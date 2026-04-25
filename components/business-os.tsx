@@ -70,7 +70,7 @@ import {
 } from "@/lib/data";
 import type { Campaign, Lead, LeadStage, ModuleKey, Payment, Workshop } from "@/lib/types";
 import { cn, formatCurrency, formatNumber, initials, normalizeSearch } from "@/lib/utils";
-import { ChangeEvent, useMemo, useRef, useState } from "react";
+import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 
 type Language = "EN" | "HI" | "GU";
 
@@ -150,6 +150,16 @@ const filterLabels = [
   "Revenue range"
 ];
 
+const ACTION_NOTE_EVENT = "cfl:action-note";
+
+function emitActionNote(message: string) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.dispatchEvent(new CustomEvent<string>(ACTION_NOTE_EVENT, { detail: message }));
+}
+
 export function BusinessOS() {
   const [activeModule, setActiveModule] = useState<ModuleKey>("home");
   const [theme, setTheme] = useState<"light" | "dark">("light");
@@ -162,6 +172,31 @@ export function BusinessOS() {
   const [activePaymentFilter, setActivePaymentFilter] = useState<"All" | Payment["status"]>("All");
   const [actionNote, setActionNote] = useState("47 payment recovery reminders are queued for WhatsApp.");
   const importInputRef = useRef<HTMLInputElement | null>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    function handleActionNote(event: Event) {
+      const detail = (event as CustomEvent<string>).detail;
+      if (detail) {
+        setActionNote(detail);
+      }
+    }
+
+    window.addEventListener(ACTION_NOTE_EVENT, handleActionNote as EventListener);
+    return () => window.removeEventListener(ACTION_NOTE_EVENT, handleActionNote as EventListener);
+  }, []);
+
+  useEffect(() => {
+    function handleHotKey(event: KeyboardEvent) {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        searchInputRef.current?.focus();
+      }
+    }
+
+    window.addEventListener("keydown", handleHotKey);
+    return () => window.removeEventListener("keydown", handleHotKey);
+  }, []);
 
   const selectedLead = leads.find((lead) => lead.id === selectedLeadId) ?? leads[0];
 
@@ -202,13 +237,13 @@ export function BusinessOS() {
         kind: "Payment",
         id: payment.id,
         title: payment.clientName,
-        meta: `${payment.id} · ${formatCurrency(payment.amount)}`
+        meta: `${payment.id} | ${formatCurrency(payment.amount)}`
       })),
       ...workshopMatches.map((workshop) => ({
         kind: "Workshop",
         id: workshop.id,
         title: workshop.title,
-        meta: `${workshop.city} · ${workshop.registrations}/${workshop.capacity}`
+        meta: `${workshop.city} | ${workshop.registrations}/${workshop.capacity}`
       }))
     ];
   }, [leads, query]);
@@ -372,12 +407,13 @@ export function BusinessOS() {
           setQuery={setQuery}
           setSelectedLeadId={setSelectedLeadId}
           setTheme={setTheme}
+          searchInputRef={searchInputRef}
           theme={theme}
         />
 
         <MobileNav activeModule={activeModule} setActiveModule={setActiveModule} />
 
-        <div className="grid min-h-0 gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_302px] lg:p-5">
+        <div className="grid min-h-0 gap-3 p-3 lg:grid-cols-[minmax(0,1fr)_296px] lg:p-4">
           <main className="min-w-0">{renderActiveModule()}</main>
           <RightRail runAIQuery={runAIQuery} setActiveModule={setActiveModule} />
         </div>
@@ -457,7 +493,7 @@ function Sidebar({
   setActiveModule: (module: ModuleKey) => void;
 }) {
   return (
-    <aside className="hidden w-[252px] shrink-0 border-r border-ink-900/10 bg-white/78 px-4 py-5 backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.04] lg:flex lg:flex-col">
+    <aside className="hidden w-[240px] shrink-0 border-r border-ink-900/10 bg-white/78 px-3 py-4 backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.04] lg:flex lg:flex-col">
       <div className="flex items-center gap-3 px-1">
         <div className="grid size-9 place-items-center rounded-lg bg-gradient-to-br from-mint-600 to-ai-500 text-sm font-black text-white shadow-soft">
           C
@@ -569,6 +605,7 @@ function TopBar({
   setQuery,
   setSelectedLeadId,
   setTheme,
+  searchInputRef,
   theme
 }: {
   actionNote: string;
@@ -586,10 +623,11 @@ function TopBar({
   setQuery: (query: string) => void;
   setSelectedLeadId: (id: string) => void;
   setTheme: (theme: "light" | "dark") => void;
+  searchInputRef: React.RefObject<HTMLInputElement | null>;
   theme: "light" | "dark";
 }) {
   return (
-    <header className="sticky top-0 z-30 border-b border-ink-900/10 bg-white/82 px-4 py-3 backdrop-blur-xl dark:border-white/10 dark:bg-[#101513]/86 lg:px-5">
+    <header className="sticky top-0 z-30 border-b border-ink-900/10 bg-white/82 px-3 py-2.5 backdrop-blur-xl dark:border-white/10 dark:bg-[#101513]/86 lg:px-4">
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-3 lg:hidden">
           <div className="grid size-9 place-items-center rounded-lg bg-gradient-to-br from-mint-600 to-ai-500 text-sm font-black text-white">
@@ -598,8 +636,8 @@ function TopBar({
           <span className="font-bold text-mint-700 dark:text-mint-100">CFL OS</span>
         </div>
 
-        <div className="relative min-w-[260px] flex-1 md:max-w-[650px]">
-          <div className="flex items-center gap-2 rounded-lg border border-ink-900/10 bg-white px-3 py-2 shadow-soft dark:border-white/10 dark:bg-white/[0.05]">
+        <div className="relative min-w-[250px] flex-1 md:max-w-[630px]">
+          <div className="flex items-center gap-2 rounded-md border border-ink-900/10 bg-white px-3 py-2 shadow-soft dark:border-white/10 dark:bg-white/[0.05]">
             <span className="hidden items-center gap-1 rounded-md bg-[#f4f7f1] px-2 py-1 text-xs font-semibold text-ink-700 dark:bg-white/10 dark:text-slate-200 sm:flex">
               <Globe2 className="size-3.5" />
               +91
@@ -610,10 +648,11 @@ function TopBar({
               className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-ink-500 dark:placeholder:text-slate-500"
               onChange={(event) => setQuery(event.target.value)}
               placeholder={languageCopy[language].search}
+              ref={searchInputRef}
               value={query}
             />
             <kbd className="hidden rounded border border-ink-900/10 bg-[#f8faf7] px-2 py-0.5 text-xs text-ink-500 dark:border-white/10 dark:bg-white/5 md:block">
-              ⌘ K
+              Ctrl K
             </kbd>
           </div>
 
@@ -775,8 +814,8 @@ function IconButton({
   return (
     <button
       aria-label={label}
-      className="grid size-10 place-items-center rounded-lg border border-ink-900/10 bg-white text-ink-700 shadow-soft transition hover:border-mint-500/30 hover:bg-mint-50 dark:border-white/10 dark:bg-white/[0.05] dark:text-slate-200 dark:hover:bg-white/[0.09]"
-      onClick={onClick}
+      className="grid size-9 place-items-center rounded-md border border-ink-900/10 bg-white text-ink-700 shadow-soft transition hover:border-mint-500/30 hover:bg-mint-50 dark:border-white/10 dark:bg-white/[0.05] dark:text-slate-200 dark:hover:bg-white/[0.09]"
+      onClick={onClick ?? (() => emitActionNote(`${label} opened.`))}
       title={label}
       type="button"
     >
@@ -803,14 +842,14 @@ function DashboardHome({
   setSelectedLeadId: (id: string) => void;
 }) {
   return (
-    <div className="space-y-4">
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+    <div className="space-y-3">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         {dashboardKpis.map((kpi) => (
           <KpiCard key={kpi.label} kpi={kpi} />
         ))}
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(440px,0.95fr)]">
+      <div className="grid gap-3 xl:grid-cols-[minmax(0,1.05fr)_minmax(440px,0.95fr)]">
         <Panel
           action={
             <button
@@ -840,7 +879,7 @@ function DashboardHome({
         </Panel>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(320px,0.9fr)_minmax(360px,1.1fr)_minmax(320px,0.9fr)]">
+      <div className="grid gap-3 xl:grid-cols-[minmax(320px,0.9fr)_minmax(360px,1.1fr)_minmax(320px,0.9fr)]">
         <WorkshopMiniPanel />
         <PaymentsMiniPanel
           activePaymentFilter={activePaymentFilter}
@@ -863,7 +902,7 @@ function KpiCard({ kpi }: { kpi: (typeof dashboardKpis)[number] }) {
   }[kpi.tone];
 
   return (
-    <div className="rounded-lg border border-ink-900/10 bg-white p-4 shadow-soft dark:border-white/10 dark:bg-white/[0.045]">
+    <div className="rounded-md border border-ink-900/10 bg-white p-3 shadow-soft dark:border-white/10 dark:bg-white/[0.045]">
       <div className="flex items-start gap-3">
         <div className={cn("grid size-12 place-items-center rounded-lg", toneStyles)}>
           <Icon className="size-5" />
@@ -893,8 +932,8 @@ function Panel({
   title: string;
 }) {
   return (
-    <section className="rounded-lg border border-ink-900/10 bg-white p-4 shadow-soft dark:border-white/10 dark:bg-white/[0.045]">
-      <div className="mb-4 flex items-center gap-2">
+    <section className="rounded-md border border-ink-900/10 bg-white p-3 shadow-soft dark:border-white/10 dark:bg-white/[0.045]">
+      <div className="mb-3 flex items-center gap-2">
         <h2 className="text-base font-bold tracking-tight">{title}</h2>
         {Icon ? <Icon className="size-4 text-ink-400" /> : null}
         <div className="ml-auto">{action}</div>
@@ -934,7 +973,7 @@ function PipelineBoard({
                 </p>
               </div>
               <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-ink-500 dark:bg-white/10 dark:text-slate-300">
-                {stageLeads.length || Math.floor(Math.random() * 20 + 14)}
+                {stageLeads.length}
               </span>
             </div>
             <div className="space-y-2">
@@ -988,7 +1027,7 @@ function RevenueOverview() {
         <div>
           <p className="text-3xl font-bold tracking-tight">{formatCurrency(total)}</p>
           <p className="mt-1 text-xs text-ink-500 dark:text-slate-400">
-            vs last month {formatCurrency(2472000)} · <span className="font-bold text-mint-600">+16.3%</span>
+            vs last month {formatCurrency(2472000)} | <span className="font-bold text-mint-600">+16.3%</span>
           </p>
         </div>
         <div className="flex gap-2">
@@ -1014,9 +1053,10 @@ function LineChart({ points }: { points: typeof revenuePoints }) {
   const padding = 24;
   const max = Math.max(...points.map((point) => point.revenue));
   const min = Math.min(...points.map((point) => point.revenue));
+  const range = Math.max(1, max - min);
   const coordinates = points.map((point, index) => {
     const x = padding + (index / (points.length - 1)) * (width - padding * 2);
-    const y = height - padding - ((point.revenue - min) / (max - min)) * (height - padding * 2);
+    const y = height - padding - ((point.revenue - min) / range) * (height - padding * 2);
     return { x, y, point };
   });
   const path = coordinates.map((coord, index) => `${index === 0 ? "M" : "L"} ${coord.x} ${coord.y}`).join(" ");
@@ -1062,9 +1102,9 @@ function LineChart({ points }: { points: typeof revenuePoints }) {
               <text fill="#63736b" fontSize="11" x={coord.x - 24} y={padding + 20}>
                 22 May
               </text>
-              <text fill="#18211d" fontSize="13" fontWeight="700" x={coord.x - 24} y={padding + 38}>
-                ₹22,18,600
-              </text>
+                <text fill="#18211d" fontSize="13" fontWeight="700" x={coord.x - 24} y={padding + 38}>
+                  INR 22,18,600
+                </text>
             </g>
           ) : null
         )}
@@ -1081,7 +1121,15 @@ function LineChart({ points }: { points: typeof revenuePoints }) {
 function WorkshopMiniPanel() {
   return (
     <Panel
-      action={<button className="text-xs font-semibold text-ink-500 hover:text-mint-700">View Calendar</button>}
+      action={
+        <button
+          className="text-xs font-semibold text-ink-500 hover:text-mint-700"
+          onClick={() => emitActionNote("Workshop calendar opened for capacity planning.")}
+          type="button"
+        >
+          View Calendar
+        </button>
+      }
       title="Workshops"
     >
       <div className="mb-4 grid grid-cols-7 gap-1 text-center text-xs">
@@ -1171,9 +1219,13 @@ function PaymentsMiniPanel({
         ))}
       </div>
       <div className="space-y-2">
-        {filtered.slice(0, 5).map((payment) => (
-          <PaymentRow key={payment.id} payment={payment} />
-        ))}
+        {filtered.length ? (
+          filtered.slice(0, 5).map((payment) => <PaymentRow key={payment.id} payment={payment} />)
+        ) : (
+          <div className="rounded-md border border-dashed border-ink-900/20 px-3 py-5 text-center text-xs text-ink-500 dark:border-white/20 dark:text-slate-400">
+            No invoices in this status yet.
+          </div>
+        )}
       </div>
       <div className="mt-4 flex items-center justify-between border-t border-ink-900/10 pt-3 text-sm dark:border-white/10">
         <span className="font-bold">Total Outstanding</span>
@@ -1195,7 +1247,7 @@ function PaymentRow({ payment }: { payment: Payment }) {
   return (
     <div className="grid grid-cols-[1fr_auto] gap-2 rounded-md border border-ink-900/10 p-2 text-xs dark:border-white/10">
       <div className="min-w-0">
-        <p className="truncate font-semibold">{payment.id} · {payment.clientName}</p>
+        <p className="truncate font-semibold">{payment.id} | {payment.clientName}</p>
         <p className="truncate text-ink-500 dark:text-slate-400">{payment.workshop}</p>
       </div>
       <div className="text-right">
@@ -1233,7 +1285,11 @@ function LeaderboardPanel() {
           </div>
         ))}
       </div>
-      <button className="mt-4 w-full rounded-md border border-ink-900/10 py-2 text-xs font-semibold hover:bg-ink-900/[0.04] dark:border-white/10 dark:hover:bg-white/[0.06]">
+      <button
+        className="mt-4 w-full rounded-md border border-ink-900/10 py-2 text-xs font-semibold hover:bg-ink-900/[0.04] dark:border-white/10 dark:hover:bg-white/[0.06]"
+        onClick={() => emitActionNote("Full sales leaderboard opened.")}
+        type="button"
+      >
         View full leaderboard
       </button>
     </Panel>
@@ -1284,7 +1340,15 @@ function RightRail({
       </Panel>
 
       <Panel
-        action={<button className="text-xs font-semibold text-ink-500 hover:text-mint-700">View all</button>}
+        action={
+          <button
+            className="text-xs font-semibold text-ink-500 hover:text-mint-700"
+            onClick={() => emitActionNote("Upcoming workshop list expanded.")}
+            type="button"
+          >
+            View all
+          </button>
+        }
         title="Upcoming Workshops"
       >
         <div className="space-y-3">
@@ -1311,7 +1375,15 @@ function RightRail({
       </Panel>
 
       <Panel
-        action={<button className="text-xs font-semibold text-ink-500 hover:text-mint-700">View all</button>}
+        action={
+          <button
+            className="text-xs font-semibold text-ink-500 hover:text-mint-700"
+            onClick={() => emitActionNote("Automation history opened.")}
+            type="button"
+          >
+            View all
+          </button>
+        }
         title="Active Automations"
       >
         <div className="space-y-3">
@@ -1344,10 +1416,10 @@ function ModuleHeader({
   title: string;
 }) {
   return (
-    <div className="mb-4 rounded-lg border border-ink-900/10 bg-white p-4 shadow-soft dark:border-white/10 dark:bg-white/[0.045]">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+    <div className="mb-3 rounded-md border border-ink-900/10 bg-white p-3 shadow-soft dark:border-white/10 dark:bg-white/[0.045]">
+      <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center">
         <div className="flex min-w-0 flex-1 items-center gap-3">
-          <div className="grid size-11 shrink-0 place-items-center rounded-lg bg-mint-50 text-mint-700 dark:bg-mint-500/10 dark:text-mint-100">
+          <div className="grid size-10 shrink-0 place-items-center rounded-md bg-mint-50 text-mint-700 dark:bg-mint-500/10 dark:text-mint-100">
             <Icon className="size-5" />
           </div>
           <div className="min-w-0 flex-1">
@@ -1375,16 +1447,41 @@ function CRMView({
   setSelectedLeadId: (id: string) => void;
 }) {
   const hotLeads = leads.filter((lead) => lead.score >= 80);
+  const [quickFilter, setQuickFilter] = useState("All stages");
+  const filteredLeads = leads.filter((lead) => {
+    switch (quickFilter) {
+      case "All stages":
+        return true;
+      case "Gujarat":
+        return lead.state === "Gujarat";
+      case "Instagram Ads":
+        return lead.source === "Instagram Ads";
+      case "Neha Kapoor":
+        return lead.assignedTo === "Neha Kapoor";
+      case "Due payment":
+        return lead.paymentHistory.some((entry) => /due|pending/i.test(entry));
+      default:
+        return true;
+    }
+  });
 
   return (
     <div>
       <ModuleHeader
         actions={
           <div className="flex gap-2">
-            <button className="rounded-lg border border-ink-900/10 px-3 py-2 text-sm font-semibold dark:border-white/10" type="button">
+            <button
+              className="rounded-lg border border-ink-900/10 px-3 py-2 text-sm font-semibold dark:border-white/10"
+              onClick={() => emitActionNote("Duplicate merge scan completed: 3 potential duplicate contacts found.")}
+              type="button"
+            >
               Duplicate merge
             </button>
-            <button className="rounded-lg bg-mint-600 px-3 py-2 text-sm font-semibold text-white" type="button">
+            <button
+              className="rounded-lg bg-mint-600 px-3 py-2 text-sm font-semibold text-white"
+              onClick={() => emitActionNote("Round-robin assignment executed for unassigned leads.")}
+              type="button"
+            >
               Assign leads
             </button>
           </div>
@@ -1402,26 +1499,33 @@ function CRMView({
           <div className="mb-4 grid gap-2 md:grid-cols-5">
             {["All stages", "Gujarat", "Instagram Ads", "Neha Kapoor", "Due payment"].map((filter) => (
               <button
-                className="rounded-md border border-ink-900/10 px-3 py-2 text-left text-xs font-semibold text-ink-600 hover:bg-ink-900/[0.04] dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/[0.06]"
+                className={cn(
+                  "rounded-md border border-ink-900/10 px-3 py-2 text-left text-xs font-semibold text-ink-600 hover:bg-ink-900/[0.04] dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/[0.06]",
+                  quickFilter === filter && "border-mint-500/40 bg-mint-50 text-mint-700 dark:bg-mint-500/10 dark:text-mint-100"
+                )}
                 key={filter}
+                onClick={() => {
+                  setQuickFilter(filter);
+                  emitActionNote(`CRM quick filter applied: ${filter}.`);
+                }}
                 type="button"
               >
                 {filter}
               </button>
             ))}
           </div>
-          <div className="overflow-hidden rounded-lg border border-ink-900/10 dark:border-white/10">
-            <div className="grid grid-cols-[1.3fr_120px_115px_115px_88px] bg-[#f6f8f4] px-3 py-2 text-xs font-bold text-ink-500 dark:bg-white/[0.05] dark:text-slate-400">
+          <div className="overflow-x-auto rounded-lg border border-ink-900/10 dark:border-white/10">
+            <div className="grid min-w-[720px] grid-cols-[1.3fr_120px_115px_115px_88px] bg-[#f6f8f4] px-3 py-2 text-xs font-bold text-ink-500 dark:bg-white/[0.05] dark:text-slate-400">
               <span>Contact</span>
               <span>City</span>
               <span>Stage</span>
               <span>Owner</span>
               <span className="text-right">Score</span>
             </div>
-            {leads.map((lead) => (
+            {filteredLeads.map((lead) => (
               <button
                 className={cn(
-                  "grid w-full grid-cols-[1.3fr_120px_115px_115px_88px] items-center border-t border-ink-900/10 px-3 py-3 text-left text-sm transition hover:bg-mint-50/70 dark:border-white/10 dark:hover:bg-white/[0.06]",
+                  "grid w-full min-w-[720px] grid-cols-[1.3fr_120px_115px_115px_88px] items-center border-t border-ink-900/10 px-3 py-3 text-left text-sm transition hover:bg-mint-50/70 dark:border-white/10 dark:hover:bg-white/[0.06]",
                   selectedLead.id === lead.id && "bg-mint-50 dark:bg-mint-500/10"
                 )}
                 key={lead.id}
@@ -1467,7 +1571,11 @@ function LeadProfile({ lead, moveLeadForward }: { lead: Lead; moveLeadForward: (
             ))}
           </div>
         </div>
-        <button className="rounded-md border border-ink-900/10 p-2 dark:border-white/10" type="button">
+        <button
+          className="rounded-md border border-ink-900/10 p-2 dark:border-white/10"
+          onClick={() => emitActionNote(`Profile options opened for ${lead.name}.`)}
+          type="button"
+        >
           <MoreHorizontal className="size-4" />
         </button>
       </div>
@@ -1480,11 +1588,19 @@ function LeadProfile({ lead, moveLeadForward }: { lead: Lead; moveLeadForward: (
       </div>
 
       <div className="mt-4 flex gap-2">
-        <button className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-mint-600 px-3 py-2 text-sm font-semibold text-white" type="button">
+        <button
+          className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-mint-600 px-3 py-2 text-sm font-semibold text-white"
+          onClick={() => emitActionNote(`WhatsApp chat opened for ${lead.name}.`)}
+          type="button"
+        >
           <MessageCircle className="size-4" />
           WhatsApp
         </button>
-        <button className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-ink-900/10 px-3 py-2 text-sm font-semibold dark:border-white/10" type="button">
+        <button
+          className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-ink-900/10 px-3 py-2 text-sm font-semibold dark:border-white/10"
+          onClick={() => emitActionNote(`Call task created for ${lead.name}.`)}
+          type="button"
+        >
           <Phone className="size-4" />
           Call
         </button>
@@ -1511,7 +1627,7 @@ function LeadProfile({ lead, moveLeadForward }: { lead: Lead; moveLeadForward: (
 
 function MetricTile({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-md border border-ink-900/10 bg-[#f8faf7] p-3 dark:border-white/10 dark:bg-white/[0.04]">
+    <div className="rounded-md border border-ink-900/10 bg-[#f8faf7] p-2.5 dark:border-white/10 dark:bg-white/[0.04]">
       <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-ink-500 dark:text-slate-400">{label}</p>
       <p className="mt-1 truncate text-sm font-bold">{value}</p>
     </div>
@@ -1548,7 +1664,15 @@ function SalesView({
   return (
     <div>
       <ModuleHeader
-        actions={<button className="rounded-lg bg-mint-600 px-3 py-2 text-sm font-semibold text-white">Create target</button>}
+        actions={
+          <button
+            className="rounded-lg bg-mint-600 px-3 py-2 text-sm font-semibold text-white"
+            onClick={() => emitActionNote("New sales target sheet created for the current month.")}
+            type="button"
+          >
+            Create target
+          </button>
+        }
         eyebrow="Sales system"
         icon={Target}
         title="Auto assignment, incentives, reminders, and conversion focus"
@@ -1565,7 +1689,7 @@ function SalesView({
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-bold">{lead.name}</p>
                   <p className="truncate text-xs text-ink-500 dark:text-slate-400">
-                    {lead.city} · {lead.source} · {lead.bestTime}
+                    {lead.city} | {lead.source} | {lead.bestTime}
                   </p>
                 </div>
                 <button
@@ -1621,7 +1745,7 @@ function SalesView({
                   <p className="text-sm font-bold">{lead.name}</p>
                   <StatusPill label={lead.stage} />
                 </div>
-                <p className="mt-2 text-xs text-ink-500 dark:text-slate-400">{lead.nextFollowUp} · {lead.bestTime}</p>
+                <p className="mt-2 text-xs text-ink-500 dark:text-slate-400">{lead.nextFollowUp} | {lead.bestTime}</p>
                 <p className="mt-2 rounded-md bg-ai-50 px-2 py-1.5 text-xs text-ai-600 dark:bg-ai-500/10 dark:text-ai-100">
                   Script: open with outcome, share 2-seat bonus, close with payment link.
                 </p>
@@ -1638,7 +1762,15 @@ function WorkshopsView() {
   return (
     <div>
       <ModuleHeader
-        actions={<button className="rounded-lg bg-mint-600 px-3 py-2 text-sm font-semibold text-white">Create workshop</button>}
+        actions={
+          <button
+            className="rounded-lg bg-mint-600 px-3 py-2 text-sm font-semibold text-white"
+            onClick={() => emitActionNote("Workshop creation form opened with trainer and batch defaults.")}
+            type="button"
+          >
+            Create workshop
+          </button>
+        }
         eyebrow="Workshop management"
         icon={CalendarDays}
         title="Workshops, batches, capacity, waitlist, QR attendance, and feedback"
@@ -1661,7 +1793,7 @@ function WorkshopsView() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="font-bold">{batch.name}</p>
-                      <p className="text-xs text-ink-500 dark:text-slate-400">{workshop?.title} · {batch.startDate}</p>
+                      <p className="text-xs text-ink-500 dark:text-slate-400">{workshop?.title} | {batch.startDate}</p>
                     </div>
                     <QrCode className="size-5 text-mint-600" />
                   </div>
@@ -1697,7 +1829,7 @@ function WorkshopCard({ workshop }: { workshop: Workshop }) {
         <div>
           <p className="text-lg font-bold">{workshop.title}</p>
           <p className="mt-1 text-sm text-ink-500 dark:text-slate-400">
-            {workshop.type} · {workshop.city} · {workshop.trainer}
+            {workshop.type} | {workshop.city} | {workshop.trainer}
           </p>
         </div>
         <StatusPill label={workshop.status} />
@@ -1724,7 +1856,15 @@ function FunnelsView() {
   return (
     <div>
       <ModuleHeader
-        actions={<button className="rounded-lg bg-mint-600 px-3 py-2 text-sm font-semibold text-white">Publish page</button>}
+        actions={
+          <button
+            className="rounded-lg bg-mint-600 px-3 py-2 text-sm font-semibold text-white"
+            onClick={() => emitActionNote("Registration funnel published and ready to accept payments.")}
+            type="button"
+          >
+            Publish page
+          </button>
+        }
         eyebrow="Registration funnels"
         icon={LayoutTemplate}
         title="Landing pages with coupons, payments, WhatsApp, FAQ, and thank-you flows"
@@ -1756,10 +1896,18 @@ function FunnelsView() {
                   <MetricTile label="Rating" value={`${featured.feedbackScore}/5`} />
                 </div>
                 <div className="mt-4 flex flex-wrap gap-2">
-                  <button className="rounded-lg bg-ink-900 px-4 py-2 text-sm font-bold text-white dark:bg-white dark:text-ink-900">
+                  <button
+                    className="rounded-lg bg-ink-900 px-4 py-2 text-sm font-bold text-white dark:bg-white dark:text-ink-900"
+                    onClick={() => emitActionNote(`Payment flow started for ${featured.title}.`)}
+                    type="button"
+                  >
                     Pay {formatCurrency(featured.price)}
                   </button>
-                  <button className="rounded-lg border border-ink-900/10 px-4 py-2 text-sm font-bold dark:border-white/10">
+                  <button
+                    className="rounded-lg border border-ink-900/10 px-4 py-2 text-sm font-bold dark:border-white/10"
+                    onClick={() => emitActionNote("WhatsApp support widget opened for funnel queries.")}
+                    type="button"
+                  >
                     WhatsApp support
                   </button>
                 </div>
@@ -1778,10 +1926,14 @@ function FunnelsView() {
                     </div>
                   ))}
                 </div>
-                <button className="mt-4 w-full rounded-lg bg-mint-600 py-2.5 text-sm font-bold text-white">
+                <button
+                  className="mt-4 w-full rounded-lg bg-mint-600 py-2.5 text-sm font-bold text-white"
+                  onClick={() => emitActionNote("Razorpay registration link generated and sent.")}
+                  type="button"
+                >
                   Register with Razorpay
                 </button>
-                <p className="mt-3 text-center text-xs text-ink-500 dark:text-slate-400">Secure payment · GST invoice · instant confirmation</p>
+                <p className="mt-3 text-center text-xs text-ink-500 dark:text-slate-400">Secure payment | GST invoice | instant confirmation</p>
               </div>
             </div>
           </div>
@@ -1804,7 +1956,15 @@ function PaymentsView({
   return (
     <div>
       <ModuleHeader
-        actions={<button className="rounded-lg bg-mint-600 px-3 py-2 text-sm font-semibold text-white">Create payment link</button>}
+        actions={
+          <button
+            className="rounded-lg bg-mint-600 px-3 py-2 text-sm font-semibold text-white"
+            onClick={() => emitActionNote("Fresh Razorpay payment link created.")}
+            type="button"
+          >
+            Create payment link
+          </button>
+        }
         eyebrow="Payment system"
         icon={CreditCard}
         title="Razorpay, part payments, refunds, GST invoices, retries, and recovery"
@@ -1830,9 +1990,13 @@ function PaymentsView({
             ))}
           </div>
           <div className="space-y-2">
-            {filtered.map((payment) => (
-              <PaymentRow key={payment.id} payment={payment} />
-            ))}
+            {filtered.length ? (
+              filtered.map((payment) => <PaymentRow key={payment.id} payment={payment} />)
+            ) : (
+              <div className="rounded-md border border-dashed border-ink-900/20 px-3 py-6 text-center text-sm text-ink-500 dark:border-white/20 dark:text-slate-400">
+                No invoices in this status.
+              </div>
+            )}
           </div>
         </Panel>
 
@@ -1869,7 +2033,15 @@ function MarketingView() {
   return (
     <div>
       <ModuleHeader
-        actions={<button className="rounded-lg bg-mint-600 px-3 py-2 text-sm font-semibold text-white">New campaign</button>}
+        actions={
+          <button
+            className="rounded-lg bg-mint-600 px-3 py-2 text-sm font-semibold text-white"
+            onClick={() => emitActionNote("Campaign builder opened with WhatsApp template defaults.")}
+            type="button"
+          >
+            New campaign
+          </button>
+        }
         eyebrow="Marketing engine"
         icon={Megaphone}
         title="Bulk WhatsApp, email, SMS, drips, referrals, and rejoin campaigns"
@@ -1925,7 +2097,7 @@ function CampaignRow({ campaign }: { campaign: Campaign }) {
     <div className="grid gap-3 rounded-lg border border-ink-900/10 p-3 dark:border-white/10 md:grid-cols-[1fr_110px_110px_130px] md:items-center">
       <div className="min-w-0">
         <p className="truncate font-bold">{campaign.name}</p>
-        <p className="text-xs text-ink-500 dark:text-slate-400">{campaign.type} · {campaign.audience}</p>
+        <p className="text-xs text-ink-500 dark:text-slate-400">{campaign.type} | {campaign.audience}</p>
       </div>
       <MetricTile label="Sent" value={formatNumber(campaign.sent)} />
       <MetricTile label="Conversion" value={`${campaign.conversion}%`} />
@@ -1935,10 +2107,20 @@ function CampaignRow({ campaign }: { campaign: Campaign }) {
 }
 
 function ReportsView() {
+  const [selectedFilter, setSelectedFilter] = useState("Date range");
+
   return (
     <div>
       <ModuleHeader
-        actions={<button className="rounded-lg bg-mint-600 px-3 py-2 text-sm font-semibold text-white">Export report</button>}
+        actions={
+          <button
+            className="rounded-lg bg-mint-600 px-3 py-2 text-sm font-semibold text-white"
+            onClick={() => emitActionNote("Advanced report export queued for CSV and PDF.")}
+            type="button"
+          >
+            Export report
+          </button>
+        }
         eyebrow="Reports center"
         icon={BarChart3}
         title="Daily, sales, revenue, workshop, city, repeat client, and failed payment reports"
@@ -1949,8 +2131,15 @@ function ReportsView() {
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
             {filterLabels.map((filter) => (
               <button
-                className="flex items-center justify-between rounded-md border border-ink-900/10 px-3 py-2 text-left text-xs font-bold text-ink-600 dark:border-white/10 dark:text-slate-300"
+                className={cn(
+                  "flex items-center justify-between rounded-md border border-ink-900/10 px-3 py-2 text-left text-xs font-bold text-ink-600 dark:border-white/10 dark:text-slate-300",
+                  selectedFilter === filter && "border-mint-500/40 bg-mint-50 text-mint-700 dark:bg-mint-500/10 dark:text-mint-100"
+                )}
                 key={filter}
+                onClick={() => {
+                  setSelectedFilter(filter);
+                  emitActionNote(`Report filter focused: ${filter}.`);
+                }}
                 type="button"
               >
                 {filter}
@@ -2002,7 +2191,15 @@ function SupportView() {
   return (
     <div>
       <ModuleHeader
-        actions={<button className="rounded-lg bg-mint-600 px-3 py-2 text-sm font-semibold text-white">New ticket</button>}
+        actions={
+          <button
+            className="rounded-lg bg-mint-600 px-3 py-2 text-sm font-semibold text-white"
+            onClick={() => emitActionNote("Support ticket creation flow opened.")}
+            type="button"
+          >
+            New ticket
+          </button>
+        }
         eyebrow="Support system"
         icon={LifeBuoy}
         title="Tickets, complaints, refunds, priority support, and satisfaction"
@@ -2020,7 +2217,7 @@ function SupportView() {
                 </div>
                 <p className="mt-2 font-semibold">{ticket.subject}</p>
                 <p className="mt-1 text-xs text-ink-500 dark:text-slate-400">
-                  {ticket.client} · owner {ticket.owner} · satisfaction {ticket.satisfaction}/5
+                  {ticket.client} | owner {ticket.owner} | satisfaction {ticket.satisfaction}/5
                 </p>
               </div>
             ))}
@@ -2043,7 +2240,15 @@ function TeamView() {
   return (
     <div>
       <ModuleHeader
-        actions={<button className="rounded-lg bg-mint-600 px-3 py-2 text-sm font-semibold text-white">Assign task</button>}
+        actions={
+          <button
+            className="rounded-lg bg-mint-600 px-3 py-2 text-sm font-semibold text-white"
+            onClick={() => emitActionNote("Team task assignment board opened.")}
+            type="button"
+          >
+            Assign task
+          </button>
+        }
         eyebrow="Team management"
         icon={BriefcaseBusiness}
         title="Staff records, roles, attendance, incentives, salary notes, and tasks"
@@ -2056,7 +2261,7 @@ function TeamView() {
               <div className="grid gap-3 rounded-lg border border-ink-900/10 p-3 dark:border-white/10 md:grid-cols-[1fr_120px_120px_120px] md:items-center" key={member.id}>
                 <div>
                   <p className="font-bold">{member.name}</p>
-                  <p className="text-xs text-ink-500 dark:text-slate-400">{member.role} · {member.city}</p>
+                  <p className="text-xs text-ink-500 dark:text-slate-400">{member.role} | {member.city}</p>
                 </div>
                 <MetricTile label="Attendance" value={`${member.attendance}%`} />
                 <MetricTile label="Calls" value={String(member.calls)} />
@@ -2101,7 +2306,15 @@ function AIView({
   return (
     <div>
       <ModuleHeader
-        actions={<button className="rounded-lg bg-ai-600 px-3 py-2 text-sm font-semibold text-white">Save insight</button>}
+        actions={
+          <button
+            className="rounded-lg bg-ai-600 px-3 py-2 text-sm font-semibold text-white"
+            onClick={() => emitActionNote("AI insight saved to founder notes.")}
+            type="button"
+          >
+            Save insight
+          </button>
+        }
         eyebrow="Advanced AI features"
         icon={Sparkles}
         title="Sales Brain, Growth Brain, Customer Brain, and Founder Assistant"
@@ -2113,7 +2326,7 @@ function AIView({
             {[
               "Show Surat revenue this month",
               "Which salesperson weak this week",
-              "Show unpaid clients above ₹5000",
+              "Show unpaid clients above INR 5000",
               "Best campaign in last 30 days"
             ].map((question) => (
               <button
@@ -2170,7 +2383,15 @@ function SecurityView({ language }: { language: Language }) {
   return (
     <div>
       <ModuleHeader
-        actions={<button className="rounded-lg bg-mint-600 px-3 py-2 text-sm font-semibold text-white">Review audit log</button>}
+        actions={
+          <button
+            className="rounded-lg bg-mint-600 px-3 py-2 text-sm font-semibold text-white"
+            onClick={() => emitActionNote("Audit log review opened with latest security events.")}
+            type="button"
+          >
+            Review audit log
+          </button>
+        }
         eyebrow="Security and SaaS readiness"
         icon={ShieldCheck}
         title="OTP auth, role access, audit logs, payment security, backups, and tenant controls"
@@ -2204,7 +2425,7 @@ function SecurityView({ language }: { language: Language }) {
               <div className="rounded-lg border border-ink-900/10 p-3 dark:border-white/10" key={log.id}>
                 <p className="font-bold">{log.actor}</p>
                 <p className="mt-1 text-sm">{log.action}</p>
-                <p className="mt-1 text-xs text-ink-500 dark:text-slate-400">{log.meta} · {log.createdAt}</p>
+                <p className="mt-1 text-xs text-ink-500 dark:text-slate-400">{log.meta} | {log.createdAt}</p>
               </div>
             ))}
           </div>
@@ -2239,7 +2460,7 @@ function answerFor(question: string) {
   const normalized = question.toLowerCase();
 
   if (normalized.includes("surat")) {
-    return "Surat revenue is ₹8,42,700 this month, up 22% versus the previous period. The strongest source is Instagram Ads, and the best next move is a WhatsApp rejoin campaign for 1,840 warm contacts with score above 70.";
+    return "Surat revenue is INR 8,42,700 this month, up 22% versus the previous period. The strongest source is Instagram Ads, and the best next move is a WhatsApp rejoin campaign for 1,840 warm contacts with score above 70.";
   }
 
   if (normalized.includes("salesperson") || normalized.includes("weak")) {
@@ -2247,16 +2468,16 @@ function answerFor(question: string) {
   }
 
   if (normalized.includes("unpaid") || normalized.includes("overdue") || normalized.includes("payment")) {
-    return "There are 47 unpaid invoices in the recovery queue. Highest priority: Rohan Mehta ₹2,10,000 overdue 3 days, BrightWave Ltd. ₹85,000 overdue 7 days, GlobalSoft HR ₹45,000 due in 3 days. Send Razorpay retry links plus GST invoice copy.";
+    return "There are 47 unpaid invoices in the recovery queue. Highest priority: Rohan Mehta INR 2,10,000 overdue 3 days, BrightWave Ltd. INR 85,000 overdue 7 days, GlobalSoft HR INR 45,000 due in 3 days. Send Razorpay retry links plus GST invoice copy.";
   }
 
   if (normalized.includes("campaign") || normalized.includes("last 30")) {
-    return "The best campaign in the last 30 days is Workshop Follow-up on WhatsApp. It converted 18.4% and attributed ₹6,85,000 revenue. Clone it for Mindset Mastery attendees and add a 48-hour coupon.";
+    return "The best campaign in the last 30 days is Workshop Follow-up on WhatsApp. It converted 18.4% and attributed INR 6,85,000 revenue. Clone it for Mindset Mastery attendees and add a 48-hour coupon.";
   }
 
   if (normalized.includes("workshop")) {
     return "Communication Skills is underperforming on seat fill: 18/25 registrations and 3 waitlist holds. Push Pune lookalike leads, add trainer proof to the funnel, and run payment reminders for interested clients.";
   }
 
-  return "Today: 342 leads, 128 registrations, ₹8,42,700 revenue, and ₹6,21,400 pending payments. AI recommends calling 5 high-score corporate leads before 6 PM and triggering the payment recovery automation for 47 invoices.";
+  return "Today: 342 leads, 128 registrations, INR 8,42,700 revenue, and INR 6,21,400 pending payments. AI recommends calling 5 high-score corporate leads before 6 PM and triggering the payment recovery automation for 47 invoices.";
 }
