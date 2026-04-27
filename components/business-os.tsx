@@ -267,16 +267,16 @@ export function BusinessOS() {
     setActionNote("Lead stage updated, next follow-up and AI script refreshed.");
   }
 
-  function addLead() {
+  function addLead(input?: Partial<Pick<Lead, "name" | "mobile" | "email" | "city" | "state" | "country" | "source">>) {
     const created: Lead = {
       id: `lead-${Date.now()}`,
-      name: "New Walk-in Lead",
-      mobile: "+91 90000 00000",
-      email: "new.lead@example.com",
-      city: "Surat",
-      state: "Gujarat",
-      country: "India",
-      source: "Manual",
+      name: input?.name?.trim() || "New Walk-in Lead",
+      mobile: input?.mobile?.trim() || "+91 90000 00000",
+      email: input?.email?.trim() || "new.lead@example.com",
+      city: input?.city?.trim() || "Surat",
+      state: input?.state?.trim() || "Gujarat",
+      country: input?.country?.trim() || "India",
+      source: input?.source?.trim() || "Manual",
       stage: "New Leads",
       assignedTo: "Auto assign",
       score: 64,
@@ -300,23 +300,29 @@ export function BusinessOS() {
     setActionNote("New lead created and placed into round-robin assignment.");
   }
 
-  function editSelectedLead() {
+  function updateSelectedLead(input: Partial<Pick<Lead, "name" | "mobile" | "email" | "city" | "state" | "country" | "source">>) {
     if (!selectedLead) {
       return;
     }
-    const name = window.prompt("Lead name", selectedLead.name)?.trim();
-    if (!name) {
+    const name = input.name?.trim();
+    const mobile = input.mobile?.trim();
+    if (!name || !mobile) {
       return;
     }
-    const mobile = window.prompt("Mobile", selectedLead.mobile)?.trim();
-    if (!mobile) {
-      return;
-    }
-    const city = window.prompt("City", selectedLead.city)?.trim() || selectedLead.city;
-    const source = window.prompt("Source", selectedLead.source)?.trim() || selectedLead.source;
     setLeads((current) =>
       current.map((lead) =>
-        lead.id === selectedLead.id ? { ...lead, name, mobile, city, source } : lead
+        lead.id === selectedLead.id
+          ? {
+              ...lead,
+              city: input.city?.trim() || lead.city,
+              country: input.country?.trim() || lead.country,
+              email: input.email?.trim() || lead.email,
+              mobile,
+              name,
+              source: input.source?.trim() || lead.source,
+              state: input.state?.trim() || lead.state
+            }
+          : lead
       )
     );
     setActionNote(`Lead updated: ${name}.`);
@@ -324,9 +330,6 @@ export function BusinessOS() {
 
   function deleteSelectedLead() {
     if (!selectedLead) {
-      return;
-    }
-    if (!window.confirm(`Delete lead ${selectedLead.name}?`)) {
       return;
     }
     setLeads((current) => {
@@ -374,25 +377,30 @@ export function BusinessOS() {
     setActionNote(`Workshop created: ${created.title}.`);
   }
 
-  function editSelectedWorkshop() {
+  function updateSelectedWorkshop(input: {
+    city?: string;
+    price?: number;
+    title: string;
+    trainer?: string;
+    type?: WorkshopType;
+  }) {
     if (!selectedWorkshop) {
       return;
     }
-    const title = window.prompt("Workshop title", selectedWorkshop.title)?.trim();
+    const title = input.title?.trim();
     if (!title) {
       return;
     }
-    const city = window.prompt("City", selectedWorkshop.city)?.trim() || selectedWorkshop.city;
-    const trainer =
-      window.prompt("Trainer", selectedWorkshop.trainer)?.trim() || selectedWorkshop.trainer;
     setWorkshopList((current) =>
       current.map((workshopItem) =>
         workshopItem.id === selectedWorkshop.id
           ? {
               ...workshopItem,
+              city: input.city?.trim() || workshopItem.city,
+              price: input.price ?? workshopItem.price,
+              trainer: input.trainer?.trim() || workshopItem.trainer,
               title,
-              city,
-              trainer,
+              type: input.type ?? workshopItem.type,
               slug: title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "")
             }
           : workshopItem
@@ -403,9 +411,6 @@ export function BusinessOS() {
 
   function deleteSelectedWorkshop() {
     if (!selectedWorkshop) {
-      return;
-    }
-    if (!window.confirm(`Delete workshop ${selectedWorkshop.title}?`)) {
       return;
     }
     setWorkshopList((current) => {
@@ -582,11 +587,11 @@ export function BusinessOS() {
           <CRMView
             addLead={addLead}
             deleteSelectedLead={deleteSelectedLead}
-            editSelectedLead={editSelectedLead}
             leads={leads}
             moveLeadForward={moveLeadForward}
             selectedLead={selectedLead}
             setSelectedLeadId={setSelectedLeadId}
+            updateSelectedLead={updateSelectedLead}
           />
         );
       case "sales":
@@ -596,9 +601,9 @@ export function BusinessOS() {
           <WorkshopsView
             addWorkshop={addWorkshop}
             deleteSelectedWorkshop={deleteSelectedWorkshop}
-            editSelectedWorkshop={editSelectedWorkshop}
             selectedWorkshop={selectedWorkshop}
             setSelectedWorkshopId={setSelectedWorkshopId}
+            updateSelectedWorkshop={updateSelectedWorkshop}
             workshops={workshopList}
           />
         );
@@ -1691,22 +1696,72 @@ function ModuleHeader({
 function CRMView({
   addLead,
   deleteSelectedLead,
-  editSelectedLead,
   leads,
   moveLeadForward,
   selectedLead,
-  setSelectedLeadId
+  setSelectedLeadId,
+  updateSelectedLead
 }: {
-  addLead: () => void;
+  addLead: (input?: Partial<Pick<Lead, "name" | "mobile" | "email" | "city" | "state" | "country" | "source">>) => void;
   deleteSelectedLead: () => void;
-  editSelectedLead: () => void;
   leads: Lead[];
   moveLeadForward: (leadId: string) => void;
   selectedLead: Lead;
   setSelectedLeadId: (id: string) => void;
+  updateSelectedLead: (input: Partial<Pick<Lead, "name" | "mobile" | "email" | "city" | "state" | "country" | "source">>) => void;
 }) {
   const hotLeads = leads.filter((lead) => lead.score >= 80);
   const [quickFilter, setQuickFilter] = useState("All stages");
+  const [leadFormMode, setLeadFormMode] = useState<"create" | "edit">("create");
+  const [leadFormOpen, setLeadFormOpen] = useState(false);
+  const [leadForm, setLeadForm] = useState({
+    city: "",
+    country: "",
+    email: "",
+    mobile: "",
+    name: "",
+    source: "",
+    state: ""
+  });
+
+  function openLeadForm(mode: "create" | "edit") {
+    setLeadFormMode(mode);
+    if (mode === "edit" && selectedLead) {
+      setLeadForm({
+        city: selectedLead.city,
+        country: selectedLead.country,
+        email: selectedLead.email,
+        mobile: selectedLead.mobile,
+        name: selectedLead.name,
+        source: selectedLead.source,
+        state: selectedLead.state
+      });
+    } else {
+      setLeadForm({
+        city: "Surat",
+        country: "India",
+        email: "",
+        mobile: "+91 ",
+        name: "",
+        source: "Manual",
+        state: "Gujarat"
+      });
+    }
+    setLeadFormOpen(true);
+  }
+
+  function saveLeadForm() {
+    if (!leadForm.name.trim() || !leadForm.mobile.trim()) {
+      emitActionNote("Lead name and mobile required.");
+      return;
+    }
+    if (leadFormMode === "create") {
+      addLead(leadForm);
+    } else {
+      updateSelectedLead(leadForm);
+    }
+    setLeadFormOpen(false);
+  }
   const filteredLeads = leads.filter((lead) => {
     switch (quickFilter) {
       case "All stages":
@@ -1731,7 +1786,7 @@ function CRMView({
           <div className="flex gap-2">
             <button
               className="rounded-lg border border-ink-900/10 px-3 py-2 text-sm font-semibold dark:border-white/10"
-              onClick={addLead}
+              onClick={() => openLeadForm("create")}
               type="button"
             >
               Add lead
@@ -1752,7 +1807,7 @@ function CRMView({
             </button>
             <button
               className="rounded-lg border border-ink-900/10 px-3 py-2 text-sm font-semibold dark:border-white/10"
-              onClick={editSelectedLead}
+              onClick={() => openLeadForm("edit")}
               type="button"
             >
               Edit selected
@@ -1770,6 +1825,28 @@ function CRMView({
         icon={UsersRound}
         title="Contacts, history, scores, and family accounts"
       />
+
+      {leadFormOpen ? (
+        <Panel defaultOpen title={leadFormMode === "create" ? "Create Lead" : `Edit Lead: ${selectedLead?.name ?? ""}`}>
+          <div className="grid gap-3 md:grid-cols-3">
+            <input className="rounded-lg border border-ink-900/10 bg-white px-3 py-2.5 text-sm outline-none focus:border-mint-500 dark:border-white/10 dark:bg-white/[0.03]" onChange={(event) => setLeadForm((current) => ({ ...current, name: event.target.value }))} placeholder="Full Name" value={leadForm.name} />
+            <input className="rounded-lg border border-ink-900/10 bg-white px-3 py-2.5 text-sm outline-none focus:border-mint-500 dark:border-white/10 dark:bg-white/[0.03]" onChange={(event) => setLeadForm((current) => ({ ...current, mobile: event.target.value }))} placeholder="Mobile" value={leadForm.mobile} />
+            <input className="rounded-lg border border-ink-900/10 bg-white px-3 py-2.5 text-sm outline-none focus:border-mint-500 dark:border-white/10 dark:bg-white/[0.03]" onChange={(event) => setLeadForm((current) => ({ ...current, email: event.target.value }))} placeholder="Email" value={leadForm.email} />
+            <input className="rounded-lg border border-ink-900/10 bg-white px-3 py-2.5 text-sm outline-none focus:border-mint-500 dark:border-white/10 dark:bg-white/[0.03]" onChange={(event) => setLeadForm((current) => ({ ...current, city: event.target.value }))} placeholder="City" value={leadForm.city} />
+            <input className="rounded-lg border border-ink-900/10 bg-white px-3 py-2.5 text-sm outline-none focus:border-mint-500 dark:border-white/10 dark:bg-white/[0.03]" onChange={(event) => setLeadForm((current) => ({ ...current, state: event.target.value }))} placeholder="State" value={leadForm.state} />
+            <input className="rounded-lg border border-ink-900/10 bg-white px-3 py-2.5 text-sm outline-none focus:border-mint-500 dark:border-white/10 dark:bg-white/[0.03]" onChange={(event) => setLeadForm((current) => ({ ...current, country: event.target.value }))} placeholder="Country" value={leadForm.country} />
+          </div>
+          <div className="mt-3 grid gap-3 md:grid-cols-[1fr_auto_auto]">
+            <input className="rounded-lg border border-ink-900/10 bg-white px-3 py-2.5 text-sm outline-none focus:border-mint-500 dark:border-white/10 dark:bg-white/[0.03]" onChange={(event) => setLeadForm((current) => ({ ...current, source: event.target.value }))} placeholder="Lead Source" value={leadForm.source} />
+            <button className="rounded-lg bg-mint-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" disabled={!leadForm.name.trim() || !leadForm.mobile.trim()} onClick={saveLeadForm} type="button">
+              {leadFormMode === "create" ? "Save lead" : "Update lead"}
+            </button>
+            <button className="rounded-lg border border-ink-900/10 px-4 py-2 text-sm font-semibold dark:border-white/10" onClick={() => setLeadFormOpen(false)} type="button">
+              Cancel
+            </button>
+          </div>
+        </Panel>
+      ) : null}
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
         <Panel
@@ -1830,7 +1907,7 @@ function CRMView({
 
         <LeadProfile
           deleteSelectedLead={deleteSelectedLead}
-          editSelectedLead={editSelectedLead}
+          editSelectedLead={() => openLeadForm("edit")}
           lead={selectedLead}
           moveLeadForward={moveLeadForward}
         />
@@ -2071,18 +2148,19 @@ function SalesView({
 function WorkshopsView({
   addWorkshop,
   deleteSelectedWorkshop,
-  editSelectedWorkshop,
+  updateSelectedWorkshop,
   selectedWorkshop,
   setSelectedWorkshopId,
   workshops
 }: {
   addWorkshop: (input: { city?: string; price?: number; title: string; trainer?: string; type?: WorkshopType }) => void;
   deleteSelectedWorkshop: () => void;
-  editSelectedWorkshop: () => void;
+  updateSelectedWorkshop: (input: { city?: string; price?: number; title: string; trainer?: string; type?: WorkshopType }) => void;
   selectedWorkshop: Workshop | undefined;
   setSelectedWorkshopId: (id: string) => void;
   workshops: Workshop[];
 }) {
+  const [formMode, setFormMode] = useState<"create" | "edit">("create");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [form, setForm] = useState({
     city: "Surat",
@@ -2110,26 +2188,47 @@ function WorkshopsView({
     setDefaultFields((current) => ({ ...current, [key]: !current[key] }));
   }
 
-  function handleCreateWorkshop() {
+  function openWorkshopForm(mode: "create" | "edit") {
+    setFormMode(mode);
+    if (mode === "edit" && selectedWorkshop) {
+      setForm({
+        city: selectedWorkshop.city,
+        isPaid: selectedWorkshop.price > 0,
+        productGroup: "Leadership",
+        title: selectedWorkshop.title,
+        trainer: selectedWorkshop.trainer,
+        type: selectedWorkshop.type
+      });
+    } else {
+      setForm({
+        city: "Surat",
+        isPaid: true,
+        productGroup: "Leadership",
+        title: "",
+        trainer: "Arjun Sharma",
+        type: "Hybrid"
+      });
+    }
+    setIsCreateOpen(true);
+  }
+
+  function saveWorkshopForm() {
     if (!form.title.trim()) {
       emitActionNote("Workshop title required.");
       return;
     }
-    addWorkshop({
+    const payload = {
       city: form.city,
       price: form.isPaid ? 9900 : 0,
       title: form.title,
       trainer: form.trainer,
       type: form.type
-    });
-    setForm({
-      city: "Surat",
-      isPaid: true,
-      productGroup: "Leadership",
-      title: "",
-      trainer: "Arjun Sharma",
-      type: "Hybrid"
-    });
+    };
+    if (formMode === "create") {
+      addWorkshop(payload);
+    } else {
+      updateSelectedWorkshop(payload);
+    }
     setIsCreateOpen(false);
   }
 
@@ -2140,14 +2239,14 @@ function WorkshopsView({
           <div className="flex gap-2">
             <button
               className="rounded-lg bg-mint-600 px-3 py-2 text-sm font-semibold text-white"
-              onClick={() => setIsCreateOpen((state) => !state)}
+              onClick={() => (isCreateOpen ? setIsCreateOpen(false) : openWorkshopForm("create"))}
               type="button"
             >
-              {isCreateOpen ? "Close form" : "Create workshop"}
+              {isCreateOpen && formMode === "create" ? "Close form" : "Create workshop"}
             </button>
             <button
               className="rounded-lg border border-ink-900/10 px-3 py-2 text-sm font-semibold dark:border-white/10"
-              onClick={editSelectedWorkshop}
+              onClick={() => openWorkshopForm("edit")}
               type="button"
             >
               Edit selected
@@ -2167,7 +2266,7 @@ function WorkshopsView({
       />
 
       {isCreateOpen ? (
-        <Panel defaultOpen title="Create Workshop / Product">
+        <Panel defaultOpen title={formMode === "create" ? "Create Workshop / Product" : "Edit Workshop / Product"}>
           <div className="grid gap-3 md:grid-cols-4">
             <input
               className="rounded-lg border border-ink-900/10 bg-white px-3 py-2.5 text-sm outline-none focus:border-mint-500 dark:border-white/10 dark:bg-white/[0.03]"
@@ -2252,10 +2351,10 @@ function WorkshopsView({
             <button
               className="rounded-lg bg-mint-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
               disabled={!form.title.trim()}
-              onClick={handleCreateWorkshop}
+              onClick={saveWorkshopForm}
               type="button"
             >
-              Save workshop
+              {formMode === "create" ? "Save workshop" : "Update workshop"}
             </button>
             <button
               className="rounded-lg border border-ink-900/10 px-4 py-2 text-sm font-semibold dark:border-white/10"
@@ -2334,7 +2433,7 @@ function WorkshopsView({
               <div className="flex gap-2">
                 <button
                   className="rounded-lg border border-ink-900/10 px-3 py-2 text-sm font-semibold dark:border-white/10"
-                  onClick={editSelectedWorkshop}
+                  onClick={() => openWorkshopForm("edit")}
                   type="button"
                 >
                   Edit workshop
