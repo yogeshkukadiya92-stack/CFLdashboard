@@ -166,7 +166,9 @@ export function BusinessOS() {
   const [language, setLanguage] = useState<Language>("EN");
   const [query, setQuery] = useState("");
   const [leads, setLeads] = useState<Lead[]>(leadsSeed);
+  const [workshopList, setWorkshopList] = useState<Workshop[]>(workshops);
   const [selectedLeadId, setSelectedLeadId] = useState(leadsSeed[0].id);
+  const [selectedWorkshopId, setSelectedWorkshopId] = useState(workshops[0]?.id ?? "");
   const [aiQuestion, setAiQuestion] = useState("Show Surat revenue this month");
   const [aiAnswer, setAiAnswer] = useState(answerFor("Show Surat revenue this month"));
   const [activePaymentFilter, setActivePaymentFilter] = useState<"All" | Payment["status"]>("All");
@@ -200,6 +202,8 @@ export function BusinessOS() {
   }, []);
 
   const selectedLead = leads.find((lead) => lead.id === selectedLeadId) ?? leads[0];
+  const selectedWorkshop =
+    workshopList.find((workshop) => workshop.id === selectedWorkshopId) ?? workshopList[0];
 
   const searchResults = useMemo(() => {
     const normalized = normalizeSearch(query);
@@ -225,7 +229,7 @@ export function BusinessOS() {
       })
       .slice(0, 3);
 
-    const workshopMatches = workshops
+    const workshopMatches = workshopList
       .filter((workshop) => {
         const haystack = normalizeSearch(`${workshop.title} ${workshop.city} ${workshop.trainer}`);
         return haystack.includes(normalized);
@@ -247,7 +251,7 @@ export function BusinessOS() {
         meta: `${workshop.city} | ${workshop.registrations}/${workshop.capacity}`
       }))
     ];
-  }, [leads, query]);
+  }, [leads, query, workshopList]);
 
   function runAIQuery(question: string) {
     setAiQuestion(question);
@@ -293,6 +297,118 @@ export function BusinessOS() {
     setSelectedLeadId(created.id);
     setActiveModule("crm");
     setActionNote("New lead created and placed into round-robin assignment.");
+  }
+
+  function editSelectedLead() {
+    if (!selectedLead) {
+      return;
+    }
+    const name = window.prompt("Lead name", selectedLead.name)?.trim();
+    if (!name) {
+      return;
+    }
+    const mobile = window.prompt("Mobile", selectedLead.mobile)?.trim();
+    if (!mobile) {
+      return;
+    }
+    const city = window.prompt("City", selectedLead.city)?.trim() || selectedLead.city;
+    const source = window.prompt("Source", selectedLead.source)?.trim() || selectedLead.source;
+    setLeads((current) =>
+      current.map((lead) =>
+        lead.id === selectedLead.id ? { ...lead, name, mobile, city, source } : lead
+      )
+    );
+    setActionNote(`Lead updated: ${name}.`);
+  }
+
+  function deleteSelectedLead() {
+    if (!selectedLead) {
+      return;
+    }
+    if (!window.confirm(`Delete lead ${selectedLead.name}?`)) {
+      return;
+    }
+    setLeads((current) => {
+      const remaining = current.filter((lead) => lead.id !== selectedLead.id);
+      if (remaining.length > 0) {
+        setSelectedLeadId(remaining[0].id);
+      }
+      return remaining.length > 0 ? remaining : current;
+    });
+    setActionNote(`Lead deleted: ${selectedLead.name}.`);
+  }
+
+  function addWorkshop() {
+    const title = window.prompt("Workshop title", "High Ticket Sales Mastery")?.trim();
+    if (!title) {
+      return;
+    }
+    const city = window.prompt("City", "Surat")?.trim() || "Surat";
+    const trainer = window.prompt("Trainer", "Arjun Sharma")?.trim() || "Arjun Sharma";
+    const created: Workshop = {
+      id: `workshop-${Date.now()}`,
+      title,
+      slug: title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, ""),
+      type: "Hybrid",
+      price: 9900,
+      trainer,
+      status: "Draft",
+      city,
+      startDate: "2026-05-30",
+      capacity: 30,
+      registrations: 0,
+      waitlist: 0,
+      revenue: 0,
+      feedbackScore: 0
+    };
+    setWorkshopList((current) => [created, ...current]);
+    setSelectedWorkshopId(created.id);
+    setActiveModule("workshops");
+    setActionNote(`Workshop created: ${created.title}.`);
+  }
+
+  function editSelectedWorkshop() {
+    if (!selectedWorkshop) {
+      return;
+    }
+    const title = window.prompt("Workshop title", selectedWorkshop.title)?.trim();
+    if (!title) {
+      return;
+    }
+    const city = window.prompt("City", selectedWorkshop.city)?.trim() || selectedWorkshop.city;
+    const trainer =
+      window.prompt("Trainer", selectedWorkshop.trainer)?.trim() || selectedWorkshop.trainer;
+    setWorkshopList((current) =>
+      current.map((workshopItem) =>
+        workshopItem.id === selectedWorkshop.id
+          ? {
+              ...workshopItem,
+              title,
+              city,
+              trainer,
+              slug: title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "")
+            }
+          : workshopItem
+      )
+    );
+    setActionNote(`Workshop updated: ${title}.`);
+  }
+
+  function deleteSelectedWorkshop() {
+    if (!selectedWorkshop) {
+      return;
+    }
+    if (!window.confirm(`Delete workshop ${selectedWorkshop.title}?`)) {
+      return;
+    }
+    setWorkshopList((current) => {
+      const remaining = current.filter((item) => item.id !== selectedWorkshop.id);
+      if (remaining.length > 0) {
+        setSelectedWorkshopId(remaining[0].id);
+      }
+      return remaining.length > 0 ? remaining : current;
+    });
+    setActionNote(`Workshop deleted: ${selectedWorkshop.title}.`);
   }
 
   function exportLeads() {
@@ -407,6 +523,7 @@ export function BusinessOS() {
           setLanguage={setLanguage}
           setQuery={setQuery}
           setSelectedLeadId={setSelectedLeadId}
+          setSelectedWorkshopId={setSelectedWorkshopId}
           setTheme={setTheme}
           setShowRightRail={setShowRightRail}
           showRightRail={showRightRail}
@@ -425,7 +542,13 @@ export function BusinessOS() {
           )}
         >
           <main className="min-w-0">{renderActiveModule()}</main>
-          {showRightRail ? <RightRail runAIQuery={runAIQuery} setActiveModule={setActiveModule} /> : null}
+          {showRightRail ? (
+            <RightRail
+              runAIQuery={runAIQuery}
+              setActiveModule={setActiveModule}
+              workshops={workshopList}
+            />
+          ) : null}
         </div>
       </div>
     </div>
@@ -450,6 +573,9 @@ export function BusinessOS() {
       case "crm":
         return (
           <CRMView
+            addLead={addLead}
+            deleteSelectedLead={deleteSelectedLead}
+            editSelectedLead={editSelectedLead}
             leads={leads}
             moveLeadForward={moveLeadForward}
             selectedLead={selectedLead}
@@ -459,9 +585,18 @@ export function BusinessOS() {
       case "sales":
         return <SalesView leads={leads} moveLeadForward={moveLeadForward} />;
       case "workshops":
-        return <WorkshopsView />;
+        return (
+          <WorkshopsView
+            addWorkshop={addWorkshop}
+            deleteSelectedWorkshop={deleteSelectedWorkshop}
+            editSelectedWorkshop={editSelectedWorkshop}
+            selectedWorkshop={selectedWorkshop}
+            setSelectedWorkshopId={setSelectedWorkshopId}
+            workshops={workshopList}
+          />
+        );
       case "funnels":
-        return <FunnelsView />;
+        return <FunnelsView workshops={workshopList} />;
       case "payments":
         return (
           <PaymentsView
@@ -614,6 +749,7 @@ function TopBar({
   setLanguage,
   setQuery,
   setSelectedLeadId,
+  setSelectedWorkshopId,
   setTheme,
   setShowRightRail,
   showRightRail,
@@ -634,6 +770,7 @@ function TopBar({
   setLanguage: (language: Language) => void;
   setQuery: (query: string) => void;
   setSelectedLeadId: (id: string) => void;
+  setSelectedWorkshopId: (id: string) => void;
   setTheme: (theme: "light" | "dark") => void;
   setShowRightRail: (show: boolean | ((prev: boolean) => boolean)) => void;
   showRightRail: boolean;
@@ -686,6 +823,7 @@ function TopBar({
                         setActiveModule("payments");
                       }
                       if (result.kind === "Workshop") {
+                        setSelectedWorkshopId(result.id);
                         setActiveModule("workshops");
                       }
                       setQuery("");
@@ -1401,10 +1539,12 @@ function LeaderboardPanel() {
 
 function RightRail({
   runAIQuery,
-  setActiveModule
+  setActiveModule,
+  workshops
 }: {
   runAIQuery: (question: string) => void;
   setActiveModule: (module: ModuleKey) => void;
+  workshops: Workshop[];
 }) {
   return (
     <aside className="space-y-4 lg:sticky lg:top-[96px] lg:self-start">
@@ -1542,11 +1682,17 @@ function ModuleHeader({
 }
 
 function CRMView({
+  addLead,
+  deleteSelectedLead,
+  editSelectedLead,
   leads,
   moveLeadForward,
   selectedLead,
   setSelectedLeadId
 }: {
+  addLead: () => void;
+  deleteSelectedLead: () => void;
+  editSelectedLead: () => void;
   leads: Lead[];
   moveLeadForward: (leadId: string) => void;
   selectedLead: Lead;
@@ -1578,6 +1724,13 @@ function CRMView({
           <div className="flex gap-2">
             <button
               className="rounded-lg border border-ink-900/10 px-3 py-2 text-sm font-semibold dark:border-white/10"
+              onClick={addLead}
+              type="button"
+            >
+              Add lead
+            </button>
+            <button
+              className="rounded-lg border border-ink-900/10 px-3 py-2 text-sm font-semibold dark:border-white/10"
               onClick={() => emitActionNote("Duplicate merge scan completed: 3 potential duplicate contacts found.")}
               type="button"
             >
@@ -1589,6 +1742,20 @@ function CRMView({
               type="button"
             >
               Assign leads
+            </button>
+            <button
+              className="rounded-lg border border-ink-900/10 px-3 py-2 text-sm font-semibold dark:border-white/10"
+              onClick={editSelectedLead}
+              type="button"
+            >
+              Edit selected
+            </button>
+            <button
+              className="rounded-lg bg-red-600 px-3 py-2 text-sm font-semibold text-white"
+              onClick={deleteSelectedLead}
+              type="button"
+            >
+              Delete
             </button>
           </div>
         }
@@ -1654,13 +1821,28 @@ function CRMView({
           </div>
         </Panel>
 
-        <LeadProfile lead={selectedLead} moveLeadForward={moveLeadForward} />
+        <LeadProfile
+          deleteSelectedLead={deleteSelectedLead}
+          editSelectedLead={editSelectedLead}
+          lead={selectedLead}
+          moveLeadForward={moveLeadForward}
+        />
       </div>
     </div>
   );
 }
 
-function LeadProfile({ lead, moveLeadForward }: { lead: Lead; moveLeadForward: (leadId: string) => void }) {
+function LeadProfile({
+  deleteSelectedLead,
+  editSelectedLead,
+  lead,
+  moveLeadForward
+}: {
+  deleteSelectedLead: () => void;
+  editSelectedLead: () => void;
+  lead: Lead;
+  moveLeadForward: (leadId: string) => void;
+}) {
   return (
     <section className="rounded-lg border border-ink-900/10 bg-white p-4 shadow-soft dark:border-white/10 dark:bg-white/[0.045]">
       <div className="flex items-start gap-3">
@@ -1695,6 +1877,20 @@ function LeadProfile({ lead, moveLeadForward }: { lead: Lead; moveLeadForward: (
       </div>
 
       <div className="mt-4 flex gap-2">
+        <button
+          className="flex items-center justify-center gap-2 rounded-lg border border-ink-900/10 px-3 py-2 text-sm font-semibold dark:border-white/10"
+          onClick={editSelectedLead}
+          type="button"
+        >
+          Edit
+        </button>
+        <button
+          className="flex items-center justify-center gap-2 rounded-lg border border-red-500/40 px-3 py-2 text-sm font-semibold text-red-600 dark:text-red-300"
+          onClick={deleteSelectedLead}
+          type="button"
+        >
+          Delete
+        </button>
         <button
           className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-mint-600 px-3 py-2 text-sm font-semibold text-white"
           onClick={() => emitActionNote(`WhatsApp chat opened for ${lead.name}.`)}
@@ -1865,18 +2061,48 @@ function SalesView({
   );
 }
 
-function WorkshopsView() {
+function WorkshopsView({
+  addWorkshop,
+  deleteSelectedWorkshop,
+  editSelectedWorkshop,
+  selectedWorkshop,
+  setSelectedWorkshopId,
+  workshops
+}: {
+  addWorkshop: () => void;
+  deleteSelectedWorkshop: () => void;
+  editSelectedWorkshop: () => void;
+  selectedWorkshop: Workshop | undefined;
+  setSelectedWorkshopId: (id: string) => void;
+  workshops: Workshop[];
+}) {
   return (
     <div>
       <ModuleHeader
         actions={
-          <button
-            className="rounded-lg bg-mint-600 px-3 py-2 text-sm font-semibold text-white"
-            onClick={() => emitActionNote("Workshop creation form opened with trainer and batch defaults.")}
-            type="button"
-          >
-            Create workshop
-          </button>
+          <div className="flex gap-2">
+            <button
+              className="rounded-lg bg-mint-600 px-3 py-2 text-sm font-semibold text-white"
+              onClick={addWorkshop}
+              type="button"
+            >
+              Create workshop
+            </button>
+            <button
+              className="rounded-lg border border-ink-900/10 px-3 py-2 text-sm font-semibold dark:border-white/10"
+              onClick={editSelectedWorkshop}
+              type="button"
+            >
+              Edit selected
+            </button>
+            <button
+              className="rounded-lg bg-red-600 px-3 py-2 text-sm font-semibold text-white"
+              onClick={deleteSelectedWorkshop}
+              type="button"
+            >
+              Delete
+            </button>
+          </div>
         }
         eyebrow="Workshop management"
         icon={CalendarDays}
@@ -1887,7 +2113,15 @@ function WorkshopsView() {
         <Panel defaultOpen title="Live Workshop Portfolio">
           <div className="grid gap-3 md:grid-cols-2">
             {workshops.map((workshop) => (
-              <WorkshopCard key={workshop.id} workshop={workshop} />
+              <WorkshopCard
+                key={workshop.id}
+                onClick={() => {
+                  setSelectedWorkshopId(workshop.id);
+                  emitActionNote(`Workshop opened: ${workshop.title}.`);
+                }}
+                selected={selectedWorkshop?.id === workshop.id}
+                workshop={workshop}
+              />
             ))}
           </div>
         </Panel>
@@ -1924,14 +2158,64 @@ function WorkshopsView() {
             ))}
           </div>
         </Panel>
+        <Panel defaultOpen title={selectedWorkshop ? `Selected: ${selectedWorkshop.title}` : "Selected workshop"}>
+          {selectedWorkshop ? (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-2">
+                <MetricTile label="Type" value={selectedWorkshop.type} />
+                <MetricTile label="Trainer" value={selectedWorkshop.trainer} />
+                <MetricTile label="City" value={selectedWorkshop.city} />
+                <MetricTile label="Price" value={formatCurrency(selectedWorkshop.price)} />
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <MetricTile label="Capacity" value={String(selectedWorkshop.capacity)} />
+                <MetricTile label="Registered" value={String(selectedWorkshop.registrations)} />
+                <MetricTile label="Waitlist" value={String(selectedWorkshop.waitlist)} />
+              </div>
+              <div className="flex gap-2">
+                <button
+                  className="rounded-lg border border-ink-900/10 px-3 py-2 text-sm font-semibold dark:border-white/10"
+                  onClick={editSelectedWorkshop}
+                  type="button"
+                >
+                  Edit workshop
+                </button>
+                <button
+                  className="rounded-lg border border-red-500/40 px-3 py-2 text-sm font-semibold text-red-600 dark:text-red-300"
+                  onClick={deleteSelectedWorkshop}
+                  type="button"
+                >
+                  Delete workshop
+                </button>
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-ink-500 dark:text-slate-400">No workshop selected.</p>
+          )}
+        </Panel>
       </div>
     </div>
   );
 }
 
-function WorkshopCard({ workshop }: { workshop: Workshop }) {
+function WorkshopCard({
+  onClick,
+  selected,
+  workshop
+}: {
+  onClick: () => void;
+  selected: boolean;
+  workshop: Workshop;
+}) {
   return (
-    <div className="rounded-lg border border-ink-900/10 p-4 transition hover:-translate-y-0.5 hover:border-mint-500/30 dark:border-white/10">
+    <button
+      className={cn(
+        "w-full rounded-lg border border-ink-900/10 p-4 text-left transition hover:-translate-y-0.5 hover:border-mint-500/30 dark:border-white/10",
+        selected && "border-mint-500/60 bg-mint-50/60 dark:bg-mint-500/10"
+      )}
+      onClick={onClick}
+      type="button"
+    >
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-lg font-bold">{workshop.title}</p>
@@ -1953,11 +2237,11 @@ function WorkshopCard({ workshop }: { workshop: Workshop }) {
         </div>
         <ProgressBar value={(workshop.registrations / workshop.capacity) * 100} />
       </div>
-    </div>
+    </button>
   );
 }
 
-function FunnelsView() {
+function FunnelsView({ workshops }: { workshops: Workshop[] }) {
   const featured = workshops[0];
 
   return (
