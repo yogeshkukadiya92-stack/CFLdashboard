@@ -155,6 +155,36 @@ const filterLabels = [
 const ACTION_NOTE_EVENT = "cfl:action-note";
 const REGISTRATION_STORAGE_KEY = "cfl_registrations_v1";
 
+function shouldOpenActionPanel(message: string) {
+  const normalized = message.toLowerCase();
+  if (
+    normalized.includes("required") ||
+    normalized.includes("select workshop first") ||
+    normalized.includes("please select") ||
+    normalized.includes("filter focused") ||
+    normalized.includes("quick filter")
+  ) {
+    return false;
+  }
+
+  return [
+    "opened",
+    "created",
+    "generated",
+    "queued",
+    "started",
+    "saved",
+    "sent",
+    "copied",
+    "exported",
+    "loaded",
+    "deleted",
+    "updated",
+    "scan completed",
+    "executed"
+  ].some((keyword) => normalized.includes(keyword));
+}
+
 function emitActionNote(message: string) {
   if (typeof window === "undefined") {
     return;
@@ -177,6 +207,7 @@ export function BusinessOS() {
   const [aiAnswer, setAiAnswer] = useState(answerFor("Show Surat revenue this month"));
   const [activePaymentFilter, setActivePaymentFilter] = useState<"All" | Payment["status"]>("All");
   const [actionNote, setActionNote] = useState("47 payment recovery reminders are queued for WhatsApp.");
+  const [actionPanel, setActionPanel] = useState<{ message: string; openedAt: number } | null>(null);
   const [showRightRail, setShowRightRail] = useState(false);
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
@@ -186,6 +217,9 @@ export function BusinessOS() {
       const detail = (event as CustomEvent<string>).detail;
       if (detail) {
         setActionNote(detail);
+        if (shouldOpenActionPanel(detail)) {
+          setActionPanel({ message: detail, openedAt: Date.now() });
+        }
       }
     }
 
@@ -648,6 +682,14 @@ export function BusinessOS() {
           ) : null}
         </div>
       </div>
+
+      {actionPanel ? (
+        <ActionPanel
+          message={actionPanel.message}
+          onClose={() => setActionPanel(null)}
+          setActiveModule={setActiveModule}
+        />
+      ) : null}
     </div>
   );
 
@@ -788,6 +830,106 @@ function Sidebar({
         </div>
       </div>
     </aside>
+  );
+}
+
+function inferActionModule(message: string): ModuleKey {
+  const normalized = message.toLowerCase();
+  if (normalized.includes("lead") || normalized.includes("crm") || normalized.includes("duplicate")) {
+    return "crm";
+  }
+  if (normalized.includes("workshop") || normalized.includes("schedule") || normalized.includes("registration link")) {
+    return "workshops";
+  }
+  if (normalized.includes("payment") || normalized.includes("razorpay") || normalized.includes("invoice")) {
+    return "payments";
+  }
+  if (normalized.includes("campaign") || normalized.includes("whatsapp") || normalized.includes("email") || normalized.includes("sms")) {
+    return "marketing";
+  }
+  if (normalized.includes("report") || normalized.includes("export")) {
+    return "reports";
+  }
+  if (normalized.includes("sales") || normalized.includes("commission") || normalized.includes("target")) {
+    return "sales";
+  }
+  if (normalized.includes("ticket") || normalized.includes("support")) {
+    return "support";
+  }
+  if (normalized.includes("team") || normalized.includes("task")) {
+    return "team";
+  }
+  if (normalized.includes("ai") || normalized.includes("insight")) {
+    return "ai";
+  }
+  return "home";
+}
+
+function ActionPanel({
+  message,
+  onClose,
+  setActiveModule
+}: {
+  message: string;
+  onClose: () => void;
+  setActiveModule: (module: ModuleKey) => void;
+}) {
+  const module = inferActionModule(message);
+  const title = message.replace(/\.$/, "");
+
+  return (
+    <div className="fixed inset-0 z-[70] grid place-items-center bg-ink-900/35 p-4 backdrop-blur-[1px]">
+      <section className="w-full max-w-[520px] rounded-xl border border-ink-900/10 bg-white p-4 shadow-2xl dark:border-white/10 dark:bg-[#16201c]">
+        <div className="flex items-start gap-3">
+          <div className="grid size-10 shrink-0 place-items-center rounded-lg bg-mint-50 text-mint-700 dark:bg-mint-500/10 dark:text-mint-100">
+            <CheckCircle2 className="size-5" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-bold uppercase tracking-[0.14em] text-ink-500 dark:text-slate-400">
+              Action Opened
+            </p>
+            <h2 className="mt-1 text-lg font-bold leading-snug">{title}</h2>
+            <p className="mt-2 text-sm text-ink-500 dark:text-slate-400">
+              This action is ready. Continue in the related module or close this panel.
+            </p>
+          </div>
+          <button
+            className="grid size-8 place-items-center rounded-md border border-ink-900/10 text-ink-500 hover:bg-ink-900/[0.04] dark:border-white/10 dark:hover:bg-white/[0.06]"
+            onClick={onClose}
+            type="button"
+          >
+            <X className="size-4" />
+          </button>
+        </div>
+
+        <div className="mt-4 grid gap-2 sm:grid-cols-3">
+          <button
+            className="rounded-lg bg-mint-600 px-3 py-2 text-sm font-semibold text-white"
+            onClick={() => {
+              setActiveModule(module);
+              onClose();
+            }}
+            type="button"
+          >
+            Open Module
+          </button>
+          <button
+            className="rounded-lg border border-ink-900/10 px-3 py-2 text-sm font-semibold dark:border-white/10"
+            onClick={() => emitActionNote(`${title} marked for follow-up.`)}
+            type="button"
+          >
+            Follow-up
+          </button>
+          <button
+            className="rounded-lg border border-ink-900/10 px-3 py-2 text-sm font-semibold dark:border-white/10"
+            onClick={onClose}
+            type="button"
+          >
+            Done
+          </button>
+        </div>
+      </section>
+    </div>
   );
 }
 
