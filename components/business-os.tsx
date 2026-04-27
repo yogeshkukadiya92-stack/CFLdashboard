@@ -679,7 +679,7 @@ export function BusinessOS() {
           />
         );
       case "sales":
-        return <SalesView leads={leads} moveLeadForward={moveLeadForward} />;
+        return <SalesView leads={leads} moveLeadForward={moveLeadForward} workshops={workshopList} />;
       case "workshops":
         return (
           <WorkshopsView
@@ -2126,12 +2126,121 @@ function TimelineBlock({ icon: Icon, title, values }: { icon: LucideIcon; title:
 
 function SalesView({
   leads,
-  moveLeadForward
+  moveLeadForward,
+  workshops
 }: {
   leads: Lead[];
   moveLeadForward: (leadId: string) => void;
+  workshops: Workshop[];
 }) {
   const bestLeads = [...leads].sort((a, b) => b.score - a.score).slice(0, 5);
+  const [salesPersonForm, setSalesPersonForm] = useState({
+    canViewOtherWorkshopReg: true,
+    directClientConversation: "",
+    email: "",
+    firstName: "",
+    generalLeadConversation: "",
+    group: "",
+    isActive: true,
+    lastName: "",
+    middleName: "",
+    mobile: "",
+    password: ""
+  });
+  const [salesPeople, setSalesPeople] = useState<
+    Array<{
+      id: string;
+      fullName: string;
+      group: string;
+      isActive: boolean;
+      mobile: string;
+    }>
+  >([]);
+  const [commissionForm, setCommissionForm] = useState({
+    directClientPercent: "5",
+    leadAssignPercent: "15",
+    workshopId: ""
+  });
+  const [commissions, setCommissions] = useState<
+    Array<{ id: string; workshopId: string; workshopName: string; leadAssignPercent: number; directClientPercent: number }>
+  >([]);
+  const [editingCommissionId, setEditingCommissionId] = useState<string | null>(null);
+
+  function saveSalesPerson() {
+    if (!salesPersonForm.firstName.trim() || !salesPersonForm.lastName.trim() || !salesPersonForm.mobile.trim()) {
+      emitActionNote("Sales person first name, last name and mobile are required.");
+      return;
+    }
+    const fullName = `${salesPersonForm.firstName} ${salesPersonForm.middleName} ${salesPersonForm.lastName}`
+      .replace(/\s+/g, " ")
+      .trim();
+    const record = {
+      id: `sp-${salesPersonForm.mobile.replace(/\D/g, "")}`,
+      fullName,
+      group: salesPersonForm.group || "General",
+      isActive: salesPersonForm.isActive,
+      mobile: salesPersonForm.mobile
+    };
+    setSalesPeople((current) => {
+      const index = current.findIndex((item) => item.id === record.id);
+      if (index >= 0) {
+        const next = [...current];
+        next[index] = record;
+        return next;
+      }
+      return [record, ...current];
+    });
+    emitActionNote(`Sales person saved: ${fullName}.`);
+  }
+
+  function addOrUpdateCommission() {
+    const workshop = workshops.find((item) => item.id === commissionForm.workshopId);
+    if (!workshop) {
+      emitActionNote("Select workshop for commission.");
+      return;
+    }
+    const leadAssignPercent = Number(commissionForm.leadAssignPercent || 0);
+    const directClientPercent = Number(commissionForm.directClientPercent || 0);
+    const payload = {
+      id: editingCommissionId ?? `com-${workshop.id}`,
+      workshopId: workshop.id,
+      workshopName: workshop.title,
+      leadAssignPercent,
+      directClientPercent
+    };
+    setCommissions((current) => {
+      const index = current.findIndex((item) => item.id === payload.id);
+      if (index >= 0) {
+        const next = [...current];
+        next[index] = payload;
+        return next;
+      }
+      return [payload, ...current];
+    });
+    setEditingCommissionId(null);
+    emitActionNote(`Commission saved for ${workshop.title}.`);
+  }
+
+  function editCommission(id: string) {
+    const found = commissions.find((item) => item.id === id);
+    if (!found) {
+      return;
+    }
+    setEditingCommissionId(found.id);
+    setCommissionForm({
+      directClientPercent: String(found.directClientPercent),
+      leadAssignPercent: String(found.leadAssignPercent),
+      workshopId: found.workshopId
+    });
+  }
+
+  function deleteCommission(id: string) {
+    setCommissions((current) => current.filter((item) => item.id !== id));
+    if (editingCommissionId === id) {
+      setEditingCommissionId(null);
+    }
+    emitActionNote("Commission row deleted.");
+  }
 
   return (
     <div>
@@ -2149,6 +2258,101 @@ function SalesView({
         icon={Target}
         title="Auto assignment, incentives, reminders, and conversion focus"
       />
+
+      <div className="mb-4 grid gap-4 xl:grid-cols-[1fr_1fr]">
+        <Panel
+          defaultOpen
+          action={
+            <button
+              className="rounded-lg border border-ai-500/40 px-3 py-1.5 text-xs font-semibold text-ai-600"
+              onClick={() => emitActionNote(`${salesPeople.length} sales person records loaded.`)}
+              type="button"
+            >
+              View Data
+            </button>
+          }
+          title="Manage Sales Person"
+        >
+          <div className="grid gap-3 md:grid-cols-3">
+            <input className="rounded-lg border border-ink-900/10 bg-white px-3 py-2.5 text-sm outline-none dark:border-white/10 dark:bg-white/[0.03]" placeholder="First Name" value={salesPersonForm.firstName} onChange={(event) => setSalesPersonForm((current) => ({ ...current, firstName: event.target.value }))} />
+            <input className="rounded-lg border border-ink-900/10 bg-white px-3 py-2.5 text-sm outline-none dark:border-white/10 dark:bg-white/[0.03]" placeholder="Middle Name" value={salesPersonForm.middleName} onChange={(event) => setSalesPersonForm((current) => ({ ...current, middleName: event.target.value }))} />
+            <input className="rounded-lg border border-ink-900/10 bg-white px-3 py-2.5 text-sm outline-none dark:border-white/10 dark:bg-white/[0.03]" placeholder="Last Name" value={salesPersonForm.lastName} onChange={(event) => setSalesPersonForm((current) => ({ ...current, lastName: event.target.value }))} />
+            <input className="rounded-lg border border-ink-900/10 bg-white px-3 py-2.5 text-sm outline-none dark:border-white/10 dark:bg-white/[0.03]" placeholder="Mobile No [Login ID]" value={salesPersonForm.mobile} onChange={(event) => setSalesPersonForm((current) => ({ ...current, mobile: event.target.value }))} />
+            <input className="rounded-lg border border-ink-900/10 bg-white px-3 py-2.5 text-sm outline-none dark:border-white/10 dark:bg-white/[0.03]" placeholder="Password" type="password" value={salesPersonForm.password} onChange={(event) => setSalesPersonForm((current) => ({ ...current, password: event.target.value }))} />
+            <input className="rounded-lg border border-ink-900/10 bg-white px-3 py-2.5 text-sm outline-none dark:border-white/10 dark:bg-white/[0.03]" placeholder="Email ID" value={salesPersonForm.email} onChange={(event) => setSalesPersonForm((current) => ({ ...current, email: event.target.value }))} />
+            <select className="rounded-lg border border-ink-900/10 bg-white px-3 py-2.5 text-sm outline-none dark:border-white/10 dark:bg-white/[0.03]" value={salesPersonForm.group} onChange={(event) => setSalesPersonForm((current) => ({ ...current, group: event.target.value }))}>
+              <option value="">SELECT SALES PERSON GROUP</option>
+              <option value="Inbound">Inbound</option>
+              <option value="Outbound">Outbound</option>
+              <option value="Corporate">Corporate</option>
+              <option value="Closers">Closers</option>
+            </select>
+            <label className="inline-flex items-center gap-2 rounded-lg border border-ink-900/10 px-3 py-2.5 text-sm dark:border-white/10">
+              <input checked={salesPersonForm.canViewOtherWorkshopReg} className="size-4 accent-ai-500" onChange={(event) => setSalesPersonForm((current) => ({ ...current, canViewOtherWorkshopReg: event.target.checked }))} type="checkbox" />
+              Can View Client Other Workshop Reg.?
+            </label>
+            <label className="inline-flex items-center gap-2 rounded-lg border border-ink-900/10 px-3 py-2.5 text-sm dark:border-white/10">
+              <input checked={salesPersonForm.isActive} className="size-4 accent-ai-500" onChange={(event) => setSalesPersonForm((current) => ({ ...current, isActive: event.target.checked }))} type="checkbox" />
+              Is Active?
+            </label>
+          </div>
+          <textarea className="mt-3 min-h-[70px] w-full rounded-lg border border-ink-900/10 bg-white px-3 py-2.5 text-sm outline-none dark:border-white/10 dark:bg-white/[0.03]" placeholder="Select Workshop Conversation For General Lead Assign" value={salesPersonForm.generalLeadConversation} onChange={(event) => setSalesPersonForm((current) => ({ ...current, generalLeadConversation: event.target.value }))} />
+          <textarea className="mt-3 min-h-[70px] w-full rounded-lg border border-ink-900/10 bg-white px-3 py-2.5 text-sm outline-none dark:border-white/10 dark:bg-white/[0.03]" placeholder="Select Workshop Conversation For Direct Client" value={salesPersonForm.directClientConversation} onChange={(event) => setSalesPersonForm((current) => ({ ...current, directClientConversation: event.target.value }))} />
+          <div className="mt-3 flex gap-2">
+            <button className="rounded-lg bg-mint-600 px-4 py-2 text-sm font-semibold text-white" onClick={saveSalesPerson} type="button">
+              Save Sales Person
+            </button>
+          </div>
+          <div className="mt-3 space-y-2">
+            {salesPeople.slice(0, 4).map((person) => (
+              <div className="flex items-center justify-between rounded-md border border-ink-900/10 p-2.5 text-sm dark:border-white/10" key={person.id}>
+                <span>{person.fullName} | {person.mobile}</span>
+                <span className="text-xs font-semibold">{person.group} | {person.isActive ? "Active" : "Inactive"}</span>
+              </div>
+            ))}
+          </div>
+        </Panel>
+
+        <Panel defaultOpen title="Manage Workshop wise Commission & Commission [Direct Client]">
+          <div className="grid gap-3 md:grid-cols-3">
+            <select className="rounded-lg border border-ink-900/10 bg-white px-3 py-2.5 text-sm outline-none dark:border-white/10 dark:bg-white/[0.03]" value={commissionForm.workshopId} onChange={(event) => setCommissionForm((current) => ({ ...current, workshopId: event.target.value }))}>
+              <option value="">SELECT WORKSHOP</option>
+              {workshops.map((workshop) => (
+                <option key={workshop.id} value={workshop.id}>
+                  {workshop.title}
+                </option>
+              ))}
+            </select>
+            <input className="rounded-lg border border-ink-900/10 bg-white px-3 py-2.5 text-sm outline-none dark:border-white/10 dark:bg-white/[0.03]" placeholder="Commission Via Lead Assign (%)" value={commissionForm.leadAssignPercent} onChange={(event) => setCommissionForm((current) => ({ ...current, leadAssignPercent: event.target.value }))} />
+            <input className="rounded-lg border border-ink-900/10 bg-white px-3 py-2.5 text-sm outline-none dark:border-white/10 dark:bg-white/[0.03]" placeholder="Commission [Direct Client] (%)" value={commissionForm.directClientPercent} onChange={(event) => setCommissionForm((current) => ({ ...current, directClientPercent: event.target.value }))} />
+          </div>
+          <button className="mt-3 rounded-lg bg-ink-900 px-4 py-2 text-sm font-semibold text-white dark:bg-white dark:text-ink-900" onClick={addOrUpdateCommission} type="button">
+            {editingCommissionId ? "Update Workshop Commission" : "Add Workshop Commission"}
+          </button>
+          <div className="mt-3 overflow-x-auto rounded-lg border border-ink-900/10 dark:border-white/10">
+            <div className="grid min-w-[620px] grid-cols-[1.2fr_1fr_1fr_90px_90px] bg-[#f6f8f4] px-3 py-2 text-xs font-bold dark:bg-white/[0.05]">
+              <span>Workshop Name</span>
+              <span>Commission Via Lead Assign (%)</span>
+              <span>Commission [Direct Client] (%)</span>
+              <span className="text-center">Edit</span>
+              <span className="text-center">Delete</span>
+            </div>
+            {commissions.length ? (
+              commissions.map((row) => (
+                <div className="grid min-w-[620px] grid-cols-[1.2fr_1fr_1fr_90px_90px] items-center border-t border-ink-900/10 px-3 py-2 text-sm dark:border-white/10" key={row.id}>
+                  <span>{row.workshopName}</span>
+                  <span>{row.leadAssignPercent}%</span>
+                  <span>{row.directClientPercent}%</span>
+                  <button className="rounded-md border border-ink-900/10 px-2 py-1 text-xs dark:border-white/10" onClick={() => editCommission(row.id)} type="button">Edit</button>
+                  <button className="rounded-md border border-red-500/40 px-2 py-1 text-xs text-red-600 dark:text-red-300" onClick={() => deleteCommission(row.id)} type="button">Delete</button>
+                </div>
+              ))
+            ) : (
+              <p className="px-3 py-6 text-center text-sm text-ink-500 dark:text-slate-400">No Data Added</p>
+            )}
+          </div>
+        </Panel>
+      </div>
 
       <div className="grid gap-4 xl:grid-cols-[0.92fr_1.08fr]">
         <Panel defaultOpen title="AI Best Lead Suggestions">
