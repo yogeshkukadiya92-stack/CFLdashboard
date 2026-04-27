@@ -53,6 +53,7 @@ import {
   UserCheck,
   UsersRound,
   Workflow,
+  X,
   type LucideIcon
 } from "lucide-react";
 import {
@@ -1799,6 +1800,7 @@ function CRMView({
   const [quickFilter, setQuickFilter] = useState("All stages");
   const [leadFormMode, setLeadFormMode] = useState<"create" | "edit">("create");
   const [leadFormOpen, setLeadFormOpen] = useState(false);
+  const [leadProfileOpen, setLeadProfileOpen] = useState(false);
   const [leadForm, setLeadForm] = useState({
     city: "",
     country: "",
@@ -1933,7 +1935,7 @@ function CRMView({
         </Panel>
       ) : null}
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="grid gap-4">
         <Panel
           defaultOpen
           action={<span className="text-xs font-semibold text-mint-600">{hotLeads.length} hot leads</span>}
@@ -1972,7 +1974,10 @@ function CRMView({
                   selectedLead.id === lead.id && "bg-mint-50 dark:bg-mint-500/10"
                 )}
                 key={lead.id}
-                onClick={() => setSelectedLeadId(lead.id)}
+                onClick={() => {
+                  setSelectedLeadId(lead.id);
+                  setLeadProfileOpen(true);
+                }}
                 type="button"
               >
                 <span className="min-w-0">
@@ -1989,14 +1994,35 @@ function CRMView({
             ))}
           </div>
         </Panel>
-
-        <LeadProfile
-          deleteSelectedLead={deleteSelectedLead}
-          editSelectedLead={() => openLeadForm("edit")}
-          lead={selectedLead}
-          moveLeadForward={moveLeadForward}
-        />
       </div>
+
+      {leadProfileOpen ? (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-ink-900/45 p-4 backdrop-blur-[1px]">
+          <div className="relative max-h-[92vh] w-full max-w-[600px] overflow-y-auto rounded-xl bg-white p-0 shadow-2xl dark:bg-[#16201c]">
+            <button
+              className="absolute right-3 top-3 grid size-8 place-items-center rounded-md border border-ink-900/10 bg-white text-ink-600 dark:border-white/10 dark:bg-white/[0.05] dark:text-slate-200"
+              onClick={() => setLeadProfileOpen(false)}
+              type="button"
+            >
+              <X className="size-4" />
+            </button>
+            <div className="p-3">
+              <LeadProfile
+                deleteSelectedLead={() => {
+                  deleteSelectedLead();
+                  setLeadProfileOpen(false);
+                }}
+                editSelectedLead={() => {
+                  openLeadForm("edit");
+                  setLeadProfileOpen(false);
+                }}
+                lead={selectedLead}
+                moveLeadForward={moveLeadForward}
+              />
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
