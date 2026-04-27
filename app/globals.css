@@ -19,8 +19,9 @@ body {
   min-height: 100vh;
   margin: 0;
   background:
-    radial-gradient(circle at top left, rgba(16, 163, 127, 0.08), transparent 32rem),
-    linear-gradient(135deg, #f8faf7 0%, #f4f6f2 42%, #fffaf4 100%);
+    radial-gradient(circle at 8% 0%, rgba(16, 163, 127, 0.1), transparent 34rem),
+    radial-gradient(circle at 92% 4%, rgba(99, 102, 241, 0.08), transparent 30rem),
+    linear-gradient(135deg, #f8faf7 0%, #f4f6f2 45%, #f7f3ec 100%);
   color: #18211d;
   font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   letter-spacing: 0;
@@ -43,6 +44,10 @@ textarea:focus-visible {
 
 .dark body {
   color-scheme: dark;
+  background:
+    radial-gradient(circle at 12% 0%, rgba(16, 163, 127, 0.16), transparent 28rem),
+    radial-gradient(circle at 90% 0%, rgba(99, 102, 241, 0.14), transparent 24rem),
+    linear-gradient(140deg, #0f1412 0%, #101513 48%, #151b19 100%);
 }
 
 .scrollbar-thin {

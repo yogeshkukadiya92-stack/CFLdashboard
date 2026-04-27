@@ -171,6 +171,7 @@ export function BusinessOS() {
   const [aiAnswer, setAiAnswer] = useState(answerFor("Show Surat revenue this month"));
   const [activePaymentFilter, setActivePaymentFilter] = useState<"All" | Payment["status"]>("All");
   const [actionNote, setActionNote] = useState("47 payment recovery reminders are queued for WhatsApp.");
+  const [showRightRail, setShowRightRail] = useState(false);
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -407,15 +408,24 @@ export function BusinessOS() {
           setQuery={setQuery}
           setSelectedLeadId={setSelectedLeadId}
           setTheme={setTheme}
+          setShowRightRail={setShowRightRail}
+          showRightRail={showRightRail}
           searchInputRef={searchInputRef}
           theme={theme}
         />
 
         <MobileNav activeModule={activeModule} setActiveModule={setActiveModule} />
 
-        <div className="grid min-h-0 gap-3 p-3 lg:grid-cols-[minmax(0,1fr)_296px] lg:p-4">
+        <div
+          className={cn(
+            "grid min-h-0 gap-3 p-3 lg:p-4",
+            showRightRail
+              ? "lg:grid-cols-[minmax(0,1fr)_296px]"
+              : "lg:grid-cols-[minmax(0,1fr)]"
+          )}
+        >
           <main className="min-w-0">{renderActiveModule()}</main>
-          <RightRail runAIQuery={runAIQuery} setActiveModule={setActiveModule} />
+          {showRightRail ? <RightRail runAIQuery={runAIQuery} setActiveModule={setActiveModule} /> : null}
         </div>
       </div>
     </div>
@@ -564,10 +574,10 @@ function NavButton({
   return (
     <button
       className={cn(
-        "group flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left text-sm font-medium transition",
+        "group flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition",
         compact && "py-2 text-xs",
         active
-          ? "border border-mint-500/20 bg-mint-50 text-mint-700 shadow-soft dark:bg-mint-500/10 dark:text-mint-100"
+          ? "border border-mint-500/30 bg-gradient-to-r from-mint-50 to-white text-mint-700 shadow-soft dark:from-mint-500/20 dark:to-white/[0.04] dark:text-mint-100"
           : "text-ink-700 hover:bg-ink-900/[0.04] dark:text-slate-300 dark:hover:bg-white/[0.06]"
       )}
       onClick={onClick}
@@ -605,6 +615,8 @@ function TopBar({
   setQuery,
   setSelectedLeadId,
   setTheme,
+  setShowRightRail,
+  showRightRail,
   searchInputRef,
   theme
 }: {
@@ -623,11 +635,13 @@ function TopBar({
   setQuery: (query: string) => void;
   setSelectedLeadId: (id: string) => void;
   setTheme: (theme: "light" | "dark") => void;
+  setShowRightRail: (show: boolean | ((prev: boolean) => boolean)) => void;
+  showRightRail: boolean;
   searchInputRef: React.RefObject<HTMLInputElement | null>;
   theme: "light" | "dark";
 }) {
   return (
-    <header className="sticky top-0 z-30 border-b border-ink-900/10 bg-white/82 px-3 py-2.5 backdrop-blur-xl dark:border-white/10 dark:bg-[#101513]/86 lg:px-4">
+    <header className="sticky top-0 z-30 border-b border-ink-900/10 bg-white/82 px-3 py-2.5 shadow-[0_8px_28px_-22px_rgba(16,24,40,0.8)] backdrop-blur-xl dark:border-white/10 dark:bg-[#101513]/86 lg:px-4">
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-3 lg:hidden">
           <div className="grid size-9 place-items-center rounded-lg bg-gradient-to-br from-mint-600 to-ai-500 text-sm font-black text-white">
@@ -637,7 +651,7 @@ function TopBar({
         </div>
 
         <div className="relative min-w-[250px] flex-1 md:max-w-[630px]">
-          <div className="flex items-center gap-2 rounded-md border border-ink-900/10 bg-white px-3 py-2 shadow-soft dark:border-white/10 dark:bg-white/[0.05]">
+          <div className="flex items-center gap-2 rounded-xl border border-ink-900/10 bg-white px-3 py-2 shadow-soft dark:border-white/10 dark:bg-white/[0.05]">
             <span className="hidden items-center gap-1 rounded-md bg-[#f4f7f1] px-2 py-1 text-xs font-semibold text-ink-700 dark:bg-white/10 dark:text-slate-200 sm:flex">
               <Globe2 className="size-3.5" />
               +91
@@ -713,7 +727,7 @@ function TopBar({
           </IconButton>
           <button
             aria-label="New Lead"
-            className="flex items-center gap-2 rounded-lg bg-mint-600 px-3 py-2 text-sm font-semibold text-white shadow-soft transition hover:bg-mint-700"
+            className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-mint-600 to-mint-700 px-3 py-2 text-sm font-semibold text-white shadow-soft transition hover:brightness-110"
             onClick={addLead}
             type="button"
           >
@@ -746,6 +760,9 @@ function TopBar({
           <IconButton label="AI Command" onClick={() => runAIQuery("Summarize today's activities")}>
             <Bot className="size-4" />
           </IconButton>
+          <IconButton label={showRightRail ? "Hide Insights" : "Show Insights"} onClick={() => setShowRightRail((prev) => !prev)}>
+            <LayoutDashboard className="size-4" />
+          </IconButton>
           <IconButton label="Notifications">
             <Bell className="size-4" />
           </IconButton>
@@ -761,10 +778,10 @@ function TopBar({
         </div>
       </div>
 
-      <div className="mt-2 hidden items-center justify-between text-xs text-ink-500 dark:text-slate-400 md:flex">
-        <span>{languageCopy[language].greeting}</span>
-        <span>{actionNote}</span>
-        <span>Selected lead: {selectedLead.name}</span>
+      <div className="mt-2 hidden items-center justify-between rounded-lg border border-ink-900/10 bg-white/55 px-2.5 py-1.5 text-[11px] text-ink-500 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-400 md:flex">
+        <span className="truncate">{languageCopy[language].greeting}</span>
+        <span className="mx-3 truncate">{actionNote}</span>
+        <span className="shrink-0">Lead: {selectedLead.name}</span>
       </div>
     </header>
   );
@@ -841,23 +858,76 @@ function DashboardHome({
   setActivePaymentFilter: (filter: "All" | Payment["status"]) => void;
   setSelectedLeadId: (id: string) => void;
 }) {
+  const [homeFocus, setHomeFocus] = useState<"overview" | "pipeline" | "revenue" | "operations">("overview");
+
   return (
     <div className="space-y-3">
+      <div className="scrollbar-thin flex gap-2 overflow-x-auto pb-1">
+        {([
+          ["overview", "Overview"],
+          ["pipeline", "Pipeline"],
+          ["revenue", "Revenue"],
+          ["operations", "Operations"]
+        ] as const).map(([key, label]) => (
+          <button
+            className={cn(
+              "shrink-0 rounded-full border px-3 py-1.5 text-xs font-semibold transition",
+              homeFocus === key
+                ? "border-mint-500/40 bg-mint-50 text-mint-700 dark:bg-mint-500/10 dark:text-mint-100"
+                : "border-ink-900/10 text-ink-600 dark:border-white/10 dark:text-slate-300"
+            )}
+            key={key}
+            onClick={() => setHomeFocus(key)}
+            type="button"
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         {dashboardKpis.map((kpi) => (
           <KpiCard key={kpi.label} kpi={kpi} />
         ))}
       </div>
 
-      <div className="grid gap-3 xl:grid-cols-[minmax(0,1.05fr)_minmax(440px,0.95fr)]">
+      {homeFocus === "overview" ? (
+        <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.9fr)]">
+          <Panel
+            defaultOpen
+            action={
+              <button
+                className="rounded-md border border-ink-900/10 px-3 py-1.5 text-xs font-semibold text-ink-600 hover:bg-ink-900/[0.04] dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/[0.06]"
+                onClick={() => setActiveModule("crm")}
+                type="button"
+              >
+                View all
+              </button>
+            }
+            icon={Filter}
+            title="Pipeline"
+          >
+            <PipelineBoard
+              leads={leads}
+              moveLeadForward={moveLeadForward}
+              selectedLeadId={selectedLeadId}
+              setSelectedLeadId={setSelectedLeadId}
+            />
+          </Panel>
+          <LeaderboardPanel />
+        </div>
+      ) : null}
+
+      {homeFocus === "pipeline" ? (
         <Panel
+          defaultOpen
           action={
             <button
               className="rounded-md border border-ink-900/10 px-3 py-1.5 text-xs font-semibold text-ink-600 hover:bg-ink-900/[0.04] dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/[0.06]"
               onClick={() => setActiveModule("crm")}
               type="button"
             >
-              View all
+              Open CRM
             </button>
           }
           icon={Filter}
@@ -870,24 +940,35 @@ function DashboardHome({
             setSelectedLeadId={setSelectedLeadId}
           />
         </Panel>
+      ) : null}
 
-        <Panel
-          action={<span className="text-xs font-medium text-ink-500 dark:text-slate-400">This Month</span>}
-          title="Revenue Overview"
-        >
-          <RevenueOverview />
-        </Panel>
-      </div>
+      {homeFocus === "revenue" ? (
+        <div className="grid gap-3 xl:grid-cols-[minmax(0,1.1fr)_minmax(340px,0.9fr)]">
+          <Panel
+            defaultOpen
+            action={<span className="text-xs font-medium text-ink-500 dark:text-slate-400">This Month</span>}
+            title="Revenue Overview"
+          >
+            <RevenueOverview />
+          </Panel>
+          <PaymentsMiniPanel
+            activePaymentFilter={activePaymentFilter}
+            setActiveModule={setActiveModule}
+            setActivePaymentFilter={setActivePaymentFilter}
+          />
+        </div>
+      ) : null}
 
-      <div className="grid gap-3 xl:grid-cols-[minmax(320px,0.9fr)_minmax(360px,1.1fr)_minmax(320px,0.9fr)]">
-        <WorkshopMiniPanel />
-        <PaymentsMiniPanel
-          activePaymentFilter={activePaymentFilter}
-          setActiveModule={setActiveModule}
-          setActivePaymentFilter={setActivePaymentFilter}
-        />
-        <LeaderboardPanel />
-      </div>
+      {homeFocus === "operations" ? (
+        <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+          <WorkshopMiniPanel />
+          <PaymentsMiniPanel
+            activePaymentFilter={activePaymentFilter}
+            setActiveModule={setActiveModule}
+            setActivePaymentFilter={setActivePaymentFilter}
+          />
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -902,7 +983,7 @@ function KpiCard({ kpi }: { kpi: (typeof dashboardKpis)[number] }) {
   }[kpi.tone];
 
   return (
-    <div className="rounded-md border border-ink-900/10 bg-white p-3 shadow-soft dark:border-white/10 dark:bg-white/[0.045]">
+    <div className="rounded-xl border border-ink-900/10 bg-white p-3 shadow-soft dark:border-white/10 dark:bg-white/[0.045]">
       <div className="flex items-start gap-3">
         <div className={cn("grid size-12 place-items-center rounded-lg", toneStyles)}>
           <Icon className="size-5" />
@@ -910,7 +991,7 @@ function KpiCard({ kpi }: { kpi: (typeof dashboardKpis)[number] }) {
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold text-ink-700 dark:text-slate-200">{kpi.label}</p>
           <div className="mt-2 flex items-baseline gap-2">
-            <p className="text-2xl font-bold tracking-tight">{kpi.value}</p>
+            <p className="truncate text-[2rem] font-bold leading-none tracking-tight tabular-nums">{kpi.value}</p>
             <span className="text-xs font-bold text-mint-600 dark:text-mint-300">{kpi.delta}</span>
           </div>
           <p className="mt-1 text-xs text-ink-500 dark:text-slate-400">{kpi.helper}</p>
@@ -923,22 +1004,42 @@ function KpiCard({ kpi }: { kpi: (typeof dashboardKpis)[number] }) {
 function Panel({
   action,
   children,
+  defaultOpen = false,
   icon: Icon,
   title
 }: {
   action?: React.ReactNode;
   children: React.ReactNode;
+  defaultOpen?: boolean;
   icon?: LucideIcon;
   title: string;
 }) {
+  const [isOpen, setIsOpen] = useState(defaultOpen);
+
   return (
-    <section className="rounded-md border border-ink-900/10 bg-white p-3 shadow-soft dark:border-white/10 dark:bg-white/[0.045]">
+    <section className="rounded-xl border border-ink-900/10 bg-white p-3 shadow-soft dark:border-white/10 dark:bg-white/[0.045]">
       <div className="mb-3 flex items-center gap-2">
         <h2 className="text-base font-bold tracking-tight">{title}</h2>
         {Icon ? <Icon className="size-4 text-ink-400" /> : null}
-        <div className="ml-auto">{action}</div>
+        <div className="ml-auto flex items-center gap-2">
+          {action}
+          <button
+            className="flex items-center gap-1 rounded-md border border-ink-900/10 px-2.5 py-1 text-xs font-semibold text-ink-600 transition hover:bg-ink-900/[0.04] dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/[0.06]"
+            onClick={() => setIsOpen((state) => !state)}
+            type="button"
+          >
+            {isOpen ? "Hide" : "Open"}
+            <ChevronDown className={cn("size-3.5 transition", isOpen && "rotate-180")} />
+          </button>
+        </div>
       </div>
-      {children}
+      {isOpen ? (
+        children
+      ) : (
+        <div className="rounded-lg border border-dashed border-ink-900/20 px-3 py-5 text-center text-xs font-medium text-ink-500 dark:border-white/20 dark:text-slate-400">
+          Section collapsed. Click Open to view details.
+        </div>
+      )}
     </section>
   );
 }
@@ -1121,6 +1222,7 @@ function LineChart({ points }: { points: typeof revenuePoints }) {
 function WorkshopMiniPanel() {
   return (
     <Panel
+      defaultOpen
       action={
         <button
           className="text-xs font-semibold text-ink-500 hover:text-mint-700"
@@ -1190,6 +1292,7 @@ function PaymentsMiniPanel({
 
   return (
     <Panel
+      defaultOpen
       action={
         <button
           className="text-xs font-semibold text-ink-500 hover:text-mint-700"
@@ -1262,7 +1365,7 @@ function PaymentRow({ payment }: { payment: Payment }) {
 
 function LeaderboardPanel() {
   return (
-    <Panel action={<span className="text-xs text-ink-500 dark:text-slate-400">This Month</span>} title="Sales Leaderboard">
+    <Panel defaultOpen action={<span className="text-xs text-ink-500 dark:text-slate-400">This Month</span>} title="Sales Leaderboard">
       <div className="space-y-3">
         {teamMembers.map((member, index) => (
           <div className="flex items-center gap-3" key={member.id}>
@@ -1306,6 +1409,7 @@ function RightRail({
   return (
     <aside className="space-y-4 lg:sticky lg:top-[96px] lg:self-start">
       <Panel
+        defaultOpen
         action={<span className="rounded-md bg-ai-50 px-2 py-1 text-[11px] font-bold text-ai-600 dark:bg-ai-500/10 dark:text-ai-100">New</span>}
         title="AI Founder Assistant"
       >
@@ -1340,6 +1444,7 @@ function RightRail({
       </Panel>
 
       <Panel
+        defaultOpen
         action={
           <button
             className="text-xs font-semibold text-ink-500 hover:text-mint-700"
@@ -1375,6 +1480,7 @@ function RightRail({
       </Panel>
 
       <Panel
+        defaultOpen
         action={
           <button
             className="text-xs font-semibold text-ink-500 hover:text-mint-700"
@@ -1493,6 +1599,7 @@ function CRMView({
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
         <Panel
+          defaultOpen
           action={<span className="text-xs font-semibold text-mint-600">{hotLeads.length} hot leads</span>}
           title="Lead Database"
         >
@@ -1679,7 +1786,7 @@ function SalesView({
       />
 
       <div className="grid gap-4 xl:grid-cols-[0.92fr_1.08fr]">
-        <Panel title="AI Best Lead Suggestions">
+        <Panel defaultOpen title="AI Best Lead Suggestions">
           <div className="space-y-3">
             {bestLeads.map((lead) => (
               <div className="flex items-center gap-3 rounded-lg border border-ink-900/10 p-3 dark:border-white/10" key={lead.id}>
@@ -1777,7 +1884,7 @@ function WorkshopsView() {
       />
 
       <div className="grid gap-4 xl:grid-cols-[1fr_0.9fr]">
-        <Panel title="Live Workshop Portfolio">
+        <Panel defaultOpen title="Live Workshop Portfolio">
           <div className="grid gap-3 md:grid-cols-2">
             {workshops.map((workshop) => (
               <WorkshopCard key={workshop.id} workshop={workshop} />
@@ -1871,7 +1978,7 @@ function FunnelsView() {
       />
 
       <div className="grid gap-4 xl:grid-cols-[0.75fr_1.25fr]">
-        <Panel title="Funnel Controls">
+        <Panel defaultOpen title="Funnel Controls">
           <div className="space-y-3">
             {["Hero copy", "Testimonials", "Countdown", "Coupon box", "Razorpay button", "FAQ", "WhatsApp support", "Thank you page"].map((item) => (
               <div className="flex items-center justify-between rounded-md border border-ink-900/10 p-3 dark:border-white/10" key={item}>
@@ -1971,7 +2078,7 @@ function PaymentsView({
       />
 
       <div className="grid gap-4 xl:grid-cols-[1fr_0.82fr]">
-        <Panel title="Payment Recovery Flow">
+        <Panel defaultOpen title="Payment Recovery Flow">
           <div className="mb-3 flex flex-wrap gap-2">
             {tabs.map((tab) => (
               <button
@@ -2048,7 +2155,7 @@ function MarketingView() {
       />
 
       <div className="grid gap-4 xl:grid-cols-[1fr_0.75fr]">
-        <Panel title="Campaign Performance">
+        <Panel defaultOpen title="Campaign Performance">
           <div className="space-y-3">
             {campaigns.map((campaign) => (
               <CampaignRow campaign={campaign} key={campaign.id} />
@@ -2127,7 +2234,7 @@ function ReportsView() {
       />
 
       <div className="space-y-4">
-        <Panel title="Advanced Filters">
+        <Panel defaultOpen title="Advanced Filters">
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
             {filterLabels.map((filter) => (
               <button
@@ -2206,7 +2313,7 @@ function SupportView() {
       />
 
       <div className="grid gap-4 xl:grid-cols-[1fr_0.8fr]">
-        <Panel title="Ticketing Queue">
+        <Panel defaultOpen title="Ticketing Queue">
           <div className="space-y-3">
             {tickets.map((ticket) => (
               <div className="rounded-lg border border-ink-900/10 p-3 dark:border-white/10" key={ticket.id}>
@@ -2255,7 +2362,7 @@ function TeamView() {
       />
 
       <div className="grid gap-4 xl:grid-cols-[1fr_0.8fr]">
-        <Panel title="Staff Records">
+        <Panel defaultOpen title="Staff Records">
           <div className="space-y-3">
             {teamMembers.map((member) => (
               <div className="grid gap-3 rounded-lg border border-ink-900/10 p-3 dark:border-white/10 md:grid-cols-[1fr_120px_120px_120px] md:items-center" key={member.id}>
@@ -2321,7 +2428,7 @@ function AIView({
       />
 
       <div className="grid gap-4 xl:grid-cols-[0.8fr_1.2fr]">
-        <Panel title="Natural Language Query">
+        <Panel defaultOpen title="Natural Language Query">
           <div className="space-y-2">
             {[
               "Show Surat revenue this month",
@@ -2398,7 +2505,7 @@ function SecurityView({ language }: { language: Language }) {
       />
 
       <div className="grid gap-4 xl:grid-cols-[1fr_0.86fr]">
-        <Panel title="Security Controls">
+        <Panel defaultOpen title="Security Controls">
           <div className="grid gap-3 md:grid-cols-2">
             {([
               ["OTP login", "Custom OTP, Clerk, or Auth.js ready", LockKeyhole],
