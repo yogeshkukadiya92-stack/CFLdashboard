@@ -2198,6 +2198,7 @@ function WorkshopsView({
   });
   const [formMode, setFormMode] = useState<"create" | "edit">("create");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isScheduleOpen, setIsScheduleOpen] = useState(false);
   const [form, setForm] = useState({
     city: "Surat",
     isPaid: true,
@@ -2231,16 +2232,17 @@ function WorkshopsView({
     setScheduleForm((current) => ({ ...current, [key]: value }));
   }
 
-  function openWorkshopForm(mode: "create" | "edit") {
+  function openWorkshopForm(mode: "create" | "edit", workshopOverride?: Workshop) {
+    const workshopToEdit = workshopOverride ?? selectedWorkshop;
     setFormMode(mode);
-    if (mode === "edit" && selectedWorkshop) {
+    if (mode === "edit" && workshopToEdit) {
       setForm({
-        city: selectedWorkshop.city,
-        isPaid: selectedWorkshop.price > 0,
+        city: workshopToEdit.city,
+        isPaid: workshopToEdit.price > 0,
         productGroup: "Leadership",
-        title: selectedWorkshop.title,
-        trainer: selectedWorkshop.trainer,
-        type: selectedWorkshop.type
+        title: workshopToEdit.title,
+        trainer: workshopToEdit.trainer,
+        type: workshopToEdit.type
       });
     } else {
       setForm({
@@ -2342,18 +2344,18 @@ function WorkshopsView({
         actions={
           <div className="flex gap-2">
             <button
+              className="rounded-lg border border-ai-500/40 px-3 py-2 text-sm font-semibold text-ai-600 dark:border-ai-400/40 dark:text-ai-200"
+              onClick={() => setIsScheduleOpen((state) => !state)}
+              type="button"
+            >
+              {isScheduleOpen ? "Hide Schedule" : "Manage Schedule"}
+            </button>
+            <button
               className="rounded-lg bg-mint-600 px-3 py-2 text-sm font-semibold text-white"
               onClick={() => (isCreateOpen ? setIsCreateOpen(false) : openWorkshopForm("create"))}
               type="button"
             >
               {isCreateOpen && formMode === "create" ? "Close form" : "Create workshop"}
-            </button>
-            <button
-              className="rounded-lg border border-ink-900/10 px-3 py-2 text-sm font-semibold dark:border-white/10"
-              onClick={() => openWorkshopForm("edit")}
-              type="button"
-            >
-              Edit selected
             </button>
             <button
               className="rounded-lg bg-red-600 px-3 py-2 text-sm font-semibold text-white"
@@ -2471,6 +2473,7 @@ function WorkshopsView({
         </Panel>
       ) : null}
 
+      {isScheduleOpen ? (
       <Panel defaultOpen title="Manage Workshop Schedule">
         <div className="mb-3 flex items-center justify-between">
           <p className="text-sm text-ink-500 dark:text-slate-400">Create registration link, email, API mapping, and scheduling rules.</p>
@@ -2705,6 +2708,7 @@ function WorkshopsView({
           </button>
         </div>
       </Panel>
+      ) : null}
 
       <div className="grid gap-4 xl:grid-cols-[1fr_0.9fr]">
         <Panel defaultOpen title="Live Workshop Portfolio">
@@ -2714,7 +2718,8 @@ function WorkshopsView({
                 key={workshop.id}
                 onClick={() => {
                   setSelectedWorkshopId(workshop.id);
-                  emitActionNote(`Workshop opened: ${workshop.title}.`);
+                  openWorkshopForm("edit", workshop);
+                  emitActionNote(`Workshop edit opened: ${workshop.title}.`);
                 }}
                 selected={selectedWorkshop?.id === workshop.id}
                 workshop={workshop}
