@@ -73,6 +73,7 @@ import { cn, formatCurrency, formatNumber, initials, normalizeSearch } from "@/l
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 
 type Language = "EN" | "HI" | "GU";
+type WorkshopType = Workshop["type"];
 
 interface NavItem {
   key: ModuleKey;
@@ -338,19 +339,25 @@ export function BusinessOS() {
     setActionNote(`Lead deleted: ${selectedLead.name}.`);
   }
 
-  function addWorkshop() {
-    const title = window.prompt("Workshop title", "High Ticket Sales Mastery")?.trim();
+  function addWorkshop(input?: {
+    city?: string;
+    price?: number;
+    title: string;
+    trainer?: string;
+    type?: WorkshopType;
+  }) {
+    const title = input?.title?.trim();
     if (!title) {
       return;
     }
-    const city = window.prompt("City", "Surat")?.trim() || "Surat";
-    const trainer = window.prompt("Trainer", "Arjun Sharma")?.trim() || "Arjun Sharma";
+    const city = input?.city?.trim() || "Surat";
+    const trainer = input?.trainer?.trim() || "Arjun Sharma";
     const created: Workshop = {
       id: `workshop-${Date.now()}`,
       title,
       slug: title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, ""),
-      type: "Hybrid",
-      price: 9900,
+      type: input?.type ?? "Hybrid",
+      price: input?.price ?? 9900,
       trainer,
       status: "Draft",
       city,
@@ -2069,13 +2076,63 @@ function WorkshopsView({
   setSelectedWorkshopId,
   workshops
 }: {
-  addWorkshop: () => void;
+  addWorkshop: (input: { city?: string; price?: number; title: string; trainer?: string; type?: WorkshopType }) => void;
   deleteSelectedWorkshop: () => void;
   editSelectedWorkshop: () => void;
   selectedWorkshop: Workshop | undefined;
   setSelectedWorkshopId: (id: string) => void;
   workshops: Workshop[];
 }) {
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [form, setForm] = useState({
+    city: "Surat",
+    isPaid: true,
+    productGroup: "Leadership",
+    title: "",
+    trainer: "Arjun Sharma",
+    type: "Hybrid" as WorkshopType
+  });
+  const [defaultFields, setDefaultFields] = useState({
+    address: false,
+    age: false,
+    city: false,
+    country: true,
+    email: true,
+    firstName: true,
+    gender: false,
+    lastName: true,
+    mobile: true,
+    occupation: false,
+    state: false
+  });
+
+  function toggleField(key: keyof typeof defaultFields) {
+    setDefaultFields((current) => ({ ...current, [key]: !current[key] }));
+  }
+
+  function handleCreateWorkshop() {
+    if (!form.title.trim()) {
+      emitActionNote("Workshop title required.");
+      return;
+    }
+    addWorkshop({
+      city: form.city,
+      price: form.isPaid ? 9900 : 0,
+      title: form.title,
+      trainer: form.trainer,
+      type: form.type
+    });
+    setForm({
+      city: "Surat",
+      isPaid: true,
+      productGroup: "Leadership",
+      title: "",
+      trainer: "Arjun Sharma",
+      type: "Hybrid"
+    });
+    setIsCreateOpen(false);
+  }
+
   return (
     <div>
       <ModuleHeader
@@ -2083,10 +2140,10 @@ function WorkshopsView({
           <div className="flex gap-2">
             <button
               className="rounded-lg bg-mint-600 px-3 py-2 text-sm font-semibold text-white"
-              onClick={addWorkshop}
+              onClick={() => setIsCreateOpen((state) => !state)}
               type="button"
             >
-              Create workshop
+              {isCreateOpen ? "Close form" : "Create workshop"}
             </button>
             <button
               className="rounded-lg border border-ink-900/10 px-3 py-2 text-sm font-semibold dark:border-white/10"
@@ -2108,6 +2165,108 @@ function WorkshopsView({
         icon={CalendarDays}
         title="Workshops, batches, capacity, waitlist, QR attendance, and feedback"
       />
+
+      {isCreateOpen ? (
+        <Panel defaultOpen title="Create Workshop / Product">
+          <div className="grid gap-3 md:grid-cols-4">
+            <input
+              className="rounded-lg border border-ink-900/10 bg-white px-3 py-2.5 text-sm outline-none focus:border-mint-500 dark:border-white/10 dark:bg-white/[0.03]"
+              onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))}
+              placeholder="Workshop/Product Name"
+              value={form.title}
+            />
+            <select
+              className="rounded-lg border border-ink-900/10 bg-white px-3 py-2.5 text-sm outline-none focus:border-mint-500 dark:border-white/10 dark:bg-white/[0.03]"
+              onChange={(event) => setForm((current) => ({ ...current, type: event.target.value as WorkshopType }))}
+              value={form.type}
+            >
+              <option value="Online">Online</option>
+              <option value="Offline">Offline</option>
+              <option value="Hybrid">Hybrid</option>
+            </select>
+            <input
+              className="rounded-lg border border-ink-900/10 bg-white px-3 py-2.5 text-sm outline-none focus:border-mint-500 dark:border-white/10 dark:bg-white/[0.03]"
+              onChange={(event) => setForm((current) => ({ ...current, trainer: event.target.value }))}
+              placeholder="Default Facilitator"
+              value={form.trainer}
+            />
+            <select
+              className="rounded-lg border border-ink-900/10 bg-white px-3 py-2.5 text-sm outline-none focus:border-mint-500 dark:border-white/10 dark:bg-white/[0.03]"
+              onChange={(event) => setForm((current) => ({ ...current, productGroup: event.target.value }))}
+              value={form.productGroup}
+            >
+              <option>Leadership</option>
+              <option>Sales</option>
+              <option>Coaching</option>
+              <option>Communication</option>
+            </select>
+          </div>
+          <div className="mt-3 grid gap-3 md:grid-cols-[1fr_auto]">
+            <input
+              className="rounded-lg border border-ink-900/10 bg-white px-3 py-2.5 text-sm outline-none focus:border-mint-500 dark:border-white/10 dark:bg-white/[0.03]"
+              onChange={(event) => setForm((current) => ({ ...current, city: event.target.value }))}
+              placeholder="City"
+              value={form.city}
+            />
+            <label className="inline-flex items-center gap-2 rounded-lg border border-ink-900/10 px-3 py-2.5 text-sm font-semibold dark:border-white/10">
+              <input
+                checked={form.isPaid}
+                className="size-4 accent-ai-500"
+                onChange={(event) => setForm((current) => ({ ...current, isPaid: event.target.checked }))}
+                type="checkbox"
+              />
+              Is Paid?
+            </label>
+          </div>
+          <div className="my-4 border-t border-ink-900/10 dark:border-white/10" />
+          <p className="mb-3 text-sm font-bold">Default Setting For Workshop</p>
+          <div className="grid gap-2 md:grid-cols-3">
+            {[
+              ["firstName", "First Name"],
+              ["lastName", "Last Name"],
+              ["mobile", "Mobile"],
+              ["email", "Email"],
+              ["country", "Country"],
+              ["state", "State"],
+              ["city", "City"],
+              ["address", "Address"],
+              ["age", "Age"],
+              ["gender", "Gender"],
+              ["occupation", "Occupation"]
+            ].map(([key, label]) => (
+              <label
+                className="inline-flex items-center justify-between rounded-lg border border-ink-900/10 px-3 py-2.5 text-sm dark:border-white/10"
+                key={key}
+              >
+                <span>{label}</span>
+                <input
+                  checked={defaultFields[key as keyof typeof defaultFields]}
+                  className="size-4 accent-ai-500"
+                  onChange={() => toggleField(key as keyof typeof defaultFields)}
+                  type="checkbox"
+                />
+              </label>
+            ))}
+          </div>
+          <div className="mt-4 flex gap-2">
+            <button
+              className="rounded-lg bg-mint-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+              disabled={!form.title.trim()}
+              onClick={handleCreateWorkshop}
+              type="button"
+            >
+              Save workshop
+            </button>
+            <button
+              className="rounded-lg border border-ink-900/10 px-4 py-2 text-sm font-semibold dark:border-white/10"
+              onClick={() => setIsCreateOpen(false)}
+              type="button"
+            >
+              Cancel
+            </button>
+          </div>
+        </Panel>
+      ) : null}
 
       <div className="grid gap-4 xl:grid-cols-[1fr_0.9fr]">
         <Panel defaultOpen title="Live Workshop Portfolio">
