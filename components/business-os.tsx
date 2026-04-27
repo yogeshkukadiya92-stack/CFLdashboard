@@ -68,7 +68,7 @@ import {
   tickets,
   workshops
 } from "@/lib/data";
-import type { Campaign, Lead, LeadStage, ModuleKey, Payment, Workshop } from "@/lib/types";
+import type { Campaign, Lead, LeadStage, ModuleKey, Payment, RegistrationEntry, Workshop } from "@/lib/types";
 import { cn, formatCurrency, formatNumber, initials, normalizeSearch } from "@/lib/utils";
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 
@@ -152,6 +152,7 @@ const filterLabels = [
 ];
 
 const ACTION_NOTE_EVENT = "cfl:action-note";
+const REGISTRATION_STORAGE_KEY = "cfl_registrations_v1";
 
 function emitActionNote(message: string) {
   if (typeof window === "undefined") {
@@ -168,6 +169,7 @@ export function BusinessOS() {
   const [query, setQuery] = useState("");
   const [leads, setLeads] = useState<Lead[]>(leadsSeed);
   const [workshopList, setWorkshopList] = useState<Workshop[]>(workshops);
+  const [registrations, setRegistrations] = useState<RegistrationEntry[]>([]);
   const [selectedLeadId, setSelectedLeadId] = useState(leadsSeed[0].id);
   const [selectedWorkshopId, setSelectedWorkshopId] = useState(workshops[0]?.id ?? "");
   const [aiQuestion, setAiQuestion] = useState("Show Surat revenue this month");
@@ -191,6 +193,27 @@ export function BusinessOS() {
   }, []);
 
   useEffect(() => {
+    function readRegistrations() {
+      try {
+        const raw = localStorage.getItem(REGISTRATION_STORAGE_KEY);
+        const parsed: RegistrationEntry[] = raw ? JSON.parse(raw) : [];
+        setRegistrations(Array.isArray(parsed) ? parsed : []);
+      } catch {
+        setRegistrations([]);
+      }
+    }
+
+    readRegistrations();
+    function onStorage(event: StorageEvent) {
+      if (!event.key || event.key === REGISTRATION_STORAGE_KEY) {
+        readRegistrations();
+      }
+    }
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
+
+  useEffect(() => {
     function handleHotKey(event: KeyboardEvent) {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
@@ -201,6 +224,67 @@ export function BusinessOS() {
     window.addEventListener("keydown", handleHotKey);
     return () => window.removeEventListener("keydown", handleHotKey);
   }, []);
+
+  useEffect(() => {
+    if (!registrations.length) {
+      return;
+    }
+
+    setLeads((current) => {
+      const byMobile = new Map<string, Lead>();
+      current.forEach((lead) => byMobile.set(normalizeSearch(lead.mobile), lead));
+
+      registrations.forEach((entry) => {
+        const key = normalizeSearch(entry.mobile);
+        const existing = byMobile.get(key);
+        if (existing) {
+          byMobile.set(key, {
+            ...existing,
+            email: entry.email || existing.email,
+            name: entry.fullName || existing.name,
+            notes: [
+              `Registration via link for ${entry.workshopTitle} (${entry.createdAt})`,
+              ...existing.notes
+            ].slice(0, 6),
+            paymentHistory: [
+              `Link Payment ${formatCurrency(entry.amountPaid)} | ${entry.status}`,
+              ...existing.paymentHistory
+            ].slice(0, 6),
+            workshopsAttended: Array.from(new Set([entry.workshopTitle, ...existing.workshopsAttended]))
+          });
+        } else {
+          byMobile.set(key, {
+            id: `lead-link-${key}`,
+            name: entry.fullName,
+            mobile: entry.mobile,
+            email: entry.email,
+            city: entry.city || "Unknown",
+            state: "Unknown",
+            country: "India",
+            source: "Registration Link",
+            stage: "Qualified",
+            assignedTo: "Auto assign",
+            score: 78,
+            revenuePotential: entry.amountDue > 0 ? entry.amountDue : entry.amountPaid,
+            notes: [`Registered via public link (${entry.createdAt})`],
+            callHistory: [],
+            whatsappHistory: ["Registration confirmation sent"],
+            workshopsAttended: [entry.workshopTitle],
+            paymentHistory: [`Link Payment ${formatCurrency(entry.amountPaid)} | ${entry.status}`],
+            certificates: [],
+            familyAccounts: [],
+            tags: ["Link Registration", entry.status],
+            createdAt: entry.createdAt,
+            nextFollowUp: "Tomorrow 11:00 AM",
+            bestTime: "10 AM - 12 PM"
+          });
+        }
+      });
+
+      return Array.from(byMobile.values());
+    });
+
+  }, [registrations]);
 
   const selectedLead = leads.find((lead) => lead.id === selectedLeadId) ?? leads[0];
   const selectedWorkshop =
@@ -601,6 +685,7 @@ export function BusinessOS() {
           <WorkshopsView
             addWorkshop={addWorkshop}
             deleteSelectedWorkshop={deleteSelectedWorkshop}
+            registrations={registrations}
             selectedWorkshop={selectedWorkshop}
             setSelectedWorkshopId={setSelectedWorkshopId}
             updateSelectedWorkshop={updateSelectedWorkshop}
@@ -2148,6 +2233,7 @@ function SalesView({
 function WorkshopsView({
   addWorkshop,
   deleteSelectedWorkshop,
+  registrations,
   updateSelectedWorkshop,
   selectedWorkshop,
   setSelectedWorkshopId,
@@ -2155,6 +2241,7 @@ function WorkshopsView({
 }: {
   addWorkshop: (input: { city?: string; price?: number; title: string; trainer?: string; type?: WorkshopType }) => void;
   deleteSelectedWorkshop: () => void;
+  registrations: RegistrationEntry[];
   updateSelectedWorkshop: (input: { city?: string; price?: number; title: string; trainer?: string; type?: WorkshopType }) => void;
   selectedWorkshop: Workshop | undefined;
   setSelectedWorkshopId: (id: string) => void;
@@ -2323,7 +2410,7 @@ function WorkshopsView({
       scheduleForm.batch || "main"
     )}&type=${encodeURIComponent(scheduleForm.linkType)}&venue=${encodeURIComponent(
       scheduleForm.venue || selected.city
-    )}`;
+    )}&paid=${scheduleForm.isPaidWorkshop ? "1" : "0"}&part=${scheduleForm.isPartPaymentAllow ? "1" : "0"}`;
     navigator.clipboard.writeText(link).then(() => {
       emitActionNote(`Schedule link copied: ${selected.title}`);
     });
@@ -2709,6 +2796,31 @@ function WorkshopsView({
         </div>
       </Panel>
       ) : null}
+
+      <Panel
+        defaultOpen
+        action={<span className="text-xs font-semibold text-mint-700">{registrations.length} entries</span>}
+        title="Registration Link Entries"
+      >
+        {registrations.length ? (
+          <div className="space-y-2">
+            {registrations.slice(0, 8).map((entry) => (
+              <div className="grid grid-cols-[1fr_auto] gap-2 rounded-md border border-ink-900/10 p-2.5 text-sm dark:border-white/10" key={entry.id}>
+                <div className="min-w-0">
+                  <p className="truncate font-semibold">{entry.fullName} | {entry.mobile}</p>
+                  <p className="truncate text-xs text-ink-500 dark:text-slate-400">{entry.workshopTitle} | {entry.createdAt}</p>
+                </div>
+                <div className="text-right">
+                  <p className="font-bold">{formatCurrency(entry.amountPaid)}</p>
+                  <p className="text-xs text-ink-500 dark:text-slate-400">{entry.status}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-ink-500 dark:text-slate-400">No public registrations yet.</p>
+        )}
+      </Panel>
 
       <div className="grid gap-4 xl:grid-cols-[1fr_0.9fr]">
         <Panel defaultOpen title="Live Workshop Portfolio">

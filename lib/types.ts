@@ -143,3 +143,19 @@ export interface Kpi {
   helper: string;
   tone: "mint" | "ai" | "saffron" | "slate";
 }
+
+export interface RegistrationEntry {
+  id: string;
+  workshopId: string;
+  workshopSlug: string;
+  workshopTitle: string;
+  fullName: string;
+  mobile: string;
+  email: string;
+  city: string;
+  paymentMode: "Full" | "Part";
+  amountPaid: number;
+  amountDue: number;
+  status: "Paid" | "Due";
+  createdAt: string;
+}
