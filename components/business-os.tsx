@@ -704,7 +704,7 @@ export function BusinessOS() {
       case "marketing":
         return <MarketingView />;
       case "reports":
-        return <ReportsView />;
+        return <ReportsView leads={leads} workshops={workshopList} />;
       case "support":
         return <SupportView />;
       case "team":
@@ -3211,8 +3211,109 @@ function CampaignRow({ campaign }: { campaign: Campaign }) {
   );
 }
 
-function ReportsView() {
+function ReportsView({
+  leads,
+  workshops
+}: {
+  leads: Lead[];
+  workshops: Workshop[];
+}) {
   const [selectedFilter, setSelectedFilter] = useState("Date range");
+  const [reportCategory, setReportCategory] = useState<"Workshop" | "Clients" | "Sales Person">("Workshop");
+  const reportGroups: Record<"Workshop" | "Clients" | "Sales Person", string[]> = {
+    Workshop: [
+      "Daily Report",
+      "WorkShop Url & Status",
+      "Yearly Public Session",
+      "Yearly Workshop",
+      "Facilitators Performance",
+      "Workshop Summary",
+      "Batch Wise Workshop Summary"
+    ],
+    Clients: [
+      "Client Milestone",
+      "Failed Payment",
+      "Part Payment",
+      "Workshop Wise Member",
+      "Member Attend More Workshop",
+      "Member Details",
+      "Member Details (Part Payment)",
+      "Session Conversation",
+      "Client Batch Transfer"
+    ],
+    "Sales Person": ["Sales Person Milestone", "Sales Person Conversion", "Sales Person Collection"]
+  };
+  const [selectedReport, setSelectedReport] = useState(reportGroups.Workshop[0]);
+
+  function toCsv(headers: string[], rows: string[][]) {
+    const body = rows.map((row) => row.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(","));
+    return [headers.join(","), ...body].join("\n");
+  }
+
+  function exportReport() {
+    let csv = "";
+    let filename = "cfl-report.csv";
+
+    if (reportCategory === "Workshop") {
+      filename = "cfl-workshop-report.csv";
+      csv = toCsv(
+        ["workshop", "slug", "type", "trainer", "city", "start_date", "price", "registrations", "revenue", "status"],
+        workshops.map((item) => [
+          item.title,
+          item.slug,
+          item.type,
+          item.trainer,
+          item.city,
+          item.startDate,
+          String(item.price),
+          String(item.registrations),
+          String(item.revenue),
+          item.status
+        ])
+      );
+    } else if (reportCategory === "Clients") {
+      filename = "cfl-client-report.csv";
+      csv = toCsv(
+        ["name", "mobile", "email", "city", "state", "source", "stage", "owner", "score", "potential"],
+        leads.map((lead) => [
+          lead.name,
+          lead.mobile,
+          lead.email,
+          lead.city,
+          lead.state,
+          lead.source,
+          lead.stage,
+          lead.assignedTo,
+          String(lead.score),
+          String(lead.revenuePotential)
+        ])
+      );
+    } else {
+      filename = "cfl-sales-person-report.csv";
+      csv = toCsv(
+        ["sales_person", "role", "city", "target", "achieved", "calls", "conversions", "incentives"],
+        teamMembers.map((member) => [
+          member.name,
+          member.role,
+          member.city,
+          String(member.target),
+          String(member.achieved),
+          String(member.calls),
+          String(member.conversions),
+          String(member.incentives)
+        ])
+      );
+    }
+
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = filename;
+    anchor.click();
+    URL.revokeObjectURL(url);
+    emitActionNote(`${selectedReport} exported as CSV.`);
+  }
 
   return (
     <div>
@@ -3220,7 +3321,7 @@ function ReportsView() {
         actions={
           <button
             className="rounded-lg bg-mint-600 px-3 py-2 text-sm font-semibold text-white"
-            onClick={() => emitActionNote("Advanced report export queued for CSV and PDF.")}
+            onClick={exportReport}
             type="button"
           >
             Export report
@@ -3253,6 +3354,51 @@ function ReportsView() {
             ))}
           </div>
         </Panel>
+        <div className="grid gap-4 xl:grid-cols-[280px_1fr]">
+          <Panel defaultOpen title="Report Groups">
+            <div className="space-y-2">
+              {(["Workshop", "Clients", "Sales Person"] as const).map((group) => (
+                <button
+                  className={cn(
+                    "flex w-full items-center justify-between rounded-lg border px-3 py-2.5 text-left text-sm font-semibold",
+                    reportCategory === group
+                      ? "border-mint-500/40 bg-mint-50 text-mint-700 dark:bg-mint-500/10 dark:text-mint-100"
+                      : "border-ink-900/10 dark:border-white/10"
+                  )}
+                  key={group}
+                  onClick={() => {
+                    setReportCategory(group);
+                    setSelectedReport(reportGroups[group][0]);
+                  }}
+                  type="button"
+                >
+                  <span>{group}</span>
+                  <ChevronDown className="size-4 -rotate-90" />
+                </button>
+              ))}
+            </div>
+          </Panel>
+          <Panel defaultOpen title={`${reportCategory} Reports`}>
+            <div className="grid gap-2 md:grid-cols-2">
+              {reportGroups[reportCategory].map((report) => (
+                <button
+                  className={cn(
+                    "flex items-center gap-2 rounded-lg border px-3 py-2.5 text-left text-sm",
+                    selectedReport === report
+                      ? "border-mint-500/40 bg-mint-50 text-mint-700 dark:bg-mint-500/10 dark:text-mint-100"
+                      : "border-ink-900/10 dark:border-white/10"
+                  )}
+                  key={report}
+                  onClick={() => setSelectedReport(report)}
+                  type="button"
+                >
+                  <span className="text-base leading-none">{selectedReport === report ? "◉" : "○"}</span>
+                  <span>{report}</span>
+                </button>
+              ))}
+            </div>
+          </Panel>
+        </div>
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {([
             ["Sales report", formatCurrency(2875000), "+16.3%", TrendingUp],
