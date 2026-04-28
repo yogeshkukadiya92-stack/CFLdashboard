@@ -2667,6 +2667,31 @@ function WorkshopsView({
   setSelectedWorkshopId: (id: string) => void;
   workshops: Workshop[];
 }) {
+  const workshopReportGroups: Record<"Workshop" | "Clients" | "Sales Person", string[]> = {
+    Workshop: [
+      "Daily Report",
+      "WorkShop Url & Status",
+      "Yearly Public Session",
+      "Yearly Workshop",
+      "Facilitators Performance",
+      "Workshop Summary",
+      "Batch Wise Workshop summary"
+    ],
+    Clients: [
+      "Client Milestone",
+      "Failed Payment",
+      "Part Payment",
+      "Workshop wise Member",
+      "Member Attend More Workshop",
+      "Member Details",
+      "Member Details (Part Payment)",
+      "Session Conversation",
+      "Client Batch Transfer"
+    ],
+    "Sales Person": ["Sales Person Milestone", "Sales Person Conversion", "Sales Person Collection"]
+  };
+  const [workshopReportGroup, setWorkshopReportGroup] = useState<"Workshop" | "Clients" | "Sales Person">("Workshop");
+  const [workshopReportOption, setWorkshopReportOption] = useState(workshopReportGroups.Workshop[0]);
   const [scheduleForm, setScheduleForm] = useState({
     aiSensyCampaignName: "",
     aiSensyFailedCampaignName: "",
@@ -2877,6 +2902,65 @@ function WorkshopsView({
         icon={CalendarDays}
         title="Workshops, batches, capacity, waitlist, QR attendance, and feedback"
       />
+
+      <div className="mb-4 grid gap-4 xl:grid-cols-[280px_1fr]">
+        <Panel defaultOpen title="Workshop Reports">
+          <div className="space-y-2">
+            {(["Workshop", "Clients", "Sales Person"] as const).map((group) => (
+              <button
+                className={cn(
+                  "flex w-full items-center justify-between rounded-lg border px-3 py-2.5 text-left text-sm font-semibold",
+                  workshopReportGroup === group
+                    ? "border-mint-500/40 bg-mint-50 text-mint-700 dark:bg-mint-500/10 dark:text-mint-100"
+                    : "border-ink-900/10 dark:border-white/10"
+                )}
+                key={group}
+                onClick={() => {
+                  setWorkshopReportGroup(group);
+                  setWorkshopReportOption(workshopReportGroups[group][0]);
+                }}
+                type="button"
+              >
+                <span>{group}</span>
+                <ChevronDown className="size-4 -rotate-90" />
+              </button>
+            ))}
+          </div>
+        </Panel>
+
+        <Panel
+          defaultOpen
+          action={
+            <button
+              className="rounded-md border border-ink-900/10 px-3 py-1.5 text-xs font-semibold dark:border-white/10"
+              onClick={() => emitActionNote(`${workshopReportOption} opened from Workshop module.`)}
+              type="button"
+            >
+              Open
+            </button>
+          }
+          title={`${workshopReportGroup} Options`}
+        >
+          <div className="grid gap-2 md:grid-cols-2">
+            {workshopReportGroups[workshopReportGroup].map((option) => (
+              <button
+                className={cn(
+                  "flex items-center gap-2 rounded-lg border px-3 py-2.5 text-left text-sm",
+                  workshopReportOption === option
+                    ? "border-mint-500/40 bg-mint-50 text-mint-700 dark:bg-mint-500/10 dark:text-mint-100"
+                    : "border-ink-900/10 dark:border-white/10"
+                )}
+                key={option}
+                onClick={() => setWorkshopReportOption(option)}
+                type="button"
+              >
+                <span className="text-base leading-none">{workshopReportOption === option ? "◉" : "○"}</span>
+                <span>{option}</span>
+              </button>
+            ))}
+          </div>
+        </Panel>
+      </div>
 
       {isCreateOpen ? (
         <Panel defaultOpen title={formMode === "create" ? "Create Workshop / Product" : "Edit Workshop / Product"}>
