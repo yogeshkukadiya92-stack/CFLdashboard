@@ -76,6 +76,49 @@ import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 type Language = "EN" | "HI" | "GU";
 type WorkshopType = Workshop["type"];
 
+const emptyLead: Lead = {
+  id: "empty-lead",
+  name: "No lead selected",
+  mobile: "",
+  email: "",
+  city: "",
+  state: "",
+  country: "India",
+  source: "",
+  stage: "New Leads",
+  assignedTo: "",
+  score: 0,
+  revenuePotential: 0,
+  notes: ["Add your first lead to begin."],
+  callHistory: [],
+  whatsappHistory: [],
+  workshopsAttended: [],
+  paymentHistory: [],
+  certificates: [],
+  familyAccounts: [],
+  tags: ["Empty"],
+  createdAt: "",
+  nextFollowUp: "",
+  bestTime: ""
+};
+
+const emptyWorkshop: Workshop = {
+  id: "empty-workshop",
+  title: "No workshop selected",
+  slug: "no-workshop",
+  type: "Online",
+  price: 0,
+  trainer: "",
+  status: "Draft",
+  city: "",
+  startDate: "",
+  capacity: 0,
+  registrations: 0,
+  waitlist: 0,
+  revenue: 0,
+  feedbackScore: 0
+};
+
 interface NavItem {
   key: ModuleKey;
   label: string;
@@ -85,11 +128,11 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { key: "home", label: "Home", icon: Home },
-  { key: "crm", label: "CRM", icon: UsersRound, badge: "342" },
+  { key: "crm", label: "CRM", icon: UsersRound },
   { key: "sales", label: "Sales", icon: Target },
   { key: "workshops", label: "Workshops", icon: CalendarDays },
   { key: "funnels", label: "Funnels", icon: LayoutTemplate },
-  { key: "payments", label: "Payments", icon: CreditCard, badge: "47" },
+  { key: "payments", label: "Payments", icon: CreditCard },
   { key: "marketing", label: "Marketing", icon: Megaphone },
   { key: "reports", label: "Reports", icon: BarChart3 },
   { key: "support", label: "Support", icon: LifeBuoy },
@@ -154,6 +197,7 @@ const filterLabels = [
 
 const ACTION_NOTE_EVENT = "cfl:action-note";
 const REGISTRATION_STORAGE_KEY = "cfl_registrations_v1";
+const RESET_MARKER_KEY = "cfl_blank_reset_2026_04_28";
 
 function shouldOpenActionPanel(message: string) {
   const normalized = message.toLowerCase();
@@ -201,12 +245,12 @@ export function BusinessOS() {
   const [leads, setLeads] = useState<Lead[]>(leadsSeed);
   const [workshopList, setWorkshopList] = useState<Workshop[]>(workshops);
   const [registrations, setRegistrations] = useState<RegistrationEntry[]>([]);
-  const [selectedLeadId, setSelectedLeadId] = useState(leadsSeed[0].id);
+  const [selectedLeadId, setSelectedLeadId] = useState(leadsSeed[0]?.id ?? "");
   const [selectedWorkshopId, setSelectedWorkshopId] = useState(workshops[0]?.id ?? "");
   const [aiQuestion, setAiQuestion] = useState("Show Surat revenue this month");
   const [aiAnswer, setAiAnswer] = useState(answerFor("Show Surat revenue this month"));
   const [activePaymentFilter, setActivePaymentFilter] = useState<"All" | Payment["status"]>("All");
-  const [actionNote, setActionNote] = useState("47 payment recovery reminders are queued for WhatsApp.");
+  const [actionNote, setActionNote] = useState("Fresh workspace ready. Add your first lead or workshop.");
   const [actionPanel, setActionPanel] = useState<{ message: string; openedAt: number } | null>(null);
   const [showRightRail, setShowRightRail] = useState(false);
   const importInputRef = useRef<HTMLInputElement | null>(null);
@@ -230,6 +274,10 @@ export function BusinessOS() {
   useEffect(() => {
     function readRegistrations() {
       try {
+        if (localStorage.getItem(RESET_MARKER_KEY) !== "done") {
+          localStorage.removeItem(REGISTRATION_STORAGE_KEY);
+          localStorage.setItem(RESET_MARKER_KEY, "done");
+        }
         const raw = localStorage.getItem(REGISTRATION_STORAGE_KEY);
         const parsed: RegistrationEntry[] = raw ? JSON.parse(raw) : [];
         setRegistrations(Array.isArray(parsed) ? parsed : []);
@@ -321,9 +369,9 @@ export function BusinessOS() {
 
   }, [registrations]);
 
-  const selectedLead = leads.find((lead) => lead.id === selectedLeadId) ?? leads[0];
+  const selectedLead = leads.find((lead) => lead.id === selectedLeadId) ?? leads[0] ?? emptyLead;
   const selectedWorkshop =
-    workshopList.find((workshop) => workshop.id === selectedWorkshopId) ?? workshopList[0];
+    workshopList.find((workshop) => workshop.id === selectedWorkshopId) ?? workshopList[0] ?? emptyWorkshop;
 
   const searchResults = useMemo(() => {
     const normalized = normalizeSearch(query);
@@ -420,7 +468,7 @@ export function BusinessOS() {
   }
 
   function updateSelectedLead(input: Partial<Pick<Lead, "name" | "mobile" | "email" | "city" | "state" | "country" | "source">>) {
-    if (!selectedLead) {
+    if (!selectedLead || selectedLead.id === emptyLead.id) {
       return;
     }
     const name = input.name?.trim();
@@ -448,7 +496,7 @@ export function BusinessOS() {
   }
 
   function deleteSelectedLead() {
-    if (!selectedLead) {
+    if (!selectedLead || selectedLead.id === emptyLead.id) {
       return;
     }
     setLeads((current) => {
@@ -503,7 +551,7 @@ export function BusinessOS() {
     trainer?: string;
     type?: WorkshopType;
   }) {
-    if (!selectedWorkshop) {
+    if (!selectedWorkshop || selectedWorkshop.id === emptyWorkshop.id) {
       return;
     }
     const title = input.title?.trim();
@@ -529,7 +577,7 @@ export function BusinessOS() {
   }
 
   function deleteSelectedWorkshop() {
-    if (!selectedWorkshop) {
+    if (!selectedWorkshop || selectedWorkshop.id === emptyWorkshop.id) {
       return;
     }
     setWorkshopList((current) => {
@@ -3347,6 +3395,13 @@ function FunnelsView({ workshops }: { workshops: Workshop[] }) {
         title="Landing pages with coupons, payments, WhatsApp, FAQ, and thank-you flows"
       />
 
+      {!featured ? (
+        <Panel defaultOpen title="No Funnel Yet">
+          <p className="text-sm text-ink-500 dark:text-slate-400">
+            Create a workshop first, then its registration funnel preview will appear here.
+          </p>
+        </Panel>
+      ) : (
       <div className="grid gap-4 xl:grid-cols-[0.75fr_1.25fr]">
         <Panel defaultOpen title="Funnel Controls">
           <div className="space-y-3">
@@ -3416,6 +3471,7 @@ function FunnelsView({ workshops }: { workshops: Workshop[] }) {
           </div>
         </Panel>
       </div>
+      )}
     </div>
   );
 }
