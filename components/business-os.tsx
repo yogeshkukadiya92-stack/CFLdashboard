@@ -2858,7 +2858,9 @@ function WorkshopsView({
       emitActionNote("Select workshop first to generate schedule link.");
       return;
     }
-    const link = `https://dashboard.coachforlife.in/register/${selected.slug}?batch=${encodeURIComponent(
+    const base =
+      typeof window !== "undefined" ? window.location.origin : "https://dashboard.coachforlife.in";
+    const link = `${base}/register/${selected.slug}?batch=${encodeURIComponent(
       scheduleForm.batch || "main"
     )}&type=${encodeURIComponent(scheduleForm.linkType)}&venue=${encodeURIComponent(
       scheduleForm.venue || selected.city
@@ -2907,7 +2909,9 @@ function WorkshopsView({
       facilitator: workshop.trainer || "Unknown",
       isPaid: workshop.price > 0,
       lastRegDate: scheduleForm.lastRegistrationDate || workshop.startDate || "",
-      link: `https://dashboard.coachforlife.in/register/${workshop.slug}`,
+      link:
+        (typeof window !== "undefined" ? window.location.origin : "https://dashboard.coachforlife.in") +
+        `/register/${workshop.slug}`,
       regStatus: workshop.status === "Live" ? "Running" : "Not Running",
       workshopName: workshop.title
     }))
@@ -3125,16 +3129,25 @@ function WorkshopsView({
                 className="grid min-w-[980px] grid-cols-[140px_1.3fr_170px_200px_140px] items-center border-t border-ink-900/10 px-3 py-3 text-sm dark:border-white/10"
                 key={row.id}
               >
-                <button
-                  className="w-fit rounded-md px-2 py-1 font-semibold text-ai-600 hover:bg-ai-50 dark:text-ai-100"
-                  onClick={() => {
-                    navigator.clipboard.writeText(row.link);
-                    emitActionNote(`Copy Link: ${row.workshopName}`);
-                  }}
-                  type="button"
-                >
-                  Copy Link
-                </button>
+                <div className="flex items-center gap-1">
+                  <button
+                    className="w-fit rounded-md px-2 py-1 font-semibold text-ai-600 hover:bg-ai-50 dark:text-ai-100"
+                    onClick={() => {
+                      navigator.clipboard.writeText(row.link);
+                      emitActionNote(`Copy Link: ${row.workshopName}`);
+                    }}
+                    type="button"
+                  >
+                    Copy Link
+                  </button>
+                  <button
+                    className="w-fit rounded-md border border-ink-900/10 px-2 py-1 text-xs font-semibold dark:border-white/10"
+                    onClick={() => window.open(row.link, "_blank", "noopener,noreferrer")}
+                    type="button"
+                  >
+                    Open
+                  </button>
+                </div>
                 <p className="truncate">{row.workshopName}</p>
                 <p>{row.lastRegDate || "-"}</p>
                 <span
