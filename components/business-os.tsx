@@ -2692,6 +2692,13 @@ function WorkshopsView({
   };
   const [workshopReportGroup, setWorkshopReportGroup] = useState<"Workshop" | "Clients" | "Sales Person">("Workshop");
   const [workshopReportOption, setWorkshopReportOption] = useState(workshopReportGroups.Workshop[0]);
+  const [workshopUrlStatusFilters, setWorkshopUrlStatusFilters] = useState({
+    activeType: "ALL",
+    facilitator: "ALL FACILITATORS",
+    paidType: "ALL",
+    search: "",
+    showEntries: "10"
+  });
   const [scheduleForm, setScheduleForm] = useState({
     aiSensyCampaignName: "",
     aiSensyFailedCampaignName: "",
@@ -2870,6 +2877,66 @@ function WorkshopsView({
     emitActionNote(`Schedule settings saved for ${selected.title}.`);
   }
 
+  function exportWorkshopUrlStatus() {
+    const headers = ["copy_link", "workshop_name", "last_reg_date", "reg_status", "is_paid"];
+    const rows = workshopUrlStatusRows.map((row) =>
+      [
+        row.link,
+        row.workshopName,
+        row.lastRegDate || "",
+        row.regStatus,
+        row.isPaid ? "Paid" : "Free"
+      ]
+        .map((value) => `"${String(value).replace(/"/g, '""')}"`)
+        .join(",")
+    );
+    const csv = [headers.join(","), ...rows].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "workshop-url-status.csv";
+    anchor.click();
+    URL.revokeObjectURL(url);
+    emitActionNote("Workshop URL & Status exported.");
+  }
+
+  const workshopUrlStatusRows = workshops
+    .map((workshop) => ({
+      id: workshop.id,
+      facilitator: workshop.trainer || "Unknown",
+      isPaid: workshop.price > 0,
+      lastRegDate: scheduleForm.lastRegistrationDate || workshop.startDate || "",
+      link: `https://dashboard.coachforlife.in/register/${workshop.slug}`,
+      regStatus: workshop.status === "Live" ? "Running" : "Not Running",
+      workshopName: workshop.title
+    }))
+    .filter((row) => {
+      if (
+        workshopUrlStatusFilters.facilitator !== "ALL FACILITATORS" &&
+        row.facilitator !== workshopUrlStatusFilters.facilitator
+      ) {
+        return false;
+      }
+      if (workshopUrlStatusFilters.paidType === "PAID" && !row.isPaid) {
+        return false;
+      }
+      if (workshopUrlStatusFilters.paidType === "FREE" && row.isPaid) {
+        return false;
+      }
+      if (workshopUrlStatusFilters.activeType === "RUNNING" && row.regStatus !== "Running") {
+        return false;
+      }
+      if (workshopUrlStatusFilters.activeType === "NOT RUNNING" && row.regStatus !== "Not Running") {
+        return false;
+      }
+      const needle = normalizeSearch(workshopUrlStatusFilters.search);
+      if (!needle) {
+        return true;
+      }
+      return normalizeSearch(`${row.workshopName} ${row.facilitator} ${row.regStatus}`).includes(needle);
+    });
+
   return (
     <div>
       <ModuleHeader
@@ -2961,6 +3028,139 @@ function WorkshopsView({
           </div>
         </Panel>
       </div>
+
+      {workshopReportGroup === "Workshop" && workshopReportOption === "WorkShop Url & Status" ? (
+        <Panel defaultOpen title="View Workshop URL and Status">
+          <div className="grid gap-3 md:grid-cols-3">
+            <div>
+              <label className="mb-1 block text-sm font-semibold">Search By Facilitators</label>
+              <select
+                className="w-full rounded-lg border border-ink-900/10 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-white/[0.03]"
+                onChange={(event) =>
+                  setWorkshopUrlStatusFilters((current) => ({ ...current, facilitator: event.target.value }))
+                }
+                value={workshopUrlStatusFilters.facilitator}
+              >
+                <option>ALL FACILITATORS</option>
+                {[...new Set(workshops.map((item) => item.trainer).filter(Boolean))].map((name) => (
+                  <option key={name}>{name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-semibold">Paid Type</label>
+              <select
+                className="w-full rounded-lg border border-ink-900/10 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-white/[0.03]"
+                onChange={(event) =>
+                  setWorkshopUrlStatusFilters((current) => ({ ...current, paidType: event.target.value }))
+                }
+                value={workshopUrlStatusFilters.paidType}
+              >
+                <option>ALL</option>
+                <option>PAID</option>
+                <option>FREE</option>
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-semibold">Active Type</label>
+              <select
+                className="w-full rounded-lg border border-ink-900/10 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-white/[0.03]"
+                onChange={(event) =>
+                  setWorkshopUrlStatusFilters((current) => ({ ...current, activeType: event.target.value }))
+                }
+                value={workshopUrlStatusFilters.activeType}
+              >
+                <option>ALL</option>
+                <option>RUNNING</option>
+                <option>NOT RUNNING</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2 text-sm">
+              <span>Show</span>
+              <select
+                className="rounded-md border border-ink-900/10 bg-white px-2 py-1 dark:border-white/10 dark:bg-white/[0.03]"
+                onChange={(event) =>
+                  setWorkshopUrlStatusFilters((current) => ({ ...current, showEntries: event.target.value }))
+                }
+                value={workshopUrlStatusFilters.showEntries}
+              >
+                <option>10</option>
+                <option>25</option>
+                <option>50</option>
+              </select>
+              <span>entries</span>
+              <button
+                className="ml-2 rounded-md border border-ink-900/10 px-3 py-1.5 text-sm dark:border-white/10"
+                onClick={exportWorkshopUrlStatus}
+                type="button"
+              >
+                Export
+              </button>
+            </div>
+            <div className="flex items-center gap-2 text-sm">
+              <span>Search:</span>
+              <input
+                className="rounded-md border border-ink-900/10 bg-white px-2 py-1.5 dark:border-white/10 dark:bg-white/[0.03]"
+                onChange={(event) =>
+                  setWorkshopUrlStatusFilters((current) => ({ ...current, search: event.target.value }))
+                }
+                value={workshopUrlStatusFilters.search}
+              />
+            </div>
+          </div>
+
+          <div className="mt-3 overflow-x-auto rounded-lg border border-ink-900/10 dark:border-white/10">
+            <div className="grid min-w-[980px] grid-cols-[140px_1.3fr_170px_200px_140px] bg-[#f6f8f4] px-3 py-2 text-xs font-bold dark:bg-white/[0.05]">
+              <span>COPY LINK</span>
+              <span>WORKSHOP NAME</span>
+              <span>LAST REG. DATE</span>
+              <span>REG. STATUS</span>
+              <span>IS PAID ?</span>
+            </div>
+            {workshopUrlStatusRows.slice(0, Number(workshopUrlStatusFilters.showEntries)).map((row) => (
+              <div
+                className="grid min-w-[980px] grid-cols-[140px_1.3fr_170px_200px_140px] items-center border-t border-ink-900/10 px-3 py-3 text-sm dark:border-white/10"
+                key={row.id}
+              >
+                <button
+                  className="w-fit rounded-md px-2 py-1 font-semibold text-ai-600 hover:bg-ai-50 dark:text-ai-100"
+                  onClick={() => {
+                    navigator.clipboard.writeText(row.link);
+                    emitActionNote(`Copy Link: ${row.workshopName}`);
+                  }}
+                  type="button"
+                >
+                  Copy Link
+                </button>
+                <p className="truncate">{row.workshopName}</p>
+                <p>{row.lastRegDate || "-"}</p>
+                <span
+                  className={cn(
+                    "w-fit rounded-md px-3 py-1.5 font-semibold text-white",
+                    row.regStatus === "Running" ? "bg-mint-500" : "bg-red-500"
+                  )}
+                >
+                  {row.regStatus}
+                </span>
+                <span
+                  className={cn(
+                    "w-fit rounded-md px-3 py-1.5 font-semibold",
+                    row.isPaid ? "bg-ink-900 text-white dark:bg-white dark:text-ink-900" : "bg-saffron-400 text-white"
+                  )}
+                >
+                  {row.isPaid ? "Paid" : "Free"}
+                </span>
+              </div>
+            ))}
+            {!workshopUrlStatusRows.length ? (
+              <p className="px-3 py-6 text-center text-sm text-ink-500 dark:text-slate-400">No workshop data found.</p>
+            ) : null}
+          </div>
+        </Panel>
+      ) : null}
 
       {isCreateOpen ? (
         <Panel defaultOpen title={formMode === "create" ? "Create Workshop / Product" : "Edit Workshop / Product"}>
