@@ -2437,6 +2437,14 @@ function SalesView({
     Array<{ id: string; workshopId: string; workshopName: string; leadAssignPercent: number; directClientPercent: number }>
   >([]);
   const [editingCommissionId, setEditingCommissionId] = useState<string | null>(null);
+  const [paymentForm, setPaymentForm] = useState({
+    amount: "",
+    date: "",
+    receipt: "",
+    remarks: "",
+    salesPerson: ""
+  });
+  const [paymentErrors, setPaymentErrors] = useState<{ amount?: string; date?: string; salesPerson?: string }>({});
 
   function saveSalesPerson() {
     if (!salesPersonForm.firstName.trim() || !salesPersonForm.lastName.trim() || !salesPersonForm.mobile.trim()) {
@@ -2531,6 +2539,22 @@ function SalesView({
     emitActionNote("Commission row deleted.");
   }
 
+  function clearPaymentForm() {
+    setPaymentForm({ amount: "", date: "", receipt: "", remarks: "", salesPerson: "" });
+    setPaymentErrors({});
+  }
+
+  function savePaymentForm() {
+    const errors: { amount?: string; date?: string; salesPerson?: string } = {};
+    if (!paymentForm.date) errors.date = "Payment date is required";
+    if (!paymentForm.salesPerson) errors.salesPerson = "Sales person is required";
+    if (!paymentForm.amount || Number(paymentForm.amount) <= 0) errors.amount = "Amount is required";
+    setPaymentErrors(errors);
+    if (Object.keys(errors).length) return;
+    emitActionNote(`Sales payment saved for ${paymentForm.salesPerson}.`);
+    clearPaymentForm();
+  }
+
   return (
     <div>
       <ModuleHeader
@@ -2597,6 +2621,30 @@ function SalesView({
                 <span className="text-xs font-semibold">{person.group} | {person.isActive ? "Active" : "Inactive"}</span>
               </div>
             ))}
+          </div>
+        </div>
+
+        <div className="rounded-lg bg-gray-100 p-2">
+          <div className="mb-4 flex items-center justify-between rounded-lg bg-white px-4 py-3 shadow-sm">
+            <button className="rounded-md border border-gray-200 p-2 text-gray-600" type="button"><Menu className="size-4" /></button>
+            <p className="text-sm font-medium text-gray-700">User Name</p>
+          </div>
+          <div className="mx-auto max-w-6xl rounded-lg bg-white p-6 shadow-sm">
+            <div className="mb-5 flex items-center justify-between">
+              <h3 className="text-xl font-semibold text-gray-900">Manage Sales Person Payment</h3>
+              <button className="rounded-md border border-indigo-500 px-3 py-2 text-sm font-medium text-indigo-600" type="button">View Data</button>
+            </div>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+              <label className="block text-sm text-gray-700">Payment Date<input className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500" type="date" value={paymentForm.date} onChange={(event) => setPaymentForm((current) => ({ ...current, date: event.target.value }))} />{paymentErrors.date ? <span className="mt-1 block text-xs text-red-600">{paymentErrors.date}</span> : null}</label>
+              <label className="block text-sm text-gray-700">Sales Person<select className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500" value={paymentForm.salesPerson} onChange={(event) => setPaymentForm((current) => ({ ...current, salesPerson: event.target.value }))}><option value="">Search and select</option>{[...new Set(teamMembers.map((member) => member.name))].map((name) => <option key={name} value={name}>{name}</option>)}</select>{paymentErrors.salesPerson ? <span className="mt-1 block text-xs text-red-600">{paymentErrors.salesPerson}</span> : null}</label>
+              <label className="block text-sm text-gray-700">Amount<input className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Enter amount" type="number" value={paymentForm.amount} onChange={(event) => setPaymentForm((current) => ({ ...current, amount: event.target.value }))} />{paymentErrors.amount ? <span className="mt-1 block text-xs text-red-600">{paymentErrors.amount}</span> : null}</label>
+              <label className="block text-sm text-gray-700 md:col-span-3">Remarks<textarea className="mt-1 min-h-[92px] w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500" value={paymentForm.remarks} onChange={(event) => setPaymentForm((current) => ({ ...current, remarks: event.target.value }))} /></label>
+              <label className="block text-sm text-gray-700 md:col-span-3">Payment Acknowledgement Receipt<input className="mt-1 w-full rounded-md border border-gray-300 p-2 text-sm" type="file" onChange={(event) => setPaymentForm((current) => ({ ...current, receipt: event.target.files?.[0]?.name ?? "" }))} />{paymentForm.receipt ? <span className="mt-1 block text-xs text-gray-500">Selected: {paymentForm.receipt}</span> : null}</label>
+            </div>
+            <div className="mt-5 flex gap-2">
+              <button className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white" onClick={savePaymentForm} type="button">Save</button>
+              <button className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-800" onClick={clearPaymentForm} type="button">Clear</button>
+            </div>
           </div>
         </div>
 
