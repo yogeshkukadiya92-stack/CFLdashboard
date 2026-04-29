@@ -210,6 +210,8 @@ const filterLabels = [
 const ACTION_NOTE_EVENT = "cfl:action-note";
 const REGISTRATION_STORAGE_KEY = "cfl_registrations_v1";
 const RESET_MARKER_KEY = "cfl_blank_reset_2026_04_28";
+const LEADS_STORAGE_KEY = "cfl_leads_v1";
+const WORKSHOPS_STORAGE_KEY = "cfl_workshops_v1";
 
 function shouldOpenActionPanel(message: string) {
   const normalized = message.toLowerCase();
@@ -278,6 +280,43 @@ export function BusinessOS() {
     window.addEventListener(ACTION_NOTE_EVENT, handleActionNote as EventListener);
     return () => window.removeEventListener(ACTION_NOTE_EVENT, handleActionNote as EventListener);
   }, []);
+
+  useEffect(() => {
+    try {
+      const rawLeads = localStorage.getItem(LEADS_STORAGE_KEY);
+      const rawWorkshops = localStorage.getItem(WORKSHOPS_STORAGE_KEY);
+      if (rawLeads) {
+        const parsed = JSON.parse(rawLeads);
+        if (Array.isArray(parsed) && parsed.length) {
+          setLeads(parsed);
+        }
+      }
+      if (rawWorkshops) {
+        const parsed = JSON.parse(rawWorkshops);
+        if (Array.isArray(parsed) && parsed.length) {
+          setWorkshopList(parsed);
+        }
+      }
+    } catch {
+      // keep defaults
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(LEADS_STORAGE_KEY, JSON.stringify(leads));
+    } catch {
+      // ignore quota/storage errors
+    }
+  }, [leads]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(WORKSHOPS_STORAGE_KEY, JSON.stringify(workshopList));
+    } catch {
+      // ignore quota/storage errors
+    }
+  }, [workshopList]);
 
   useEffect(() => {
     function readRegistrations() {
