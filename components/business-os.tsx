@@ -83,6 +83,7 @@ import {
 import type { Campaign, Lead, LeadStage, ModuleKey, Payment, RegistrationEntry, Workshop } from "@/lib/types";
 import { cn, formatCurrency, formatNumber, initials, normalizeSearch } from "@/lib/utils";
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
+import { Bar, BarChart, CartesianGrid, Legend, Line, LineChart as ReLineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 type Language = "EN" | "HI" | "GU";
 type WorkshopType = Workshop["type"];
@@ -772,13 +773,7 @@ export function BusinessOS() {
       case "home":
         return (
           <DashboardHome
-            activePaymentFilter={activePaymentFilter}
             leads={leads}
-            moveLeadForward={moveLeadForward}
-            selectedLeadId={selectedLeadId}
-            setActiveModule={setActiveModule}
-            setActivePaymentFilter={setActivePaymentFilter}
-            setSelectedLeadId={setSelectedLeadId}
           />
         );
       case "crm":
@@ -1294,133 +1289,99 @@ function IconButton({
 }
 
 function DashboardHome({
-  activePaymentFilter,
-  leads,
-  moveLeadForward,
-  selectedLeadId,
-  setActiveModule,
-  setActivePaymentFilter,
-  setSelectedLeadId
+  leads
 }: {
-  activePaymentFilter: "All" | Payment["status"];
   leads: Lead[];
-  moveLeadForward: (leadId: string) => void;
-  selectedLeadId: string;
-  setActiveModule: (module: ModuleKey) => void;
-  setActivePaymentFilter: (filter: "All" | Payment["status"]) => void;
-  setSelectedLeadId: (id: string) => void;
 }) {
-  const [homeFocus, setHomeFocus] = useState<"overview" | "pipeline" | "revenue" | "operations">("overview");
-
+  const chartData = [
+    { month: "Jan", enrollments: 120, workshops: 10 }, { month: "Feb", enrollments: 145, workshops: 12 },
+    { month: "Mar", enrollments: 170, workshops: 13 }, { month: "Apr", enrollments: 195, workshops: 15 },
+    { month: "May", enrollments: 220, workshops: 17 }, { month: "Jun", enrollments: 260, workshops: 18 },
+    { month: "Jul", enrollments: 275, workshops: 19 }, { month: "Aug", enrollments: 290, workshops: 20 },
+    { month: "Sep", enrollments: 305, workshops: 21 }, { month: "Oct", enrollments: 330, workshops: 23 },
+    { month: "Nov", enrollments: 355, workshops: 24 }, { month: "Dec", enrollments: 380, workshops: 26 }
+  ];
   return (
-    <div className="space-y-3">
-      <div className="scrollbar-thin flex gap-2 overflow-x-auto pb-1">
+    <div className="space-y-4 rounded-xl bg-[#F3F4F6] p-4">
+      <div className="rounded-xl bg-white p-5 shadow-sm">
+        <h2 className="text-xl font-semibold text-slate-900">Revenue Overview</h2>
+        <div className="mt-3 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <p className="text-3xl font-bold text-[#1E3A8A]">₹31,85,000</p>
+            <p className="text-sm text-gray-600">+16.3% vs previous month</p>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-3">
+            {[
+              ["Product A", "42%", "text-blue-700"],
+              ["Service B", "33%", "text-emerald-600"],
+              ["Program C", "25%", "text-indigo-600"]
+            ].map(([label, val, tone]) => (
+              <div className="rounded-lg border border-gray-200 px-3 py-2 text-sm" key={label}>
+                <p className="text-gray-500">{label}</p><p className={cn("font-semibold", tone)}>{val}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {([
-          ["overview", "Overview"],
-          ["pipeline", "Pipeline"],
-          ["revenue", "Revenue"],
-          ["operations", "Operations"]
-        ] as const).map(([key, label]) => (
-          <button
-            className={cn(
-              "shrink-0 rounded-full border px-3 py-1.5 text-xs font-semibold transition",
-              homeFocus === key
-                ? "border-mint-500/40 bg-mint-50 text-mint-700 dark:bg-mint-500/10 dark:text-mint-100"
-                : "border-ink-900/10 text-ink-600 dark:border-white/10 dark:text-slate-300"
-            )}
-            key={key}
-            onClick={() => setHomeFocus(key)}
-            type="button"
-          >
-            {label}
-          </button>
-        ))}
+          { title: "Total Workshops", value: "148", icon: CalendarDays },
+          { title: "Upcoming Workshops", value: "22", icon: Timer },
+          { title: "Total Members", value: formatNumber(leads.length), icon: UsersRound },
+          { title: "Total Revenue", value: "₹1.28Cr", icon: CircleDollarSign }
+        ] satisfies Array<{ title: string; value: string; icon: LucideIcon }>).map((item) => {
+          const Icon = item.icon;
+          return <div className="rounded-xl bg-white p-4 shadow-sm" key={item.title}><Icon className="size-5 text-[#1E3A8A]" /><p className="mt-2 text-sm text-gray-600">{item.title}</p><p className="text-2xl font-bold text-slate-900">{item.value}</p></div>;
+        })}
       </div>
 
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        {dashboardKpis.map((kpi) => (
-          <KpiCard key={kpi.label} kpi={kpi} />
-        ))}
+      <div className="grid gap-4 xl:grid-cols-[1.5fr_0.9fr]">
+        <div className="rounded-xl bg-white p-4 shadow-sm">
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="text-lg font-semibold text-slate-900">Event Registration Status</h3>
+            <button className="rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700">Excel Download</button>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="min-w-[760px] w-full text-sm">
+              <thead className="bg-gray-100 text-left text-xs font-bold uppercase text-gray-700"><tr><th className="px-3 py-2">Event Name</th><th className="px-3 py-2">Date Range</th><th className="px-3 py-2">Latest Registrant Name</th><th className="px-3 py-2">Total Registrations</th><th className="px-3 py-2">New Registrations</th></tr></thead>
+              <tbody>
+                {[
+                  ["Leadership Sprint", "1 Jun - 3 Jun", "Rohan Mehta", "320", "28"],
+                  ["Sales Mastery", "10 Jun - 12 Jun", "Priya Nair", "275", "19"],
+                  ["Mindset Reset", "18 Jun - 20 Jun", "Neha Kapoor", "241", "14"]
+                ].map((row) => <tr className="border-b border-gray-100" key={row[0]}>{row.map((cell) => <td className="px-3 py-2.5" key={`${row[0]}-${cell}`}>{cell}</td>)}</tr>)}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div className="rounded-xl bg-white p-4 shadow-sm">
+          <p className="text-lg font-semibold text-slate-900">Upcoming Event</p>
+          <div className="mt-3 rounded-lg border border-gray-200 p-3">
+            <span className="rounded bg-[#1E3A8A] px-2 py-1 text-xs font-semibold text-white">24 Jun</span>
+            <p className="mt-2 font-semibold">Growth Accelerator Bootcamp</p>
+            <p className="text-sm text-gray-600">Location: Zoom</p>
+            <button className="mt-3 rounded-md bg-emerald-500 px-3 py-2 text-sm font-semibold text-white">Registration Link</button>
+          </div>
+        </div>
       </div>
 
-      {homeFocus === "overview" ? (
-        <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.9fr)]">
-          <Panel
-            defaultOpen
-            action={
-              <button
-                className="rounded-md border border-ink-900/10 px-3 py-1.5 text-xs font-semibold text-ink-600 hover:bg-ink-900/[0.04] dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/[0.06]"
-                onClick={() => setActiveModule("crm")}
-                type="button"
-              >
-                View all
-              </button>
-            }
-            icon={Filter}
-            title="Pipeline"
-          >
-            <PipelineBoard
-              leads={leads}
-              moveLeadForward={moveLeadForward}
-              selectedLeadId={selectedLeadId}
-              setSelectedLeadId={setSelectedLeadId}
-            />
-          </Panel>
-          <LeaderboardPanel />
+      <div className="rounded-xl bg-white p-4 shadow-sm">
+        <h3 className="mb-3 text-lg font-semibold text-slate-900">User Enrollment Report</h3>
+        <div className="h-[320px] w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <ReLineChart data={chartData}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="month" />
+              <YAxis />
+              <Tooltip />
+              <Legend />
+              <Bar dataKey="workshops" fill="#10B981" radius={[4, 4, 0, 0]} />
+              <Line dataKey="enrollments" stroke="#1E3A8A" strokeWidth={3} />
+            </ReLineChart>
+          </ResponsiveContainer>
         </div>
-      ) : null}
-
-      {homeFocus === "pipeline" ? (
-        <Panel
-          defaultOpen
-          action={
-            <button
-              className="rounded-md border border-ink-900/10 px-3 py-1.5 text-xs font-semibold text-ink-600 hover:bg-ink-900/[0.04] dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/[0.06]"
-              onClick={() => setActiveModule("crm")}
-              type="button"
-            >
-              Open CRM
-            </button>
-          }
-          icon={Filter}
-          title="Pipeline"
-        >
-          <PipelineBoard
-            leads={leads}
-            moveLeadForward={moveLeadForward}
-            selectedLeadId={selectedLeadId}
-            setSelectedLeadId={setSelectedLeadId}
-          />
-        </Panel>
-      ) : null}
-
-      {homeFocus === "revenue" ? (
-        <div className="grid gap-3 xl:grid-cols-[minmax(0,1.1fr)_minmax(340px,0.9fr)]">
-          <Panel
-            defaultOpen
-            action={<span className="text-xs font-medium text-ink-500 dark:text-slate-400">This Month</span>}
-            title="Revenue Overview"
-          >
-            <RevenueOverview />
-          </Panel>
-          <PaymentsMiniPanel
-            activePaymentFilter={activePaymentFilter}
-            setActiveModule={setActiveModule}
-            setActivePaymentFilter={setActivePaymentFilter}
-          />
-        </div>
-      ) : null}
-
-      {homeFocus === "operations" ? (
-        <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-          <WorkshopMiniPanel />
-          <PaymentsMiniPanel
-            activePaymentFilter={activePaymentFilter}
-            setActiveModule={setActiveModule}
-            setActivePaymentFilter={setActivePaymentFilter}
-          />
-        </div>
-      ) : null}
+      </div>
     </div>
   );
 }
