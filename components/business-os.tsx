@@ -254,7 +254,6 @@ export function BusinessOS() {
   const [aiAnswer, setAiAnswer] = useState(answerFor("Show Surat revenue this month"));
   const [activePaymentFilter, setActivePaymentFilter] = useState<"All" | Payment["status"]>("All");
   const [actionNote, setActionNote] = useState("Fresh workspace ready. Add your first lead or workshop.");
-  const [actionPanel, setActionPanel] = useState<{ message: string; openedAt: number } | null>(null);
   const [showRightRail, setShowRightRail] = useState(false);
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
@@ -264,9 +263,6 @@ export function BusinessOS() {
       const detail = (event as CustomEvent<string>).detail;
       if (detail) {
         setActionNote(detail);
-        if (shouldOpenActionPanel(detail)) {
-          setActionPanel({ message: detail, openedAt: Date.now() });
-        }
       }
     }
 
@@ -734,13 +730,6 @@ export function BusinessOS() {
         </div>
       </div>
 
-      {actionPanel ? (
-        <ActionPanel
-          message={actionPanel.message}
-          onClose={() => setActionPanel(null)}
-          setActiveModule={setActiveModule}
-        />
-      ) : null}
     </div>
   );
 
