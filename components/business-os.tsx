@@ -516,6 +516,30 @@ export function BusinessOS() {
     setActionNote(`Lead deleted: ${selectedLead.name}.`);
   }
 
+  function assignLeadsToSalesPerson(leadIds: string[], salesPerson: string) {
+    if (!leadIds.length || !salesPerson.trim()) {
+      return;
+    }
+    setLeads((current) =>
+      current.map((lead) => (leadIds.includes(lead.id) ? { ...lead, assignedTo: salesPerson } : lead))
+    );
+    setActionNote(`${leadIds.length} leads assigned to ${salesPerson}.`);
+  }
+
+  function deleteLeadsByIds(leadIds: string[]) {
+    if (!leadIds.length) {
+      return;
+    }
+    setLeads((current) => {
+      const remaining = current.filter((lead) => !leadIds.includes(lead.id));
+      if (remaining.length > 0) {
+        setSelectedLeadId(remaining[0].id);
+      }
+      return remaining.length > 0 ? remaining : current;
+    });
+    setActionNote(`${leadIds.length} selected leads deleted.`);
+  }
+
   function addWorkshop(input?: {
     city?: string;
     price?: number;
@@ -760,7 +784,9 @@ export function BusinessOS() {
       case "crm":
         return (
           <CRMView
+            assignLeadsToSalesPerson={assignLeadsToSalesPerson}
             addLead={addLead}
+            deleteLeadsByIds={deleteLeadsByIds}
             deleteSelectedLead={deleteSelectedLead}
             leads={leads}
             moveLeadForward={moveLeadForward}
@@ -1970,7 +1996,9 @@ function ModuleHeader({
 }
 
 function CRMView({
+  assignLeadsToSalesPerson,
   addLead,
+  deleteLeadsByIds,
   deleteSelectedLead,
   leads,
   moveLeadForward,
@@ -1978,7 +2006,9 @@ function CRMView({
   setSelectedLeadId,
   updateSelectedLead
 }: {
+  assignLeadsToSalesPerson: (leadIds: string[], salesPerson: string) => void;
   addLead: (input?: Partial<Pick<Lead, "name" | "mobile" | "email" | "city" | "state" | "country" | "source">>) => void;
+  deleteLeadsByIds: (leadIds: string[]) => void;
   deleteSelectedLead: () => void;
   leads: Lead[];
   moveLeadForward: (leadId: string) => void;
@@ -1991,6 +2021,8 @@ function CRMView({
   const [leadFormMode, setLeadFormMode] = useState<"create" | "edit">("create");
   const [leadFormOpen, setLeadFormOpen] = useState(false);
   const [leadProfileOpen, setLeadProfileOpen] = useState(false);
+  const [selectedLeadIds, setSelectedLeadIds] = useState<string[]>([]);
+  const [selectedSalesPerson, setSelectedSalesPerson] = useState("");
   const [leadForm, setLeadForm] = useState({
     city: "",
     country: "",
@@ -2056,11 +2088,57 @@ function CRMView({
     }
   });
 
+  function toggleLeadSelection(leadId: string) {
+    setSelectedLeadIds((current) =>
+      current.includes(leadId) ? current.filter((id) => id !== leadId) : [...current, leadId]
+    );
+  }
+
+  function toggleSelectAllVisible() {
+    const visibleIds = filteredLeads.map((lead) => lead.id);
+    const allSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedLeadIds.includes(id));
+    if (allSelected) {
+      setSelectedLeadIds((current) => current.filter((id) => !visibleIds.includes(id)));
+      return;
+    }
+    setSelectedLeadIds((current) => Array.from(new Set([...current, ...visibleIds])));
+  }
+
+  function handleAssignSelected() {
+    if (!selectedLeadIds.length) {
+      emitActionNote("Select leads first for assignment.");
+      return;
+    }
+    if (!selectedSalesPerson.trim()) {
+      emitActionNote("Select sales person first.");
+      return;
+    }
+    assignLeadsToSalesPerson(selectedLeadIds, selectedSalesPerson);
+    setSelectedLeadIds([]);
+  }
+
+  function handleDeleteSelected() {
+    if (!selectedLeadIds.length) {
+      emitActionNote("Select leads first to delete.");
+      return;
+    }
+    deleteLeadsByIds(selectedLeadIds);
+    setSelectedLeadIds([]);
+  }
+
   return (
     <div>
       <ModuleHeader
         actions={
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
+            <select className="rounded-lg border border-ink-900/10 px-3 py-2 text-sm dark:border-white/10" onChange={(event) => setSelectedSalesPerson(event.target.value)} value={selectedSalesPerson}>
+              <option value="">Assign to sales person</option>
+              {[...new Set(teamMembers.map((member) => member.name))].map((member) => (
+                <option key={member} value={member}>
+                  {member}
+                </option>
+              ))}
+            </select>
             <button
               className="rounded-lg border border-ink-900/10 px-3 py-2 text-sm font-semibold dark:border-white/10"
               onClick={() => openLeadForm("create")}
@@ -2077,10 +2155,10 @@ function CRMView({
             </button>
             <button
               className="rounded-lg bg-mint-600 px-3 py-2 text-sm font-semibold text-white"
-              onClick={() => emitActionNote("Round-robin assignment executed for unassigned leads.")}
+              onClick={handleAssignSelected}
               type="button"
             >
-              Assign leads
+              Assign selected
             </button>
             <button
               className="rounded-lg border border-ink-900/10 px-3 py-2 text-sm font-semibold dark:border-white/10"
@@ -2091,10 +2169,10 @@ function CRMView({
             </button>
             <button
               className="rounded-lg bg-red-600 px-3 py-2 text-sm font-semibold text-white"
-              onClick={deleteSelectedLead}
+              onClick={handleDeleteSelected}
               type="button"
             >
-              Delete
+              Delete selected
             </button>
           </div>
         }
@@ -2150,7 +2228,15 @@ function CRMView({
             ))}
           </div>
           <div className="overflow-x-auto rounded-lg border border-ink-900/10 dark:border-white/10">
-            <div className="grid min-w-[720px] grid-cols-[1.3fr_120px_115px_115px_88px] bg-[#f6f8f4] px-3 py-2 text-xs font-bold text-ink-500 dark:bg-white/[0.05] dark:text-slate-400">
+            <div className="grid min-w-[760px] grid-cols-[40px_1.3fr_120px_115px_115px_88px] bg-[#f6f8f4] px-3 py-2 text-xs font-bold text-ink-500 dark:bg-white/[0.05] dark:text-slate-400">
+              <span>
+                <input
+                  checked={filteredLeads.length > 0 && filteredLeads.every((lead) => selectedLeadIds.includes(lead.id))}
+                  className="size-4 accent-indigo-600"
+                  onChange={toggleSelectAllVisible}
+                  type="checkbox"
+                />
+              </span>
               <span>Contact</span>
               <span>City</span>
               <span>Stage</span>
@@ -2160,7 +2246,7 @@ function CRMView({
             {filteredLeads.map((lead) => (
               <button
                 className={cn(
-                  "grid w-full min-w-[720px] grid-cols-[1.3fr_120px_115px_115px_88px] items-center border-t border-ink-900/10 px-3 py-3 text-left text-sm transition hover:bg-mint-50/70 dark:border-white/10 dark:hover:bg-white/[0.06]",
+                  "grid w-full min-w-[760px] grid-cols-[40px_1.3fr_120px_115px_115px_88px] items-center border-t border-ink-900/10 px-3 py-3 text-left text-sm transition hover:bg-mint-50/70 dark:border-white/10 dark:hover:bg-white/[0.06]",
                   selectedLead.id === lead.id && "bg-mint-50 dark:bg-mint-500/10"
                 )}
                 key={lead.id}
@@ -2170,6 +2256,14 @@ function CRMView({
                 }}
                 type="button"
               >
+                <span onClick={(event) => event.stopPropagation()}>
+                  <input
+                    checked={selectedLeadIds.includes(lead.id)}
+                    className="size-4 accent-indigo-600"
+                    onChange={() => toggleLeadSelection(lead.id)}
+                    type="checkbox"
+                  />
+                </span>
                 <span className="min-w-0">
                   <span className="block truncate font-bold">{lead.name}</span>
                   <span className="block truncate text-xs text-ink-500 dark:text-slate-400">{lead.mobile}</span>
@@ -2363,6 +2457,7 @@ function SalesView({
     mobile: "",
     password: ""
   });
+
   const [salesPeople, setSalesPeople] = useState<
     Array<{
       id: string;
