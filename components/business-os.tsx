@@ -6,6 +6,7 @@ import {
   ArrowUpRight,
   BadgeCheck,
   BarChart3,
+  Bold,
   Bell,
   Bot,
   BriefcaseBusiness,
@@ -27,11 +28,15 @@ import {
   HelpCircle,
   Home,
   Import,
+  Italic,
   Languages,
   LayoutDashboard,
   LayoutTemplate,
   LifeBuoy,
   LockKeyhole,
+  Link2,
+  List,
+  ListOrdered,
   Megaphone,
   MessageCircle,
   Menu,
@@ -49,6 +54,7 @@ import {
   ShieldCheck,
   Sparkles,
   Sun,
+  Underline,
   Target,
   TicketCheck,
   Timer,
@@ -3272,23 +3278,23 @@ function WorkshopsView({
       ) : null}
 
       {isScheduleOpen ? (
-      <Panel defaultOpen title="Manage Workshop Schedule">
-        <div className="mb-3 flex items-center justify-between">
-          <p className="text-sm text-ink-500 dark:text-slate-400">Create registration link, email, API mapping, and scheduling rules.</p>
-          <button
-            className="rounded-lg border border-ai-500/40 px-3 py-2 text-sm font-semibold text-ai-600 dark:text-ai-200"
-            onClick={() => emitActionNote("Schedule data preview opened.")}
-            type="button"
-          >
-            View Data
-          </button>
+      <div className="rounded-lg bg-gray-50 p-2">
+        <div className="flex items-center justify-between rounded-md bg-white px-4 py-3 shadow-sm">
+          <button className="rounded-md border border-gray-200 p-2 text-gray-600" type="button"><Menu className="size-4" /></button>
+          <p className="text-sm font-medium text-gray-700">Welcome User</p>
         </div>
+        <div className="mx-auto mt-6 max-w-7xl rounded-lg bg-white p-6 shadow-sm">
+          <div className="mb-5 flex items-center justify-between">
+            <h3 className="text-xl font-medium text-gray-900">Manage Schedule</h3>
+            <button className="inline-flex items-center gap-2 rounded-md border border-indigo-500 px-3 py-2 text-sm font-medium text-indigo-600" onClick={() => emitActionNote("Schedule data preview opened.")} type="button"><Eye className="size-4" />View Data</button>
+          </div>
 
-        <div className="grid gap-3 md:grid-cols-3">
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-3 lg:grid-cols-4">
           <div>
-            <label className="mb-1.5 block text-sm font-semibold">Select Workshop</label>
+            <label className="mb-1 block text-sm text-gray-700"><input checked={scheduleForm.transferLeadToZoho} className="mr-2 size-4 accent-indigo-600" onChange={(event) => updateScheduleForm("transferLeadToZoho", event.target.checked)} type="checkbox" />Transfer Lead?</label>
+            <label className="mb-1 block text-sm text-gray-700">Select Event</label>
             <select
-              className="w-full rounded-lg border border-ink-900/10 bg-white px-3 py-2.5 text-sm outline-none focus:border-ai-500 dark:border-white/10 dark:bg-white/[0.03]"
+              className="w-full rounded-md border border-gray-300 bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
               onChange={(event) => updateScheduleForm("scheduleWorkshopId", event.target.value)}
               value={scheduleForm.scheduleWorkshopId}
             >
@@ -3299,20 +3305,11 @@ function WorkshopsView({
                 </option>
               ))}
             </select>
-            <label className="mt-2 inline-flex items-center gap-2 text-sm font-semibold">
-              <input
-                checked={scheduleForm.transferLeadToZoho}
-                className="size-4 accent-ai-500"
-                onChange={(event) => updateScheduleForm("transferLeadToZoho", event.target.checked)}
-                type="checkbox"
-              />
-              Transfer Lead to Zoho?
-            </label>
           </div>
           <div>
-            <label className="mb-1.5 block text-sm font-semibold">Facilitator</label>
+            <label className="mb-1 block text-sm text-gray-700">Facilitator</label>
             <select
-              className="w-full rounded-lg border border-ink-900/10 bg-white px-3 py-2.5 text-sm outline-none focus:border-ai-500 dark:border-white/10 dark:bg-white/[0.03]"
+              className="w-full rounded-md border border-gray-300 bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
               onChange={(event) => updateScheduleForm("facilitator", event.target.value)}
               value={scheduleForm.facilitator}
             >
@@ -3325,45 +3322,30 @@ function WorkshopsView({
             </select>
           </div>
           <div>
-            <label className="mb-1.5 block text-sm font-semibold">Batch</label>
+            <label className="mb-1 block text-sm text-gray-700">Batch</label>
             <input
-              className="w-full rounded-lg border border-ink-900/10 bg-white px-3 py-2.5 text-sm outline-none focus:border-ai-500 dark:border-white/10 dark:bg-white/[0.03]"
+              className="w-full rounded-md border border-gray-300 bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
               onChange={(event) => updateScheduleForm("batch", event.target.value)}
               placeholder="Batch"
               value={scheduleForm.batch}
             />
           </div>
-        </div>
-
-        <div className="mt-3 grid gap-3 md:grid-cols-5">
-          <label className="inline-flex items-center gap-2 text-sm font-semibold">
-            <input
-              checked={scheduleForm.isPaidWorkshop}
-              className="size-4 accent-ai-500"
-              onChange={(event) => updateScheduleForm("isPaidWorkshop", event.target.checked)}
-              type="checkbox"
-            />
-            Is Paid Workshop?
-          </label>
-          <label className="inline-flex items-center gap-2 text-sm font-semibold">
-            <input
-              checked={scheduleForm.isPartPaymentAllow}
-              className="size-4 accent-ai-500"
-              onChange={(event) => updateScheduleForm("isPartPaymentAllow", event.target.checked)}
-              type="checkbox"
-            />
-            Is Part Payment Allow?
-          </label>
-          <input className="rounded-lg border border-ink-900/10 bg-white px-3 py-2.5 text-sm outline-none focus:border-ai-500 dark:border-white/10 dark:bg-white/[0.03]" onChange={(event) => updateScheduleForm("minimumPartPayment", event.target.value)} placeholder="Minimum Part Payment" value={scheduleForm.minimumPartPayment} />
-          <input className="rounded-lg border border-ink-900/10 bg-white px-3 py-2.5 text-sm outline-none focus:border-ai-500 dark:border-white/10 dark:bg-white/[0.03]" onChange={(event) => updateScheduleForm("discountEod", event.target.value)} placeholder="Discount EOD" value={scheduleForm.discountEod} />
-          <input className="rounded-lg border border-ink-900/10 bg-white px-3 py-2.5 text-sm outline-none focus:border-ai-500 dark:border-white/10 dark:bg-white/[0.03]" onChange={(event) => updateScheduleForm("discountValue", event.target.value)} placeholder="Discount Value" value={scheduleForm.discountValue} />
-        </div>
-
-        <div className="mt-3 grid gap-3 md:grid-cols-3">
           <div>
-            <label className="mb-1.5 block text-sm font-semibold">Discount Type</label>
-            <div className="flex gap-4 rounded-lg border border-ink-900/10 px-3 py-2.5 text-sm dark:border-white/10">
-              <label className="inline-flex items-center gap-2">
+            <label className="mb-1 block text-sm text-gray-700"><input checked={scheduleForm.isPaidWorkshop} className="mr-2 size-4 accent-indigo-600" onChange={(event) => updateScheduleForm("isPaidWorkshop", event.target.checked)} type="checkbox" />Is Paid?</label>
+            <input className="w-full rounded-md border border-gray-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Fees With GST" />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm text-gray-700"><input checked={scheduleForm.isPartPaymentAllow} className="mr-2 size-4 accent-indigo-600" onChange={(event) => updateScheduleForm("isPartPaymentAllow", event.target.checked)} type="checkbox" />Is Part Payment Allow?</label>
+            <input className="w-full rounded-md border border-gray-300 bg-gray-100 px-3 py-2.5 text-sm outline-none" onChange={(event) => updateScheduleForm("minimumPartPayment", event.target.value)} placeholder="Minimum Part Payment" value={scheduleForm.minimumPartPayment} />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm text-gray-700">Discount EOD</label>
+            <input className="w-full rounded-md border border-gray-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500" onChange={(event) => updateScheduleForm("discountEod", event.target.value)} placeholder="Discount EOD" value={scheduleForm.discountEod} />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm text-gray-700">Discount Type</label>
+            <div className="flex gap-4 rounded-md border border-gray-300 px-3 py-2.5 text-sm">
+              <label className="inline-flex items-center gap-2 text-sm text-gray-700">
                 <input
                   checked={scheduleForm.discountType === "percent"}
                   onChange={() => updateScheduleForm("discountType", "percent")}
@@ -3371,7 +3353,7 @@ function WorkshopsView({
                 />
                 %
               </label>
-              <label className="inline-flex items-center gap-2">
+              <label className="inline-flex items-center gap-2 text-sm text-gray-700">
                 <input
                   checked={scheduleForm.discountType === "flat"}
                   onChange={() => updateScheduleForm("discountType", "flat")}
@@ -3381,131 +3363,92 @@ function WorkshopsView({
               </label>
             </div>
           </div>
-          <input className="rounded-lg border border-ink-900/10 bg-white px-3 py-2.5 text-sm outline-none focus:border-ai-500 dark:border-white/10 dark:bg-white/[0.03]" onChange={(event) => updateScheduleForm("orderQtyTitle", event.target.value)} placeholder="Order Qty Title" value={scheduleForm.orderQtyTitle} />
-          <input className="rounded-lg border border-ink-900/10 bg-white px-3 py-2.5 text-sm outline-none focus:border-ai-500 dark:border-white/10 dark:bg-white/[0.03]" onChange={(event) => updateScheduleForm("minOrderQty", event.target.value)} placeholder="Min Order Qty" value={scheduleForm.minOrderQty} />
-        </div>
-
-        <div className="mt-3 grid gap-3 md:grid-cols-3">
-          <input className="rounded-lg border border-ink-900/10 bg-white px-3 py-2.5 text-sm outline-none focus:border-ai-500 dark:border-white/10 dark:bg-white/[0.03]" onChange={(event) => updateScheduleForm("maxOrderQty", event.target.value)} placeholder="Max Order Qty" value={scheduleForm.maxOrderQty} />
-          <input className="rounded-lg border border-ink-900/10 bg-white px-3 py-2.5 text-sm outline-none focus:border-ai-500 dark:border-white/10 dark:bg-white/[0.03]" onChange={(event) => updateScheduleForm("startDate", event.target.value)} placeholder="Start Date" type="date" value={scheduleForm.startDate} />
-          <input className="rounded-lg border border-ink-900/10 bg-white px-3 py-2.5 text-sm outline-none focus:border-ai-500 dark:border-white/10 dark:bg-white/[0.03]" onChange={(event) => updateScheduleForm("endDate", event.target.value)} placeholder="End Date" type="date" value={scheduleForm.endDate} />
-        </div>
-
-        <div className="mt-3 grid gap-3 md:grid-cols-3">
-          <input className="rounded-lg border border-ink-900/10 bg-white px-3 py-2.5 text-sm outline-none focus:border-ai-500 dark:border-white/10 dark:bg-white/[0.03]" onChange={(event) => updateScheduleForm("lastRegistrationDate", event.target.value)} placeholder="Last Registration Date" type="date" value={scheduleForm.lastRegistrationDate} />
-          <select className="rounded-lg border border-ink-900/10 bg-white px-3 py-2.5 text-sm outline-none focus:border-ai-500 dark:border-white/10 dark:bg-white/[0.03]" onChange={(event) => updateScheduleForm("linkType", event.target.value)} value={scheduleForm.linkType}>
-            <option>NA</option>
-            <option>Public</option>
-            <option>Private</option>
-            <option>Affiliate</option>
-          </select>
-          <select className="rounded-lg border border-ink-900/10 bg-white px-3 py-2.5 text-sm outline-none focus:border-ai-500 dark:border-white/10 dark:bg-white/[0.03]" onChange={(event) => updateScheduleForm("venue", event.target.value)} value={scheduleForm.venue}>
-            <option value="">SELECT VENUE</option>
-            <option value="Online Zoom">Online Zoom</option>
-            <option value="Surat">Surat</option>
-            <option value="Ahmedabad">Ahmedabad</option>
-            <option value="Mumbai">Mumbai</option>
-          </select>
-        </div>
-
-        <div className="mt-3 grid gap-3 md:grid-cols-2">
-          <input className="rounded-lg border border-ink-900/10 bg-white px-3 py-2.5 text-sm outline-none focus:border-ai-500 dark:border-white/10 dark:bg-white/[0.03]" onChange={(event) => updateScheduleForm("redirectUrl", event.target.value)} placeholder="Re-Direct URL After Registration" value={scheduleForm.redirectUrl} />
-          <div className="rounded-lg border border-ink-900/10 px-3 py-2.5 text-sm dark:border-white/10">
-            <label className="mb-1 block font-semibold">Image Preview [1024 * 576]</label>
-            <input
-              onChange={(event) =>
-                updateScheduleForm("imagePreviewName", event.target.files?.[0]?.name ?? "")
-              }
-              type="file"
-            />
-            {scheduleForm.imagePreviewName ? (
-              <p className="mt-1 text-xs text-ink-500 dark:text-slate-400">{scheduleForm.imagePreviewName}</p>
-            ) : null}
+          <div>
+            <label className="mb-1 block text-sm text-gray-700">Discount Value</label>
+            <input className="w-full rounded-md border border-gray-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500" onChange={(event) => updateScheduleForm("discountValue", event.target.value)} placeholder="Discount Value" value={scheduleForm.discountValue} />
+          </div>
+          <div className="md:col-span-3 lg:col-span-4">
+            <label className="mb-1 block text-sm text-gray-700">Discount Description</label>
+            <input className="w-full rounded-md border border-gray-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500" onChange={(event) => updateScheduleForm("discountDescription", event.target.value)} placeholder="Discount Description" value={scheduleForm.discountDescription} />
+          </div>
+          <div><label className="mb-1 block text-sm text-gray-700">Order Qty Title</label><input className="w-full rounded-md border border-gray-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500" onChange={(event) => updateScheduleForm("orderQtyTitle", event.target.value)} placeholder="Order Qty Title" value={scheduleForm.orderQtyTitle} /></div>
+          <div><label className="mb-1 block text-sm text-gray-700">Min Order Qty</label><input className="w-full rounded-md border border-gray-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500" onChange={(event) => updateScheduleForm("minOrderQty", event.target.value)} placeholder="Min Order Qty" value={scheduleForm.minOrderQty} /></div>
+          <div><label className="mb-1 block text-sm text-gray-700">Max Order Qty</label><input className="w-full rounded-md border border-gray-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500" onChange={(event) => updateScheduleForm("maxOrderQty", event.target.value)} placeholder="Max Order Qty" value={scheduleForm.maxOrderQty} /></div>
+          <div><label className="mb-1 block text-sm text-gray-700">Start Date</label><input className="w-full rounded-md border border-gray-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500" onChange={(event) => updateScheduleForm("startDate", event.target.value)} type="date" value={scheduleForm.startDate} /></div>
+          <div><label className="mb-1 block text-sm text-gray-700">End Date</label><input className="w-full rounded-md border border-gray-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500" onChange={(event) => updateScheduleForm("endDate", event.target.value)} type="date" value={scheduleForm.endDate} /></div>
+          <div><label className="mb-1 block text-sm text-gray-700">Last Registration Date</label><input className="w-full rounded-md border border-gray-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500" onChange={(event) => updateScheduleForm("lastRegistrationDate", event.target.value)} type="date" value={scheduleForm.lastRegistrationDate} /></div>
+          <div><label className="mb-1 block text-sm text-gray-700">Redirect URL</label><input className="w-full rounded-md border border-gray-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500" onChange={(event) => updateScheduleForm("redirectUrl", event.target.value)} placeholder="Redirect URL" value={scheduleForm.redirectUrl} /></div>
+          <div><label className="mb-1 block text-sm text-gray-700">Link Type</label><select className="w-full rounded-md border border-gray-300 bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500" onChange={(event) => updateScheduleForm("linkType", event.target.value)} value={scheduleForm.linkType}><option>NA</option><option>Public</option><option>Private</option><option>Affiliate</option></select></div>
+          <div><label className="mb-1 block text-sm text-gray-700">Venue</label><select className="w-full rounded-md border border-gray-300 bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500" onChange={(event) => updateScheduleForm("venue", event.target.value)} value={scheduleForm.venue}><option value="">SELECT VENUE</option><option value="Online Zoom">Online Zoom</option><option value="Surat">Surat</option><option value="Ahmedabad">Ahmedabad</option><option value="Mumbai">Mumbai</option></select></div>
+          <div className="md:col-span-3 lg:col-span-4"><label className="mb-1 block text-sm text-gray-700">Image Preview (1024x576)</label><input className="w-full rounded-md border border-gray-300 px-3 py-2.5 text-sm" onChange={(event) => updateScheduleForm("imagePreviewName", event.target.files?.[0]?.name ?? "")} type="file" /></div>
+          <div className="md:col-span-3 lg:col-span-4">
+            <label className="mb-1 block text-sm text-gray-700">Event Description</label>
+            <div className="rounded-md border border-gray-300">
+              <div className="flex gap-2 border-b border-gray-200 p-2 text-gray-600">
+                <Bold className="size-4" /><Italic className="size-4" /><Underline className="size-4" /><Link2 className="size-4" /><List className="size-4" /><ListOrdered className="size-4" />
+              </div>
+              <textarea className="min-h-[140px] w-full rounded-b-md px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500" onChange={(event) => updateScheduleForm("workshopDescription", event.target.value)} placeholder="Event Description" value={scheduleForm.workshopDescription} />
+            </div>
           </div>
         </div>
+        <h4 className="mt-8 mb-4 border-b border-gray-200 pb-2 text-base font-semibold text-gray-900">Third Party API Setup</h4>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          <input className="rounded-md border border-gray-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500" onChange={(event) => updateScheduleForm("aiSensyCampaignName", event.target.value)} placeholder="Campaign Name" value={scheduleForm.aiSensyCampaignName} />
+          <input className="rounded-md border border-gray-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500" onChange={(event) => updateScheduleForm("aiSensyMediaUrl", event.target.value)} placeholder="Media URL" value={scheduleForm.aiSensyMediaUrl} />
+          <input className="rounded-md border border-gray-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500" onChange={(event) => updateScheduleForm("aiSensyFailedCampaignName", event.target.value)} placeholder="Failed Campaign Name" value={scheduleForm.aiSensyFailedCampaignName} />
+          <input className="rounded-md border border-gray-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500" onChange={(event) => updateScheduleForm("aiSensyFailedMediaUrl", event.target.value)} placeholder="Failed Media URL" value={scheduleForm.aiSensyFailedMediaUrl} />
+          <input className="rounded-md border border-gray-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500" onChange={(event) => updateScheduleForm("clickMagicUid", event.target.value)} placeholder="UID" value={scheduleForm.clickMagicUid} />
+          <input className="rounded-md border border-gray-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500" onChange={(event) => updateScheduleForm("clickMagicHid", event.target.value)} placeholder="HID" value={scheduleForm.clickMagicHid} />
+          <input className="rounded-md border border-gray-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500" onChange={(event) => updateScheduleForm("clickMagicCampaignId", event.target.value)} placeholder="Campaign ID" value={scheduleForm.clickMagicCampaignId} />
+        </div>
 
-        <textarea
-          className="mt-3 min-h-[96px] w-full rounded-lg border border-ink-900/10 bg-white px-3 py-2.5 text-sm outline-none focus:border-ai-500 dark:border-white/10 dark:bg-white/[0.03]"
-          onChange={(event) => updateScheduleForm("discountDescription", event.target.value)}
-          placeholder="Discount Description"
-          value={scheduleForm.discountDescription}
-        />
-        <textarea
-          className="mt-3 min-h-[110px] w-full rounded-lg border border-ink-900/10 bg-white px-3 py-2.5 text-sm outline-none focus:border-ai-500 dark:border-white/10 dark:bg-white/[0.03]"
-          onChange={(event) => updateScheduleForm("workshopDescription", event.target.value)}
-          placeholder="Workshop Description"
-          value={scheduleForm.workshopDescription}
-        />
+        <h4 className="mt-8 mb-4 border-b border-gray-200 pb-2 text-base font-semibold text-gray-900">Auto Assign</h4>
+        <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+          <input
+            checked={scheduleForm.autoAssignSalesPerson}
+            className="size-4 accent-indigo-600"
+            onChange={(event) => updateScheduleForm("autoAssignSalesPerson", event.target.checked)}
+            type="checkbox"
+          />
+          Activate Auto Lead Assign
+        </label>
 
-        <div className="my-4 border-t border-ink-900/10 dark:border-white/10" />
-        <h3 className="mb-2 text-base font-bold">Send Email After Registration</h3>
-        <label className="inline-flex items-center gap-2 text-sm font-semibold">
+        <h4 className="mt-8 mb-4 border-b border-gray-200 pb-2 text-base font-semibold text-gray-900">Email Setup</h4>
+        <label className="inline-flex items-center gap-2 text-sm text-gray-700">
           <input
             checked={scheduleForm.emailAfterRegistration}
-            className="size-4 accent-ai-500"
+            className="size-4 accent-indigo-600"
             onChange={(event) => updateScheduleForm("emailAfterRegistration", event.target.checked)}
             type="checkbox"
           />
-          Thank you Email After Registration
+          Send Email After Registration
         </label>
-        <div className="mt-2 grid gap-3 md:grid-cols-[1fr_auto]">
-          <input className="rounded-lg border border-ink-900/10 bg-white px-3 py-2.5 text-sm outline-none focus:border-ai-500 dark:border-white/10 dark:bg-white/[0.03]" onChange={(event) => updateScheduleForm("emailId", event.target.value)} placeholder="Email ID" value={scheduleForm.emailId} />
-          <button
-            className="rounded-lg border border-ink-900/10 px-4 py-2 text-sm font-semibold dark:border-white/10"
-            onClick={() => emitActionNote("Test email format sent to preview queue.")}
-            type="button"
-          >
-            Test Email Format
-          </button>
-        </div>
-        <input className="mt-3 w-full rounded-lg border border-ink-900/10 bg-white px-3 py-2.5 text-sm outline-none focus:border-ai-500 dark:border-white/10 dark:bg-white/[0.03]" onChange={(event) => updateScheduleForm("emailSubject", event.target.value)} placeholder="Email Subject" value={scheduleForm.emailSubject} />
-        <textarea className="mt-3 min-h-[120px] w-full rounded-lg border border-ink-900/10 bg-white px-3 py-2.5 text-sm outline-none focus:border-ai-500 dark:border-white/10 dark:bg-white/[0.03]" onChange={(event) => updateScheduleForm("emailBody", event.target.value)} placeholder="Email Body (use [Name])" value={scheduleForm.emailBody} />
-
-        <div className="my-4 border-t border-ink-900/10 dark:border-white/10" />
-        <h3 className="mb-2 text-base font-bold">Third Party API Setup</h3>
-        <div className="grid gap-3 md:grid-cols-3">
-          <input className="rounded-lg border border-ink-900/10 bg-white px-3 py-2.5 text-sm outline-none focus:border-ai-500 dark:border-white/10 dark:bg-white/[0.03]" onChange={(event) => updateScheduleForm("aiSensyCampaignName", event.target.value)} placeholder="AiSensy Campaign Name (Small Letter)" value={scheduleForm.aiSensyCampaignName} />
-          <input className="rounded-lg border border-ink-900/10 bg-white px-3 py-2.5 text-sm outline-none focus:border-ai-500 dark:border-white/10 dark:bg-white/[0.03]" onChange={(event) => updateScheduleForm("aiSensyMediaUrl", event.target.value)} placeholder="AiSensy Media URL" value={scheduleForm.aiSensyMediaUrl} />
-          <input className="rounded-lg border border-ink-900/10 bg-white px-3 py-2.5 text-sm outline-none focus:border-ai-500 dark:border-white/10 dark:bg-white/[0.03]" onChange={(event) => updateScheduleForm("aiSensyFailedCampaignName", event.target.value)} placeholder="AiSensy Failed Campaign Name (Small Letter)" value={scheduleForm.aiSensyFailedCampaignName} />
-          <input className="rounded-lg border border-ink-900/10 bg-white px-3 py-2.5 text-sm outline-none focus:border-ai-500 dark:border-white/10 dark:bg-white/[0.03]" onChange={(event) => updateScheduleForm("aiSensyFailedMediaUrl", event.target.value)} placeholder="AiSensy Failed Media URL" value={scheduleForm.aiSensyFailedMediaUrl} />
-          <input className="rounded-lg border border-ink-900/10 bg-white px-3 py-2.5 text-sm outline-none focus:border-ai-500 dark:border-white/10 dark:bg-white/[0.03]" onChange={(event) => updateScheduleForm("clickMagicUid", event.target.value)} placeholder="Click Magic UID" value={scheduleForm.clickMagicUid} />
-          <input className="rounded-lg border border-ink-900/10 bg-white px-3 py-2.5 text-sm outline-none focus:border-ai-500 dark:border-white/10 dark:bg-white/[0.03]" onChange={(event) => updateScheduleForm("clickMagicHid", event.target.value)} placeholder="Click Magic HID" value={scheduleForm.clickMagicHid} />
-          <input className="rounded-lg border border-ink-900/10 bg-white px-3 py-2.5 text-sm outline-none focus:border-ai-500 dark:border-white/10 dark:bg-white/[0.03]" onChange={(event) => updateScheduleForm("clickMagicCampaignId", event.target.value)} placeholder="Click Magic Campaign ID" value={scheduleForm.clickMagicCampaignId} />
-          <label className="inline-flex items-center gap-2 rounded-lg border border-ink-900/10 px-3 py-2.5 text-sm font-semibold dark:border-white/10">
-            <input
-              checked={scheduleForm.autoAssignSalesPerson}
-              className="size-4 accent-ai-500"
-              onChange={(event) => updateScheduleForm("autoAssignSalesPerson", event.target.checked)}
-              type="checkbox"
-            />
-            Auto Lead Assign to Sales Person
-          </label>
+        <input className="mt-3 w-full rounded-md border border-gray-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500" onChange={(event) => updateScheduleForm("emailSubject", event.target.value)} placeholder="Email Subject" value={scheduleForm.emailSubject} />
+        <div className="mt-3 rounded-md border border-gray-300">
+          <div className="flex gap-2 border-b border-gray-200 p-2 text-gray-600">
+            <Bold className="size-4" /><Italic className="size-4" /><Underline className="size-4" /><Link2 className="size-4" /><List className="size-4" /><ListOrdered className="size-4" />
+          </div>
+          <textarea className="min-h-[130px] w-full rounded-b-md px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500" onChange={(event) => updateScheduleForm("emailBody", event.target.value)} placeholder="Email Body" value={scheduleForm.emailBody} />
         </div>
 
-        <div className="mt-4 flex flex-wrap gap-2">
+        <div className="mt-6 flex flex-wrap gap-2">
           <button
-            className="rounded-lg bg-mint-600 px-4 py-2 text-sm font-semibold text-white"
+            className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white"
             onClick={saveScheduleConfig}
             type="button"
           >
-            Save Config
+            Save
           </button>
           <button
-            className="rounded-lg border border-ink-900/10 px-4 py-2 text-sm font-semibold dark:border-white/10"
-            onClick={generateScheduleLink}
-            type="button"
-          >
-            Generate Link
-          </button>
-          <button
-            className="rounded-lg border border-ink-900/10 px-4 py-2 text-sm font-semibold dark:border-white/10"
+            className="rounded-md border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700"
             onClick={clearScheduleForm}
             type="button"
           >
             Clear
           </button>
         </div>
-      </Panel>
+      </div>
+      </div>
       ) : null}
 
       <Panel
