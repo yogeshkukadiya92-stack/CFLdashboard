@@ -24,6 +24,7 @@ import {
   Gift,
   Globe2,
   Headphones,
+  HelpCircle,
   Home,
   Import,
   Languages,
@@ -2833,6 +2834,31 @@ function WorkshopsView({
     setIsCreateOpen(false);
   }
 
+  function clearWorkshopMasterForm() {
+    setForm({
+      city: "Surat",
+      isPaid: true,
+      productGroup: "Leadership",
+      title: "",
+      trainer: "Arjun Sharma",
+      type: "Hybrid"
+    });
+    setDefaultFields({
+      address: false,
+      age: false,
+      city: false,
+      country: true,
+      email: true,
+      firstName: true,
+      gender: false,
+      lastName: true,
+      mobile: true,
+      occupation: false,
+      state: false
+    });
+    emitActionNote("Workshop master form cleared.");
+  }
+
   function clearScheduleForm() {
     setScheduleForm((current) => ({
       ...current,
@@ -3193,105 +3219,67 @@ function WorkshopsView({
       ) : null}
 
       {isCreateOpen ? (
-        <Panel defaultOpen title={formMode === "create" ? "Create Workshop / Product" : "Edit Workshop / Product"}>
-          <div className="grid gap-3 md:grid-cols-4">
-            <input
-              className="rounded-lg border border-ink-900/10 bg-white px-3 py-2.5 text-sm outline-none focus:border-mint-500 dark:border-white/10 dark:bg-white/[0.03]"
-              onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))}
-              placeholder="Workshop/Product Name"
-              value={form.title}
-            />
-            <select
-              className="rounded-lg border border-ink-900/10 bg-white px-3 py-2.5 text-sm outline-none focus:border-mint-500 dark:border-white/10 dark:bg-white/[0.03]"
-              onChange={(event) => setForm((current) => ({ ...current, type: event.target.value as WorkshopType }))}
-              value={form.type}
-            >
-              <option value="Online">Online</option>
-              <option value="Offline">Offline</option>
-              <option value="Hybrid">Hybrid</option>
-            </select>
-            <input
-              className="rounded-lg border border-ink-900/10 bg-white px-3 py-2.5 text-sm outline-none focus:border-mint-500 dark:border-white/10 dark:bg-white/[0.03]"
-              onChange={(event) => setForm((current) => ({ ...current, trainer: event.target.value }))}
-              placeholder="Default Facilitator"
-              value={form.trainer}
-            />
-            <select
-              className="rounded-lg border border-ink-900/10 bg-white px-3 py-2.5 text-sm outline-none focus:border-mint-500 dark:border-white/10 dark:bg-white/[0.03]"
-              onChange={(event) => setForm((current) => ({ ...current, productGroup: event.target.value }))}
-              value={form.productGroup}
-            >
-              <option>Leadership</option>
-              <option>Sales</option>
-              <option>Coaching</option>
-              <option>Communication</option>
-            </select>
+        <div className="rounded-lg bg-gray-50 p-2">
+          <div className="flex items-center justify-between rounded-md bg-white px-4 py-3 shadow-sm">
+            <button className="rounded-md border border-gray-200 p-2 text-gray-600" type="button">
+              <Menu className="size-4" />
+            </button>
+            <p className="text-sm font-medium text-gray-700">Welcome User</p>
           </div>
-          <div className="mt-3 grid gap-3 md:grid-cols-[1fr_auto]">
-            <input
-              className="rounded-lg border border-ink-900/10 bg-white px-3 py-2.5 text-sm outline-none focus:border-mint-500 dark:border-white/10 dark:bg-white/[0.03]"
-              onChange={(event) => setForm((current) => ({ ...current, city: event.target.value }))}
-              placeholder="City"
-              value={form.city}
-            />
-            <label className="inline-flex items-center gap-2 rounded-lg border border-ink-900/10 px-3 py-2.5 text-sm font-semibold dark:border-white/10">
-              <input
-                checked={form.isPaid}
-                className="size-4 accent-ai-500"
-                onChange={(event) => setForm((current) => ({ ...current, isPaid: event.target.checked }))}
-                type="checkbox"
-              />
-              Is Paid?
+          <div className="mx-auto mt-6 max-w-6xl rounded-lg bg-white p-6 shadow-sm">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <h3 className="text-xl font-bold text-gray-900">Manage Workshop Master</h3>
+              <button className="rounded-md border border-indigo-500 px-3 py-2 text-sm font-medium text-indigo-600" onClick={() => emitActionNote("Workshop master view data opened.")} type="button">View Data</button>
+            </div>
+            <label className="block text-sm text-gray-600">
+              Workshop/Product Name
+              <input className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500" onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))} value={form.title} />
             </label>
-          </div>
-          <div className="my-4 border-t border-ink-900/10 dark:border-white/10" />
-          <p className="mb-3 text-sm font-bold">Default Setting For Workshop</p>
-          <div className="grid gap-2 md:grid-cols-3">
-            {[
-              ["firstName", "First Name"],
-              ["lastName", "Last Name"],
-              ["mobile", "Mobile"],
-              ["email", "Email"],
-              ["country", "Country"],
-              ["state", "State"],
-              ["city", "City"],
-              ["address", "Address"],
-              ["age", "Age"],
-              ["gender", "Gender"],
-              ["occupation", "Occupation"]
-            ].map(([key, label]) => (
-              <label
-                className="inline-flex items-center justify-between rounded-lg border border-ink-900/10 px-3 py-2.5 text-sm dark:border-white/10"
-                key={key}
-              >
-                <span>{label}</span>
-                <input
-                  checked={defaultFields[key as keyof typeof defaultFields]}
-                  className="size-4 accent-ai-500"
-                  onChange={() => toggleField(key as keyof typeof defaultFields)}
-                  type="checkbox"
-                />
+            <div className="mt-4 grid grid-cols-1 items-center gap-4 md:grid-cols-4">
+              <label className="block text-sm text-gray-600">Workshop Type
+                <select className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500" onChange={(event) => setForm((current) => ({ ...current, type: event.target.value as WorkshopType }))} value={form.type}>
+                  <option value="Online">Online</option><option value="Offline">Offline</option><option value="Hybrid">Hybrid</option>
+                </select>
               </label>
-            ))}
+              <label className="block text-sm text-gray-600">Default Facilitator
+                <input className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500" onChange={(event) => setForm((current) => ({ ...current, trainer: event.target.value }))} value={form.trainer} />
+              </label>
+              <label className="block text-sm text-gray-600">Product Group
+                <select className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500" onChange={(event) => setForm((current) => ({ ...current, productGroup: event.target.value }))} value={form.productGroup}>
+                  <option>Leadership</option><option>Sales</option><option>Coaching</option><option>Communication</option>
+                </select>
+              </label>
+              <label className="inline-flex items-center gap-2 text-sm text-gray-700 md:pt-6">
+                <input checked={form.isPaid} className="size-4 accent-indigo-600" onChange={(event) => setForm((current) => ({ ...current, isPaid: event.target.checked }))} type="checkbox" />
+                Is Paid?
+              </label>
+            </div>
+            <div className="my-8 flex items-center gap-4">
+              <div className="h-px flex-1 bg-gray-200" />
+              <p className="text-sm font-semibold text-gray-600">Default Setting For Workshop</p>
+              <div className="h-px flex-1 bg-gray-200" />
+            </div>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-4">
+              {[
+                ["firstName", "First Name"], ["lastName", "Last Name"], ["mobile", "Mobile"], ["email", "Email"],
+                ["country", "Country"], ["state", "State"], ["city", "City"], ["address", "Address"],
+                ["age", "Age"], ["gender", "Gender"], ["occupation", "Occupation"]
+              ].map(([key, label]) => (
+                <label className="flex cursor-pointer items-center justify-between rounded-md border border-gray-200 p-3 hover:bg-gray-50" key={key}>
+                  <span className="inline-flex items-center gap-2 text-sm text-gray-700">
+                    <input checked={defaultFields[key as keyof typeof defaultFields]} className="size-4 accent-indigo-600" onChange={() => toggleField(key as keyof typeof defaultFields)} type="checkbox" />
+                    {label}
+                  </span>
+                  <HelpCircle className="text-gray-400" size={16} />
+                </label>
+              ))}
+            </div>
+            <div className="mt-6 flex justify-end gap-2">
+              <button className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" disabled={!form.title.trim()} onClick={saveWorkshopForm} type="button">{formMode === "create" ? "Save" : "Update"}</button>
+              <button className="rounded-md border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700" onClick={clearWorkshopMasterForm} type="button">Clear</button>
+            </div>
           </div>
-          <div className="mt-4 flex gap-2">
-            <button
-              className="rounded-lg bg-mint-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-              disabled={!form.title.trim()}
-              onClick={saveWorkshopForm}
-              type="button"
-            >
-              {formMode === "create" ? "Save workshop" : "Update workshop"}
-            </button>
-            <button
-              className="rounded-lg border border-ink-900/10 px-4 py-2 text-sm font-semibold dark:border-white/10"
-              onClick={() => setIsCreateOpen(false)}
-              type="button"
-            >
-              Cancel
-            </button>
-          </div>
-        </Panel>
+        </div>
       ) : null}
 
       {isScheduleOpen ? (
