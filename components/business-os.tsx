@@ -17,6 +17,7 @@ import {
   ClipboardCheck,
   Clock3,
   Command,
+  ChevronUp,
   CreditCard,
   Database,
   Download,
@@ -48,6 +49,7 @@ import {
   QrCode,
   ReceiptText,
   RefreshCw,
+  SquarePen,
   Search,
   Send,
   Settings,
@@ -4001,6 +4003,83 @@ function ReportsView({
       />
 
         <div className="space-y-4">
+          {selectedReport === "Client Milestone" && (
+            <div className="rounded-lg bg-gray-50 p-2">
+              <div className="flex items-center justify-between rounded-md bg-white px-4 py-3 shadow-sm">
+                <button className="rounded-md border border-gray-200 p-2 text-gray-600" type="button">
+                  <Menu className="size-4" />
+                </button>
+                <p className="text-sm font-medium text-gray-700">Welcome User</p>
+              </div>
+              <div className="m-4 overflow-hidden rounded-lg bg-white p-6 shadow-sm">
+                <h3 className="mb-4 text-2xl font-semibold text-gray-900">Manage Client</h3>
+                <div className="mb-4 rounded-md border border-gray-200 p-3">
+                  <label className="mb-1 block text-sm text-gray-700">Search By Status</label>
+                  <select className="w-full max-w-xs rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500">
+                    <option>ALL</option>
+                    <option>Active</option>
+                    <option>InActive</option>
+                    <option>Suspect</option>
+                  </select>
+                </div>
+                <div className="my-4 flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm text-gray-700">Show</span>
+                    <select className="rounded-md border border-gray-300 px-2 py-1.5 text-sm">
+                      <option>10</option>
+                      <option>25</option>
+                      <option>50</option>
+                    </select>
+                    <span className="text-sm text-gray-700">entries</span>
+                    <button className="inline-flex items-center gap-2 rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-700">
+                      <Import className="size-4" />
+                      Export
+                      <ChevronDown className="size-4" />
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-gray-700">Search:</span>
+                    <input className="rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500" />
+                  </div>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="min-w-[1400px] w-full border border-gray-200 text-sm">
+                    <thead className="bg-gray-100 text-left text-xs font-bold uppercase text-gray-700">
+                      <tr>
+                        {["ACTION","STATUS","CLIENT ID","NAME","MOBILE","EMAIL","D.O.B.","GENDER","OCCUPATION","COUNTRY","STATE","CITY"].map((head) => (
+                          <th className="whitespace-nowrap border-b border-gray-200 px-3 py-3" key={head}>
+                            <span className="inline-flex items-center gap-1">{head}<ChevronUp className="size-3" /><ChevronDown className="size-3" /></span>
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="text-gray-700">
+                      {[
+                        ["CFL001","Rohan Mehta","+91 9825011843","rohan@demo.com","1991-07-21","Male","Entrepreneur","India","Gujarat","Surat"],
+                        ["CFL002","Priya Nair","+91 9898022314","priya@demo.com","1994-12-08","Female","Coach","India","Maharashtra","Mumbai"],
+                        ["CFL003","Sumeet Shah","+91 9909944112","sumeet@demo.com","1989-03-14","Male","Consultant","India","Gujarat","Ahmedabad"],
+                        ["CFL004","Neha Kapoor","+91 9879578441","neha@demo.com","1996-10-04","Female","Trainer","India","Delhi","Delhi"]
+                      ].map((row) => (
+                        <tr className="border-b border-gray-100" key={row[0]}>
+                          <td className="px-3 py-2.5"><button className="rounded-md bg-indigo-600 p-2 text-white"><SquarePen className="size-4" /></button></td>
+                          <td className="px-3 py-2.5"><span className="rounded bg-green-500 px-2 py-1 text-xs text-white">Active</span></td>
+                          {row.map((cell) => <td className="whitespace-nowrap px-3 py-2.5" key={`${row[0]}-${cell}`}>{cell}</td>)}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm text-gray-600">
+                  <p>Showing 1 to 10 of 250,000 entries</p>
+                  <div className="inline-flex overflow-hidden rounded-md border border-gray-300">
+                    {["Previous","1","2","3","4","5","...","Next"].map((p) => (
+                      <button className="border-r border-gray-300 px-3 py-1.5 last:border-r-0 hover:bg-gray-50" key={p}>{p}</button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
           {selectedReport === "Daily Report" && (
             <div className="rounded-lg bg-gray-50 p-2">
               <div className="flex items-center justify-between rounded-md bg-white px-4 py-3 shadow-sm">
@@ -4050,7 +4129,7 @@ function ReportsView({
             </div>
           )}
 
-          {selectedReport !== "Daily Report" && (
+          {selectedReport !== "Daily Report" && selectedReport !== "Client Milestone" && (
             <>
           <Panel defaultOpen title="Advanced Filters">
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
