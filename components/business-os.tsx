@@ -33,8 +33,10 @@ import {
   LockKeyhole,
   Megaphone,
   MessageCircle,
+  Menu,
   Moon,
   MoreHorizontal,
+  Eye,
   Phone,
   Plus,
   QrCode,
@@ -2409,6 +2411,23 @@ function SalesView({
     emitActionNote(`Sales person saved: ${fullName}.`);
   }
 
+  function clearSalesPersonForm() {
+    setSalesPersonForm({
+      canViewOtherWorkshopReg: true,
+      directClientConversation: "",
+      email: "",
+      firstName: "",
+      generalLeadConversation: "",
+      group: "",
+      isActive: true,
+      lastName: "",
+      middleName: "",
+      mobile: "",
+      password: ""
+    });
+    emitActionNote("Sales person form cleared.");
+  }
+
   function addOrUpdateCommission() {
     const workshop = workshops.find((item) => item.id === commissionForm.workshopId);
     if (!workshop) {
@@ -2476,48 +2495,46 @@ function SalesView({
       />
 
       <div className="mb-4 grid gap-4 xl:grid-cols-[1fr_1fr]">
-        <Panel
-          defaultOpen
-          action={
-            <button
-              className="rounded-lg border border-ai-500/40 px-3 py-1.5 text-xs font-semibold text-ai-600"
-              onClick={() => emitActionNote(`${salesPeople.length} sales person records loaded.`)}
-              type="button"
-            >
-              View Data
+        <div className="rounded-lg bg-gray-50 p-2">
+          <div className="mb-4 flex items-center justify-between rounded-lg bg-white px-4 py-3 shadow-sm">
+            <button className="rounded-md border border-gray-200 p-2 text-gray-600" type="button">
+              <Menu className="size-4" />
             </button>
-          }
-          title="Manage Sales Person"
-        >
-          <div className="grid gap-3 md:grid-cols-3">
-            <input className="rounded-lg border border-ink-900/10 bg-white px-3 py-2.5 text-sm outline-none dark:border-white/10 dark:bg-white/[0.03]" placeholder="First Name" value={salesPersonForm.firstName} onChange={(event) => setSalesPersonForm((current) => ({ ...current, firstName: event.target.value }))} />
-            <input className="rounded-lg border border-ink-900/10 bg-white px-3 py-2.5 text-sm outline-none dark:border-white/10 dark:bg-white/[0.03]" placeholder="Middle Name" value={salesPersonForm.middleName} onChange={(event) => setSalesPersonForm((current) => ({ ...current, middleName: event.target.value }))} />
-            <input className="rounded-lg border border-ink-900/10 bg-white px-3 py-2.5 text-sm outline-none dark:border-white/10 dark:bg-white/[0.03]" placeholder="Last Name" value={salesPersonForm.lastName} onChange={(event) => setSalesPersonForm((current) => ({ ...current, lastName: event.target.value }))} />
-            <input className="rounded-lg border border-ink-900/10 bg-white px-3 py-2.5 text-sm outline-none dark:border-white/10 dark:bg-white/[0.03]" placeholder="Mobile No [Login ID]" value={salesPersonForm.mobile} onChange={(event) => setSalesPersonForm((current) => ({ ...current, mobile: event.target.value }))} />
-            <input className="rounded-lg border border-ink-900/10 bg-white px-3 py-2.5 text-sm outline-none dark:border-white/10 dark:bg-white/[0.03]" placeholder="Password" type="password" value={salesPersonForm.password} onChange={(event) => setSalesPersonForm((current) => ({ ...current, password: event.target.value }))} />
-            <input className="rounded-lg border border-ink-900/10 bg-white px-3 py-2.5 text-sm outline-none dark:border-white/10 dark:bg-white/[0.03]" placeholder="Email ID" value={salesPersonForm.email} onChange={(event) => setSalesPersonForm((current) => ({ ...current, email: event.target.value }))} />
-            <select className="rounded-lg border border-ink-900/10 bg-white px-3 py-2.5 text-sm outline-none dark:border-white/10 dark:bg-white/[0.03]" value={salesPersonForm.group} onChange={(event) => setSalesPersonForm((current) => ({ ...current, group: event.target.value }))}>
-              <option value="">SELECT SALES PERSON GROUP</option>
-              <option value="Inbound">Inbound</option>
-              <option value="Outbound">Outbound</option>
-              <option value="Corporate">Corporate</option>
-              <option value="Closers">Closers</option>
-            </select>
-            <label className="inline-flex items-center gap-2 rounded-lg border border-ink-900/10 px-3 py-2.5 text-sm dark:border-white/10">
-              <input checked={salesPersonForm.canViewOtherWorkshopReg} className="size-4 accent-ai-500" onChange={(event) => setSalesPersonForm((current) => ({ ...current, canViewOtherWorkshopReg: event.target.checked }))} type="checkbox" />
-              Can View Client Other Workshop Reg.?
-            </label>
-            <label className="inline-flex items-center gap-2 rounded-lg border border-ink-900/10 px-3 py-2.5 text-sm dark:border-white/10">
-              <input checked={salesPersonForm.isActive} className="size-4 accent-ai-500" onChange={(event) => setSalesPersonForm((current) => ({ ...current, isActive: event.target.checked }))} type="checkbox" />
-              Is Active?
-            </label>
+            <p className="text-sm font-medium text-gray-700">Welcome User</p>
           </div>
-          <textarea className="mt-3 min-h-[70px] w-full rounded-lg border border-ink-900/10 bg-white px-3 py-2.5 text-sm outline-none dark:border-white/10 dark:bg-white/[0.03]" placeholder="Select Workshop Conversation For General Lead Assign" value={salesPersonForm.generalLeadConversation} onChange={(event) => setSalesPersonForm((current) => ({ ...current, generalLeadConversation: event.target.value }))} />
-          <textarea className="mt-3 min-h-[70px] w-full rounded-lg border border-ink-900/10 bg-white px-3 py-2.5 text-sm outline-none dark:border-white/10 dark:bg-white/[0.03]" placeholder="Select Workshop Conversation For Direct Client" value={salesPersonForm.directClientConversation} onChange={(event) => setSalesPersonForm((current) => ({ ...current, directClientConversation: event.target.value }))} />
-          <div className="mt-3 flex gap-2">
-            <button className="rounded-lg bg-mint-600 px-4 py-2 text-sm font-semibold text-white" onClick={saveSalesPerson} type="button">
-              Save Sales Person
-            </button>
+          <div className="mx-auto max-w-6xl rounded-lg bg-white p-6 shadow-sm">
+            <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+              <h3 className="text-xl font-bold text-gray-900">Manage Sales Person</h3>
+              <button
+                className="inline-flex items-center gap-2 rounded-md border border-indigo-500 px-3 py-2 text-sm font-medium text-indigo-600"
+                onClick={() => emitActionNote(`${salesPeople.length} sales person records loaded.`)}
+                type="button"
+              >
+                <Eye className="size-4" />
+                View Data
+              </button>
+            </div>
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+              <label className="block text-sm text-gray-700">First Name <span className="text-red-500">*</span><input className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500" value={salesPersonForm.firstName} onChange={(event) => setSalesPersonForm((current) => ({ ...current, firstName: event.target.value }))} /></label>
+              <label className="block text-sm text-gray-700">Middle Name<input className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500" value={salesPersonForm.middleName} onChange={(event) => setSalesPersonForm((current) => ({ ...current, middleName: event.target.value }))} /></label>
+              <label className="block text-sm text-gray-700">Last Name <span className="text-red-500">*</span><input className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500" value={salesPersonForm.lastName} onChange={(event) => setSalesPersonForm((current) => ({ ...current, lastName: event.target.value }))} /></label>
+              <label className="block text-sm text-gray-700">Mobile No [Login ID] <span className="text-red-500">*</span><input className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500" value={salesPersonForm.mobile} onChange={(event) => setSalesPersonForm((current) => ({ ...current, mobile: event.target.value }))} /></label>
+              <label className="block text-sm text-gray-700">Password <span className="text-red-500">*</span><input className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500" type="password" value={salesPersonForm.password} onChange={(event) => setSalesPersonForm((current) => ({ ...current, password: event.target.value }))} /></label>
+              <label className="block text-sm text-gray-700">Email Id <span className="text-red-500">*</span><input className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500" type="email" value={salesPersonForm.email} onChange={(event) => setSalesPersonForm((current) => ({ ...current, email: event.target.value }))} /></label>
+              <label className="block text-sm text-gray-700 md:col-span-1">Sales Person Group <span className="text-red-500">*</span><select className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500" value={salesPersonForm.group} onChange={(event) => setSalesPersonForm((current) => ({ ...current, group: event.target.value }))}><option value="">SELECT SALES PERSON GROUP</option><option value="Inbound">Inbound</option><option value="Outbound">Outbound</option><option value="Corporate">Corporate</option><option value="Closers">Closers</option></select></label>
+            </div>
+            <div className="mt-5 flex flex-wrap items-center gap-6">
+              <label className="inline-flex items-center gap-2 text-sm text-gray-700"><input checked={salesPersonForm.canViewOtherWorkshopReg} className="size-4 accent-indigo-600" onChange={(event) => setSalesPersonForm((current) => ({ ...current, canViewOtherWorkshopReg: event.target.checked }))} type="checkbox" />Can View Client Other Reg.?</label>
+              <label className="inline-flex items-center gap-2 text-sm text-gray-700"><input checked={salesPersonForm.isActive} className="size-4 accent-indigo-600" onChange={(event) => setSalesPersonForm((current) => ({ ...current, isActive: event.target.checked }))} type="checkbox" />Is Active?</label>
+            </div>
+            <div className="mt-5 space-y-4">
+              <textarea className="min-h-[96px] w-full rounded-md border border-gray-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Select Category For General Lead Assign" value={salesPersonForm.generalLeadConversation} onChange={(event) => setSalesPersonForm((current) => ({ ...current, generalLeadConversation: event.target.value }))} />
+              <textarea className="min-h-[96px] w-full rounded-md border border-gray-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Select Category For Direct Client" value={salesPersonForm.directClientConversation} onChange={(event) => setSalesPersonForm((current) => ({ ...current, directClientConversation: event.target.value }))} />
+            </div>
+            <div className="mt-5 flex justify-end gap-2">
+              <button className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white" onClick={saveSalesPerson} type="button">Save</button>
+              <button className="rounded-md border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700" onClick={clearSalesPersonForm} type="button">Clear</button>
+            </div>
           </div>
           <div className="mt-3 space-y-2">
             {salesPeople.slice(0, 4).map((person) => (
@@ -2527,7 +2544,7 @@ function SalesView({
               </div>
             ))}
           </div>
-        </Panel>
+        </div>
 
         <Panel defaultOpen title="Manage Workshop wise Commission & Commission [Direct Client]">
           <div className="grid gap-3 md:grid-cols-3">
@@ -3944,6 +3961,12 @@ function ReportsView({
   workshops: Workshop[];
 }) {
   const [selectedFilter, setSelectedFilter] = useState("Date range");
+  const [dailyReportFilter, setDailyReportFilter] = useState({
+    batch: "ALL BATCH",
+    date: "",
+    workshop: "",
+    workshopGroup: ""
+  });
   const [reportCategory, setReportCategory] = useState<"Workshop" | "Clients" | "Sales Person">("Workshop");
   const reportGroups: Record<"Workshop" | "Clients" | "Sales Person", string[]> = {
     Workshop: [
@@ -4057,8 +4080,59 @@ function ReportsView({
         title="Daily, sales, revenue, workshop, city, repeat client, and failed payment reports"
       />
 
-      <div className="space-y-4">
-        <Panel defaultOpen title="Advanced Filters">
+        <div className="space-y-4">
+          {selectedReport === "Daily Report" && (
+            <div className="rounded-lg bg-gray-50 p-2">
+              <div className="flex items-center justify-between rounded-md bg-white px-4 py-3 shadow-sm">
+                <button className="rounded-md border border-gray-200 p-2 text-gray-600" type="button">
+                  <Menu className="size-4" />
+                </button>
+                <p className="text-sm font-medium text-gray-700">Welcome User</p>
+              </div>
+
+              <div className="mx-auto mt-6 w-full rounded-md bg-white p-6 shadow-sm">
+                <h3 className="text-lg font-medium text-gray-800">Daily Report</h3>
+                <div className="mt-4 grid grid-cols-1 items-end gap-4 md:grid-cols-5">
+                  <label className="block text-sm text-gray-600">
+                    WorkShop Group
+                    <select className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500" value={dailyReportFilter.workshopGroup} onChange={(event) => setDailyReportFilter((current) => ({ ...current, workshopGroup: event.target.value }))}>
+                      <option value="">SEARCH ...</option>
+                      <option value="Leadership">Leadership</option>
+                      <option value="Growth">Growth</option>
+                    </select>
+                  </label>
+                  <label className="block text-sm text-gray-600">
+                    Workshop
+                    <input className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Search Workshop" value={dailyReportFilter.workshop} onChange={(event) => setDailyReportFilter((current) => ({ ...current, workshop: event.target.value }))} />
+                  </label>
+                  <label className="block text-sm text-gray-600">
+                    Batch
+                    <select className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500" value={dailyReportFilter.batch} onChange={(event) => setDailyReportFilter((current) => ({ ...current, batch: event.target.value }))}>
+                      <option value="ALL BATCH">ALL BATCH</option>
+                      <option value="Batch A">Batch A</option>
+                      <option value="Batch B">Batch B</option>
+                    </select>
+                  </label>
+                  <label className="block text-sm text-gray-600">
+                    Date
+                    <input className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500" placeholder="14-Sep-2024" type="date" value={dailyReportFilter.date} onChange={(event) => setDailyReportFilter((current) => ({ ...current, date: event.target.value }))} />
+                  </label>
+                  <button className="inline-flex h-[42px] w-[42px] items-center justify-center rounded-md bg-gray-700 text-white transition hover:bg-gray-800" onClick={exportReport} type="button">
+                    <Download className="size-4" />
+                  </button>
+                </div>
+              </div>
+
+              <footer className="mt-6 flex flex-wrap items-center justify-between gap-2 border-t border-gray-200 px-1 pt-4 text-sm text-gray-600">
+                <p>Copyright © 2024 Your Company</p>
+                <p>Maintained By Developer</p>
+              </footer>
+            </div>
+          )}
+
+          {selectedReport !== "Daily Report" && (
+            <>
+          <Panel defaultOpen title="Advanced Filters">
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
             {filterLabels.map((filter) => (
               <button
@@ -4142,7 +4216,7 @@ function ReportsView({
             );
           })}
         </div>
-        <Panel title="City / State / Country Growth">
+          <Panel title="City / State / Country Growth">
           <div className="grid gap-3 md:grid-cols-4">
             {[
               ["Surat", 842700, 22],
@@ -4157,8 +4231,10 @@ function ReportsView({
               </div>
             ))}
           </div>
-        </Panel>
-      </div>
+          </Panel>
+            </>
+          )}
+        </div>
     </div>
   );
 }
