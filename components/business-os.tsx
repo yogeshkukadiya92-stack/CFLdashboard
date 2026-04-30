@@ -265,6 +265,7 @@ export function BusinessOS() {
   const [aiAnswer, setAiAnswer] = useState(answerFor("Show Surat revenue this month"));
   const [activePaymentFilter, setActivePaymentFilter] = useState<"All" | Payment["status"]>("All");
   const [actionNote, setActionNote] = useState("Fresh workspace ready. Add your first lead or workshop.");
+  const [dbEnabled, setDbEnabled] = useState(false);
   const [showRightRail, setShowRightRail] = useState(false);
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
@@ -279,6 +280,30 @@ export function BusinessOS() {
 
     window.addEventListener(ACTION_NOTE_EVENT, handleActionNote as EventListener);
     return () => window.removeEventListener(ACTION_NOTE_EVENT, handleActionNote as EventListener);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function syncFromDb() {
+      try {
+        const response = await fetch("/api/state", { method: "GET" });
+        if (!response.ok) return;
+        const data = await response.json();
+        if (cancelled) return;
+        if (data?.dbEnabled) {
+          setDbEnabled(true);
+          if (Array.isArray(data.leads) && data.leads.length) setLeads(data.leads);
+          if (Array.isArray(data.workshops) && data.workshops.length) setWorkshopList(data.workshops);
+          setActionNote("PostgreSQL mode active. Data is persistent.");
+        }
+      } catch {
+        // fallback to local storage mode
+      }
+    }
+    syncFromDb();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -317,6 +342,22 @@ export function BusinessOS() {
       // ignore quota/storage errors
     }
   }, [workshopList]);
+
+  useEffect(() => {
+    if (!dbEnabled) return;
+    const timer = setTimeout(async () => {
+      try {
+        await fetch("/api/state", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ leads, workshops: workshopList })
+        });
+      } catch {
+        // keep local mode
+      }
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [dbEnabled, leads, workshopList]);
 
   useEffect(() => {
     function readRegistrations() {
