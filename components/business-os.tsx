@@ -828,7 +828,7 @@ export function BusinessOS() {
 
         <div
           className={cn(
-            "grid min-h-0 gap-3 p-3 lg:p-4",
+            "grid min-h-0 gap-2 p-2 lg:p-3",
             showRightRail
               ? "lg:grid-cols-[minmax(0,1fr)_296px]"
               : "lg:grid-cols-[minmax(0,1fr)]"
@@ -1512,14 +1512,14 @@ function Panel({
   const [isOpen, setIsOpen] = useState(defaultOpen);
 
   return (
-    <section className="rounded-xl border border-ink-900/10 bg-white p-3 shadow-soft dark:border-white/10 dark:bg-white/[0.045]">
-      <div className="mb-3 flex items-center gap-2">
-        <h2 className="text-base font-bold tracking-tight">{title}</h2>
+    <section className="rounded-lg border border-ink-900/10 bg-white p-2.5 shadow-sm dark:border-white/10 dark:bg-white/[0.045]">
+      <div className="mb-2 flex items-center gap-2">
+        <h2 className="text-sm font-bold tracking-tight">{title}</h2>
         {Icon ? <Icon className="size-4 text-ink-400" /> : null}
         <div className="ml-auto flex items-center gap-2">
           {action}
           <button
-            className="flex items-center gap-1 rounded-md border border-ink-900/10 px-2.5 py-1 text-xs font-semibold text-ink-600 transition hover:bg-ink-900/[0.04] dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/[0.06]"
+            className="flex items-center gap-1 rounded-md border border-ink-900/10 px-2 py-1 text-[11px] font-semibold text-ink-600 transition hover:bg-ink-900/[0.04] dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/[0.06]"
             onClick={() => setIsOpen((state) => !state)}
             type="button"
           >
@@ -1531,8 +1531,8 @@ function Panel({
       {isOpen ? (
         children
       ) : (
-        <div className="rounded-lg border border-dashed border-ink-900/20 px-3 py-5 text-center text-xs font-medium text-ink-500 dark:border-white/20 dark:text-slate-400">
-          Section collapsed. Click Open to view details.
+        <div className="rounded-md border border-dashed border-ink-900/20 px-3 py-4 text-center text-xs font-medium text-ink-500 dark:border-white/20 dark:text-slate-400">
+          Section collapsed.
         </div>
       )}
     </section>
@@ -2019,18 +2019,18 @@ function ModuleHeader({
   title: string;
 }) {
   return (
-    <div className="mb-3 rounded-md border border-ink-900/10 bg-white p-3 shadow-soft dark:border-white/10 dark:bg-white/[0.045]">
-      <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center">
-        <div className="flex min-w-0 flex-1 items-center gap-3">
-          <div className="grid size-10 shrink-0 place-items-center rounded-md bg-mint-50 text-mint-700 dark:bg-mint-500/10 dark:text-mint-100">
-            <Icon className="size-5" />
+    <div className="mb-2 rounded-lg border border-ink-900/10 bg-white px-3 py-2 shadow-sm dark:border-white/10 dark:bg-white/[0.045]">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          <div className="grid size-8 shrink-0 place-items-center rounded-md bg-mint-50 text-mint-700 dark:bg-mint-500/10 dark:text-mint-100">
+            <Icon className="size-4" />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-xs font-bold uppercase tracking-[0.14em] text-ink-500 dark:text-slate-400">{eyebrow}</p>
-            <h1 className="text-xl font-bold leading-tight tracking-tight sm:text-2xl">{title}</h1>
+            <h1 className="truncate text-sm font-bold uppercase text-ink-700 dark:text-slate-100">{eyebrow}</h1>
+            <span className="sr-only">{title}</span>
           </div>
         </div>
-        <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:justify-end">
+        <div className="flex w-full flex-wrap gap-1.5 sm:w-auto sm:justify-end">
           {actions}
         </div>
       </div>
