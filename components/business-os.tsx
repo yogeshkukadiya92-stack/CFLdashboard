@@ -4123,6 +4123,10 @@ function ReportsView({
   const [clientPageSize, setClientPageSize] = useState(10);
   const [clientPage, setClientPage] = useState(1);
   const [clientDarkMode, setClientDarkMode] = useState(false);
+  const [refundFilters, setRefundFilters] = useState({ from: "", status: "ALL", to: "" });
+  const [refundSearch, setRefundSearch] = useState("");
+  const [refundPageSize, setRefundPageSize] = useState(10);
+  const [refundPage, setRefundPage] = useState(1);
   const [batchTransferForm, setBatchTransferForm] = useState({
     fromBatch: "",
     keywords: "",
@@ -4142,6 +4146,12 @@ function ReportsView({
     { clientId: "CFL002", name: "Priya Nair", mobile: "+91 98980 22314", email: "priya@demo.com", dob: "1994-12-08", gender: "Female", occupation: "Coach", country: "India", state: "Maharashtra", city: "Mumbai", status: "Suspect" },
     { clientId: "CFL003", name: "Sumeet Shah", mobile: "+91 99099 44112", email: "sumeet@demo.com", dob: "1989-03-14", gender: "Male", occupation: "Consultant", country: "India", state: "Gujarat", city: "Ahmedabad", status: "InActive" },
     { clientId: "CFL004", name: "Neha Kapoor", mobile: "+91 98795 78441", email: "neha@demo.com", dob: "1996-10-04", gender: "Female", occupation: "Trainer", country: "India", state: "Delhi", city: "Delhi", status: "Active" }
+  ];
+  const refundRows = [
+    { status: "Success", regDate: "2026-04-10", name: "Rohan Mehta", mobile: "+91 98250 11843", amount: 9900, workshop: "Leadership Sprint", batch: "A1", paymentId: "pay_RH001", orderId: "order_RH001" },
+    { status: "Refund", regDate: "2026-04-12", name: "Priya Nair", mobile: "+91 98980 22314", amount: 14900, workshop: "Sales Mastery", batch: "B2", paymentId: "pay_PR002", orderId: "order_PR002" },
+    { status: "Success", regDate: "2026-04-15", name: "Sumeet Shah", mobile: "+91 99099 44112", amount: 7900, workshop: "Mindset Reset", batch: "C1", paymentId: "pay_SU003", orderId: "order_SU003" },
+    { status: "Refund", regDate: "2026-04-18", name: "Neha Kapoor", mobile: "+91 98795 78441", amount: 19900, workshop: "Corporate Influence", batch: "D4", paymentId: "pay_NE004", orderId: "order_NE004" }
   ];
 
   const filteredMemberRows = useMemo(() => {
@@ -4168,6 +4178,19 @@ function ReportsView({
       return normalizeSearch(`${row.name} ${row.mobile} ${row.email} ${row.clientId} ${row.city}`).includes(normalizeSearch(clientSearch));
     });
   }, [clientSearch, clientStatusFilter]);
+  const filteredRefundRows = useMemo(() => {
+    return refundRows.filter((row) => {
+      if (refundFilters.status !== "ALL" && row.status !== refundFilters.status) return false;
+      if (refundFilters.from && row.regDate < refundFilters.from) return false;
+      if (refundFilters.to && row.regDate > refundFilters.to) return false;
+      if (!refundSearch.trim()) return true;
+      return normalizeSearch(`${row.name} ${row.mobile} ${row.workshop} ${row.paymentId} ${row.orderId}`).includes(normalizeSearch(refundSearch));
+    });
+  }, [refundFilters, refundSearch]);
+  const refundPageCount = Math.max(1, Math.ceil(filteredRefundRows.length / refundPageSize));
+  const safeRefundPage = Math.min(refundPage, refundPageCount);
+  const refundStart = (safeRefundPage - 1) * refundPageSize;
+  const pagedRefundRows = filteredRefundRows.slice(refundStart, refundStart + refundPageSize);
   const clientPageCount = Math.max(1, Math.ceil(filteredClientRows.length / clientPageSize));
   const safeClientPage = Math.min(clientPage, clientPageCount);
   const clientStart = (safeClientPage - 1) * clientPageSize;
@@ -4545,6 +4568,91 @@ function ReportsView({
               </div>
             </div>
           )}
+          {selectedReport === "Failed Payment" && (
+            <div className="rounded-lg bg-[#f3f4f6] p-2 font-sans">
+              <div className="rounded-md bg-white px-4 py-3 shadow-sm">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <nav className="flex flex-wrap items-center gap-2 text-sm">
+                    {["Dashboard", "Masters", "Process", "Lead", "Reports", "Settings"].map((item) => (
+                      <button className="rounded-md px-3 py-1.5 text-slate-700 hover:bg-indigo-50 hover:text-indigo-600" key={item} type="button">{item}</button>
+                    ))}
+                  </nav>
+                  <div className="inline-flex items-center gap-2 rounded-md border border-gray-200 px-3 py-1.5 text-sm text-gray-700">
+                    <UsersRound className="size-4" />
+                    User Profile
+                  </div>
+                </div>
+              </div>
+              <div className="m-4 rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+                <h3 className="mb-4 text-2xl font-semibold text-gray-900">Manage User Refund</h3>
+                <div className="grid grid-cols-1 gap-3 rounded-md border border-gray-200 p-3 md:grid-cols-4">
+                  <label className="block text-sm text-gray-700">From Date<input className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-600" onChange={(event) => { setRefundPage(1); setRefundFilters((current) => ({ ...current, from: event.target.value })); }} type="date" value={refundFilters.from} /></label>
+                  <label className="block text-sm text-gray-700">To Date<input className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-600" onChange={(event) => { setRefundPage(1); setRefundFilters((current) => ({ ...current, to: event.target.value })); }} type="date" value={refundFilters.to} /></label>
+                  <label className="block text-sm text-gray-700">Status<select className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-600" onChange={(event) => { setRefundPage(1); setRefundFilters((current) => ({ ...current, status: event.target.value })); }} value={refundFilters.status}><option>ALL</option><option>Success</option><option>Refund</option></select></label>
+                  <div className="flex items-end"><button className="w-full rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700" type="button">Search</button></div>
+                </div>
+
+                <div className="my-4 flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 text-sm text-gray-700">
+                    <span>Show</span>
+                    <select className="rounded-md border border-gray-300 px-2 py-1.5 text-sm" onChange={(event) => { setRefundPage(1); setRefundPageSize(Number(event.target.value)); }} value={String(refundPageSize)}>
+                      {[10, 25, 50].map((size) => <option key={size} value={size}>{size}</option>)}
+                    </select>
+                    <span>entries</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-gray-700">
+                    <span>Search</span>
+                    <input className="rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-600" onChange={(event) => { setRefundPage(1); setRefundSearch(event.target.value); }} value={refundSearch} />
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto rounded-lg border border-gray-200">
+                  <table className="min-w-[1400px] w-full text-sm">
+                    <thead className="bg-gray-100 text-left text-xs font-bold uppercase text-gray-700">
+                      <tr>
+                        {["Status", "Reg. Date", "Name", "Mobile No", "Amount", "Workshop", "Batch", "Razorpay Payment ID", "Razorpay Order ID"].map((head) => (
+                          <th className="whitespace-nowrap px-3 py-3" key={head}><span className="inline-flex items-center gap-1">{head}<ChevronUp className="size-3" /><ChevronDown className="size-3" /></span></th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pagedRefundRows.map((row) => (
+                        <tr className="border-t border-gray-100" key={`${row.paymentId}-${row.orderId}`}>
+                          <td className="px-3 py-2.5">
+                            <div className="flex flex-col items-start gap-2">
+                              <span className={cn("rounded-full px-2 py-1 text-xs font-semibold text-white", row.status === "Success" ? "bg-green-500" : "bg-purple-500")}>{row.status}</span>
+                              <button className="rounded-md bg-indigo-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-indigo-700" type="button">Issue Refund</button>
+                            </div>
+                          </td>
+                          <td className="px-3 py-2.5">{row.regDate}</td>
+                          <td className="px-3 py-2.5">{row.name}</td>
+                          <td className="px-3 py-2.5">{row.mobile}</td>
+                          <td className="px-3 py-2.5">{formatCurrency(row.amount)}</td>
+                          <td className="px-3 py-2.5">{row.workshop}</td>
+                          <td className="px-3 py-2.5">{row.batch}</td>
+                          <td className="px-3 py-2.5">{row.paymentId}</td>
+                          <td className="px-3 py-2.5">{row.orderId}</td>
+                        </tr>
+                      ))}
+                      {!pagedRefundRows.length ? <tr><td className="px-3 py-6 text-center text-sm text-gray-500" colSpan={9}>No records found</td></tr> : null}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm text-gray-600">
+                  <p>Showing {filteredRefundRows.length ? refundStart + 1 : 0} to {Math.min(refundStart + refundPageSize, filteredRefundRows.length)} of {filteredRefundRows.length} entries</p>
+                  <div className="inline-flex overflow-hidden rounded-md border border-gray-300">
+                    <button className="border-r border-gray-300 px-3 py-1.5 hover:bg-gray-50 disabled:opacity-50" disabled={safeRefundPage === 1} onClick={() => setRefundPage((p) => Math.max(1, p - 1))} type="button">Previous</button>
+                    {Array.from({ length: refundPageCount }).slice(0, 5).map((_, index) => {
+                      const pageNumber = index + 1;
+                      return <button className={cn("border-r border-gray-300 px-3 py-1.5 hover:bg-gray-50", safeRefundPage === pageNumber && "bg-indigo-600 text-white")} key={pageNumber} onClick={() => setRefundPage(pageNumber)} type="button">{pageNumber}</button>;
+                    })}
+                    <button className="px-3 py-1.5 hover:bg-gray-50 disabled:opacity-50" disabled={safeRefundPage === refundPageCount} onClick={() => setRefundPage((p) => Math.min(refundPageCount, p + 1))} type="button">Next</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
           {selectedReport === "Daily Report" && (
             <div className="rounded-lg bg-gray-50 p-2">
               <div className="flex items-center justify-between rounded-md bg-white px-4 py-3 shadow-sm">
@@ -4594,7 +4702,7 @@ function ReportsView({
             </div>
           )}
 
-          {selectedReport !== "Daily Report" && selectedReport !== "Client Milestone" && selectedReport !== "Member Details" && selectedReport !== "Client Batch Transfer" && (
+          {selectedReport !== "Daily Report" && selectedReport !== "Client Milestone" && selectedReport !== "Member Details" && selectedReport !== "Client Batch Transfer" && selectedReport !== "Failed Payment" && (
             <>
           <Panel defaultOpen title="Advanced Filters">
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
