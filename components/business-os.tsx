@@ -4123,6 +4123,12 @@ function ReportsView({
   const [clientPageSize, setClientPageSize] = useState(10);
   const [clientPage, setClientPage] = useState(1);
   const [clientDarkMode, setClientDarkMode] = useState(false);
+  const [batchTransferForm, setBatchTransferForm] = useState({
+    fromBatch: "",
+    keywords: "",
+    remarks: "",
+    toBatch: ""
+  });
 
   const memberRows = [
     { name: "Rohan Mehta", mobile: "+91 98250 11843", email: "rohan@example.com", regDate: "2026-04-20", workshop: "Leadership Sprint", salesPerson: "Neha Kapoor", facilitator: "Arjun Sharma", state: "Gujarat", city: "Surat", status: "Success", source: "Instagram Ads", country: "India", batch: "A1" },
@@ -4204,6 +4210,11 @@ function ReportsView({
     anchor.download = "manage-client.csv";
     anchor.click();
     URL.revokeObjectURL(url);
+  }
+  function submitBatchTransfer() {
+    // Mock submit flow for UI testing.
+    console.log("Client Batch Transfer Submit", batchTransferForm);
+    emitActionNote("Client batch transfer request saved.");
   }
 
   function toCsv(headers: string[], rows: string[][]) {
@@ -4482,6 +4493,58 @@ function ReportsView({
               </div>
             </div>
           )}
+          {selectedReport === "Client Batch Transfer" && (
+            <div className="rounded-lg bg-[#f3f4f6] p-2">
+              <div className="rounded-md bg-white px-4 py-3 shadow-sm">
+                <nav className="flex flex-wrap items-center gap-2 text-sm">
+                  {["Dashboard", "Masters", "Process", "Lead", "Reports", "Settings"].map((item) => (
+                    <button className="rounded-md px-3 py-1.5 text-slate-700 hover:bg-indigo-50 hover:text-indigo-600" key={item} type="button">{item}</button>
+                  ))}
+                </nav>
+              </div>
+              <div className="mx-auto my-4 w-full max-w-5xl rounded-md bg-white p-6 shadow-sm">
+                <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+                  <h3 className="text-2xl font-semibold text-gray-900">Client Batch Transfer</h3>
+                  <button className="rounded-md bg-[#333] px-3 py-2 text-sm font-semibold text-white hover:bg-black" type="button">
+                    View Batch Transfer Report
+                  </button>
+                </div>
+                <label className="block text-sm text-gray-700">
+                  Search Client By Name or Mobile No
+                  <input className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500" onChange={(event) => setBatchTransferForm((current) => ({ ...current, keywords: event.target.value }))} placeholder="Search by Keyword" value={batchTransferForm.keywords} />
+                </label>
+                <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <label className="block text-sm text-gray-700">
+                    Select Workshop Batch
+                    <select className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500" onChange={(event) => setBatchTransferForm((current) => ({ ...current, fromBatch: event.target.value }))} value={batchTransferForm.fromBatch}>
+                      <option value="">Select batch</option>
+                      <option value="Leadership-A1">Leadership-A1</option>
+                      <option value="Sales-B2">Sales-B2</option>
+                      <option value="Mindset-C3">Mindset-C3</option>
+                    </select>
+                  </label>
+                  <label className="block text-sm text-gray-700">
+                    Transfer to Batch
+                    <select className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500" onChange={(event) => setBatchTransferForm((current) => ({ ...current, toBatch: event.target.value }))} value={batchTransferForm.toBatch}>
+                      <option value="">Select target batch</option>
+                      <option value="Leadership-A2">Leadership-A2</option>
+                      <option value="Sales-B3">Sales-B3</option>
+                      <option value="Mindset-C4">Mindset-C4</option>
+                    </select>
+                  </label>
+                </div>
+                <label className="mt-4 block text-sm text-gray-700">
+                  Remarks
+                  <textarea className="mt-1 min-h-[120px] w-full rounded-md border border-gray-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500" onChange={(event) => setBatchTransferForm((current) => ({ ...current, remarks: event.target.value }))} value={batchTransferForm.remarks} />
+                </label>
+                <div className="mt-5 flex justify-start">
+                  <button className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700" onClick={submitBatchTransfer} type="button">
+                    Save
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
           {selectedReport === "Daily Report" && (
             <div className="rounded-lg bg-gray-50 p-2">
               <div className="flex items-center justify-between rounded-md bg-white px-4 py-3 shadow-sm">
@@ -4531,7 +4594,7 @@ function ReportsView({
             </div>
           )}
 
-          {selectedReport !== "Daily Report" && selectedReport !== "Client Milestone" && selectedReport !== "Member Details" && (
+          {selectedReport !== "Daily Report" && selectedReport !== "Client Milestone" && selectedReport !== "Member Details" && selectedReport !== "Client Batch Transfer" && (
             <>
           <Panel defaultOpen title="Advanced Filters">
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
