@@ -217,6 +217,10 @@ const RESET_MARKER_KEY = "cfl_blank_reset_2026_04_28";
 const LEADS_STORAGE_KEY = "cfl_leads_v1";
 const WORKSHOPS_STORAGE_KEY = "cfl_workshops_v1";
 
+function digitsOnly(value: string) {
+  return value.replace(/\D/g, "");
+}
+
 function shouldOpenActionPanel(message: string) {
   const normalized = message.toLowerCase();
   if (
@@ -460,6 +464,27 @@ export function BusinessOS() {
       return Array.from(byMobile.values());
     });
 
+  }, [registrations]);
+
+  useEffect(() => {
+    setWorkshopList((current) => {
+      let changed = false;
+      const next = current.map((workshop) => {
+        const workshopRegistrations = registrations.filter((entry) => entry.workshopId === workshop.id);
+        const registrationCount = workshopRegistrations.length;
+        const collectedRevenue = workshopRegistrations.reduce((sum, entry) => sum + entry.amountPaid, 0);
+        if (workshop.registrations === registrationCount && workshop.revenue === collectedRevenue) {
+          return workshop;
+        }
+        changed = true;
+        return {
+          ...workshop,
+          registrations: registrationCount,
+          revenue: collectedRevenue
+        };
+      });
+      return changed ? next : current;
+    });
   }, [registrations]);
 
   const selectedLead = leads.find((lead) => lead.id === selectedLeadId) ?? leads[0] ?? emptyLead;
@@ -707,6 +732,67 @@ export function BusinessOS() {
     setActionNote(`Workshop deleted: ${selectedWorkshop.title}.`);
   }
 
+  function addClientToWorkshop(input: {
+    leadId: string;
+    paymentMode: "Full" | "Part";
+    partAmount?: number;
+    workshopId: string;
+  }) {
+    const lead = leads.find((item) => item.id === input.leadId);
+    const workshop = workshopList.find((item) => item.id === input.workshopId);
+    if (!lead || !workshop) {
+      emitActionNote("Select a valid client and workshop.");
+      return;
+    }
+
+    const mobile = digitsOnly(lead.mobile);
+    if (!mobile) {
+      emitActionNote("Client mobile is required for registration.");
+      return;
+    }
+
+    const fullAmount = Math.max(0, workshop.price);
+    const cappedPart = Math.max(0, Math.min(Number(input.partAmount || 0), fullAmount));
+    const amountPaid = input.paymentMode === "Part" ? cappedPart : fullAmount;
+    const amountDue = Math.max(0, fullAmount - amountPaid);
+    const registrationId = `reg-${workshop.id}-${mobile}`;
+
+    setRegistrations((current) => {
+      const payload: RegistrationEntry = {
+        id: registrationId,
+        workshopId: workshop.id,
+        workshopSlug: workshop.slug,
+        workshopTitle: workshop.title,
+        fullName: lead.name,
+        mobile: lead.mobile.trim() || `+91 ${mobile}`,
+        email: lead.email,
+        city: lead.city || workshop.city || "Unknown",
+        paymentMode: input.paymentMode,
+        amountPaid,
+        amountDue,
+        status: amountDue > 0 ? "Due" : "Paid",
+        createdAt: new Date().toISOString().slice(0, 10)
+      };
+
+      const existingIndex = current.findIndex((item) => item.id === registrationId);
+      const next = [...current];
+      if (existingIndex >= 0) {
+        next[existingIndex] = payload;
+      } else {
+        next.unshift(payload);
+      }
+
+      try {
+        localStorage.setItem(REGISTRATION_STORAGE_KEY, JSON.stringify(next));
+      } catch {
+        // ignore storage errors
+      }
+      return next;
+    });
+
+    emitActionNote(`Client added to workshop: ${lead.name} -> ${workshop.title}.`);
+  }
+
   function exportLeads() {
     const headers = [
       "name",
@@ -841,7 +927,9 @@ export function BusinessOS() {
         return (
           <WorkshopsView
             addWorkshop={addWorkshop}
+            addClientToWorkshop={addClientToWorkshop}
             deleteSelectedWorkshop={deleteSelectedWorkshop}
+            leads={leads}
             registrations={registrations}
             selectedWorkshop={selectedWorkshop}
             setSelectedWorkshopId={setSelectedWorkshopId}
@@ -2934,7 +3022,9 @@ function SalesView({
 
 function WorkshopsView({
   addWorkshop,
+  addClientToWorkshop,
   deleteSelectedWorkshop,
+  leads,
   registrations,
   updateSelectedWorkshop,
   selectedWorkshop,
@@ -2942,7 +3032,14 @@ function WorkshopsView({
   workshops
 }: {
   addWorkshop: (input: { city?: string; price?: number; title: string; trainer?: string; type?: WorkshopType }) => void;
+  addClientToWorkshop: (input: {
+    leadId: string;
+    paymentMode: "Full" | "Part";
+    partAmount?: number;
+    workshopId: string;
+  }) => void;
   deleteSelectedWorkshop: () => void;
+  leads: Lead[];
   registrations: RegistrationEntry[];
   updateSelectedWorkshop: (input: { city?: string; price?: number; title: string; trainer?: string; type?: WorkshopType }) => void;
   selectedWorkshop: Workshop | undefined;
@@ -3021,6 +3118,12 @@ function WorkshopsView({
   const [formMode, setFormMode] = useState<"create" | "edit">("create");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isScheduleOpen, setIsScheduleOpen] = useState(false);
+  const [clientRegistrationForm, setClientRegistrationForm] = useState({
+    leadId: "",
+    partAmount: "",
+    paymentMode: "Full" as "Full" | "Part",
+    workshopId: ""
+  });
   const [form, setForm] = useState({
     city: "Surat",
     isPaid: true,
@@ -3212,6 +3315,14 @@ function WorkshopsView({
     emitActionNote("Workshop URL & Status exported.");
   }
 
+  const selectableLeads = useMemo(
+    () =>
+      leads
+        .filter((lead) => digitsOnly(lead.mobile).length >= 10)
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    [leads]
+  );
+
   const workshopUrlStatusRows = workshops
     .map((workshop) => ({
       id: workshop.id,
@@ -3249,6 +3360,28 @@ function WorkshopsView({
       }
       return normalizeSearch(`${row.workshopName} ${row.facilitator} ${row.regStatus}`).includes(needle);
     });
+
+  function submitClientWorkshopRegistration() {
+    const workshopId = clientRegistrationForm.workshopId || selectedWorkshop?.id || "";
+    if (!clientRegistrationForm.leadId || !workshopId) {
+      emitActionNote("Select client and workshop first.");
+      return;
+    }
+
+    addClientToWorkshop({
+      leadId: clientRegistrationForm.leadId,
+      paymentMode: clientRegistrationForm.paymentMode,
+      partAmount: Number(clientRegistrationForm.partAmount || 0),
+      workshopId
+    });
+
+    setClientRegistrationForm({
+      leadId: "",
+      partAmount: "",
+      paymentMode: "Full",
+      workshopId
+    });
+  }
 
   return (
     <div>
@@ -3341,6 +3474,82 @@ function WorkshopsView({
           </div>
         </Panel>
       </div>
+
+      <Panel defaultOpen title="Add Client From CRM To Workshop">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <div className="xl:col-span-2">
+            <label className="mb-1 block text-sm font-semibold">Client</label>
+            <select
+              className="w-full rounded-lg border border-ink-900/10 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-white/[0.03]"
+              onChange={(event) =>
+                setClientRegistrationForm((current) => ({ ...current, leadId: event.target.value }))
+              }
+              value={clientRegistrationForm.leadId}
+            >
+              <option value="">Select CRM Client</option>
+              {selectableLeads.map((lead) => (
+                <option key={lead.id} value={lead.id}>
+                  {lead.name} | {lead.mobile}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-semibold">Workshop</label>
+            <select
+              className="w-full rounded-lg border border-ink-900/10 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-white/[0.03]"
+              onChange={(event) =>
+                setClientRegistrationForm((current) => ({ ...current, workshopId: event.target.value }))
+              }
+              value={clientRegistrationForm.workshopId || selectedWorkshop?.id || ""}
+            >
+              {workshops.map((workshop) => (
+                <option key={workshop.id} value={workshop.id}>
+                  {workshop.title}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-semibold">Payment Mode</label>
+            <select
+              className="w-full rounded-lg border border-ink-900/10 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-white/[0.03]"
+              onChange={(event) =>
+                setClientRegistrationForm((current) => ({
+                  ...current,
+                  paymentMode: event.target.value as "Full" | "Part"
+                }))
+              }
+              value={clientRegistrationForm.paymentMode}
+            >
+              <option value="Full">Full Payment</option>
+              <option value="Part">Part Payment</option>
+            </select>
+          </div>
+          {clientRegistrationForm.paymentMode === "Part" ? (
+            <div>
+              <label className="mb-1 block text-sm font-semibold">Part Amount</label>
+              <input
+                className="w-full rounded-lg border border-ink-900/10 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-white/[0.03]"
+                onChange={(event) =>
+                  setClientRegistrationForm((current) => ({ ...current, partAmount: event.target.value }))
+                }
+                placeholder="Enter amount"
+                value={clientRegistrationForm.partAmount}
+              />
+            </div>
+          ) : null}
+        </div>
+        <div className="mt-3 flex justify-end">
+          <button
+            className="rounded-lg bg-mint-600 px-4 py-2 text-sm font-semibold text-white"
+            onClick={submitClientWorkshopRegistration}
+            type="button"
+          >
+            Add Client To Workshop
+          </button>
+        </div>
+      </Panel>
 
       {workshopReportGroup === "Workshop" && workshopReportOption === "WorkShop Url & Status" ? (
         <Panel defaultOpen title="View Workshop URL and Status">

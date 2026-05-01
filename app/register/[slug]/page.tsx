@@ -61,9 +61,10 @@ export default function RegistrationPage() {
 
     const raw = localStorage.getItem(STORAGE_KEY);
     const current: RegistrationEntry[] = raw ? JSON.parse(raw) : [];
-    const existingIndex = current.findIndex((item) => cleanMobile(item.mobile) === mobile);
+    const registrationId = `reg-${workshop.id}-${mobile}`;
+    const existingIndex = current.findIndex((item) => item.id === registrationId);
     const payload: RegistrationEntry = {
-      id: `reg-${mobile}`,
+      id: registrationId,
       workshopId: workshop.id,
       workshopSlug: workshop.slug,
       workshopTitle: workshop.title,
