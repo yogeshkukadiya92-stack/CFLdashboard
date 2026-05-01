@@ -4433,8 +4433,8 @@ function ReportsView({
   ];
   const clientRows = [
     { clientId: "CFL001", name: "Rohan Mehta", mobile: "+91 98250 11843", email: "rohan@demo.com", dob: "1991-07-21", gender: "Male", occupation: "Entrepreneur", country: "India", state: "Gujarat", city: "Surat", status: "Active" },
-    { clientId: "CFL002", name: "Priya Nair", mobile: "+91 98980 22314", email: "priya@demo.com", dob: "1994-12-08", gender: "Female", occupation: "Coach", country: "India", state: "Maharashtra", city: "Mumbai", status: "Suspect" },
-    { clientId: "CFL003", name: "Sumeet Shah", mobile: "+91 99099 44112", email: "sumeet@demo.com", dob: "1989-03-14", gender: "Male", occupation: "Consultant", country: "India", state: "Gujarat", city: "Ahmedabad", status: "InActive" },
+    { clientId: "CFL002", name: "Priya Nair", mobile: "+91 98980 22314", email: "priya@demo.com", dob: "1994-12-08", gender: "Female", occupation: "Coach", country: "India", state: "Maharashtra", city: "Mumbai", status: "Inactive" },
+    { clientId: "CFL003", name: "Sumeet Shah", mobile: "+91 99099 44112", email: "sumeet@demo.com", dob: "1989-03-14", gender: "Male", occupation: "Consultant", country: "India", state: "Gujarat", city: "Ahmedabad", status: "Inactive" },
     { clientId: "CFL004", name: "Neha Kapoor", mobile: "+91 98795 78441", email: "neha@demo.com", dob: "1996-10-04", gender: "Female", occupation: "Trainer", country: "India", state: "Delhi", city: "Delhi", status: "Active" }
   ];
   const refundRows = [
@@ -4619,70 +4619,127 @@ function ReportsView({
 
         <div className="space-y-4">
           {selectedReport === "Client Milestone" && (
-            <div className={cn("rounded-lg p-2", clientDarkMode ? "bg-slate-900 text-slate-100" : "bg-gray-50")}>
+            <div className={cn("rounded-lg bg-gray-50 p-2", clientDarkMode && "bg-slate-900")}>
               <div className="flex items-center justify-between rounded-md bg-white px-4 py-3 shadow-sm">
                 <button className="rounded-md border border-gray-200 p-2 text-gray-600" type="button">
                   <Menu className="size-4" />
                 </button>
                 <div className="flex items-center gap-3">
-                  <nav className="hidden items-center gap-2 md:flex">
-                    {["Dashboard", "Masters", "Process", "Reports", "Settings"].map((item) => (
-                      <button className="rounded-md px-2 py-1 text-sm text-gray-700 hover:bg-gray-100" key={item} type="button">{item}</button>
-                    ))}
-                  </nav>
-                  <button className="rounded-md border border-gray-200 p-2 text-gray-700" onClick={() => setClientDarkMode((s) => !s)} type="button">
+                  <button
+                    className="rounded-md border border-gray-200 p-2 text-gray-700"
+                    onClick={() => setClientDarkMode((state) => !state)}
+                    type="button"
+                  >
                     {clientDarkMode ? <Sun className="size-4" /> : <Moon className="size-4" />}
                   </button>
                   <p className="text-sm font-medium text-gray-700">Welcome User</p>
                 </div>
               </div>
-              <div className="m-4 overflow-hidden rounded-lg bg-white p-6 shadow-sm">
-                <h3 className="mb-4 text-2xl font-semibold text-gray-900">Manage Client</h3>
-                <div className="mb-4 rounded-md border border-gray-200 p-3">
-                  <label className="mb-1 block text-sm text-gray-700">Search By Status</label>
-                  <select className="w-full max-w-xs rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500" onChange={(event) => { setClientPage(1); setClientStatusFilter(event.target.value); }} value={clientStatusFilter}>
+
+              <div className="m-4 overflow-hidden rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+                <h3 className="mb-5 text-2xl font-semibold text-gray-900">Manage Client</h3>
+
+                <div className="mb-5 max-w-sm">
+                  <label className="mb-1 block text-sm font-medium text-gray-700">Search By Status</label>
+                  <select
+                    className="w-full rounded-md border border-gray-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-violet-500"
+                    onChange={(event) => {
+                      setClientPage(1);
+                      setClientStatusFilter(event.target.value);
+                    }}
+                    value={clientStatusFilter}
+                  >
                     <option>All</option>
                     <option>Active</option>
-                    <option>InActive</option>
-                    <option>Suspect</option>
+                    <option>Inactive</option>
                   </select>
                 </div>
-                <div className="my-4 flex flex-wrap items-center justify-between gap-3">
+
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-sm text-gray-700">Show</span>
-                    <select className="rounded-md border border-gray-300 px-2 py-1.5 text-sm" onChange={(event) => { setClientPage(1); setClientPageSize(Number(event.target.value)); }} value={String(clientPageSize)}>
+                    <select
+                      className="rounded-md border border-gray-300 px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-violet-500"
+                      onChange={(event) => {
+                        setClientPage(1);
+                        setClientPageSize(Number(event.target.value));
+                      }}
+                      value={String(clientPageSize)}
+                    >
                       <option>10</option>
                       <option>25</option>
                       <option>50</option>
                     </select>
                     <span className="text-sm text-gray-700">entries</span>
-                    <button className="inline-flex items-center gap-2 rounded-md border border-indigo-500 px-3 py-2 text-sm text-indigo-600" onClick={exportClientCsv} type="button">
-                      <Import className="size-4" />
+                    <button
+                      className="inline-flex items-center gap-2 rounded-md border border-violet-500 px-3 py-2 text-sm font-medium text-violet-600 hover:bg-violet-50"
+                      onClick={exportClientCsv}
+                      type="button"
+                    >
+                      <Download className="size-4" />
                       Export
-                      <ChevronDown className="size-4" />
                     </button>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-sm text-gray-700">Search:</span>
-                    <input className="rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500" onChange={(event) => { setClientPage(1); setClientSearch(event.target.value); }} value={clientSearch} />
+                    <input
+                      className="rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-violet-500"
+                      onChange={(event) => {
+                        setClientPage(1);
+                        setClientSearch(event.target.value);
+                      }}
+                      placeholder="Search client..."
+                      value={clientSearch}
+                    />
                   </div>
                 </div>
-                <div className="overflow-x-auto">
-                  <table className="min-w-[1400px] w-full border border-gray-200 text-sm">
-                    <thead className="bg-gray-100 text-left text-xs font-bold uppercase text-gray-700">
+
+                <div className="overflow-x-auto rounded-lg border border-gray-200">
+                  <table className="min-w-[1400px] w-full text-sm">
+                    <thead className="bg-gray-100 text-left text-xs font-bold uppercase tracking-wide text-gray-700">
                       <tr>
-                        {["ACTION","STATUS","CLIENT ID","NAME","MOBILE","EMAIL","D.O.B.","GENDER","OCCUPATION","COUNTRY","STATE","CITY"].map((head) => (
+                        {[
+                          "Action",
+                          "Status",
+                          "Client ID",
+                          "Name",
+                          "Mobile",
+                          "Email",
+                          "D.O.B",
+                          "Gender",
+                          "Occupation",
+                          "Country",
+                          "State",
+                          "City"
+                        ].map((head) => (
                           <th className="whitespace-nowrap border-b border-gray-200 px-3 py-3" key={head}>
-                            <span className="inline-flex items-center gap-1">{head}<ChevronUp className="size-3" /><ChevronDown className="size-3" /></span>
+                            <span className="inline-flex items-center gap-1">
+                              {head}
+                              <ChevronUp className="size-3 text-violet-400" />
+                              <ChevronDown className="size-3 text-violet-400" />
+                            </span>
                           </th>
                         ))}
                       </tr>
                     </thead>
                     <tbody className="text-gray-700">
-                      {pagedClientRows.map((row) => (
-                        <tr className="border-b border-gray-100" key={row.clientId}>
-                          <td className="px-3 py-2.5"><button className="rounded-md bg-indigo-600 p-2 text-white"><SquarePen className="size-4" /></button></td>
-                          <td className="px-3 py-2.5"><span className={cn("rounded-full px-2 py-1 text-xs text-white", row.status === "Active" ? "bg-green-500" : row.status === "InActive" ? "bg-red-500" : "bg-amber-500")}>{row.status}</span></td>
+                      {pagedClientRows.map((row, index) => (
+                        <tr className={cn("border-b border-gray-100", index % 2 === 1 && "bg-gray-50/70")} key={row.clientId}>
+                          <td className="px-3 py-2.5">
+                            <button className="rounded-md bg-violet-600 p-2 text-white hover:bg-violet-700" type="button">
+                              <SquarePen className="size-4" />
+                            </button>
+                          </td>
+                          <td className="px-3 py-2.5">
+                            <span
+                              className={cn(
+                                "rounded-full px-2.5 py-1 text-xs font-semibold text-white",
+                                row.status === "Active" ? "bg-green-500" : "bg-slate-500"
+                              )}
+                            >
+                              {row.status}
+                            </span>
+                          </td>
                           <td className="whitespace-nowrap px-3 py-2.5">{row.clientId}</td>
                           <td className="whitespace-nowrap px-3 py-2.5">{row.name}</td>
                           <td className="whitespace-nowrap px-3 py-2.5">{row.mobile}</td>
@@ -4695,19 +4752,57 @@ function ReportsView({
                           <td className="whitespace-nowrap px-3 py-2.5">{row.city}</td>
                         </tr>
                       ))}
-                      {!pagedClientRows.length ? <tr><td className="px-3 py-6 text-center text-sm text-gray-500" colSpan={12}>No records found</td></tr> : null}
+                      {!pagedClientRows.length ? (
+                        <tr>
+                          <td className="px-3 py-6 text-center text-sm text-gray-500" colSpan={12}>
+                            No records found
+                          </td>
+                        </tr>
+                      ) : null}
                     </tbody>
                   </table>
                 </div>
+
                 <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm text-gray-600">
-                  <p>Showing {filteredClientRows.length ? clientStart + 1 : 0} to {Math.min(clientStart + clientPageSize, filteredClientRows.length)} of {filteredClientRows.length} entries</p>
-                  <div className="inline-flex overflow-hidden rounded-md border border-gray-300">
-                    <button className="border-r border-gray-300 px-3 py-1.5 hover:bg-gray-50 disabled:opacity-50" disabled={safeClientPage === 1} onClick={() => setClientPage((p) => Math.max(1, p - 1))} type="button">Previous</button>
-                    {Array.from({ length: clientPageCount }).slice(0, 5).map((_, index) => {
+                  <p>
+                    Showing {filteredClientRows.length ? clientStart + 1 : 0} to{" "}
+                    {Math.min(clientStart + clientPageSize, filteredClientRows.length)} of {filteredClientRows.length}{" "}
+                    entries
+                  </p>
+                  <div className="inline-flex items-center overflow-hidden rounded-md border border-gray-300">
+                    <button
+                      className="border-r border-gray-300 px-3 py-1.5 hover:bg-gray-50 disabled:opacity-50"
+                      disabled={safeClientPage === 1}
+                      onClick={() => setClientPage((page) => Math.max(1, page - 1))}
+                      type="button"
+                    >
+                      Previous
+                    </button>
+                    {Array.from({ length: Math.min(clientPageCount, 3) }).map((_, index) => {
                       const pageNumber = index + 1;
-                      return <button className={cn("border-r border-gray-300 px-3 py-1.5 hover:bg-gray-50", safeClientPage === pageNumber && "bg-indigo-500 text-white")} key={pageNumber} onClick={() => setClientPage(pageNumber)} type="button">{pageNumber}</button>;
+                      return (
+                        <button
+                          className={cn(
+                            "border-r border-gray-300 px-3 py-1.5 hover:bg-gray-50",
+                            safeClientPage === pageNumber && "bg-violet-600 text-white hover:bg-violet-700"
+                          )}
+                          key={pageNumber}
+                          onClick={() => setClientPage(pageNumber)}
+                          type="button"
+                        >
+                          {pageNumber}
+                        </button>
+                      );
                     })}
-                    <button className="px-3 py-1.5 hover:bg-gray-50 disabled:opacity-50" disabled={safeClientPage === clientPageCount} onClick={() => setClientPage((p) => Math.min(clientPageCount, p + 1))} type="button">Next</button>
+                    {clientPageCount > 3 ? <span className="border-r border-gray-300 px-2 py-1.5">...</span> : null}
+                    <button
+                      className="px-3 py-1.5 hover:bg-gray-50 disabled:opacity-50"
+                      disabled={safeClientPage === clientPageCount}
+                      onClick={() => setClientPage((page) => Math.min(clientPageCount, page + 1))}
+                      type="button"
+                    >
+                      Next
+                    </button>
                   </div>
                 </div>
               </div>
