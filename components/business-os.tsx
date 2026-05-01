@@ -9,6 +9,7 @@ import {
   Bold,
   Bell,
   Bot,
+  Box,
   BriefcaseBusiness,
   CalendarDays,
   CheckCircle2,
@@ -41,6 +42,7 @@ import {
   Megaphone,
   MessageCircle,
   Menu,
+  MapPin,
   Moon,
   MoreHorizontal,
   Eye,
@@ -269,6 +271,7 @@ export function BusinessOS() {
   const [actionNote, setActionNote] = useState("Fresh workspace ready. Add your first lead or workshop.");
   const [dbEnabled, setDbEnabled] = useState(false);
   const [showRightRail, setShowRightRail] = useState(false);
+  const [openAdminMenu, setOpenAdminMenu] = useState<string | null>(null);
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -797,54 +800,14 @@ export function BusinessOS() {
   }
 
   const content = (
-    <div className="flex min-h-screen bg-[#f7f8f4] text-ink-900 dark:bg-[#101513] dark:text-slate-100">
-      <Sidebar activeModule={activeModule} setActiveModule={setActiveModule} />
-
-      <div className="flex min-w-0 flex-1 flex-col">
-        <TopBar
-          actionNote={actionNote}
-          addLead={addLead}
-          exportLeads={exportLeads}
-          importInputRef={importInputRef}
-          importLeads={importLeads}
-          language={language}
-          query={query}
-          runAIQuery={runAIQuery}
-          searchResults={searchResults}
-          selectedLead={selectedLead}
-          setActiveModule={setActiveModule}
-          setLanguage={setLanguage}
-          setQuery={setQuery}
-          setSelectedLeadId={setSelectedLeadId}
-          setSelectedWorkshopId={setSelectedWorkshopId}
-          setTheme={setTheme}
-          setShowRightRail={setShowRightRail}
-          showRightRail={showRightRail}
-          searchInputRef={searchInputRef}
-          theme={theme}
-        />
-
-        <MobileNav activeModule={activeModule} setActiveModule={setActiveModule} />
-
-        <div
-          className={cn(
-            "grid min-h-0 gap-2 p-2 lg:p-3",
-            showRightRail
-              ? "lg:grid-cols-[minmax(0,1fr)_296px]"
-              : "lg:grid-cols-[minmax(0,1fr)]"
-          )}
-        >
-          <main className="min-w-0">{renderActiveModule()}</main>
-          {showRightRail ? (
-            <RightRail
-              runAIQuery={runAIQuery}
-              setActiveModule={setActiveModule}
-              workshops={workshopList}
-            />
-          ) : null}
-        </div>
-      </div>
-
+    <div className="min-h-screen bg-[#f3f4f6] p-2 text-ink-900 dark:bg-[#101513] dark:text-slate-100">
+      <AdminHorizontalNav
+        activeModule={activeModule}
+        openMenu={openAdminMenu}
+        setActiveModule={setActiveModule}
+        setOpenMenu={setOpenAdminMenu}
+      />
+      <main className="mt-3 min-w-0">{renderActiveModule()}</main>
     </div>
   );
 
@@ -919,6 +882,141 @@ export function BusinessOS() {
         return null;
     }
   }
+}
+
+function AdminHorizontalNav({
+  activeModule,
+  openMenu,
+  setActiveModule,
+  setOpenMenu
+}: {
+  activeModule: ModuleKey;
+  openMenu: string | null;
+  setActiveModule: (module: ModuleKey) => void;
+  setOpenMenu: (menu: string | null) => void;
+}) {
+  const menus: Array<{
+    icon: LucideIcon;
+    key: string;
+    label: string;
+    module?: ModuleKey;
+    items?: Array<{ icon: LucideIcon; label: string; module: ModuleKey }>;
+  }> = [
+    { icon: Home, key: "dashboard", label: "Dashboard", module: "home" },
+    {
+      icon: SquarePen,
+      key: "masters",
+      label: "Masters",
+      items: [
+        { icon: MapPin, label: "Location", module: "settings" },
+        { icon: Activity, label: "Tables", module: "reports" },
+        { icon: UsersRound, label: "Sales Person", module: "sales" },
+        { icon: ClipboardCheck, label: "Workshop Master", module: "workshops" },
+        { icon: CalendarDays, label: "Workshop Schedule", module: "workshops" },
+        { icon: Gift, label: "Workshop Discount", module: "workshops" },
+        { icon: UsersRound, label: "Client", module: "crm" },
+        { icon: ClipboardCheck, label: "Family", module: "crm" }
+      ]
+    },
+    { icon: SquarePen, key: "paw", label: "PAW Profile Analysis", module: "reports" },
+    {
+      icon: Box,
+      key: "process",
+      label: "Process",
+      items: [
+        { icon: ClipboardCheck, label: "Client Batch Transfer", module: "reports" },
+        { icon: ClipboardCheck, label: "Refund", module: "reports" },
+        { icon: ClipboardCheck, label: "Merge Client", module: "crm" },
+        { icon: Activity, label: "Re-Check Failed Payment", module: "payments" },
+        { icon: Activity, label: "Manual Client Registration", module: "funnels" },
+        { icon: Activity, label: "Manual Client Part Payment", module: "payments" }
+      ]
+    },
+    {
+      icon: Box,
+      key: "lead",
+      label: "Lead",
+      items: [
+        { icon: ClipboardCheck, label: "Import Old Lead Sales Person", module: "crm" },
+        { icon: ClipboardCheck, label: "Import Client Workshop Verification", module: "crm" },
+        { icon: ClipboardCheck, label: "Import Direct RM Assign", module: "crm" },
+        { icon: ClipboardCheck, label: "Sales Person Payment", module: "sales" },
+        { icon: ClipboardCheck, label: "Transfer Lead", module: "crm" },
+        { icon: ClipboardCheck, label: "Sales Person Lead Assign", module: "crm" }
+      ]
+    },
+    {
+      icon: FileSpreadsheet,
+      key: "reports",
+      label: "Reports",
+      items: [
+        { icon: Activity, label: "Workshop", module: "reports" },
+        { icon: Activity, label: "Clients", module: "reports" },
+        { icon: Activity, label: "Sales Person", module: "reports" }
+      ]
+    },
+    { icon: Settings, key: "settings", label: "Settings", module: "settings" }
+  ];
+
+  return (
+    <nav className="relative z-40 rounded-lg bg-white px-4 py-3 shadow-sm">
+      <div className="flex flex-wrap items-center gap-3">
+        {menus.map((menu) => {
+          const Icon = menu.icon;
+          const isOpen = openMenu === menu.key;
+          const isActive = menu.module === activeModule || isOpen;
+          return (
+            <div className="relative" key={menu.key}>
+              <button
+                className={cn(
+                  "flex items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold text-ink-900 transition hover:bg-gray-100",
+                  isActive && "bg-gray-100"
+                )}
+                onClick={() => {
+                  if (menu.items) {
+                    setOpenMenu(isOpen ? null : menu.key);
+                    return;
+                  }
+                  if (menu.module) {
+                    setActiveModule(menu.module);
+                    setOpenMenu(null);
+                  }
+                }}
+                type="button"
+              >
+                <Icon className="size-4" />
+                {menu.label}
+                {menu.items ? <ChevronDown className={cn("size-4 text-ink-500 transition", isOpen && "rotate-180")} /> : null}
+              </button>
+              {menu.items && isOpen ? (
+                <div className="absolute left-0 top-full mt-3 min-w-[320px] rounded-md bg-white p-3 shadow-2xl">
+                  <div className="grid gap-1">
+                    {menu.items.map((item) => {
+                      const ItemIcon = item.icon;
+                      return (
+                        <button
+                          className="flex items-center gap-3 rounded-md px-3 py-2.5 text-left text-sm font-medium hover:bg-gray-50"
+                          key={item.label}
+                          onClick={() => {
+                            setActiveModule(item.module);
+                            setOpenMenu(null);
+                          }}
+                          type="button"
+                        >
+                          <ItemIcon className="size-4" />
+                          {item.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+    </nav>
+  );
 }
 
 function Sidebar({
@@ -2008,34 +2106,17 @@ function RightRail({
 }
 
 function ModuleHeader({
-  actions,
-  eyebrow,
-  icon: Icon,
-  title
+  actions: _actions,
+  eyebrow: _eyebrow,
+  icon: _Icon,
+  title: _title
 }: {
   actions?: React.ReactNode;
   eyebrow: string;
   icon: LucideIcon;
   title: string;
 }) {
-  return (
-    <div className="mb-2 rounded-lg border border-ink-900/10 bg-white px-3 py-2 shadow-sm dark:border-white/10 dark:bg-white/[0.045]">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-        <div className="flex min-w-0 flex-1 items-center gap-2">
-          <div className="grid size-8 shrink-0 place-items-center rounded-md bg-mint-50 text-mint-700 dark:bg-mint-500/10 dark:text-mint-100">
-            <Icon className="size-4" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <h1 className="truncate text-sm font-bold uppercase text-ink-700 dark:text-slate-100">{eyebrow}</h1>
-            <span className="sr-only">{title}</span>
-          </div>
-        </div>
-        <div className="flex w-full flex-wrap gap-1.5 sm:w-auto sm:justify-end">
-          {actions}
-        </div>
-      </div>
-    </div>
-  );
+  return null;
 }
 
 function CRMView({
