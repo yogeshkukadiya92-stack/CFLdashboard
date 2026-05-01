@@ -4118,6 +4118,11 @@ function ReportsView({
   const [memberSearch, setMemberSearch] = useState("");
   const [memberPageSize, setMemberPageSize] = useState(10);
   const [memberPage, setMemberPage] = useState(1);
+  const [clientStatusFilter, setClientStatusFilter] = useState("All");
+  const [clientSearch, setClientSearch] = useState("");
+  const [clientPageSize, setClientPageSize] = useState(10);
+  const [clientPage, setClientPage] = useState(1);
+  const [clientDarkMode, setClientDarkMode] = useState(false);
 
   const memberRows = [
     { name: "Rohan Mehta", mobile: "+91 98250 11843", email: "rohan@example.com", regDate: "2026-04-20", workshop: "Leadership Sprint", salesPerson: "Neha Kapoor", facilitator: "Arjun Sharma", state: "Gujarat", city: "Surat", status: "Success", source: "Instagram Ads", country: "India", batch: "A1" },
@@ -4125,6 +4130,12 @@ function ReportsView({
     { name: "Sumeet Shah", mobile: "+91 99099 44112", email: "sumeet@example.com", regDate: "2026-04-24", workshop: "Mindset Reset", salesPerson: "Neha Kapoor", facilitator: "Arjun Sharma", state: "Gujarat", city: "Ahmedabad", status: "Failed", source: "Website", country: "India", batch: "A1" },
     { name: "GlobalSoft HR", mobile: "+91 98795 78441", email: "hr@globalsoft.com", regDate: "2026-04-26", workshop: "Corporate Influence", salesPerson: "Rohan Patel", facilitator: "Devansh Rao", state: "Karnataka", city: "Bengaluru", status: "Success", source: "WhatsApp", country: "India", batch: "C3" },
     { name: "Harsha Iyer", mobile: "+91 90012 33445", email: "harsha@example.com", regDate: "2026-04-28", workshop: "Sales Mastery", salesPerson: "Amit Verma", facilitator: "Rakesh Jain", state: "Tamil Nadu", city: "Chennai", status: "Failed", source: "Email Campaign", country: "India", batch: "B2" }
+  ];
+  const clientRows = [
+    { clientId: "CFL001", name: "Rohan Mehta", mobile: "+91 98250 11843", email: "rohan@demo.com", dob: "1991-07-21", gender: "Male", occupation: "Entrepreneur", country: "India", state: "Gujarat", city: "Surat", status: "Active" },
+    { clientId: "CFL002", name: "Priya Nair", mobile: "+91 98980 22314", email: "priya@demo.com", dob: "1994-12-08", gender: "Female", occupation: "Coach", country: "India", state: "Maharashtra", city: "Mumbai", status: "Suspect" },
+    { clientId: "CFL003", name: "Sumeet Shah", mobile: "+91 99099 44112", email: "sumeet@demo.com", dob: "1989-03-14", gender: "Male", occupation: "Consultant", country: "India", state: "Gujarat", city: "Ahmedabad", status: "InActive" },
+    { clientId: "CFL004", name: "Neha Kapoor", mobile: "+91 98795 78441", email: "neha@demo.com", dob: "1996-10-04", gender: "Female", occupation: "Trainer", country: "India", state: "Delhi", city: "Delhi", status: "Active" }
   ];
 
   const filteredMemberRows = useMemo(() => {
@@ -4144,6 +4155,17 @@ function ReportsView({
       return true;
     });
   }, [memberFilters, memberSearch]);
+  const filteredClientRows = useMemo(() => {
+    return clientRows.filter((row) => {
+      if (clientStatusFilter !== "All" && row.status !== clientStatusFilter) return false;
+      if (!clientSearch.trim()) return true;
+      return normalizeSearch(`${row.name} ${row.mobile} ${row.email} ${row.clientId} ${row.city}`).includes(normalizeSearch(clientSearch));
+    });
+  }, [clientSearch, clientStatusFilter]);
+  const clientPageCount = Math.max(1, Math.ceil(filteredClientRows.length / clientPageSize));
+  const safeClientPage = Math.min(clientPage, clientPageCount);
+  const clientStart = (safeClientPage - 1) * clientPageSize;
+  const pagedClientRows = filteredClientRows.slice(clientStart, clientStart + clientPageSize);
 
   const totalMemberRows = filteredMemberRows.length;
   const memberPageCount = Math.max(1, Math.ceil(totalMemberRows / memberPageSize));
@@ -4164,6 +4186,22 @@ function ReportsView({
     const anchor = document.createElement("a");
     anchor.href = url;
     anchor.download = "member-management-report.csv";
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
+  function exportClientCsv() {
+    const headers = ["client_id", "name", "mobile", "email", "dob", "gender", "occupation", "country", "state", "city", "status"];
+    const rows = filteredClientRows.map((row) =>
+      [row.clientId, row.name, row.mobile, row.email, row.dob, row.gender, row.occupation, row.country, row.state, row.city, row.status]
+        .map((value) => `"${String(value).replace(/"/g, '""')}"`)
+        .join(",")
+    );
+    const csv = [headers.join(","), ...rows].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "manage-client.csv";
     anchor.click();
     URL.revokeObjectURL(url);
   }
@@ -4257,19 +4295,29 @@ function ReportsView({
 
         <div className="space-y-4">
           {selectedReport === "Client Milestone" && (
-            <div className="rounded-lg bg-gray-50 p-2">
+            <div className={cn("rounded-lg p-2", clientDarkMode ? "bg-slate-900 text-slate-100" : "bg-gray-50")}>
               <div className="flex items-center justify-between rounded-md bg-white px-4 py-3 shadow-sm">
                 <button className="rounded-md border border-gray-200 p-2 text-gray-600" type="button">
                   <Menu className="size-4" />
                 </button>
-                <p className="text-sm font-medium text-gray-700">Welcome User</p>
+                <div className="flex items-center gap-3">
+                  <nav className="hidden items-center gap-2 md:flex">
+                    {["Dashboard", "Masters", "Process", "Reports", "Settings"].map((item) => (
+                      <button className="rounded-md px-2 py-1 text-sm text-gray-700 hover:bg-gray-100" key={item} type="button">{item}</button>
+                    ))}
+                  </nav>
+                  <button className="rounded-md border border-gray-200 p-2 text-gray-700" onClick={() => setClientDarkMode((s) => !s)} type="button">
+                    {clientDarkMode ? <Sun className="size-4" /> : <Moon className="size-4" />}
+                  </button>
+                  <p className="text-sm font-medium text-gray-700">Welcome User</p>
+                </div>
               </div>
               <div className="m-4 overflow-hidden rounded-lg bg-white p-6 shadow-sm">
                 <h3 className="mb-4 text-2xl font-semibold text-gray-900">Manage Client</h3>
                 <div className="mb-4 rounded-md border border-gray-200 p-3">
                   <label className="mb-1 block text-sm text-gray-700">Search By Status</label>
-                  <select className="w-full max-w-xs rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500">
-                    <option>ALL</option>
+                  <select className="w-full max-w-xs rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500" onChange={(event) => { setClientPage(1); setClientStatusFilter(event.target.value); }} value={clientStatusFilter}>
+                    <option>All</option>
                     <option>Active</option>
                     <option>InActive</option>
                     <option>Suspect</option>
@@ -4278,13 +4326,13 @@ function ReportsView({
                 <div className="my-4 flex flex-wrap items-center justify-between gap-3">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-sm text-gray-700">Show</span>
-                    <select className="rounded-md border border-gray-300 px-2 py-1.5 text-sm">
+                    <select className="rounded-md border border-gray-300 px-2 py-1.5 text-sm" onChange={(event) => { setClientPage(1); setClientPageSize(Number(event.target.value)); }} value={String(clientPageSize)}>
                       <option>10</option>
                       <option>25</option>
                       <option>50</option>
                     </select>
                     <span className="text-sm text-gray-700">entries</span>
-                    <button className="inline-flex items-center gap-2 rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-700">
+                    <button className="inline-flex items-center gap-2 rounded-md border border-indigo-500 px-3 py-2 text-sm text-indigo-600" onClick={exportClientCsv} type="button">
                       <Import className="size-4" />
                       Export
                       <ChevronDown className="size-4" />
@@ -4292,7 +4340,7 @@ function ReportsView({
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-sm text-gray-700">Search:</span>
-                    <input className="rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500" />
+                    <input className="rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500" onChange={(event) => { setClientPage(1); setClientSearch(event.target.value); }} value={clientSearch} />
                   </div>
                 </div>
                 <div className="overflow-x-auto">
@@ -4307,27 +4355,35 @@ function ReportsView({
                       </tr>
                     </thead>
                     <tbody className="text-gray-700">
-                      {[
-                        ["CFL001","Rohan Mehta","+91 9825011843","rohan@demo.com","1991-07-21","Male","Entrepreneur","India","Gujarat","Surat"],
-                        ["CFL002","Priya Nair","+91 9898022314","priya@demo.com","1994-12-08","Female","Coach","India","Maharashtra","Mumbai"],
-                        ["CFL003","Sumeet Shah","+91 9909944112","sumeet@demo.com","1989-03-14","Male","Consultant","India","Gujarat","Ahmedabad"],
-                        ["CFL004","Neha Kapoor","+91 9879578441","neha@demo.com","1996-10-04","Female","Trainer","India","Delhi","Delhi"]
-                      ].map((row) => (
-                        <tr className="border-b border-gray-100" key={row[0]}>
+                      {pagedClientRows.map((row) => (
+                        <tr className="border-b border-gray-100" key={row.clientId}>
                           <td className="px-3 py-2.5"><button className="rounded-md bg-indigo-600 p-2 text-white"><SquarePen className="size-4" /></button></td>
-                          <td className="px-3 py-2.5"><span className="rounded bg-green-500 px-2 py-1 text-xs text-white">Active</span></td>
-                          {row.map((cell) => <td className="whitespace-nowrap px-3 py-2.5" key={`${row[0]}-${cell}`}>{cell}</td>)}
+                          <td className="px-3 py-2.5"><span className={cn("rounded-full px-2 py-1 text-xs text-white", row.status === "Active" ? "bg-green-500" : row.status === "InActive" ? "bg-red-500" : "bg-amber-500")}>{row.status}</span></td>
+                          <td className="whitespace-nowrap px-3 py-2.5">{row.clientId}</td>
+                          <td className="whitespace-nowrap px-3 py-2.5">{row.name}</td>
+                          <td className="whitespace-nowrap px-3 py-2.5">{row.mobile}</td>
+                          <td className="whitespace-nowrap px-3 py-2.5">{row.email}</td>
+                          <td className="whitespace-nowrap px-3 py-2.5">{row.dob}</td>
+                          <td className="whitespace-nowrap px-3 py-2.5">{row.gender}</td>
+                          <td className="whitespace-nowrap px-3 py-2.5">{row.occupation}</td>
+                          <td className="whitespace-nowrap px-3 py-2.5">{row.country}</td>
+                          <td className="whitespace-nowrap px-3 py-2.5">{row.state}</td>
+                          <td className="whitespace-nowrap px-3 py-2.5">{row.city}</td>
                         </tr>
                       ))}
+                      {!pagedClientRows.length ? <tr><td className="px-3 py-6 text-center text-sm text-gray-500" colSpan={12}>No records found</td></tr> : null}
                     </tbody>
                   </table>
                 </div>
                 <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm text-gray-600">
-                  <p>Showing 1 to 10 of 250,000 entries</p>
+                  <p>Showing {filteredClientRows.length ? clientStart + 1 : 0} to {Math.min(clientStart + clientPageSize, filteredClientRows.length)} of {filteredClientRows.length} entries</p>
                   <div className="inline-flex overflow-hidden rounded-md border border-gray-300">
-                    {["Previous","1","2","3","4","5","...","Next"].map((p) => (
-                      <button className="border-r border-gray-300 px-3 py-1.5 last:border-r-0 hover:bg-gray-50" key={p}>{p}</button>
-                    ))}
+                    <button className="border-r border-gray-300 px-3 py-1.5 hover:bg-gray-50 disabled:opacity-50" disabled={safeClientPage === 1} onClick={() => setClientPage((p) => Math.max(1, p - 1))} type="button">Previous</button>
+                    {Array.from({ length: clientPageCount }).slice(0, 5).map((_, index) => {
+                      const pageNumber = index + 1;
+                      return <button className={cn("border-r border-gray-300 px-3 py-1.5 hover:bg-gray-50", safeClientPage === pageNumber && "bg-indigo-500 text-white")} key={pageNumber} onClick={() => setClientPage(pageNumber)} type="button">{pageNumber}</button>;
+                    })}
+                    <button className="px-3 py-1.5 hover:bg-gray-50 disabled:opacity-50" disabled={safeClientPage === clientPageCount} onClick={() => setClientPage((p) => Math.min(clientPageCount, p + 1))} type="button">Next</button>
                   </div>
                 </div>
               </div>
