@@ -15,6 +15,7 @@
     "pg": "^8.20.0",
     "react": "latest",
     "react-dom": "latest",
+    "react-quill": "^2.0.0",
     "recharts": "^3.8.1"
   },
   "devDependencies": {
