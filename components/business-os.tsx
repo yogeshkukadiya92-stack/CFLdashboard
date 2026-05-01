@@ -4098,6 +4098,70 @@ function ReportsView({
     "Sales Person": ["Sales Person Milestone", "Sales Person Conversion", "Sales Person Collection"]
   };
   const [selectedReport, setSelectedReport] = useState(reportGroups.Workshop[0]);
+  const [memberFilters, setMemberFilters] = useState({
+    batch: "ALL",
+    city: "ALL",
+    country: "ALL",
+    facilitator: "ALL",
+    from: "",
+    salesPerson: "ALL",
+    state: "ALL",
+    status: "ALL",
+    to: "",
+    workshop: "ALL"
+  });
+  const [memberSearch, setMemberSearch] = useState("");
+  const [memberPageSize, setMemberPageSize] = useState(10);
+  const [memberPage, setMemberPage] = useState(1);
+
+  const memberRows = [
+    { name: "Rohan Mehta", mobile: "+91 98250 11843", email: "rohan@example.com", regDate: "2026-04-20", workshop: "Leadership Sprint", salesPerson: "Neha Kapoor", facilitator: "Arjun Sharma", state: "Gujarat", city: "Surat", status: "Success", source: "Instagram Ads", country: "India", batch: "A1" },
+    { name: "Priya Nair", mobile: "+91 98980 22314", email: "priya@example.com", regDate: "2026-04-22", workshop: "Sales Mastery", salesPerson: "Amit Verma", facilitator: "Rakesh Jain", state: "Maharashtra", city: "Mumbai", status: "Success", source: "Referral", country: "India", batch: "B2" },
+    { name: "Sumeet Shah", mobile: "+91 99099 44112", email: "sumeet@example.com", regDate: "2026-04-24", workshop: "Mindset Reset", salesPerson: "Neha Kapoor", facilitator: "Arjun Sharma", state: "Gujarat", city: "Ahmedabad", status: "Failed", source: "Website", country: "India", batch: "A1" },
+    { name: "GlobalSoft HR", mobile: "+91 98795 78441", email: "hr@globalsoft.com", regDate: "2026-04-26", workshop: "Corporate Influence", salesPerson: "Rohan Patel", facilitator: "Devansh Rao", state: "Karnataka", city: "Bengaluru", status: "Success", source: "WhatsApp", country: "India", batch: "C3" },
+    { name: "Harsha Iyer", mobile: "+91 90012 33445", email: "harsha@example.com", regDate: "2026-04-28", workshop: "Sales Mastery", salesPerson: "Amit Verma", facilitator: "Rakesh Jain", state: "Tamil Nadu", city: "Chennai", status: "Failed", source: "Email Campaign", country: "India", batch: "B2" }
+  ];
+
+  const filteredMemberRows = useMemo(() => {
+    return memberRows.filter((row) => {
+      if (memberFilters.workshop !== "ALL" && row.workshop !== memberFilters.workshop) return false;
+      if (memberFilters.batch !== "ALL" && row.batch !== memberFilters.batch) return false;
+      if (memberFilters.salesPerson !== "ALL" && row.salesPerson !== memberFilters.salesPerson) return false;
+      if (memberFilters.facilitator !== "ALL" && row.facilitator !== memberFilters.facilitator) return false;
+      if (memberFilters.status !== "ALL" && row.status !== memberFilters.status) return false;
+      if (memberFilters.country !== "ALL" && row.country !== memberFilters.country) return false;
+      if (memberFilters.state !== "ALL" && row.state !== memberFilters.state) return false;
+      if (memberFilters.city !== "ALL" && row.city !== memberFilters.city) return false;
+      if (memberFilters.from && row.regDate < memberFilters.from) return false;
+      if (memberFilters.to && row.regDate > memberFilters.to) return false;
+      const haystack = normalizeSearch(`${row.name} ${row.mobile} ${row.email} ${row.source}`);
+      if (memberSearch.trim() && !haystack.includes(normalizeSearch(memberSearch))) return false;
+      return true;
+    });
+  }, [memberFilters, memberSearch]);
+
+  const totalMemberRows = filteredMemberRows.length;
+  const memberPageCount = Math.max(1, Math.ceil(totalMemberRows / memberPageSize));
+  const safeMemberPage = Math.min(memberPage, memberPageCount);
+  const memberStartIndex = (safeMemberPage - 1) * memberPageSize;
+  const pagedMemberRows = filteredMemberRows.slice(memberStartIndex, memberStartIndex + memberPageSize);
+
+  function exportMemberCsv() {
+    const headers = ["name", "mobile", "email", "reg_date", "workshop", "sales_person", "facilitator", "state", "city", "status", "source"];
+    const rows = filteredMemberRows.map((row) =>
+      [row.name, row.mobile, row.email, row.regDate, row.workshop, row.salesPerson, row.facilitator, row.state, row.city, row.status, row.source]
+        .map((value) => `"${String(value).replace(/"/g, '""')}"`)
+        .join(",")
+    );
+    const csv = [headers.join(","), ...rows].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "member-management-report.csv";
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
 
   function toCsv(headers: string[], rows: string[][]) {
     const body = rows.map((row) => row.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(","));
@@ -4264,6 +4328,99 @@ function ReportsView({
               </div>
             </div>
           )}
+          {selectedReport === "Member Details" && (
+            <div className="rounded-lg bg-gray-50 p-2 font-sans">
+              <div className="flex items-center justify-between rounded-md bg-white px-4 py-3 shadow-sm">
+                <button className="rounded-md border border-gray-200 p-2 text-gray-600" type="button"><Menu className="size-4" /></button>
+                <p className="text-sm font-medium text-gray-700">Welcome User</p>
+              </div>
+              <div className="m-4 overflow-hidden rounded-lg bg-white p-6 shadow-sm">
+                <h3 className="mb-4 text-2xl font-semibold text-gray-900">Member Management</h3>
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-3 xl:grid-cols-5">
+                  {([
+                    { label: "Workshop", key: "workshop", values: [...new Set(memberRows.map((row) => row.workshop))] },
+                    { label: "Batch", key: "batch", values: [...new Set(memberRows.map((row) => row.batch))] },
+                    { label: "Sales Person", key: "salesPerson", values: [...new Set(memberRows.map((row) => row.salesPerson))] },
+                    { label: "Facilitators", key: "facilitator", values: [...new Set(memberRows.map((row) => row.facilitator))] },
+                    { label: "Status", key: "status", values: ["Success", "Failed"] },
+                    { label: "Country", key: "country", values: [...new Set(memberRows.map((row) => row.country))] },
+                    { label: "State", key: "state", values: [...new Set(memberRows.map((row) => row.state))] },
+                    { label: "City", key: "city", values: [...new Set(memberRows.map((row) => row.city))] }
+                  ] satisfies Array<{ label: string; key: keyof typeof memberFilters; values: string[] }>).map(({ label, key, values }) => (
+                    <label className="block text-sm text-gray-700" key={String(key)}>
+                      {label}
+                      <select className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#333]" value={memberFilters[key as keyof typeof memberFilters]} onChange={(event) => { setMemberPage(1); setMemberFilters((current) => ({ ...current, [key]: event.target.value })); }}>
+                        <option value="ALL">ALL</option>
+                        {(values as string[]).map((value) => <option key={value} value={value}>{value}</option>)}
+                      </select>
+                    </label>
+                  ))}
+                  <label className="block text-sm text-gray-700">From<input className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#333]" type="date" value={memberFilters.from} onChange={(event) => { setMemberPage(1); setMemberFilters((current) => ({ ...current, from: event.target.value })); }} /></label>
+                  <label className="block text-sm text-gray-700">To<input className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#333]" type="date" value={memberFilters.to} onChange={(event) => { setMemberPage(1); setMemberFilters((current) => ({ ...current, to: event.target.value })); }} /></label>
+                </div>
+
+                <div className="my-4 flex flex-wrap items-center justify-between gap-3">
+                  <button className="rounded-md bg-[#333] px-4 py-2 text-sm font-semibold text-white hover:bg-black" onClick={exportMemberCsv} type="button">All Data Excel Download</button>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <div className="flex items-center gap-2 text-sm text-gray-700">
+                      <span>Show entries</span>
+                      <select className="rounded-md border border-gray-300 px-2 py-1.5 text-sm" value={String(memberPageSize)} onChange={(event) => { setMemberPage(1); setMemberPageSize(Number(event.target.value)); }}>
+                        {[10, 25, 50].map((size) => <option key={size} value={size}>{size}</option>)}
+                      </select>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm text-gray-700">
+                      <span>Search</span>
+                      <input className="rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#333]" value={memberSearch} onChange={(event) => { setMemberPage(1); setMemberSearch(event.target.value); }} />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto rounded-lg border border-gray-200">
+                  <table className="min-w-[1300px] w-full text-sm">
+                    <thead className="bg-gray-100 text-left text-xs font-bold uppercase text-gray-700">
+                      <tr>
+                        {["Name", "Mobile", "Email", "Reg. Date", "Workshop", "Sales Person", "Facilitator", "State", "City", "Status", "Source"].map((head) => (
+                          <th className="px-3 py-3" key={head}>
+                            <span className="inline-flex items-center gap-1">{head}<ChevronUp className="size-3" /><ChevronDown className="size-3" /></span>
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pagedMemberRows.map((row) => (
+                        <tr className="border-t border-gray-100" key={`${row.mobile}-${row.regDate}`}>
+                          <td className="px-3 py-2.5">{row.name}</td>
+                          <td className="px-3 py-2.5">{row.mobile}</td>
+                          <td className="px-3 py-2.5">{row.email}</td>
+                          <td className="px-3 py-2.5">{row.regDate}</td>
+                          <td className="px-3 py-2.5">{row.workshop}</td>
+                          <td className="px-3 py-2.5">{row.salesPerson}</td>
+                          <td className="px-3 py-2.5">{row.facilitator}</td>
+                          <td className="px-3 py-2.5">{row.state}</td>
+                          <td className="px-3 py-2.5">{row.city}</td>
+                          <td className="px-3 py-2.5"><span className={cn("rounded px-2 py-1 text-xs font-semibold text-white", row.status === "Success" ? "bg-green-500" : "bg-red-500")}>{row.status}</span></td>
+                          <td className="px-3 py-2.5">{row.source}</td>
+                        </tr>
+                      ))}
+                      {!pagedMemberRows.length ? <tr><td className="px-3 py-6 text-center text-sm text-gray-500" colSpan={11}>No records found</td></tr> : null}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm text-gray-600">
+                  <p>Showing {totalMemberRows ? memberStartIndex + 1 : 0} to {Math.min(memberStartIndex + memberPageSize, totalMemberRows)} of {totalMemberRows} entries</p>
+                  <div className="inline-flex overflow-hidden rounded-md border border-gray-300">
+                    <button className="border-r border-gray-300 px-3 py-1.5 hover:bg-gray-50 disabled:opacity-50" disabled={safeMemberPage === 1} onClick={() => setMemberPage((current) => Math.max(1, current - 1))} type="button">Previous</button>
+                    {Array.from({ length: memberPageCount }).slice(0, 5).map((_, index) => {
+                      const pageNumber = index + 1;
+                      return <button className={cn("border-r border-gray-300 px-3 py-1.5 hover:bg-gray-50", safeMemberPage === pageNumber && "bg-[#333] text-white")} key={pageNumber} onClick={() => setMemberPage(pageNumber)} type="button">{pageNumber}</button>;
+                    })}
+                    <button className="px-3 py-1.5 hover:bg-gray-50 disabled:opacity-50" disabled={safeMemberPage === memberPageCount} onClick={() => setMemberPage((current) => Math.min(memberPageCount, current + 1))} type="button">Next</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
           {selectedReport === "Daily Report" && (
             <div className="rounded-lg bg-gray-50 p-2">
               <div className="flex items-center justify-between rounded-md bg-white px-4 py-3 shadow-sm">
@@ -4313,7 +4470,7 @@ function ReportsView({
             </div>
           )}
 
-          {selectedReport !== "Daily Report" && selectedReport !== "Client Milestone" && (
+          {selectedReport !== "Daily Report" && selectedReport !== "Client Milestone" && selectedReport !== "Member Details" && (
             <>
           <Panel defaultOpen title="Advanced Filters">
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
