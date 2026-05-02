@@ -3250,6 +3250,7 @@ function WorkshopsView({
   const [formMode, setFormMode] = useState<"create" | "edit">("create");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isScheduleOpen, setIsScheduleOpen] = useState(false);
+  const [showWorkshopParticipants, setShowWorkshopParticipants] = useState(false);
   const [clientRegistrationForm, setClientRegistrationForm] = useState({
     leadId: "",
     partAmount: "",
@@ -3333,6 +3334,13 @@ function WorkshopsView({
     }
     setIsCreateOpen(false);
   }
+
+  const currentWorkshopForViewData =
+    workshops.find((item) => item.id === selectedWorkshop?.id) ??
+    workshops.find((item) => item.title === form.title.trim());
+  const workshopParticipants = registrations.filter(
+    (entry) => entry.workshopId === currentWorkshopForViewData?.id
+  );
 
   function clearWorkshopMasterForm() {
     setForm({
@@ -3836,8 +3844,75 @@ function WorkshopsView({
           <div className="mx-auto mt-6 max-w-6xl rounded-lg bg-white p-6 shadow-sm">
             <div className="mb-4 flex items-center justify-between gap-3">
               <h3 className="text-xl font-bold text-gray-900">Manage Workshop Master</h3>
-              <button className="rounded-md border border-indigo-500 px-3 py-2 text-sm font-medium text-indigo-600" onClick={() => emitActionNote("Workshop master view data opened.")} type="button">View Data</button>
+              <button
+                className="rounded-md border border-indigo-500 px-3 py-2 text-sm font-medium text-indigo-600"
+                onClick={() => {
+                  setShowWorkshopParticipants((state) => !state);
+                  if (!currentWorkshopForViewData) {
+                    emitActionNote("Workshop save/select karo pachhi participants dekhase.");
+                    return;
+                  }
+                  emitActionNote(
+                    `${currentWorkshopForViewData.title} participants loaded: ${workshopParticipants.length}.`
+                  );
+                }}
+                type="button"
+              >
+                {showWorkshopParticipants ? "Hide Data" : "View Data"}
+              </button>
             </div>
+            {showWorkshopParticipants ? (
+              <div className="mb-4 rounded-lg border border-indigo-100 bg-indigo-50/50 p-3">
+                <div className="mb-2 flex items-center justify-between">
+                  <p className="text-sm font-semibold text-indigo-900">
+                    {currentWorkshopForViewData?.title ?? "Workshop"} Participants
+                  </p>
+                  <span className="rounded-md bg-indigo-600 px-2 py-1 text-xs font-semibold text-white">
+                    {workshopParticipants.length}
+                  </span>
+                </div>
+                {workshopParticipants.length ? (
+                  <div className="overflow-x-auto rounded-md border border-indigo-100 bg-white">
+                    <table className="min-w-[680px] w-full text-sm">
+                      <thead className="bg-indigo-50 text-left text-xs font-semibold uppercase text-indigo-700">
+                        <tr>
+                          <th className="px-3 py-2">Name</th>
+                          <th className="px-3 py-2">Mobile</th>
+                          <th className="px-3 py-2">Email</th>
+                          <th className="px-3 py-2">Payment</th>
+                          <th className="px-3 py-2">Reg. Date</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {workshopParticipants.map((entry, index) => (
+                          <tr
+                            className={cn("border-t border-indigo-50", index % 2 === 1 && "bg-indigo-50/30")}
+                            key={entry.id}
+                          >
+                            <td className="px-3 py-2">{entry.fullName}</td>
+                            <td className="px-3 py-2">{entry.mobile}</td>
+                            <td className="px-3 py-2">{entry.email}</td>
+                            <td className="px-3 py-2">
+                              <span
+                                className={cn(
+                                  "rounded-full px-2 py-1 text-xs font-semibold text-white",
+                                  entry.status === "Paid" ? "bg-emerald-500" : "bg-amber-500"
+                                )}
+                              >
+                                {entry.status}
+                              </span>
+                            </td>
+                            <td className="px-3 py-2">{entry.createdAt}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p className="text-sm text-indigo-700">Aa workshop ma haju koi participant add nathi.</p>
+                )}
+              </div>
+            ) : null}
             <label className="block text-sm text-gray-600">
               Workshop/Product Name
               <input className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500" onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))} value={form.title} />
