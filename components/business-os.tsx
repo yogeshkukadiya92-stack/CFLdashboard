@@ -903,7 +903,7 @@ export function BusinessOS() {
     switch (activeModule) {
       case "home":
         return (
-          <DashboardHome
+          <PremiumDashboardHome
             leads={leads}
           />
         );
@@ -1646,6 +1646,138 @@ function DashboardHome({
               <Legend />
               <Bar dataKey="workshops" fill="#10B981" radius={[4, 4, 0, 0]} />
               <Line dataKey="enrollments" stroke="#1E3A8A" strokeWidth={3} />
+            </ReLineChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PremiumDashboardHome({
+  leads
+}: {
+  leads: Lead[];
+}) {
+  const chartData = [
+    { month: "Jan", enrollments: 120, workshops: 10 }, { month: "Feb", enrollments: 145, workshops: 12 },
+    { month: "Mar", enrollments: 170, workshops: 13 }, { month: "Apr", enrollments: 195, workshops: 15 },
+    { month: "May", enrollments: 220, workshops: 17 }, { month: "Jun", enrollments: 260, workshops: 18 },
+    { month: "Jul", enrollments: 275, workshops: 19 }, { month: "Aug", enrollments: 290, workshops: 20 },
+    { month: "Sep", enrollments: 305, workshops: 21 }, { month: "Oct", enrollments: 330, workshops: 23 },
+    { month: "Nov", enrollments: 355, workshops: 24 }, { month: "Dec", enrollments: 380, workshops: 26 }
+  ];
+
+  return (
+    <div className="space-y-3 rounded-xl bg-[#f3f4f6] p-3">
+      <div className="rounded-2xl border border-indigo-100 bg-white p-5 shadow-sm">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-indigo-500">Revenue Overview</p>
+            <p className="mt-2 text-4xl font-bold text-indigo-900">INR 31,85,000</p>
+            <p className="mt-1 inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700">
+              <ArrowUpRight className="size-3.5" />
+              +16.3% vs previous month
+            </p>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-3">
+            {[
+              ["Product A", "42%", "bg-indigo-50 text-indigo-700 border-indigo-100"],
+              ["Service B", "33%", "bg-emerald-50 text-emerald-700 border-emerald-100"],
+              ["Program C", "25%", "bg-violet-50 text-violet-700 border-violet-100"]
+            ].map(([label, val, tone]) => (
+              <div className={cn("rounded-xl border px-3 py-2.5 text-sm", tone)} key={label}>
+                <p className="font-medium">{label}</p>
+                <p className="mt-1 text-xl font-bold">{val}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {([
+          { title: "Total Workshops", value: "148", icon: CalendarDays, tone: "bg-indigo-50 text-indigo-700" },
+          { title: "Upcoming Workshops", value: "22", icon: Timer, tone: "bg-cyan-50 text-cyan-700" },
+          { title: "Total Members", value: formatNumber(leads.length), icon: UsersRound, tone: "bg-violet-50 text-violet-700" },
+          { title: "Total Revenue", value: "INR 1.28Cr", icon: CircleDollarSign, tone: "bg-emerald-50 text-emerald-700" }
+        ] satisfies Array<{ title: string; value: string; icon: LucideIcon; tone: string }>).map((item) => {
+          const Icon = item.icon;
+          return (
+            <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm" key={item.title}>
+              <div className={cn("inline-flex rounded-lg p-2", item.tone)}>
+                <Icon className="size-5" />
+              </div>
+              <p className="mt-2 text-sm font-medium text-gray-600">{item.title}</p>
+              <p className="text-2xl font-bold text-slate-900">{item.value}</p>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="grid gap-3 xl:grid-cols-[1.6fr_0.9fr]">
+        <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="text-lg font-semibold text-slate-900">Event Registration Status</h3>
+            <button className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-700">
+              Excel Download
+            </button>
+          </div>
+          <div className="overflow-x-auto rounded-lg border border-gray-200">
+            <table className="min-w-[760px] w-full text-sm">
+              <thead className="bg-slate-100 text-left text-xs font-bold uppercase text-slate-700">
+                <tr>
+                  <th className="px-3 py-2.5">Event Name</th>
+                  <th className="px-3 py-2.5">Date Range</th>
+                  <th className="px-3 py-2.5">Latest Registrant Name</th>
+                  <th className="px-3 py-2.5">Total Registrations</th>
+                  <th className="px-3 py-2.5">New Registrations</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[
+                  ["Leadership Sprint", "1 Jun - 3 Jun", "Rohan Mehta", "320", "28"],
+                  ["Sales Mastery", "10 Jun - 12 Jun", "Priya Nair", "275", "19"],
+                  ["Mindset Reset", "18 Jun - 20 Jun", "Neha Kapoor", "241", "14"]
+                ].map((row, rowIndex) => (
+                  <tr className={cn("border-b border-gray-100", rowIndex % 2 === 1 && "bg-indigo-50/30")} key={row[0]}>
+                    {row.map((cell) => (
+                      <td className="px-3 py-2.5" key={`${row[0]}-${cell}`}>
+                        {cell}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+          <p className="text-lg font-semibold text-slate-900">Upcoming Event</p>
+          <div className="mt-3 rounded-xl border border-indigo-100 bg-indigo-50/50 p-3">
+            <span className="rounded-md bg-indigo-700 px-2 py-1 text-xs font-semibold text-white">24 Jun</span>
+            <p className="mt-2 text-xl font-semibold text-slate-900">Growth Accelerator Bootcamp</p>
+            <p className="mt-1 text-sm text-gray-600">Location: Zoom</p>
+            <button className="mt-3 w-full rounded-md bg-emerald-500 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-600">
+              Registration Link
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+        <h3 className="mb-3 text-lg font-semibold text-slate-900">User Enrollment Report</h3>
+        <div className="h-[320px] w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <ReLineChart data={chartData}>
+              <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" />
+              <XAxis dataKey="month" />
+              <YAxis />
+              <Tooltip />
+              <Legend />
+              <Bar dataKey="workshops" fill="#10b981" radius={[4, 4, 0, 0]} />
+              <Line dataKey="enrollments" stroke="#4f46e5" strokeWidth={3} />
             </ReLineChart>
           </ResponsiveContainer>
         </div>
