@@ -4468,6 +4468,15 @@ function ReportsView({
       return normalizeSearch(`${row.name} ${row.mobile} ${row.email} ${row.clientId} ${row.city}`).includes(normalizeSearch(clientSearch));
     });
   }, [clientSearch, clientStatusFilter]);
+  const clientStatusSummary = useMemo(() => {
+    const active = clientRows.filter((row) => row.status === "Active").length;
+    const inactive = clientRows.length - active;
+    return {
+      active,
+      all: clientRows.length,
+      inactive
+    };
+  }, [clientRows]);
   const filteredRefundRows = useMemo(() => {
     return refundRows.filter((row) => {
       if (refundFilters.status !== "ALL" && row.status !== refundFilters.status) return false;
@@ -4620,29 +4629,51 @@ function ReportsView({
         <div className="space-y-4">
           {selectedReport === "Client Milestone" && (
             <div className={cn("rounded-lg bg-gray-50 p-2", clientDarkMode && "bg-slate-900")}>
-              <div className="flex items-center justify-between rounded-md bg-white px-4 py-3 shadow-sm">
-                <button className="rounded-md border border-gray-200 p-2 text-gray-600" type="button">
+              <div className="flex items-center justify-between rounded-xl border border-white/70 bg-white/95 px-4 py-3 shadow-sm backdrop-blur">
+                <button className="rounded-md border border-gray-200 bg-gray-50 p-2 text-gray-600" type="button">
                   <Menu className="size-4" />
                 </button>
                 <div className="flex items-center gap-3">
                   <button
-                    className="rounded-md border border-gray-200 p-2 text-gray-700"
+                    className="rounded-md border border-gray-200 bg-gray-50 p-2 text-gray-700"
                     onClick={() => setClientDarkMode((state) => !state)}
                     type="button"
                   >
                     {clientDarkMode ? <Sun className="size-4" /> : <Moon className="size-4" />}
                   </button>
-                  <p className="text-sm font-medium text-gray-700">Welcome User</p>
+                  <div className="text-right">
+                    <p className="text-xs uppercase tracking-[0.14em] text-gray-500">Client Ops</p>
+                    <p className="text-sm font-semibold text-gray-900">Welcome User</p>
+                  </div>
                 </div>
               </div>
 
-              <div className="m-4 overflow-hidden rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-                <h3 className="mb-5 text-2xl font-semibold text-gray-900">Manage Client</h3>
+              <div className="m-4 overflow-hidden rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+                <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+                  <div>
+                    <h3 className="text-2xl font-semibold text-gray-900">Manage Client</h3>
+                    <p className="mt-1 text-sm text-gray-500">Fast filters, compact controls, and real-time search.</p>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="rounded-lg border border-indigo-100 bg-indigo-50 px-3 py-2 text-center">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-indigo-600">All</p>
+                      <p className="text-lg font-bold text-indigo-900">{clientStatusSummary.all}</p>
+                    </div>
+                    <div className="rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2 text-center">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-600">Active</p>
+                      <p className="text-lg font-bold text-emerald-900">{clientStatusSummary.active}</p>
+                    </div>
+                    <div className="rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-center">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-600">Inactive</p>
+                      <p className="text-lg font-bold text-amber-900">{clientStatusSummary.inactive}</p>
+                    </div>
+                  </div>
+                </div>
 
-                <div className="mb-5 max-w-sm">
+                <div className="mb-4 max-w-sm">
                   <label className="mb-1 block text-sm font-medium text-gray-700">Search By Status</label>
                   <select
-                    className="w-full rounded-md border border-gray-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-violet-500"
+                    className="w-full rounded-md border border-gray-300 bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-violet-500"
                     onChange={(event) => {
                       setClientPage(1);
                       setClientStatusFilter(event.target.value);
@@ -4655,11 +4686,11 @@ function ReportsView({
                   </select>
                 </div>
 
-                <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                  <div className="flex flex-wrap items-center gap-2">
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-gray-200 bg-gray-50/80 px-3 py-2.5">
+                  <div className="flex flex-wrap items-center gap-2 rounded-md bg-white px-2 py-1.5 shadow-sm">
                     <span className="text-sm text-gray-700">Show</span>
                     <select
-                      className="rounded-md border border-gray-300 px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-violet-500"
+                      className="rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-violet-500"
                       onChange={(event) => {
                         setClientPage(1);
                         setClientPageSize(Number(event.target.value));
@@ -4672,7 +4703,7 @@ function ReportsView({
                     </select>
                     <span className="text-sm text-gray-700">entries</span>
                     <button
-                      className="inline-flex items-center gap-2 rounded-md border border-violet-500 px-3 py-2 text-sm font-medium text-violet-600 hover:bg-violet-50"
+                      className="inline-flex items-center gap-2 rounded-md bg-violet-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-violet-700"
                       onClick={exportClientCsv}
                       type="button"
                     >
@@ -4680,10 +4711,10 @@ function ReportsView({
                       Export
                     </button>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-gray-700">Search:</span>
+                  <div className="flex items-center gap-2 rounded-md bg-white px-2 py-1.5 shadow-sm">
+                    <Search className="size-4 text-violet-500" />
                     <input
-                      className="rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-violet-500"
+                      className="rounded-md border border-gray-300 px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-violet-500"
                       onChange={(event) => {
                         setClientPage(1);
                         setClientSearch(event.target.value);
@@ -4724,9 +4755,9 @@ function ReportsView({
                     </thead>
                     <tbody className="text-gray-700">
                       {pagedClientRows.map((row, index) => (
-                        <tr className={cn("border-b border-gray-100", index % 2 === 1 && "bg-gray-50/70")} key={row.clientId}>
+                        <tr className={cn("border-b border-gray-100", index % 2 === 1 && "bg-violet-50/30")} key={row.clientId}>
                           <td className="px-3 py-2.5">
-                            <button className="rounded-md bg-violet-600 p-2 text-white hover:bg-violet-700" type="button">
+                            <button className="rounded-md bg-violet-600 p-2 text-white shadow-sm hover:bg-violet-700" type="button">
                               <SquarePen className="size-4" />
                             </button>
                           </td>
@@ -4734,7 +4765,7 @@ function ReportsView({
                             <span
                               className={cn(
                                 "rounded-full px-2.5 py-1 text-xs font-semibold text-white",
-                                row.status === "Active" ? "bg-green-500" : "bg-slate-500"
+                                row.status === "Active" ? "bg-emerald-500" : "bg-amber-500"
                               )}
                             >
                               {row.status}
