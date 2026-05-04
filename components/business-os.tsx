@@ -3257,6 +3257,7 @@ function WorkshopsView({
     paymentMode: "Full" as "Full" | "Part",
     workshopId: ""
   });
+  const bulkImportInputRef = useRef<HTMLInputElement | null>(null);
   const [form, setForm] = useState({
     city: "Surat",
     isPaid: true,
@@ -3523,6 +3524,65 @@ function WorkshopsView({
     });
   }
 
+  function downloadBulkImportSample() {
+    const headers = ["mobile", "payment_mode", "part_amount"];
+    const rows = [
+      ["9825011843", "Full", ""],
+      ["9898022314", "Part", "2500"]
+    ];
+    const csv = [headers.join(","), ...rows.map((row) => row.join(","))].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "workshop-bulk-import-sample.csv";
+    anchor.click();
+    URL.revokeObjectURL(url);
+    emitActionNote("Bulk import sample downloaded.");
+  }
+
+  function handleBulkImport(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const workshopId = clientRegistrationForm.workshopId || selectedWorkshop?.id || "";
+    if (!workshopId) {
+      emitActionNote("Bulk import mate workshop select karo.");
+      event.target.value = "";
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const raw = String(reader.result || "");
+      const lines = raw.split(/\r?\n/).filter((line) => line.trim());
+      if (lines.length < 2) {
+        emitActionNote("CSV empty che.");
+        return;
+      }
+
+      const parsedRows = lines.slice(1).map((line) => line.split(",").map((cell) => cell.trim()));
+      let added = 0;
+      parsedRows.forEach((cells) => {
+        const mobile = digitsOnly(cells[0] || "");
+        const mode = (cells[1] || "Full").toLowerCase() === "part" ? "Part" : "Full";
+        const partAmount = Number(cells[2] || 0);
+        if (mobile.length < 10) return;
+        const lead = selectableLeads.find((item) => digitsOnly(item.mobile) === mobile);
+        if (!lead) return;
+        addClientToWorkshop({
+          leadId: lead.id,
+          paymentMode: mode,
+          partAmount,
+          workshopId
+        });
+        added += 1;
+      });
+      emitActionNote(`Bulk import complete: ${added} clients added.`);
+    };
+    reader.readAsText(file);
+    event.target.value = "";
+  }
+
   return (
     <div>
       <ModuleHeader
@@ -3616,6 +3676,29 @@ function WorkshopsView({
       </div>
 
       <Panel defaultOpen title="Add Client From CRM To Workshop">
+        <div className="mb-3 flex flex-wrap items-center justify-end gap-2">
+          <button
+            className="rounded-md border border-indigo-500 px-3 py-1.5 text-xs font-semibold text-indigo-600"
+            onClick={downloadBulkImportSample}
+            type="button"
+          >
+            Download Sample
+          </button>
+          <input
+            accept=".csv"
+            className="hidden"
+            onChange={handleBulkImport}
+            ref={bulkImportInputRef}
+            type="file"
+          />
+          <button
+            className="rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white"
+            onClick={() => bulkImportInputRef.current?.click()}
+            type="button"
+          >
+            Bulk Import CSV
+          </button>
+        </div>
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <div className="xl:col-span-2">
             <label className="mb-1 block text-sm font-semibold">Client</label>
