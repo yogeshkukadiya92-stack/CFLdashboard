@@ -87,6 +87,7 @@ import { cn, formatCurrency, formatNumber, initials, normalizeSearch } from "@/l
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { Bar, BarChart, CartesianGrid, Legend, Line, LineChart as ReLineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { ManageWorkshopScheduleForm } from "@/components/manage-workshop-schedule-form";
 
 type Language = "EN" | "HI" | "GU";
 type WorkshopType = Workshop["type"];
@@ -4048,178 +4049,13 @@ function WorkshopsView({
       ) : null}
 
       {isScheduleOpen ? (
-      <div className="rounded-lg bg-gray-50 p-2">
-        <div className="flex items-center justify-between rounded-md bg-white px-4 py-3 shadow-sm">
-          <button className="rounded-md border border-gray-200 p-2 text-gray-600" type="button"><Menu className="size-4" /></button>
-          <p className="text-sm font-medium text-gray-700">Welcome User</p>
-        </div>
-        <div className="mx-auto mt-6 max-w-7xl rounded-lg bg-white p-6 shadow-sm">
-          <div className="mb-4 flex flex-wrap items-center gap-2 border-b border-slate-200 pb-3 text-sm">
-            {["Dashboard", "Masters", "Lead", "Reports"].map((item) => (
-              <button className="rounded-md px-3 py-1.5 text-slate-700 hover:bg-slate-100" key={item} type="button">{item}</button>
-            ))}
-          </div>
-          <div className="mb-5 flex items-center justify-between">
-            <h3 className="text-xl font-medium text-gray-900">Manage Schedule</h3>
-            <button className="inline-flex items-center gap-2 rounded-md border border-indigo-500 px-3 py-2 text-sm font-medium text-indigo-600" onClick={() => emitActionNote("Schedule data preview opened.")} type="button"><Eye className="size-4" />View Data</button>
-          </div>
-
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-3 lg:grid-cols-4">
-          <div>
-            <label className="mb-1 block text-sm text-gray-700"><input checked={scheduleForm.transferLeadToZoho} className="mr-2 size-4 accent-indigo-600" onChange={(event) => updateScheduleForm("transferLeadToZoho", event.target.checked)} type="checkbox" />Transfer Lead?</label>
-            <label className="mb-1 block text-sm text-gray-700">Select Event</label>
-            <select
-              className="w-full rounded-md border border-gray-300 bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
-              onChange={(event) => updateScheduleForm("scheduleWorkshopId", event.target.value)}
-              value={scheduleForm.scheduleWorkshopId}
-            >
-              <option value="">SELECT WORKSHOP</option>
-              {workshops.map((workshop) => (
-                <option key={workshop.id} value={workshop.id}>
-                  {workshop.title}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="mb-1 block text-sm text-gray-700">Facilitator</label>
-            <select
-              className="w-full rounded-md border border-gray-300 bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
-              onChange={(event) => updateScheduleForm("facilitator", event.target.value)}
-              value={scheduleForm.facilitator}
-            >
-              <option value="">SELECT FACILITATOR</option>
-              {[...new Set(workshops.map((item) => item.trainer))].map((trainer) => (
-                <option key={trainer} value={trainer}>
-                  {trainer}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="mb-1 block text-sm text-gray-700">Batch</label>
-            <input
-              className="w-full rounded-md border border-gray-300 bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
-              onChange={(event) => updateScheduleForm("batch", event.target.value)}
-              placeholder="Batch"
-              value={scheduleForm.batch}
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm text-gray-700"><input checked={scheduleForm.isPaidWorkshop} className="mr-2 size-4 accent-indigo-600" onChange={(event) => updateScheduleForm("isPaidWorkshop", event.target.checked)} type="checkbox" />Is Paid?</label>
-            <input className="w-full rounded-md border border-gray-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-100" disabled={!scheduleForm.isPaidWorkshop} onChange={(event) => updateScheduleForm("feesWithGst", event.target.value)} placeholder="Fees With GST" value={scheduleForm.feesWithGst} />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm text-gray-700"><input checked={scheduleForm.isPartPaymentAllow} className="mr-2 size-4 accent-indigo-600" onChange={(event) => updateScheduleForm("isPartPaymentAllow", event.target.checked)} type="checkbox" />Is Part Payment Allow?</label>
-            <input className="w-full rounded-md border border-gray-300 bg-gray-100 px-3 py-2.5 text-sm outline-none" onChange={(event) => updateScheduleForm("minimumPartPayment", event.target.value)} placeholder="Minimum Part Payment" value={scheduleForm.minimumPartPayment} />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm text-gray-700">Discount EOD</label>
-            <input className="w-full rounded-md border border-gray-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500" onChange={(event) => updateScheduleForm("discountEod", event.target.value)} placeholder="Discount EOD" value={scheduleForm.discountEod} />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm text-gray-700">Discount Type</label>
-            <div className="flex gap-4 rounded-md border border-gray-300 px-3 py-2.5 text-sm">
-              <label className="inline-flex items-center gap-2 text-sm text-gray-700">
-                <input
-                  checked={scheduleForm.discountType === "percent"}
-                  disabled={!scheduleForm.isPaidWorkshop}
-                  onChange={() => updateScheduleForm("discountType", "percent")}
-                  type="radio"
-                />
-                %
-              </label>
-              <label className="inline-flex items-center gap-2 text-sm text-gray-700">
-                <input
-                  checked={scheduleForm.discountType === "flat"}
-                  disabled={!scheduleForm.isPaidWorkshop}
-                  onChange={() => updateScheduleForm("discountType", "flat")}
-                  type="radio"
-                />
-                Flat Amount
-              </label>
-            </div>
-          </div>
-          <div>
-            <label className="mb-1 block text-sm text-gray-700">Discount Value</label>
-            <input className="w-full rounded-md border border-gray-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-100" disabled={!scheduleForm.isPaidWorkshop} onChange={(event) => updateScheduleForm("discountValue", event.target.value)} placeholder="Discount Value" value={scheduleForm.discountValue} />
-          </div>
-          <div className="md:col-span-3 lg:col-span-4">
-            <label className="mb-1 block text-sm text-gray-700">Discount Description</label>
-            <input className="w-full rounded-md border border-gray-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500" onChange={(event) => updateScheduleForm("discountDescription", event.target.value)} placeholder="Discount Description" value={scheduleForm.discountDescription} />
-          </div>
-          <div><label className="mb-1 block text-sm text-gray-700">Order Qty Title</label><input className="w-full rounded-md border border-gray-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500" onChange={(event) => updateScheduleForm("orderQtyTitle", event.target.value)} placeholder="Order Qty Title" value={scheduleForm.orderQtyTitle} /></div>
-          <div><label className="mb-1 block text-sm text-gray-700">Min Order Qty</label><input className="w-full rounded-md border border-gray-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500" onChange={(event) => updateScheduleForm("minOrderQty", event.target.value)} placeholder="Min Order Qty" value={scheduleForm.minOrderQty} /></div>
-          <div><label className="mb-1 block text-sm text-gray-700">Max Order Qty</label><input className="w-full rounded-md border border-gray-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500" onChange={(event) => updateScheduleForm("maxOrderQty", event.target.value)} placeholder="Max Order Qty" value={scheduleForm.maxOrderQty} /></div>
-          <div><label className="mb-1 block text-sm text-gray-700">Start Date</label><input className="w-full rounded-md border border-gray-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500" onChange={(event) => updateScheduleForm("startDate", event.target.value)} type="date" value={scheduleForm.startDate} /></div>
-          <div><label className="mb-1 block text-sm text-gray-700">End Date</label><input className="w-full rounded-md border border-gray-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500" onChange={(event) => updateScheduleForm("endDate", event.target.value)} type="date" value={scheduleForm.endDate} /></div>
-          <div><label className="mb-1 block text-sm text-gray-700">Last Registration Date</label><input className="w-full rounded-md border border-gray-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500" onChange={(event) => updateScheduleForm("lastRegistrationDate", event.target.value)} type="date" value={scheduleForm.lastRegistrationDate} /></div>
-          <div><label className="mb-1 block text-sm text-gray-700">Redirect URL</label><input className="w-full rounded-md border border-gray-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500" onChange={(event) => updateScheduleForm("redirectUrl", event.target.value)} placeholder="Redirect URL" value={scheduleForm.redirectUrl} /></div>
-          <div><label className="mb-1 block text-sm text-gray-700">Link Type</label><select className="w-full rounded-md border border-gray-300 bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500" onChange={(event) => updateScheduleForm("linkType", event.target.value)} value={scheduleForm.linkType}><option>NA</option><option>Public</option><option>Private</option><option>Affiliate</option></select></div>
-          <div><label className="mb-1 block text-sm text-gray-700">Venue</label><select className="w-full rounded-md border border-gray-300 bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500" onChange={(event) => updateScheduleForm("venue", event.target.value)} value={scheduleForm.venue}><option value="">SELECT VENUE</option><option value="Online Zoom">Online Zoom</option><option value="Surat">Surat</option><option value="Ahmedabad">Ahmedabad</option><option value="Mumbai">Mumbai</option></select></div>
-          <div className="md:col-span-3 lg:col-span-4"><label className="mb-1 block text-sm text-gray-700">Image Preview (1024x576)</label><input className="w-full rounded-md border border-gray-300 px-3 py-2.5 text-sm" onChange={(event) => updateScheduleForm("imagePreviewName", event.target.files?.[0]?.name ?? "")} type="file" /></div>
-          <div className="md:col-span-3 lg:col-span-4">
-            <label className="mb-1 block text-sm text-gray-700">Event Description</label>
-            <div className="rounded-md border border-gray-300 bg-white p-1">
-              <ReactQuill theme="snow" value={scheduleForm.workshopDescription} onChange={(value) => updateScheduleForm("workshopDescription", value)} />
-            </div>
-          </div>
-        </div>
-        <h4 className="mt-8 mb-4 border-b border-gray-200 pb-2 text-base font-semibold text-gray-900">Third Party API Setup</h4>
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-          <input className="rounded-md border border-gray-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500" onChange={(event) => updateScheduleForm("aiSensyCampaignName", event.target.value)} placeholder="Campaign Name" value={scheduleForm.aiSensyCampaignName} />
-          <input className="rounded-md border border-gray-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500" onChange={(event) => updateScheduleForm("aiSensyMediaUrl", event.target.value)} placeholder="Media URL" value={scheduleForm.aiSensyMediaUrl} />
-          <input className="rounded-md border border-gray-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500" onChange={(event) => updateScheduleForm("aiSensyFailedCampaignName", event.target.value)} placeholder="Failed Campaign Name" value={scheduleForm.aiSensyFailedCampaignName} />
-          <input className="rounded-md border border-gray-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500" onChange={(event) => updateScheduleForm("aiSensyFailedMediaUrl", event.target.value)} placeholder="Failed Media URL" value={scheduleForm.aiSensyFailedMediaUrl} />
-          <input className="rounded-md border border-gray-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500" onChange={(event) => updateScheduleForm("clickMagicUid", event.target.value)} placeholder="UID" value={scheduleForm.clickMagicUid} />
-          <input className="rounded-md border border-gray-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500" onChange={(event) => updateScheduleForm("clickMagicHid", event.target.value)} placeholder="HID" value={scheduleForm.clickMagicHid} />
-          <input className="rounded-md border border-gray-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500" onChange={(event) => updateScheduleForm("clickMagicCampaignId", event.target.value)} placeholder="Campaign ID" value={scheduleForm.clickMagicCampaignId} />
-        </div>
-
-        <h4 className="mt-8 mb-4 border-b border-gray-200 pb-2 text-base font-semibold text-gray-900">Auto Assign</h4>
-        <label className="inline-flex items-center gap-2 text-sm text-gray-700">
-          <input
-            checked={scheduleForm.autoAssignSalesPerson}
-            className="size-4 accent-indigo-600"
-            onChange={(event) => updateScheduleForm("autoAssignSalesPerson", event.target.checked)}
-            type="checkbox"
-          />
-          Activate Auto Lead Assign
-        </label>
-
-        <h4 className="mt-8 mb-4 border-b border-gray-200 pb-2 text-base font-semibold text-gray-900">Email Setup</h4>
-        <label className="inline-flex items-center gap-2 text-sm text-gray-700">
-          <input
-            checked={scheduleForm.emailAfterRegistration}
-            className="size-4 accent-indigo-600"
-            onChange={(event) => updateScheduleForm("emailAfterRegistration", event.target.checked)}
-            type="checkbox"
-          />
-          Send Email After Registration
-        </label>
-        <input className="mt-3 w-full rounded-md border border-gray-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500" onChange={(event) => updateScheduleForm("emailSubject", event.target.value)} placeholder="Email Subject" value={scheduleForm.emailSubject} />
-        <div className="mt-3 rounded-md border border-gray-300 bg-white p-1">
-          <ReactQuill theme="snow" value={scheduleForm.emailBody} onChange={(value) => updateScheduleForm("emailBody", value)} />
-        </div>
-
-        <div className="mt-6 flex flex-wrap gap-2">
-          <button
-            className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white"
-            onClick={saveScheduleConfig}
-            type="button"
-          >
-            Save
-          </button>
-          <button
-            className="rounded-md border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700"
-            onClick={clearScheduleForm}
-            type="button"
-          >
-            Clear
-          </button>
-        </div>
-      </div>
-      </div>
+        <ManageWorkshopScheduleForm
+          facilitators={[...new Set(workshops.map((item) => item.trainer).filter(Boolean))]}
+          onClear={clearScheduleForm}
+          onSave={() => saveScheduleConfig()}
+          venues={["Online Zoom", "Surat", "Ahmedabad", "Mumbai"]}
+          workshops={workshops.map((item) => ({ id: item.id, title: item.title }))}
+        />
       ) : null}
 
       <Panel
