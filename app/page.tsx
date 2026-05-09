@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation";
+import { BusinessOS } from "@/components/business-os";
 
 export default function Page() {
-  redirect("/workshop-scheduling-admin");
+  return <BusinessOS />;
 }
