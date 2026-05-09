@@ -1,195 +1,243 @@
 "use client";
 
+import { HelpCircle, Eye, Menu } from "lucide-react";
 import { useMemo, useState } from "react";
-import { useForm } from "react-hook-form";
-import { Box, CalendarDays, FileText, Home, Settings, UserRound, Workflow, Wrench } from "lucide-react";
-import { WorkshopPageHeader } from "@/components/dashboard/workshop-page-header";
-import { CoreInfoSection, type WorkshopFormValues } from "@/components/dashboard/workshop-form-sections";
 
-const workshops = ["Leadership Sprint", "Sales Mastery", "Mindset Reset", "Business Acceleration Bootcamp"];
-const facilitators = ["Dr Luv Patel", "Arjun Sharma", "Neha Kapoor", "Amit Verma"];
-const venues = ["Surat", "Ahmedabad", "Mumbai", "Online Zoom"];
+type FieldItem = {
+  key: string;
+  label: string;
+  tooltip: string;
+  defaultChecked?: boolean;
+};
 
-export default function WorkshopSchedulingAdminPage() {
-  const [workshopDescription, setWorkshopDescription] = useState("");
-  const [emailBody, setEmailBody] = useState("");
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [showMastersMenu, setShowMastersMenu] = useState(true);
+const fieldConfig: FieldItem[] = [
+  { key: "firstName", label: "First Name", tooltip: "User નું પ્રથમ નામ ફરજિયાત રાખો.", defaultChecked: true },
+  { key: "lastName", label: "Last Name", tooltip: "User નું છેલ્લું નામ ફરજિયાત રાખો.", defaultChecked: true },
+  { key: "mobile", label: "Mobile", tooltip: "OTP / સંપર્ક માટે મોબાઇલ નંબર.", defaultChecked: true },
+  { key: "email", label: "Email", tooltip: "Email confirmations માટે.", defaultChecked: true },
+  { key: "country", label: "Country", tooltip: "Country capture માટે.", defaultChecked: true },
+  { key: "state", label: "State", tooltip: "State-based filtering/reporting માટે." },
+  { key: "city", label: "City", tooltip: "City segmentation માટે." },
+  { key: "address", label: "Address", tooltip: "પૂર્ણ સરનામું માંગવું હોય તો enable કરો." },
+  { key: "age", label: "Age", tooltip: "Age analysis માટે." },
+  { key: "gender", label: "Gender", tooltip: "Gender-wise analytics માટે." },
+  { key: "occupation", label: "Occupation", tooltip: "Profession insights માટે." },
+  { key: "firstTime", label: "First Time", tooltip: "નવી/પહેલી વાર join કરનાર ઓળખવા." },
+  { key: "source", label: "Lead Source", tooltip: "Lead ક્યાંથી આવ્યો તે capture કરવા." },
+  { key: "company", label: "Company", tooltip: "Corporate users માટે useful field." },
+  { key: "referral", label: "Referral", tooltip: "કોણે refer કર્યું તે track કરવા." },
+  { key: "notes", label: "Notes", tooltip: "Extra context માટે optional field." },
+];
 
-  const { handleSubmit, register, reset, watch } = useForm<WorkshopFormValues>({
-    defaultValues: {
-      batch: "",
-      crmCampaignName: "",
-      crmMediaUrl: "",
-      discountDescription: "",
-      discountType: "flat",
-      discountValue: "",
-      endDate: "",
-      failedCampaignName: "",
-      failedMediaUrl: "",
-      facilitator: "",
-      feesWithGst: "",
-      isPaidWorkshop: false,
-      isPartPaymentAllowed: false,
-      lastRegistrationDate: "",
-      linkType: "WhatsApp",
-      maxOrderQty: "",
-      minOrderQty: "",
-      minimumPartPayment: "",
-      startDate: "",
-      venue: "",
-      workshop: ""
+export default function ManageEventMasterPage() {
+  const [eventName, setEventName] = useState("");
+  const [eventType, setEventType] = useState("");
+  const [facilitator, setFacilitator] = useState("");
+  const [productGroup, setProductGroup] = useState("");
+  const [isPaid, setIsPaid] = useState(false);
+
+  const [fieldState, setFieldState] = useState<Record<string, boolean>>(
+    () =>
+      fieldConfig.reduce<Record<string, boolean>>((acc, item) => {
+        acc[item.key] = Boolean(item.defaultChecked);
+        return acc;
+      }, {})
+  );
+
+  const checkedCount = useMemo(
+    () => Object.values(fieldState).filter(Boolean).length,
+    [fieldState]
+  );
+
+  const toggleField = (key: string) => {
+    setFieldState((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const clearForm = () => {
+    setEventName("");
+    setEventType("");
+    setFacilitator("");
+    setProductGroup("");
+    setIsPaid(false);
+    setFieldState(
+      fieldConfig.reduce<Record<string, boolean>>((acc, item) => {
+        acc[item.key] = Boolean(item.defaultChecked);
+        return acc;
+      }, {})
+    );
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!eventName.trim()) {
+      alert("Event/Product Name required");
+      return;
     }
-  });
 
-  const isPaidWorkshop = watch("isPaidWorkshop");
-  const isPartPaymentAllowed = watch("isPartPaymentAllowed");
-  const preview = useMemo(() => imagePreview, [imagePreview]);
-
-  function onSubmit(data: WorkshopFormValues) {
-    console.log("Workshop Scheduling Form:", { ...data, emailBody, workshopDescription });
-  }
-
-  function onClear() {
-    reset();
-    setImagePreview(null);
-    setWorkshopDescription("");
-    setEmailBody("");
-  }
-
-  const inputClass =
-    "w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none placeholder:text-gray-400 focus:ring-2 focus:ring-indigo-500";
-  const labelClass = "mb-1 block text-sm text-gray-600";
+    console.log({
+      eventName,
+      eventType,
+      facilitator,
+      productGroup,
+      isPaid,
+      fields: fieldState,
+    });
+  };
 
   return (
-    <main className="min-h-screen bg-gray-50 p-4 md:p-6">
-      <div className="mx-auto max-w-[1500px] space-y-4">
-        <header className="rounded-xl bg-white p-3 shadow-sm">
-          <nav className="flex flex-wrap items-center gap-2">
-            {[
-              { icon: Home, label: "Dashboard" },
-              { icon: Wrench, label: "Masters", active: true },
-              { icon: UserRound, label: "PAW Profile Analysis" },
-              { icon: Box, label: "Process" },
-              { icon: Workflow, label: "Lead" },
-              { icon: FileText, label: "Reports" },
-              { icon: Settings, label: "Settings" }
-            ].map((item) => {
-              const Icon = item.icon;
-              return (
-                <button
-                  className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm ${
-                    item.active ? "bg-gray-100 text-gray-900" : "text-gray-700 hover:bg-gray-100"
-                  }`}
-                  key={item.label}
-                  onClick={() => {
-                    if (item.label === "Masters") setShowMastersMenu((s) => !s);
-                  }}
-                  type="button"
-                >
-                  <Icon className="size-4" />
-                  {item.label}
-                </button>
-              );
-            })}
-          </nav>
-        </header>
+    <main className="min-h-screen bg-gray-50 p-4 md:p-6 font-sans">
+      <header className="mx-auto mb-4 flex max-w-7xl items-center justify-between rounded-lg bg-white px-4 py-3 shadow-sm">
+        <button
+          type="button"
+          className="rounded-md p-2 text-gray-600 hover:bg-gray-100"
+          aria-label="Toggle Menu"
+        >
+          <Menu className="h-5 w-5" />
+        </button>
+        <p className="text-sm font-medium text-gray-700">Welcome Admin</p>
+      </header>
 
-        {showMastersMenu ? (
-          <div className="w-full max-w-[320px] rounded-xl bg-white p-3 shadow-sm">
-            <div className="space-y-1 text-sm">
-              {[
-                "Location",
-                "Tables",
-                "Sales Person",
-                "Workshop Master",
-                "Workshop Schedule",
-                "Workshop Referral",
-                "Resources",
-                "Workshop Discount",
-                "Client",
-                "Family"
-              ].map((item) => (
-                <button className="flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-gray-800 hover:bg-gray-100" key={item} type="button">
-                  <span>{item}</span>
-                  <span className="text-gray-400">›</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        ) : null}
+      <section className="mx-auto max-w-7xl rounded-lg bg-white p-5 shadow-sm md:p-7">
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+          <h1 className="text-xl font-semibold text-gray-800">Manage Event Master</h1>
+          <button
+            type="button"
+            className="inline-flex items-center gap-2 rounded-md border border-indigo-500 px-4 py-2 text-sm font-medium text-indigo-600 hover:bg-indigo-50"
+          >
+            <Eye className="h-4 w-4" />
+            View Data
+          </button>
+        </div>
 
-        <section className="rounded-lg bg-white p-4 shadow-sm md:p-6">
-          <WorkshopPageHeader />
-
-          <form className="space-y-6" onSubmit={handleSubmit(onSubmit)}>
-            <CoreInfoSection
-              facilitators={facilitators}
-              inputClass={inputClass}
-              isPaidWorkshop={isPaidWorkshop}
-              isPartPaymentAllowed={isPartPaymentAllowed}
-              labelClass={labelClass}
-              register={register}
-              venues={venues}
-              workshops={workshops}
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div>
+            <label htmlFor="eventName" className="mb-1 block text-sm text-gray-600">
+              Event/Product Name
+            </label>
+            <input
+              id="eventName"
+              value={eventName}
+              onChange={(e) => setEventName(e.target.value)}
+              placeholder="Enter event or product name"
+              className="w-full rounded-md border border-gray-300 px-3 py-2.5 text-sm text-gray-800 placeholder:text-gray-400 outline-none focus:ring-2 focus:ring-indigo-500"
             />
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-              <div className="md:col-span-3">
-                <label className={labelClass} htmlFor="workshopImage">Workshop Image (1024x576)</label>
-                <input
-                  accept="image/*"
-                  className={inputClass}
-                  id="workshopImage"
-                  type="file"
-                  onChange={(event) => {
-                    const file = event.target.files?.[0];
-                    if (!file) return setImagePreview(null);
-                    const reader = new FileReader();
-                    reader.onload = () => setImagePreview(String(reader.result));
-                    reader.readAsDataURL(file);
-                  }}
-                />
-                {preview ? <img alt="Workshop preview" className="mt-3 h-40 w-full max-w-md rounded-md border border-gray-200 object-cover" src={preview} /> : null}
-              </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+            <div>
+              <label htmlFor="eventType" className="mb-1 block text-sm text-gray-600">
+                Select Event Type
+              </label>
+              <select
+                id="eventType"
+                value={eventType}
+                onChange={(e) => setEventType(e.target.value)}
+                className="w-full rounded-md border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-800 outline-none focus:ring-2 focus:ring-indigo-500"
+              >
+                <option value="">Choose type</option>
+                <option value="Workshop">Workshop</option>
+                <option value="Event">Event</option>
+                <option value="Product">Product</option>
+              </select>
             </div>
 
             <div>
-              <h2 className="mb-2 border-b border-gray-200 pb-2 text-base font-semibold text-gray-900">Workshop Description</h2>
-              <textarea
-                className={`${inputClass} min-h-[180px]`}
-                onChange={(event) => setWorkshopDescription(event.target.value)}
-                placeholder="Write workshop description..."
-                value={workshopDescription}
+              <label htmlFor="facilitator" className="mb-1 block text-sm text-gray-600">
+                Select Default Facilitator
+              </label>
+              <select
+                id="facilitator"
+                value={facilitator}
+                onChange={(e) => setFacilitator(e.target.value)}
+                className="w-full rounded-md border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-800 outline-none focus:ring-2 focus:ring-indigo-500"
+              >
+                <option value="">Choose facilitator</option>
+                <option>Dr Luv Patel</option>
+                <option>Arjun Sharma</option>
+                <option>Neha Kapoor</option>
+              </select>
+            </div>
+
+            <div>
+              <label htmlFor="productGroup" className="mb-1 block text-sm text-gray-600">
+                Select Product Group
+              </label>
+              <select
+                id="productGroup"
+                value={productGroup}
+                onChange={(e) => setProductGroup(e.target.value)}
+                className="w-full rounded-md border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-800 outline-none focus:ring-2 focus:ring-indigo-500"
+              >
+                <option value="">Choose group</option>
+                <option>Leadership</option>
+                <option>Sales</option>
+                <option>Coaching</option>
+              </select>
+            </div>
+
+            <label className="mt-6 inline-flex items-center gap-2 text-sm text-gray-700">
+              <input
+                type="checkbox"
+                checked={isPaid}
+                onChange={(e) => setIsPaid(e.target.checked)}
+                className="h-4 w-4 accent-indigo-500"
               />
-            </div>
+              Is Paid?
+            </label>
+          </div>
 
-            <div>
-              <h2 className="mb-4 border-b border-gray-200 pb-2 text-base font-semibold text-gray-900">Third Party API Setup</h2>
-              <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-                <div><label className={labelClass} htmlFor="crmCampaignName">CRM Campaign Name</label><input className={inputClass} id="crmCampaignName" placeholder="Campaign name" {...register("crmCampaignName")} /></div>
-                <div><label className={labelClass} htmlFor="crmMediaUrl">CRM Media URL</label><input className={inputClass} id="crmMediaUrl" placeholder="https://..." {...register("crmMediaUrl")} /></div>
-                <div><label className={labelClass} htmlFor="failedCampaignName">Failed Campaign Name</label><input className={inputClass} id="failedCampaignName" placeholder="Failed campaign" {...register("failedCampaignName")} /></div>
-                <div><label className={labelClass} htmlFor="failedMediaUrl">Failed Media URL</label><input className={inputClass} id="failedMediaUrl" placeholder="https://..." {...register("failedMediaUrl")} /></div>
+          <div className="flex items-center gap-4">
+            <div className="h-px flex-1 bg-gray-200" />
+            <p className="text-sm font-medium text-gray-600">
+              Default Setting For Event ({checkedCount}/16)
+            </p>
+            <div className="h-px flex-1 bg-gray-200" />
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+            {fieldConfig.map((field) => (
+              <div
+                key={field.key}
+                className="group relative flex items-center justify-between rounded-md border border-gray-200 px-3 py-3"
+              >
+                <label className="inline-flex cursor-pointer items-center gap-2 text-sm text-gray-700">
+                  <input
+                    type="checkbox"
+                    checked={fieldState[field.key]}
+                    onChange={() => toggleField(field.key)}
+                    className="h-4 w-4 accent-indigo-500"
+                  />
+                  {field.label}
+                </label>
+
+                <div className="relative ml-2">
+                  <HelpCircle className="h-4 w-4 cursor-help text-gray-400" />
+                  <div className="invisible absolute right-0 top-6 z-10 w-48 rounded-md bg-gray-900 px-2 py-1.5 text-xs text-white opacity-0 shadow transition-all group-hover:visible group-hover:opacity-100">
+                    {field.tooltip}
+                  </div>
+                </div>
               </div>
-            </div>
+            ))}
+          </div>
 
-            <div>
-              <h2 className="mb-2 border-b border-gray-200 pb-2 text-base font-semibold text-gray-900">Email Body</h2>
-              <textarea
-                className={`${inputClass} min-h-[180px]`}
-                onChange={(event) => setEmailBody(event.target.value)}
-                placeholder="Write email body..."
-                value={emailBody}
-              />
-            </div>
-
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <button className="rounded-md bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700" type="submit">Save</button>
-              <button className="rounded-md border border-gray-300 px-5 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50" type="button" onClick={onClear}>Clear</button>
-            </div>
-          </form>
-        </section>
-      </div>
+          <div className="flex items-center gap-3">
+            <button
+              type="submit"
+              className="rounded-md bg-indigo-500 px-5 py-2.5 text-sm font-medium text-white hover:bg-indigo-600"
+            >
+              Save
+            </button>
+            <button
+              type="button"
+              onClick={clearForm}
+              className="rounded-md border border-gray-300 px-5 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            >
+              Clear
+            </button>
+          </div>
+        </form>
+      </section>
     </main>
   );
 }
+
