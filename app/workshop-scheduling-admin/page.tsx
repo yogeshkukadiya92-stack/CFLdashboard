@@ -1,10 +1,7 @@
 "use client";
 
-import dynamic from "next/dynamic";
 import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
-
-const ReactQuill = dynamic(() => import("react-quill"), { ssr: false });
 
 type FormValues = {
   workshop: string;
@@ -220,9 +217,12 @@ export default function WorkshopSchedulingAdminPage() {
 
             <div>
               <h2 className="mb-2 border-b border-gray-200 pb-2 text-base font-semibold text-gray-900">Workshop Description</h2>
-              <div className="rounded-md border border-gray-300 bg-white p-1">
-                <ReactQuill theme="snow" value={workshopDescription} onChange={setWorkshopDescription} />
-              </div>
+              <textarea
+                className={`${inputClass} min-h-[180px]`}
+                onChange={(event) => setWorkshopDescription(event.target.value)}
+                placeholder="Write workshop description..."
+                value={workshopDescription}
+              />
             </div>
 
             <div>
@@ -237,9 +237,12 @@ export default function WorkshopSchedulingAdminPage() {
 
             <div>
               <h2 className="mb-2 border-b border-gray-200 pb-2 text-base font-semibold text-gray-900">Email Body</h2>
-              <div className="rounded-md border border-gray-300 bg-white p-1">
-                <ReactQuill theme="snow" value={emailBody} onChange={setEmailBody} />
-              </div>
+              <textarea
+                className={`${inputClass} min-h-[180px]`}
+                onChange={(event) => setEmailBody(event.target.value)}
+                placeholder="Write email body..."
+                value={emailBody}
+              />
             </div>
 
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -252,4 +255,3 @@ export default function WorkshopSchedulingAdminPage() {
     </main>
   );
 }
-
