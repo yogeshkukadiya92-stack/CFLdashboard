@@ -989,7 +989,7 @@ function AdminHorizontalNav({
     key: string;
     label: string;
     module?: ModuleKey;
-    items?: Array<{ icon: LucideIcon; label: string; module: ModuleKey }>;
+    items?: Array<{ href?: string; icon: LucideIcon; label: string; module: ModuleKey }>;
   }> = [
     { icon: Home, key: "dashboard", label: "Dashboard", module: "home" },
     {
@@ -1000,8 +1000,8 @@ function AdminHorizontalNav({
         { icon: MapPin, label: "Location", module: "settings" },
         { icon: Activity, label: "Tables", module: "reports" },
         { icon: UsersRound, label: "Sales Person", module: "sales" },
-        { icon: ClipboardCheck, label: "Workshop Master", module: "workshops" },
-        { icon: CalendarDays, label: "Workshop Schedule", module: "workshops" },
+        { href: "/workshop-master", icon: ClipboardCheck, label: "Workshop Master", module: "workshops" },
+        { href: "/workshop-scheduling-admin", icon: CalendarDays, label: "Workshop Schedule", module: "workshops" },
         { icon: Gift, label: "Workshop Discount", module: "workshops" },
         { icon: UsersRound, label: "Client", module: "crm" },
         { icon: ClipboardCheck, label: "Family", module: "crm" }
@@ -1082,6 +1082,20 @@ function AdminHorizontalNav({
                   <div className="grid gap-1">
                     {menu.items.map((item) => {
                       const ItemIcon = item.icon;
+                      if (item.href) {
+                        return (
+                          <a
+                            className="flex items-center gap-3 rounded-md px-3 py-2.5 text-left text-sm font-medium hover:bg-gray-50"
+                            href={item.href}
+                            key={item.label}
+                            onClick={() => setOpenMenu(null)}
+                          >
+                            <ItemIcon className="size-4" />
+                            {item.label}
+                          </a>
+                        );
+                      }
+
                       return (
                         <button
                           className="flex items-center gap-3 rounded-md px-3 py-2.5 text-left text-sm font-medium hover:bg-gray-50"

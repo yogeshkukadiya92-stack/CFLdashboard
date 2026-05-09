@@ -165,18 +165,29 @@ export default function ManageEventSchedulePage() {
               <p className="text-sm font-semibold text-gray-900">Workshop Schedule</p>
             </div>
             <div className="space-y-1">
-              {masterItems.map((item) => (
-                <button
-                  className={`flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm ${
-                    item === "Workshop Schedule" ? "bg-indigo-50 font-semibold text-indigo-700" : "text-gray-700 hover:bg-gray-50"
-                  }`}
-                  key={item}
-                  type="button"
-                >
-                  <span>{item}</span>
-                  <ChevronDown className="-rotate-90 size-4 text-gray-400" />
-                </button>
-              ))}
+              {masterItems.map((item) => {
+                const href =
+                  item === "Workshop Master" ? "/workshop-master" : item === "Workshop Schedule" ? "/workshop-scheduling-admin" : undefined;
+                const className = `flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm ${
+                  item === "Workshop Schedule" ? "bg-indigo-50 font-semibold text-indigo-700" : "text-gray-700 hover:bg-gray-50"
+                }`;
+
+                if (href) {
+                  return (
+                    <a className={className} href={href} key={item}>
+                      <span>{item}</span>
+                      <ChevronDown className="-rotate-90 size-4 text-gray-400" />
+                    </a>
+                  );
+                }
+
+                return (
+                  <button className={className} key={item} type="button">
+                    <span>{item}</span>
+                    <ChevronDown className="-rotate-90 size-4 text-gray-400" />
+                  </button>
+                );
+              })}
             </div>
           </aside>
 
