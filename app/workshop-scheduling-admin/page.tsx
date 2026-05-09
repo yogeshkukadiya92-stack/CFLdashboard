@@ -2,11 +2,10 @@
 
 import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
-import { SidebarNav } from "@/components/dashboard/sidebar-nav";
+import { Box, CalendarDays, FileText, Home, Settings, UserRound, Workflow, Wrench } from "lucide-react";
 import { WorkshopPageHeader } from "@/components/dashboard/workshop-page-header";
 import { CoreInfoSection, type WorkshopFormValues } from "@/components/dashboard/workshop-form-sections";
 
-const sidebarLinks = ["Dashboard", "Workshops", "Reports", "Settings"];
 const workshops = ["Leadership Sprint", "Sales Mastery", "Mindset Reset", "Business Acceleration Bootcamp"];
 const facilitators = ["Dr Luv Patel", "Arjun Sharma", "Neha Kapoor", "Amit Verma"];
 const venues = ["Surat", "Ahmedabad", "Mumbai", "Online Zoom"];
@@ -15,6 +14,7 @@ export default function WorkshopSchedulingAdminPage() {
   const [workshopDescription, setWorkshopDescription] = useState("");
   const [emailBody, setEmailBody] = useState("");
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [showMastersMenu, setShowMastersMenu] = useState(true);
 
   const { handleSubmit, register, reset, watch } = useForm<WorkshopFormValues>({
     defaultValues: {
@@ -63,8 +63,61 @@ export default function WorkshopSchedulingAdminPage() {
 
   return (
     <main className="min-h-screen bg-gray-50 p-4 md:p-6">
-      <div className="mx-auto grid max-w-[1500px] gap-4 lg:grid-cols-[240px_1fr]">
-        <SidebarNav items={sidebarLinks} />
+      <div className="mx-auto max-w-[1500px] space-y-4">
+        <header className="rounded-xl bg-white p-3 shadow-sm">
+          <nav className="flex flex-wrap items-center gap-2">
+            {[
+              { icon: Home, label: "Dashboard" },
+              { icon: Wrench, label: "Masters", active: true },
+              { icon: UserRound, label: "PAW Profile Analysis" },
+              { icon: Box, label: "Process" },
+              { icon: Workflow, label: "Lead" },
+              { icon: FileText, label: "Reports" },
+              { icon: Settings, label: "Settings" }
+            ].map((item) => {
+              const Icon = item.icon;
+              return (
+                <button
+                  className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm ${
+                    item.active ? "bg-gray-100 text-gray-900" : "text-gray-700 hover:bg-gray-100"
+                  }`}
+                  key={item.label}
+                  onClick={() => {
+                    if (item.label === "Masters") setShowMastersMenu((s) => !s);
+                  }}
+                  type="button"
+                >
+                  <Icon className="size-4" />
+                  {item.label}
+                </button>
+              );
+            })}
+          </nav>
+        </header>
+
+        {showMastersMenu ? (
+          <div className="w-full max-w-[320px] rounded-xl bg-white p-3 shadow-sm">
+            <div className="space-y-1 text-sm">
+              {[
+                "Location",
+                "Tables",
+                "Sales Person",
+                "Workshop Master",
+                "Workshop Schedule",
+                "Workshop Referral",
+                "Resources",
+                "Workshop Discount",
+                "Client",
+                "Family"
+              ].map((item) => (
+                <button className="flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-gray-800 hover:bg-gray-100" key={item} type="button">
+                  <span>{item}</span>
+                  <span className="text-gray-400">›</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
 
         <section className="rounded-lg bg-white p-4 shadow-sm md:p-6">
           <WorkshopPageHeader />
