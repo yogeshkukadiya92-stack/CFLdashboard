@@ -9,6 +9,7 @@ import {
   Menu,
   Search,
   Settings,
+  Target,
   UserRound,
   UsersRound,
   type LucideIcon
@@ -28,6 +29,7 @@ const navItems: NavItem[] = [
   { href: "/workshop-master", icon: Layers3, label: "Workshop Master", group: "Masters" },
   { href: "/workshop-scheduling-admin", icon: CalendarDays, label: "Workshop Schedule", group: "Masters" },
   { href: "/manage-client", icon: UsersRound, label: "Manage Client", group: "Masters" },
+  { href: "/sales-person", icon: Target, label: "Sales Person", group: "CRM" },
   { href: "/manage-client", icon: BarChart3, label: "Reports" },
   { href: "/workshop-master", icon: Settings, label: "Settings" }
 ];

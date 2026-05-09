@@ -999,7 +999,7 @@ function AdminHorizontalNav({
       items: [
         { icon: MapPin, label: "Location", module: "settings" },
         { icon: Activity, label: "Tables", module: "reports" },
-        { icon: UsersRound, label: "Sales Person", module: "sales" },
+        { href: "/sales-person", icon: UsersRound, label: "Sales Person", module: "sales" },
         { href: "/workshop-master", icon: ClipboardCheck, label: "Workshop Master", module: "workshops" },
         { href: "/workshop-scheduling-admin", icon: CalendarDays, label: "Workshop Schedule", module: "workshops" },
         { icon: Gift, label: "Workshop Discount", module: "workshops" },
