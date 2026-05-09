@@ -42,6 +42,10 @@ export function ProcessModulePage({ slug }: { slug: string }) {
     return <MergeClientWorkflow />;
   }
 
+  if (slug === "manual-client-registration") {
+    return <ManualClientRegistrationWorkflow />;
+  }
+
   const config = processPageConfigs[slug];
   const initialForm = useMemo(
     () => Object.fromEntries(config.fields.map((field) => [field.key, ""])) as Record<string, string>,
@@ -977,6 +981,102 @@ function MergeClientWorkflow() {
         </div>
       ) : null}
     </AdminPlatformShell>
+  );
+}
+
+function ManualClientRegistrationWorkflow() {
+  const [workshop, setWorkshop] = useState("");
+  const [batch, setBatch] = useState("");
+  const [email, setEmail] = useState("");
+  const [source, setSource] = useState("");
+  const [success, setSuccess] = useState("");
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSuccess(`Free registration created for ${email || "client"}.`);
+  }
+
+  return (
+    <AdminPlatformShell
+      activeLabel="Manual Client Registration"
+      description="Register a client manually into a workshop with batch, email and source tracking."
+      title="Manage Manual Client Registration"
+    >
+      <section className="mx-auto mt-2 w-full max-w-4xl rounded-2xl bg-white p-6 shadow-sm">
+        <h3 className="mb-6 text-xl font-medium text-gray-800">Manage Manual Client Registration</h3>
+
+        {success ? <p className="mb-5 rounded-xl bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700">{success}</p> : null}
+
+        <form onSubmit={submit}>
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+            <ManualSelect label="Select Workshop" onChange={setWorkshop} options={["Leadership Sprint", "Sales Masterclass", "Growth Bootcamp"]} placeholder="SELECT WORKSHOP" value={workshop} />
+            <ManualSelect label="Batch" onChange={setBatch} options={["Batch A", "Batch B", "Batch C"]} placeholder="SELECT BATCH" value={batch} />
+
+            <label className="block">
+              <span className="mb-2 block text-sm font-semibold text-gray-600">Email ID</span>
+              <input
+                className="w-full rounded-md border border-gray-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-400"
+                onChange={(event) => setEmail(event.target.value)}
+                placeholder="Email Id"
+                required
+                type="email"
+                value={email}
+              />
+            </label>
+
+            <label className="block">
+              <span className="mb-2 block text-sm font-semibold text-gray-600">Source (UTM)</span>
+              <input
+                className="w-full rounded-md border border-gray-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-400"
+                onChange={(event) => setSource(event.target.value)}
+                placeholder="Source (UTM)"
+                value={source}
+              />
+            </label>
+          </div>
+
+          <button className="mt-6 rounded-md bg-indigo-500 px-6 py-2 text-sm font-bold text-white hover:bg-indigo-600" type="submit">
+            Register Free
+          </button>
+        </form>
+      </section>
+    </AdminPlatformShell>
+  );
+}
+
+function ManualSelect({
+  label,
+  onChange,
+  options,
+  placeholder,
+  value
+}: {
+  label: string;
+  onChange: (value: string) => void;
+  options: string[];
+  placeholder: string;
+  value: string;
+}) {
+  return (
+    <label className="block">
+      <span className="mb-2 block text-sm font-semibold text-gray-600">{label}</span>
+      <span className="relative block">
+        <select
+          className="w-full appearance-none rounded-md border border-gray-300 bg-white px-3 py-2.5 pr-10 text-sm outline-none focus:ring-2 focus:ring-indigo-400"
+          onChange={(event) => onChange(event.target.value)}
+          required
+          value={value}
+        >
+          <option value="">{placeholder}</option>
+          {options.map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
+          ))}
+        </select>
+        <ChevronDown className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-gray-400" />
+      </span>
+    </label>
   );
 }
 
