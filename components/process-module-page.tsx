@@ -6,6 +6,7 @@ import {
   ArrowDown,
   ArrowUp,
   CheckCircle2,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Download,
@@ -14,6 +15,7 @@ import {
   RefreshCw,
   Save,
   Search,
+  Link2,
   Trash2,
   Upload,
   X
@@ -34,6 +36,10 @@ export function ProcessModulePage({ slug }: { slug: string }) {
 
   if (slug === "import-data-workshop-wise") {
     return <ImportWorkshopDataWorkflow />;
+  }
+
+  if (slug === "merge-client") {
+    return <MergeClientWorkflow />;
   }
 
   const config = processPageConfigs[slug];
@@ -829,6 +835,226 @@ function ImportWorkshopDataWorkflow() {
         </footer>
       </section>
     </AdminPlatformShell>
+  );
+}
+
+type MergeClient = {
+  city: string;
+  id: string;
+  mobile: string;
+  name: string;
+};
+
+const mergeClients: MergeClient[] = [
+  { city: "Surat", id: "CL-192562", mobile: "+91 98250 11843", name: "Rohan Mehta" },
+  { city: "Mumbai", id: "CL-192563", mobile: "+91 98980 22314", name: "Priya Nair" },
+  { city: "Ahmedabad", id: "CL-192564", mobile: "+91 99099 44112", name: "Sumeet Shah" },
+  { city: "Bengaluru", id: "CL-192565", mobile: "+91 98795 78441", name: "Kavya Desai" },
+  { city: "Delhi", id: "CL-192566", mobile: "+91 98111 44289", name: "GlobalSoft HR" }
+];
+
+function MergeClientWorkflow() {
+  const [retainQuery, setRetainQuery] = useState("");
+  const [removeQuery, setRemoveQuery] = useState("");
+  const [retainClient, setRetainClient] = useState<MergeClient | null>(null);
+  const [removeClient, setRemoveClient] = useState<MergeClient | null>(null);
+  const [error, setError] = useState("");
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [success, setSuccess] = useState("");
+
+  const retainResults = filterMergeClients(retainQuery, removeClient?.id);
+  const removeResults = filterMergeClients(removeQuery, retainClient?.id);
+
+  function processMerge() {
+    setSuccess("");
+    if (!retainClient || !removeClient) {
+      setError("Please select both clients before processing merge.");
+      return;
+    }
+
+    if (retainClient.id === removeClient.id) {
+      setError("Retain and remove client cannot be the same.");
+      return;
+    }
+
+    setError("");
+    setConfirmOpen(true);
+  }
+
+  function confirmMerge() {
+    if (!retainClient || !removeClient) return;
+    setSuccess(`${removeClient.name} merged into ${retainClient.name}. Duplicate client removed from workflow.`);
+    setRemoveClient(null);
+    setRemoveQuery("");
+    setConfirmOpen(false);
+  }
+
+  return (
+    <AdminPlatformShell
+      activeLabel="Merge Client"
+      description="Deduplicate client records by retaining one profile and merging completed workshop data from another."
+      title="Merge Client"
+    >
+      <section className="rounded-2xl bg-white p-4 shadow-sm">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <h3 className="text-xl font-semibold text-gray-800">Merge Client</h3>
+          <button
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-gray-800 px-5 py-3 text-sm font-bold text-white hover:bg-gray-900"
+            onClick={processMerge}
+            type="button"
+          >
+            <Link2 className="size-4" />
+            Process Merge
+          </button>
+        </div>
+      </section>
+
+      {error ? <p className="rounded-xl bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{error}</p> : null}
+      {success ? <p className="rounded-xl bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700">{success}</p> : null}
+
+      <section className="grid grid-cols-1 gap-6 md:grid-cols-2">
+        <div className="rounded-2xl bg-white p-6 shadow-sm">
+          <h3 className="mb-4 text-lg font-semibold text-gray-800">Select Client To Retain</h3>
+          <ComboboxCard
+            query={retainQuery}
+            results={retainResults}
+            selected={retainClient}
+            setQuery={setRetainQuery}
+            setSelected={(client) => {
+              setRetainClient(client);
+              setRetainQuery(client ? `${client.name} - ${client.mobile}` : "");
+            }}
+          />
+        </div>
+
+        <div className="rounded-2xl bg-white p-6 shadow-sm">
+          <h3 className="text-lg font-semibold text-gray-800">Select Client To Merge and Remove</h3>
+          <p className="mb-4 mt-1 text-sm italic text-red-500">
+            [ Note : Only Completed Workshop Data will be merge and client will be removed from system ]
+          </p>
+          <ComboboxCard
+            query={removeQuery}
+            results={removeResults}
+            selected={removeClient}
+            setQuery={setRemoveQuery}
+            setSelected={(client) => {
+              setRemoveClient(client);
+              setRemoveQuery(client ? `${client.name} - ${client.mobile}` : "");
+            }}
+          />
+        </div>
+      </section>
+
+      <footer className="rounded-2xl bg-white p-4 text-center text-xs font-semibold text-slate-500 shadow-sm">
+        Copyright © 2026 CRM System. Maintained by Developer.
+      </footer>
+
+      {confirmOpen && retainClient && removeClient ? (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/40 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-xl font-black text-slate-950">Are you sure?</h3>
+                <p className="mt-1 text-sm text-slate-500">This will merge completed workshop data and remove duplicate client profile.</p>
+              </div>
+              <button className="grid size-9 place-items-center rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50" onClick={() => setConfirmOpen(false)} type="button">
+                <X className="size-4" />
+              </button>
+            </div>
+            <div className="mt-5 grid gap-3 rounded-2xl bg-slate-50 p-4 text-sm">
+              <p><span className="font-bold text-slate-500">Retain:</span> <span className="font-black text-slate-950">{retainClient.name}</span></p>
+              <p><span className="font-bold text-slate-500">Merge & Remove:</span> <span className="font-black text-red-600">{removeClient.name}</span></p>
+            </div>
+            <div className="mt-6 flex justify-end gap-2">
+              <button className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50" onClick={() => setConfirmOpen(false)} type="button">
+                Cancel
+              </button>
+              <button className="rounded-xl bg-gray-800 px-4 py-2.5 text-sm font-bold text-white hover:bg-gray-900" onClick={confirmMerge} type="button">
+                Yes, Merge Client
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </AdminPlatformShell>
+  );
+}
+
+function filterMergeClients(query: string, excludeId?: string) {
+  const normalized = query.trim().toLowerCase();
+  return mergeClients
+    .filter((client) => client.id !== excludeId)
+    .filter((client) => {
+      if (!normalized) return true;
+      return `${client.name} ${client.mobile} ${client.id}`.toLowerCase().includes(normalized);
+    })
+    .slice(0, 5);
+}
+
+function ComboboxCard({
+  query,
+  results,
+  selected,
+  setQuery,
+  setSelected
+}: {
+  query: string;
+  results: MergeClient[];
+  selected: MergeClient | null;
+  setQuery: (value: string) => void;
+  setSelected: (client: MergeClient | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div>
+      <label className="mb-2 block text-sm text-gray-600">Search By Name or Mobile No</label>
+      <div className="relative">
+        <input
+          className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-3 pr-10 text-sm outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100"
+          onChange={(event) => {
+            setQuery(event.target.value);
+            setSelected(null);
+            setOpen(true);
+          }}
+          onFocus={() => setOpen(true)}
+          placeholder="Search by Keyword"
+          value={query}
+        />
+        <ChevronDown className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
+        {open ? (
+          <div className="absolute z-20 mt-2 max-h-64 w-full overflow-auto rounded-2xl border border-slate-200 bg-white p-2 shadow-xl">
+            {results.length ? (
+              results.map((client) => (
+                <button
+                  className="flex w-full items-center justify-between rounded-xl px-3 py-3 text-left hover:bg-indigo-50"
+                  key={client.id}
+                  onClick={() => {
+                    setSelected(client);
+                    setOpen(false);
+                  }}
+                  type="button"
+                >
+                  <span>
+                    <span className="block text-sm font-black text-slate-950">{client.name}</span>
+                    <span className="text-xs font-semibold text-slate-500">{client.mobile} | {client.city}</span>
+                  </span>
+                  <span className="text-xs font-bold text-indigo-600">{client.id}</span>
+                </button>
+              ))
+            ) : (
+              <p className="px-3 py-4 text-sm text-slate-500">No clients found.</p>
+            )}
+          </div>
+        ) : null}
+      </div>
+      {selected ? (
+        <div className="mt-4 rounded-2xl border border-indigo-100 bg-indigo-50 p-4 text-sm">
+          <p className="font-black text-slate-950">{selected.name}</p>
+          <p className="mt-1 font-semibold text-indigo-700">{selected.mobile} | {selected.city}</p>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
