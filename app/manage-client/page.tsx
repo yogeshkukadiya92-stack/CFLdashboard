@@ -1,5 +1,6 @@
 "use client";
 
+import { AdminPlatformShell } from "@/components/admin-platform-shell";
 import {
   ArrowDown,
   ArrowUp,
@@ -7,14 +8,8 @@ import {
   ChevronRight,
   Download,
   Edit3,
-  Home,
-  Layers3,
-  Menu,
   Search,
-  Settings,
-  TableProperties,
-  UsersRound,
-  type LucideIcon
+  UsersRound
 } from "lucide-react";
 import { type ReactNode, useMemo, useState } from "react";
 
@@ -170,13 +165,6 @@ const clients: ClientRow[] = [
   }
 ];
 
-const navItems: Array<{ href?: string; icon: LucideIcon; label: string; active?: boolean }> = [
-  { href: "/", icon: Home, label: "Dashboard" },
-  { icon: Layers3, label: "Masters", active: true },
-  { icon: TableProperties, label: "Reports" },
-  { icon: Settings, label: "Settings" }
-];
-
 const columns: Array<{ key: SortKey; label: string }> = [
   { key: "status", label: "Status" },
   { key: "id", label: "Client ID" },
@@ -192,7 +180,6 @@ const columns: Array<{ key: SortKey; label: string }> = [
 ];
 
 export default function ManageClientPage() {
-  const [sidebarOpen, setSidebarOpen] = useState(true);
   const [statusFilter, setStatusFilter] = useState<"All" | ClientStatus>("All");
   const [searchTerm, setSearchTerm] = useState("");
   const [pageSize, setPageSize] = useState(10);
@@ -259,63 +246,7 @@ export default function ManageClientPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#f8fafc] text-slate-950">
-      <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur">
-        <div className="mx-auto flex max-w-[1540px] items-center justify-between gap-3 px-4 py-3 lg:px-6">
-          <div className="flex items-center gap-3">
-            <button
-              aria-label="Toggle sidebar"
-              className="grid size-10 place-items-center rounded-xl border border-slate-200 text-slate-700 shadow-sm hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700"
-              onClick={() => setSidebarOpen((open) => !open)}
-              type="button"
-            >
-              <Menu className="size-5" />
-            </button>
-            <div>
-              <p className="text-xs font-bold uppercase tracking-[0.2em] text-indigo-600">Client Ops</p>
-              <h1 className="text-lg font-black text-slate-950">Manage Client</h1>
-            </div>
-          </div>
-          <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-right">
-            <p className="text-xs text-slate-500">Welcome</p>
-            <p className="text-sm font-semibold text-slate-900">Admin User</p>
-          </div>
-        </div>
-      </header>
-
-      <div className="mx-auto grid max-w-[1540px] gap-4 px-4 py-4 lg:grid-cols-[260px_1fr] lg:px-6">
-        <aside className={`${sidebarOpen ? "block" : "hidden"} rounded-2xl border border-slate-200 bg-white p-3 shadow-sm lg:block`}>
-          <div className="mb-3 rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-600 p-4 text-white">
-            <UsersRound className="size-7" />
-            <p className="mt-3 text-sm text-indigo-100">Centralized user management</p>
-            <p className="text-xl font-black">249,789 clients</p>
-          </div>
-          <nav className="space-y-1">
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              const className = `flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-semibold transition ${
-                item.active ? "bg-indigo-50 text-indigo-700" : "text-slate-700 hover:bg-slate-50"
-              }`;
-
-              if (item.href) {
-                return (
-                  <a className={className} href={item.href} key={item.label}>
-                    <Icon className="size-5" />
-                    {item.label}
-                  </a>
-                );
-              }
-
-              return (
-                <button className={className} key={item.label} type="button">
-                  <Icon className="size-5" />
-                  {item.label}
-                </button>
-              );
-            })}
-          </nav>
-        </aside>
-
+    <AdminPlatformShell activeLabel="Manage Client" description="Centralized client table with filters, sorting, export and pagination in the same admin platform." title="Manage Client">
         <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
           <div className="border-b border-slate-200 p-4 md:p-6">
             <div className="flex flex-wrap items-start justify-between gap-4">
@@ -478,8 +409,18 @@ export default function ManageClientPage() {
             </div>
           </div>
         </section>
-      </div>
-    </main>
+      <section className="rounded-3xl border border-indigo-100 bg-indigo-50 p-5">
+        <div className="flex items-center gap-3">
+          <span className="grid size-12 place-items-center rounded-2xl bg-indigo-600 text-white">
+            <UsersRound className="size-5" />
+          </span>
+          <div>
+            <p className="text-xl font-black text-slate-950">249,789 clients ready for scaling</p>
+            <p className="text-sm font-semibold text-indigo-700">Search, filter, sort and export flow is active.</p>
+          </div>
+        </div>
+      </section>
+    </AdminPlatformShell>
   );
 }
 
