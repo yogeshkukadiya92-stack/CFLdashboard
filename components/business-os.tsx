@@ -1003,7 +1003,7 @@ function AdminHorizontalNav({
         { href: "/workshop-master", icon: ClipboardCheck, label: "Workshop Master", module: "workshops" },
         { href: "/workshop-scheduling-admin", icon: CalendarDays, label: "Workshop Schedule", module: "workshops" },
         { icon: Gift, label: "Workshop Discount", module: "workshops" },
-        { icon: UsersRound, label: "Client", module: "crm" },
+        { href: "/manage-client", icon: UsersRound, label: "Client", module: "crm" },
         { icon: ClipboardCheck, label: "Family", module: "crm" }
       ]
     },
