@@ -15,6 +15,7 @@ import {
   Save,
   Search,
   Trash2,
+  Upload,
   X
 } from "lucide-react";
 import { type FormEvent, type ReactNode, useMemo, useState } from "react";
@@ -29,6 +30,10 @@ export function ProcessModulePage({ slug }: { slug: string }) {
 
   if (slug === "refund") {
     return <RefundWorkflow />;
+  }
+
+  if (slug === "import-data-workshop-wise") {
+    return <ImportWorkshopDataWorkflow />;
   }
 
   const config = processPageConfigs[slug];
@@ -726,6 +731,103 @@ function RefundWorkflow() {
           </div>
         </div>
       ) : null}
+    </AdminPlatformShell>
+  );
+}
+
+function ImportWorkshopDataWorkflow() {
+  const [fileName, setFileName] = useState("");
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [uploading, setUploading] = useState(false);
+
+  function downloadSample() {
+    const headers = ["Workshop Name", "Client Name", "Mobile", "Email", "Batch", "Payment Status", "Amount"];
+    const row = ["Leadership Sprint", "Rohan Mehta", "+91 98250 11843", "rohan@example.com", "Batch A", "SUCCESS", "18500"];
+    const csv = [headers, row].map((items) => items.map((item) => `"${item}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "workshop-import-sample.csv";
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function upload() {
+    setSuccess("");
+    if (!fileName) {
+      setError("Please choose a CSV or Excel file before upload.");
+      return;
+    }
+
+    setError("");
+    setUploading(true);
+    window.setTimeout(() => {
+      setUploading(false);
+      setSuccess(`${fileName} uploaded successfully. Data is ready for review.`);
+    }, 700);
+  }
+
+  return (
+    <AdminPlatformShell
+      activeLabel="Import Data Workshop Wise"
+      description="Bulk upload workshop-wise data using CSV or Excel templates."
+      title="Import Data Workshop Wise"
+    >
+      <section className="mx-auto w-full max-w-4xl rounded-3xl border border-slate-200 bg-white p-6 shadow-sm md:p-8">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-bold text-slate-500">Bulk Import</p>
+            <h3 className="mt-1 text-2xl font-black text-slate-950">Import Workshop Data</h3>
+          </div>
+          <button
+            className="inline-flex items-center gap-2 rounded-xl bg-[#00CFE8] px-4 py-3 text-sm font-black text-white shadow-sm hover:bg-cyan-500"
+            onClick={downloadSample}
+            type="button"
+          >
+            <Download className="size-4" />
+            Download Sample
+          </button>
+        </div>
+
+        <div className="mt-8 rounded-3xl border border-dashed border-slate-300 bg-slate-50 p-6">
+          <label className="block">
+            <span className="mb-3 block text-sm font-black text-slate-700">Choose File</span>
+            <input
+              accept=".csv,.xlsx,.xls"
+              className="block w-full rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-sm file:mr-4 file:rounded-lg file:border-0 file:bg-indigo-50 file:px-4 file:py-2 file:text-sm file:font-bold file:text-indigo-700 hover:file:bg-indigo-100"
+              onChange={(event) => {
+                setFileName(event.target.files?.[0]?.name ?? "");
+                setError("");
+                setSuccess("");
+              }}
+              type="file"
+            />
+          </label>
+
+          <div className="mt-4 rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-600">
+            Selected file: <span className="font-black text-slate-950">{fileName || "No file chosen"}</span>
+          </div>
+
+          {error ? <p className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{error}</p> : null}
+          {success ? <p className="mt-4 rounded-xl bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700">{success}</p> : null}
+
+          <button
+            className="mt-5 inline-flex items-center gap-2 rounded-xl bg-[#4B4B4B] px-6 py-3 text-sm font-black text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70"
+            disabled={uploading}
+            onClick={upload}
+            type="button"
+          >
+            {uploading ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
+            {uploading ? "Uploading..." : "Upload"}
+          </button>
+        </div>
+
+        <footer className="mt-8 border-t border-slate-200 pt-5 text-center text-xs font-semibold text-slate-500">
+          Copyright © 2026 CRM System. Maintained by Developer.
+        </footer>
+      </section>
     </AdminPlatformShell>
   );
 }
