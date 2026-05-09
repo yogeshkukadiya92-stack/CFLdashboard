@@ -1,15 +1,22 @@
 "use client";
 
 import {
+  Activity,
   BarChart3,
   CalendarDays,
   ChevronDown,
+  ClipboardCheck,
   Home,
+  Import,
   Layers3,
   Menu,
+  Merge,
   Search,
   Settings,
+  Tags,
   Target,
+  TicketCheck,
+  UserPlus,
   UserRound,
   UsersRound,
   type LucideIcon
@@ -30,6 +37,14 @@ const navItems: NavItem[] = [
   { href: "/workshop-scheduling-admin", icon: CalendarDays, label: "Workshop Schedule", group: "Masters" },
   { href: "/manage-client", icon: UsersRound, label: "Manage Client", group: "Masters" },
   { href: "/sales-person", icon: Target, label: "Sales Person", group: "CRM" },
+  { href: "/process/client-batch-transfer", icon: ClipboardCheck, label: "Client Batch Transfer", group: "Process" },
+  { href: "/process/refund", icon: TicketCheck, label: "Refund", group: "Process" },
+  { href: "/process/import-data-workshop-wise", icon: Import, label: "Import Data Workshop Wise", group: "Process" },
+  { href: "/process/merge-client", icon: Merge, label: "Merge Client", group: "Process" },
+  { href: "/process/apply-coupon", icon: Tags, label: "Apply Coupon", group: "Process" },
+  { href: "/process/re-check-failed-payment", icon: Activity, label: "Re-Check Failed Payment", group: "Process" },
+  { href: "/process/manual-client-registration", icon: UserPlus, label: "Manual Client Registration", group: "Process" },
+  { href: "/process/manual-client-part-payment", icon: Activity, label: "Manual Client Part Payment", group: "Process" },
   { href: "/manage-client", icon: BarChart3, label: "Reports" },
   { href: "/workshop-master", icon: Settings, label: "Settings" }
 ];
