@@ -6,8 +6,8 @@ import { type FormEvent, type ReactNode, useMemo, useState } from "react";
 
 type DiscountType = "percent" | "flat";
 
-const events = ["Leadership Sprint", "Sales Masterclass", "Growth Bootcamp", "Founder Strategy Session"];
-const facilitators = ["Facilitator A", "Facilitator B", "Facilitator C", "Facilitator D"];
+const events: string[] = [];
+const facilitators: string[] = [];
 const inputClass = "w-full rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-sm outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 disabled:bg-slate-100 disabled:text-slate-400";
 
 export default function ManageEventSchedulePage() {

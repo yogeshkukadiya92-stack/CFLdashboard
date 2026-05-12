@@ -23,8 +23,8 @@ export const processPageConfigs: Record<string, ProcessPageConfig> = {
     description: "Move selected clients from one workshop batch to another with remarks and audit-ready tracking.",
     fields: [
       { key: "client", label: "Search Client By Name or Mobile No", placeholder: "Search by keyword", required: true, type: "text" },
-      { key: "fromBatch", label: "Select Workshop Batch", options: ["Leadership Batch A", "Sales Batch B", "Growth Batch C"], required: true, type: "select" },
-      { key: "toBatch", label: "Transfer to Batch", options: ["Leadership Batch D", "Sales Batch E", "Growth Batch F"], required: true, type: "select" },
+      { key: "fromBatch", label: "Select Workshop Batch", options: [], required: true, type: "select" },
+      { key: "toBatch", label: "Transfer to Batch", options: [], required: true, type: "select" },
       { key: "remarks", label: "Remarks", placeholder: "Reason for batch transfer", type: "textarea" }
     ],
     tableColumns: ["Client", "From Batch", "To Batch", "Status", "Updated At"],
@@ -46,7 +46,7 @@ export const processPageConfigs: Record<string, ProcessPageConfig> = {
     actionLabel: "Upload Data",
     description: "Import workshop-wise registrations or member records using a structured CSV file.",
     fields: [
-      { key: "workshop", label: "Select Workshop", options: ["Leadership Sprint", "Sales Masterclass", "Growth Bootcamp"], required: true, type: "select" },
+      { key: "workshop", label: "Select Workshop", options: [], required: true, type: "select" },
       { key: "source", label: "Import Source", options: ["CSV", "Excel", "Google Sheet"], required: true, type: "select" },
       { key: "file", label: "Upload File", required: true, type: "file" },
       { key: "notes", label: "Import Notes", placeholder: "Optional notes", type: "textarea" }
@@ -71,7 +71,7 @@ export const processPageConfigs: Record<string, ProcessPageConfig> = {
     description: "Apply coupon benefits to selected clients or workshop registrations.",
     fields: [
       { key: "client", label: "Client / Mobile", placeholder: "Search client", required: true, type: "text" },
-      { key: "workshop", label: "Workshop", options: ["Leadership Sprint", "Sales Masterclass", "Growth Bootcamp"], required: true, type: "select" },
+      { key: "workshop", label: "Workshop", options: [], required: true, type: "select" },
       { key: "coupon", label: "Coupon Code", placeholder: "WELCOME10", required: true, type: "text" },
       { key: "discount", label: "Discount Value", placeholder: "0", type: "number" }
     ],
@@ -96,8 +96,8 @@ export const processPageConfigs: Record<string, ProcessPageConfig> = {
     fields: [
       { key: "client", label: "Client Name", placeholder: "Full name", required: true, type: "text" },
       { key: "mobile", label: "Mobile", placeholder: "+91", required: true, type: "text" },
-      { key: "workshop", label: "Workshop", options: ["Leadership Sprint", "Sales Masterclass", "Growth Bootcamp"], required: true, type: "select" },
-      { key: "batch", label: "Batch", options: ["Batch A", "Batch B", "Batch C"], required: true, type: "select" }
+      { key: "workshop", label: "Workshop", options: [], required: true, type: "select" },
+      { key: "batch", label: "Batch", options: [], required: true, type: "select" }
     ],
     tableColumns: ["Client", "Mobile", "Workshop", "Batch", "Registered At"],
     title: "Manual Client Registration"
@@ -107,7 +107,7 @@ export const processPageConfigs: Record<string, ProcessPageConfig> = {
     description: "Record partial payments for clients and keep collection follow-up clean.",
     fields: [
       { key: "client", label: "Client / Mobile", placeholder: "Search client", required: true, type: "text" },
-      { key: "workshop", label: "Workshop", options: ["Leadership Sprint", "Sales Masterclass", "Growth Bootcamp"], required: true, type: "select" },
+      { key: "workshop", label: "Workshop", options: [], required: true, type: "select" },
       { key: "amount", label: "Part Payment Amount", placeholder: "0", required: true, type: "number" },
       { key: "dueDate", label: "Next Due Date", type: "date" }
     ],

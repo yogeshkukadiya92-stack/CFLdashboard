@@ -199,7 +199,7 @@ function ClientBatchTransferWorkflow() {
   const [showReport, setShowReport] = useState(false);
   const [transfers, setTransfers] = useState<Array<{ client: string; from: string; id: string; remarks: string; status: string; to: string }>>([]);
 
-  const batches = ["Batch A", "Batch B", "Batch C", "Weekend Batch", "Online Premium Batch"];
+  const batches: string[] = [];
 
   function clear() {
     setClientSearch("");
@@ -413,80 +413,7 @@ type RefundRow = {
   workshop: string;
 };
 
-const refundRowsSeed: RefundRow[] = [
-  {
-    amount: 18500,
-    batch: "Batch A",
-    id: "txn-001",
-    mobile: "+91 98250 11843",
-    name: "Rohan Mehta",
-    orderId: "order_NBX1001",
-    paymentId: "pay_NBX9001",
-    regDate: "2026-04-21",
-    status: "SUCCESS",
-    workshop: "Leadership Sprint"
-  },
-  {
-    amount: 9800,
-    batch: "Weekend Batch",
-    id: "txn-002",
-    mobile: "+91 98980 22314",
-    name: "Priya Nair",
-    orderId: "order_NBX1002",
-    paymentId: "pay_NBX9002",
-    regDate: "2026-04-22",
-    status: "SUCCESS",
-    workshop: "Sales Masterclass"
-  },
-  {
-    amount: 12500,
-    batch: "Batch C",
-    id: "txn-003",
-    mobile: "+91 99099 44112",
-    name: "Sumeet Shah",
-    orderId: "order_NBX1003",
-    paymentId: "pay_NBX9003",
-    regDate: "2026-04-23",
-    status: "REFUND",
-    workshop: "Growth Bootcamp"
-  },
-  {
-    amount: 5200,
-    batch: "Online Premium Batch",
-    id: "txn-004",
-    mobile: "+91 98795 78441",
-    name: "Kavya Desai",
-    orderId: "order_NBX1004",
-    paymentId: "pay_NBX9004",
-    regDate: "2026-04-25",
-    status: "SUCCESS",
-    workshop: "Founder Strategy Session"
-  },
-  {
-    amount: 25000,
-    batch: "Batch B",
-    id: "txn-005",
-    mobile: "+91 98111 44289",
-    name: "GlobalSoft HR",
-    orderId: "order_NBX1005",
-    paymentId: "pay_NBX9005",
-    regDate: "2026-04-26",
-    status: "SUCCESS",
-    workshop: "Corporate Leadership"
-  },
-  {
-    amount: 7500,
-    batch: "Batch A",
-    id: "txn-006",
-    mobile: "+91 94260 55218",
-    name: "Mehul Patel",
-    orderId: "order_NBX1006",
-    paymentId: "pay_NBX9006",
-    regDate: "2026-04-28",
-    status: "REFUND",
-    workshop: "Wellness Intensive"
-  }
-];
+const refundRowsSeed: RefundRow[] = [];
 
 function RefundWorkflow() {
   const [rows, setRows] = useState(refundRowsSeed);
@@ -753,7 +680,7 @@ function ImportWorkshopDataWorkflow() {
 
   function downloadSample() {
     const headers = ["Workshop Name", "Client Name", "Mobile", "Email", "Batch", "Payment Status", "Amount"];
-    const row = ["Leadership Sprint", "Rohan Mehta", "+91 98250 11843", "rohan@example.com", "Batch A", "SUCCESS", "18500"];
+    const row = ["Sample Workshop", "Sample Client", "+91 00000 00000", "sample@example.com", "Sample Batch", "SUCCESS", "0"];
     const csv = [headers, row].map((items) => items.map((item) => `"${item}"`).join(",")).join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
@@ -849,13 +776,7 @@ type MergeClient = {
   name: string;
 };
 
-const mergeClients: MergeClient[] = [
-  { city: "Surat", id: "CL-192562", mobile: "+91 98250 11843", name: "Rohan Mehta" },
-  { city: "Mumbai", id: "CL-192563", mobile: "+91 98980 22314", name: "Priya Nair" },
-  { city: "Ahmedabad", id: "CL-192564", mobile: "+91 99099 44112", name: "Sumeet Shah" },
-  { city: "Bengaluru", id: "CL-192565", mobile: "+91 98795 78441", name: "Kavya Desai" },
-  { city: "Delhi", id: "CL-192566", mobile: "+91 98111 44289", name: "GlobalSoft HR" }
-];
+const mergeClients: MergeClient[] = [];
 
 function MergeClientWorkflow() {
   const [retainQuery, setRetainQuery] = useState("");
@@ -1009,8 +930,8 @@ function ManualClientRegistrationWorkflow() {
 
         <form onSubmit={submit}>
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-            <ManualSelect label="Select Workshop" onChange={setWorkshop} options={["Leadership Sprint", "Sales Masterclass", "Growth Bootcamp"]} placeholder="SELECT WORKSHOP" value={workshop} />
-            <ManualSelect label="Batch" onChange={setBatch} options={["Batch A", "Batch B", "Batch C"]} placeholder="SELECT BATCH" value={batch} />
+            <ManualSelect label="Select Workshop" onChange={setWorkshop} options={[]} placeholder="SELECT WORKSHOP" value={workshop} />
+            <ManualSelect label="Batch" onChange={setBatch} options={[]} placeholder="SELECT BATCH" value={batch} />
 
             <label className="block">
               <span className="mb-2 block text-sm font-semibold text-gray-600">Email ID</span>
@@ -1246,3 +1167,4 @@ function RefundPageButton({
     </button>
   );
 }
+

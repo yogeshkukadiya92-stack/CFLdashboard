@@ -12,7 +12,7 @@ type CommissionRow = {
 };
 
 const groups = ["Business", "Health", "Other"];
-const workshops = ["Leadership Sprint", "Sales Masterclass", "Growth Bootcamp", "Founder Strategy Session", "Wellness Intensive"];
+const workshops: string[] = [];
 const inputClass = "w-full rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-sm outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100";
 
 export default function SalesPersonPage() {

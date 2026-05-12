@@ -1629,11 +1629,7 @@ function DashboardHome({
             <table className="min-w-[760px] w-full text-sm">
               <thead className="bg-gray-100 text-left text-xs font-bold uppercase text-gray-700"><tr><th className="px-3 py-2">Event Name</th><th className="px-3 py-2">Date Range</th><th className="px-3 py-2">Latest Registrant Name</th><th className="px-3 py-2">Total Registrations</th><th className="px-3 py-2">New Registrations</th></tr></thead>
               <tbody>
-                {[
-                  ["Leadership Sprint", "1 Jun - 3 Jun", "Rohan Mehta", "320", "28"],
-                  ["Sales Mastery", "10 Jun - 12 Jun", "Priya Nair", "275", "19"],
-                  ["Mindset Reset", "18 Jun - 20 Jun", "Neha Kapoor", "241", "14"]
-                ].map((row) => <tr className="border-b border-gray-100" key={row[0]}>{row.map((cell) => <td className="px-3 py-2.5" key={`${row[0]}-${cell}`}>{cell}</td>)}</tr>)}
+                {([] as string[][]).map((row) => <tr className="border-b border-gray-100" key={row[0]}>{row.map((cell) => <td className="px-3 py-2.5" key={`${row[0]}-${cell}`}>{cell}</td>)}</tr>)}
               </tbody>
             </table>
           </div>
@@ -1750,11 +1746,7 @@ function PremiumDashboardHome({
                 </tr>
               </thead>
               <tbody>
-                {[
-                  ["Leadership Sprint", "1 Jun - 3 Jun", "Rohan Mehta", "320", "28"],
-                  ["Sales Mastery", "10 Jun - 12 Jun", "Priya Nair", "275", "19"],
-                  ["Mindset Reset", "18 Jun - 20 Jun", "Neha Kapoor", "241", "14"]
-                ].map((row, rowIndex) => (
+                {([] as string[][]).map((row, rowIndex) => (
                   <tr className={cn("border-b border-gray-100", rowIndex % 2 === 1 && "bg-indigo-50/30")} key={row[0]}>
                     {row.map((cell) => (
                       <td className="px-3 py-2.5" key={`${row[0]}-${cell}`}>
@@ -4564,25 +4556,9 @@ function ReportsView({
     toBatch: ""
   });
 
-  const memberRows = [
-    { name: "Rohan Mehta", mobile: "+91 98250 11843", email: "rohan@example.com", regDate: "2026-04-20", workshop: "Leadership Sprint", salesPerson: "Neha Kapoor", facilitator: "Arjun Sharma", state: "Gujarat", city: "Surat", status: "Success", source: "Instagram Ads", country: "India", batch: "A1" },
-    { name: "Priya Nair", mobile: "+91 98980 22314", email: "priya@example.com", regDate: "2026-04-22", workshop: "Sales Mastery", salesPerson: "Amit Verma", facilitator: "Rakesh Jain", state: "Maharashtra", city: "Mumbai", status: "Success", source: "Referral", country: "India", batch: "B2" },
-    { name: "Sumeet Shah", mobile: "+91 99099 44112", email: "sumeet@example.com", regDate: "2026-04-24", workshop: "Mindset Reset", salesPerson: "Neha Kapoor", facilitator: "Arjun Sharma", state: "Gujarat", city: "Ahmedabad", status: "Failed", source: "Website", country: "India", batch: "A1" },
-    { name: "GlobalSoft HR", mobile: "+91 98795 78441", email: "hr@globalsoft.com", regDate: "2026-04-26", workshop: "Corporate Influence", salesPerson: "Rohan Patel", facilitator: "Devansh Rao", state: "Karnataka", city: "Bengaluru", status: "Success", source: "WhatsApp", country: "India", batch: "C3" },
-    { name: "Harsha Iyer", mobile: "+91 90012 33445", email: "harsha@example.com", regDate: "2026-04-28", workshop: "Sales Mastery", salesPerson: "Amit Verma", facilitator: "Rakesh Jain", state: "Tamil Nadu", city: "Chennai", status: "Failed", source: "Email Campaign", country: "India", batch: "B2" }
-  ];
-  const clientRows = [
-    { clientId: "CFL001", name: "Rohan Mehta", mobile: "+91 98250 11843", email: "rohan@demo.com", dob: "1991-07-21", gender: "Male", occupation: "Entrepreneur", country: "India", state: "Gujarat", city: "Surat", status: "Active" },
-    { clientId: "CFL002", name: "Priya Nair", mobile: "+91 98980 22314", email: "priya@demo.com", dob: "1994-12-08", gender: "Female", occupation: "Coach", country: "India", state: "Maharashtra", city: "Mumbai", status: "Inactive" },
-    { clientId: "CFL003", name: "Sumeet Shah", mobile: "+91 99099 44112", email: "sumeet@demo.com", dob: "1989-03-14", gender: "Male", occupation: "Consultant", country: "India", state: "Gujarat", city: "Ahmedabad", status: "Inactive" },
-    { clientId: "CFL004", name: "Neha Kapoor", mobile: "+91 98795 78441", email: "neha@demo.com", dob: "1996-10-04", gender: "Female", occupation: "Trainer", country: "India", state: "Delhi", city: "Delhi", status: "Active" }
-  ];
-  const refundRows = [
-    { status: "Success", regDate: "2026-04-10", name: "Rohan Mehta", mobile: "+91 98250 11843", amount: 9900, workshop: "Leadership Sprint", batch: "A1", paymentId: "pay_RH001", orderId: "order_RH001" },
-    { status: "Refund", regDate: "2026-04-12", name: "Priya Nair", mobile: "+91 98980 22314", amount: 14900, workshop: "Sales Mastery", batch: "B2", paymentId: "pay_PR002", orderId: "order_PR002" },
-    { status: "Success", regDate: "2026-04-15", name: "Sumeet Shah", mobile: "+91 99099 44112", amount: 7900, workshop: "Mindset Reset", batch: "C1", paymentId: "pay_SU003", orderId: "order_SU003" },
-    { status: "Refund", regDate: "2026-04-18", name: "Neha Kapoor", mobile: "+91 98795 78441", amount: 19900, workshop: "Corporate Influence", batch: "D4", paymentId: "pay_NE004", orderId: "order_NE004" }
-  ];
+  const memberRows: Array<{ batch: string; city: string; country: string; email: string; facilitator: string; mobile: string; name: string; regDate: string; salesPerson: string; source: string; state: string; status: string; workshop: string }> = [];
+  const clientRows: Array<{ city: string; clientId: string; country: string; dob: string; email: string; gender: string; mobile: string; name: string; occupation: string; state: string; status: string }> = [];
+  const refundRows: Array<{ amount: number; batch: string; mobile: string; name: string; orderId: string; paymentId: string; regDate: string; status: string; workshop: string }> = [];
 
   const filteredMemberRows = useMemo(() => {
     return memberRows.filter((row) => {
@@ -5644,11 +5620,11 @@ function answerFor(question: string) {
   }
 
   if (normalized.includes("salesperson") || normalized.includes("weak")) {
-    return "Kavya Rao needs attention this week: 85% of target, 11 conversions, and 89% attendance. The issue is not lead volume; conversion drops after the first call. Assign Neha's follow-up script and review 10 call notes today.";
+    return "No salesperson performance data is uploaded yet. Import your sales and attendance records first, then this assistant can identify weak follow-up areas.";
   }
 
   if (normalized.includes("unpaid") || normalized.includes("overdue") || normalized.includes("payment")) {
-    return "There are 47 unpaid invoices in the recovery queue. Highest priority: Rohan Mehta INR 2,10,000 overdue 3 days, BrightWave Ltd. INR 85,000 overdue 7 days, GlobalSoft HR INR 45,000 due in 3 days. Send Razorpay retry links plus GST invoice copy.";
+    return "No unpaid invoice data is uploaded yet. After importing payments, this assistant will list overdue clients and recovery priorities.";
   }
 
   if (normalized.includes("campaign") || normalized.includes("last 30")) {

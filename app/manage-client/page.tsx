@@ -32,138 +32,7 @@ type ClientRow = {
 type SortKey = keyof ClientRow;
 type SortDirection = "asc" | "desc";
 
-const clients: ClientRow[] = [
-  {
-    id: 192562,
-    status: "Active",
-    name: "Rohan Mehta",
-    mobile: "+91 98250 11843",
-    email: "rohan.mehta@example.com",
-    dob: "14 Sep 1988",
-    gender: "Male",
-    occupation: "Founder",
-    country: "India",
-    state: "Gujarat",
-    city: "Surat"
-  },
-  {
-    id: 192563,
-    status: "Active",
-    name: "Priya Nair",
-    mobile: "+91 98980 22314",
-    email: "priya.nair@example.com",
-    dob: "02 Jan 1991",
-    gender: "Female",
-    occupation: "Coach",
-    country: "India",
-    state: "Maharashtra",
-    city: "Mumbai"
-  },
-  {
-    id: 192564,
-    status: "Suspect",
-    name: "Sumeet Shah",
-    mobile: "+91 99099 44112",
-    email: "sumeet.shah@example.com",
-    dob: "27 Mar 1985",
-    gender: "Male",
-    occupation: "Consultant",
-    country: "India",
-    state: "Gujarat",
-    city: "Ahmedabad"
-  },
-  {
-    id: 192565,
-    status: "Inactive",
-    name: "Kavya Desai",
-    mobile: "+91 98795 78441",
-    email: "kavya.desai@example.com",
-    dob: "19 Jun 1993",
-    gender: "Female",
-    occupation: "Designer",
-    country: "India",
-    state: "Karnataka",
-    city: "Bengaluru"
-  },
-  {
-    id: 192566,
-    status: "Active",
-    name: "GlobalSoft HR",
-    mobile: "+91 98111 44289",
-    email: "hr@globalsoft.example",
-    dob: "11 Nov 1982",
-    gender: "Other",
-    occupation: "Corporate",
-    country: "India",
-    state: "Delhi",
-    city: "New Delhi"
-  },
-  {
-    id: 192567,
-    status: "Active",
-    name: "Mehul Patel",
-    mobile: "+91 94260 55218",
-    email: "mehul.patel@example.com",
-    dob: "05 May 1990",
-    gender: "Male",
-    occupation: "Trainer",
-    country: "India",
-    state: "Gujarat",
-    city: "Vadodara"
-  },
-  {
-    id: 192568,
-    status: "Inactive",
-    name: "Ananya Rao",
-    mobile: "+91 99870 66120",
-    email: "ananya.rao@example.com",
-    dob: "22 Aug 1994",
-    gender: "Female",
-    occupation: "Nutritionist",
-    country: "India",
-    state: "Telangana",
-    city: "Hyderabad"
-  },
-  {
-    id: 192569,
-    status: "Suspect",
-    name: "Arvind Kumar",
-    mobile: "+91 97122 80901",
-    email: "arvind.kumar@example.com",
-    dob: "10 Dec 1987",
-    gender: "Male",
-    occupation: "Sales Lead",
-    country: "India",
-    state: "Rajasthan",
-    city: "Jaipur"
-  },
-  {
-    id: 192570,
-    status: "Active",
-    name: "Neha Kapoor",
-    mobile: "+91 98981 10045",
-    email: "neha.kapoor@example.com",
-    dob: "30 Apr 1992",
-    gender: "Female",
-    occupation: "Entrepreneur",
-    country: "India",
-    state: "Maharashtra",
-    city: "Pune"
-  },
-  {
-    id: 192571,
-    status: "Active",
-    name: "Acme Corp.",
-    mobile: "+91 98111 44289",
-    email: "admin@acme.example",
-    dob: "01 Jul 1980",
-    gender: "Other",
-    occupation: "Corporate Account",
-    country: "India",
-    state: "Tamil Nadu",
-    city: "Chennai"
-  }
-];
+const clients: ClientRow[] = [];
 
 const columns: Array<{ key: SortKey; label: string }> = [
   { key: "status", label: "Status" },
@@ -255,9 +124,9 @@ export default function ManageClientPage() {
                 <p className="mt-1 text-sm text-slate-500">Filter, search, sort, export, and manage all member records.</p>
               </div>
               <div className="grid grid-cols-3 gap-2 text-center">
-                <Summary label="Active" tone="emerald" value="6" />
-                <Summary label="Inactive" tone="slate" value="2" />
-                <Summary label="Suspect" tone="rose" value="2" />
+                <Summary label="Active" tone="emerald" value="0" />
+                <Summary label="Inactive" tone="slate" value="0" />
+                <Summary label="Suspect" tone="rose" value="0" />
               </div>
             </div>
 
@@ -415,7 +284,7 @@ export default function ManageClientPage() {
             <UsersRound className="size-5" />
           </span>
           <div>
-            <p className="text-xl font-black text-slate-950">249,789 clients ready for scaling</p>
+            <p className="text-xl font-black text-slate-950">0 clients ready for upload</p>
             <p className="text-sm font-semibold text-indigo-700">Search, filter, sort and export flow is active.</p>
           </div>
         </div>
@@ -476,3 +345,4 @@ function PageButton({
     </button>
   );
 }
+
