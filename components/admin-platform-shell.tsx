@@ -33,6 +33,13 @@ type NavGroup = {
   icon: LucideIcon;
   items: NavItem[];
   label: string;
+  sections?: ReportSection[];
+};
+
+type ReportSection = {
+  icon: LucideIcon;
+  items: NavItem[];
+  label: string;
 };
 
 const quickItems: NavItem[] = [
@@ -77,10 +84,45 @@ const navGroups: NavGroup[] = [
   {
     icon: BarChart3,
     label: "Reports",
-    items: [
-      { href: "/manage-client", icon: BarChart3, label: "Client Report" },
-      { href: "/process/refund", icon: TicketCheck, label: "Payment Report" },
-      { href: "/process/import-data-workshop-wise", icon: Import, label: "Import Report" }
+    items: [],
+    sections: [
+      {
+        icon: Activity,
+        label: "Workshop",
+        items: [
+          { href: "/reports/daily-report", icon: Activity, label: "Daily Report" },
+          { href: "/reports/workshop-url-status", icon: Activity, label: "WorkShop Url & Status" },
+          { href: "/reports/yearly-public-session", icon: Activity, label: "Yearly Public Session" },
+          { href: "/reports/yearly-workshop", icon: Activity, label: "Yearly Workshop" },
+          { href: "/reports/facilitators-performance", icon: Activity, label: "Facilitators Performance" },
+          { href: "/reports/workshop-summary", icon: Activity, label: "Workshop Summary" },
+          { href: "/reports/batch-wise-workshop-summary", icon: Activity, label: "Batch Wise Workshop summary" }
+        ]
+      },
+      {
+        icon: Activity,
+        label: "Clients",
+        items: [
+          { href: "/reports/client-milestone", icon: Activity, label: "Client Milestone" },
+          { href: "/reports/failed-payment", icon: Activity, label: "Failed Payment" },
+          { href: "/reports/part-payment", icon: Activity, label: "Part Payment" },
+          { href: "/reports/workshop-wise-member", icon: Activity, label: "Workshop wise Member" },
+          { href: "/reports/member-attend-more-workshop", icon: Activity, label: "Member Attend More Workshop" },
+          { href: "/reports/member-details", icon: Activity, label: "Member Details" },
+          { href: "/reports/member-details-part-payment", icon: Activity, label: "Member Details (Part Payment)" },
+          { href: "/reports/session-conversation", icon: Activity, label: "Session Conversation" },
+          { href: "/reports/client-batch-transfer", icon: Activity, label: "Client Batch Transfer" }
+        ]
+      },
+      {
+        icon: Activity,
+        label: "Sales Person",
+        items: [
+          { href: "/reports/sales-person-milestone", icon: Activity, label: "Sales Person Milestone" },
+          { href: "/reports/sales-person-payment", icon: Activity, label: "Sales Person Payment" },
+          { href: "/reports/sales-person-lead-assign", icon: Activity, label: "Sales Person Lead Assign" }
+        ]
+      }
     ]
   }
 ];
@@ -98,11 +140,16 @@ export function AdminPlatformShell({
 }) {
   const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const activeGroup = useMemo(() => navGroups.find((group) => group.items.some((item) => item.href === pathname))?.label ?? "Workshop", [pathname]);
+  const activeGroup = useMemo(() => navGroups.find((group) => isGroupActive(group, pathname))?.label ?? "Workshop", [pathname]);
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({ [activeGroup]: true });
+  const [openReportSections, setOpenReportSections] = useState<Record<string, boolean>>({ Workshop: true });
 
   function toggleGroup(label: string) {
     setOpenGroups((current) => ({ ...current, [label]: !current[label] }));
+  }
+
+  function toggleReportSection(label: string) {
+    setOpenReportSections((current) => ({ ...current, [label]: !current[label] }));
   }
 
   return (
@@ -177,7 +224,7 @@ export function AdminPlatformShell({
 
             {navGroups.map((group) => {
               const GroupIcon = group.icon;
-              const groupActive = group.items.some((item) => item.href === pathname);
+              const groupActive = isGroupActive(group, pathname);
               const open = openGroups[group.label] ?? groupActive;
 
               return (
@@ -198,7 +245,49 @@ export function AdminPlatformShell({
 
                   {open ? (
                     <div className="mt-1 space-y-1 px-1 pb-1">
-                      {group.items.map((item) => {
+                      {group.sections ? (
+                        group.sections.map((section) => {
+                          const SectionIcon = section.icon;
+                          const sectionActive = section.items.some((item) => item.href === pathname);
+                          const sectionOpen = openReportSections[section.label] ?? sectionActive;
+
+                          return (
+                            <div className="rounded-xl bg-white/70" key={section.label}>
+                              <button
+                                className={`flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[13px] font-black transition ${
+                                  sectionActive ? "text-indigo-700" : "text-slate-700 hover:text-slate-950"
+                                }`}
+                                onClick={() => toggleReportSection(section.label)}
+                                type="button"
+                              >
+                                <SectionIcon className="size-3.5" />
+                                <span className="min-w-0 flex-1 truncate">{section.label}</span>
+                                <ChevronDown className={`size-3.5 text-slate-400 transition ${sectionOpen ? "rotate-180" : ""}`} />
+                              </button>
+
+                              {sectionOpen ? (
+                                <div className="space-y-1 pb-1 pl-5 pr-1">
+                                  {section.items.map((item) => {
+                                    const active = pathname === item.href;
+                                    return (
+                                      <a
+                                        className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-[12px] font-bold transition ${
+                                          active ? "bg-indigo-600 text-white" : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"
+                                        }`}
+                                        href={item.href}
+                                        key={`${section.label}-${item.label}`}
+                                      >
+                                        <span className={`size-2 rounded-full border ${active ? "border-white bg-white" : "border-slate-400"}`} />
+                                        <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                                      </a>
+                                    );
+                                  })}
+                                </div>
+                              ) : null}
+                            </div>
+                          );
+                        })
+                      ) : group.items.map((item) => {
                         const Icon = item.icon;
                         const active = pathname === item.href;
                         return (
@@ -265,5 +354,12 @@ export function AdminPlatformShell({
         </section>
       </div>
     </main>
+  );
+}
+
+function isGroupActive(group: NavGroup, pathname: string) {
+  return (
+    group.items.some((item) => item.href === pathname) ||
+    Boolean(group.sections?.some((section) => section.items.some((item) => item.href === pathname)))
   );
 }
