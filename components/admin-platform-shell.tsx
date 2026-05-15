@@ -36,7 +36,10 @@ type NavGroup = {
 };
 
 const quickItems: NavItem[] = [
-  { href: "/", icon: Home, label: "Dashboard" },
+  { href: "/", icon: Home, label: "Dashboard" }
+];
+
+const footerItems: NavItem[] = [
   { href: "/settings", icon: Settings, label: "Settings" }
 ];
 
@@ -214,6 +217,27 @@ export function AdminPlatformShell({
                     </div>
                   ) : null}
                 </div>
+              );
+            })}
+
+            <div className="my-3 border-t border-slate-100" />
+
+            {footerItems.map((item) => {
+              const Icon = item.icon;
+              const active = pathname === item.href;
+              return (
+                <a
+                  className={`flex items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-bold transition ${
+                    active ? "bg-indigo-50 text-indigo-700" : "text-slate-700 hover:bg-slate-50"
+                  }`}
+                  href={item.href}
+                  key={item.label}
+                >
+                  <span className={`grid size-8 place-items-center rounded-xl ${active ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-600"}`}>
+                    <Icon className="size-4" />
+                  </span>
+                  <span className="min-w-0 flex-1">{item.label}</span>
+                </a>
               );
             })}
           </nav>
