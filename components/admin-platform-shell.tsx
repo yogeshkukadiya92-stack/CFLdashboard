@@ -46,7 +46,7 @@ const navItems: NavItem[] = [
   { href: "/process/manual-client-registration", icon: UserPlus, label: "Manual Client Registration", group: "Process" },
   { href: "/process/manual-client-part-payment", icon: Activity, label: "Manual Client Part Payment", group: "Process" },
   { href: "/manage-client", icon: BarChart3, label: "Reports" },
-  { href: "/workshop-master", icon: Settings, label: "Settings" }
+  { href: "/settings", icon: Settings, label: "Settings" }
 ];
 
 export function AdminPlatformShell({
@@ -142,8 +142,13 @@ export function AdminPlatformShell({
                 <h2 className="mt-2 text-3xl font-black tracking-tight text-slate-950">{title}</h2>
                 {description ? <p className="mt-1 max-w-3xl text-sm text-slate-500">{description}</p> : null}
               </div>
-              <div className="rounded-2xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-sm font-bold text-indigo-700">
-                Same platform layout
+              <div className="flex flex-wrap gap-2">
+                <a className="rounded-2xl bg-slate-950 px-4 py-3 text-sm font-bold text-white hover:bg-slate-800" href="/manage-client">
+                  Import / Export
+                </a>
+                <a className="rounded-2xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm font-bold text-indigo-700 hover:bg-indigo-100" href="/settings">
+                  Integrations
+                </a>
               </div>
             </div>
           </div>

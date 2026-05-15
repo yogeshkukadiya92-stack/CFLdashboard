@@ -3,7 +3,7 @@ import { getAppState, isDbEnabled, saveAppState } from "@/lib/db";
 
 export async function GET() {
   if (!(await isDbEnabled())) {
-    return NextResponse.json({ dbEnabled: false, leads: null, workshops: null });
+    return NextResponse.json({ clients: null, dbEnabled: false, leads: null, workshops: null });
   }
   try {
     const state = await getAppState();
@@ -19,9 +19,10 @@ export async function POST(request: Request) {
   }
   try {
     const body = await request.json();
-    const leads = Array.isArray(body?.leads) ? body.leads : [];
-    const workshops = Array.isArray(body?.workshops) ? body.workshops : [];
-    await saveAppState({ leads, workshops });
+    const clients = Array.isArray(body?.clients) ? body.clients : undefined;
+    const leads = Array.isArray(body?.leads) ? body.leads : undefined;
+    const workshops = Array.isArray(body?.workshops) ? body.workshops : undefined;
+    await saveAppState({ clients, leads, workshops });
     return NextResponse.json({ ok: true, dbEnabled: true });
   } catch {
     return NextResponse.json({ ok: false, error: "Failed to save DB state" }, { status: 500 });

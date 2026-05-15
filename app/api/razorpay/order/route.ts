@@ -1,0 +1,39 @@
+import { NextResponse } from "next/server";
+
+export async function POST(request: Request) {
+  const keyId = process.env.RAZORPAY_KEY_ID;
+  const keySecret = process.env.RAZORPAY_KEY_SECRET;
+
+  if (!keyId || !keySecret) {
+    return NextResponse.json(
+      { error: "RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET are not configured." },
+      { status: 400 }
+    );
+  }
+
+  const body = await request.json().catch(() => ({}));
+  const amount = Number(body?.amount);
+  const currency = String(body?.currency || "INR");
+  const receipt = String(body?.receipt || `receipt_${Date.now()}`);
+
+  if (!amount || amount < 1) {
+    return NextResponse.json({ error: "Valid amount is required." }, { status: 400 });
+  }
+
+  const response = await fetch("https://api.razorpay.com/v1/orders", {
+    body: JSON.stringify({
+      amount: Math.round(amount * 100),
+      currency,
+      notes: body?.notes || {},
+      receipt
+    }),
+    headers: {
+      Authorization: `Basic ${Buffer.from(`${keyId}:${keySecret}`).toString("base64")}`,
+      "Content-Type": "application/json"
+    },
+    method: "POST"
+  });
+
+  const data = await response.json();
+  return NextResponse.json(data, { status: response.status });
+}
