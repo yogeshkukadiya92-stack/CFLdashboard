@@ -205,24 +205,31 @@ export default function ManageClientPage() {
   }
 
   async function exportXlsx() {
-    const XLSX = await import("xlsx");
-    const rows = filteredClients.map((client) => ({
-      Status: client.status,
-      "Client ID": client.id,
-      Name: client.name,
-      Mobile: client.mobile,
-      Email: client.email,
-      DOB: client.dob,
-      Gender: client.gender,
-      Occupation: client.occupation,
-      Country: client.country,
-      State: client.state,
-      City: client.city
-    }));
-    const worksheet = XLSX.utils.json_to_sheet(rows);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Clients");
-    XLSX.writeFile(workbook, "clients-export.xlsx");
+    try {
+      const XLSX = await import("xlsx");
+      const headers = ["Status", "Client ID", "Name", "Mobile", "Email", "DOB", "Gender", "Occupation", "Country", "State", "City"];
+      const rows = filteredClients.map((client) => [
+        client.status,
+        client.id,
+        client.name,
+        client.mobile,
+        client.email,
+        client.dob,
+        client.gender,
+        client.occupation,
+        client.country,
+        client.state,
+        client.city
+      ]);
+      const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Clients");
+      XLSX.writeFile(workbook, "clients-export.xlsx");
+      setMessage(`Excel export ready with ${filteredClients.length} client rows.`);
+    } catch {
+      exportCsv();
+      setMessage("Excel export fallback: CSV file downloaded.");
+    }
   }
 
   function exportCsv() {
@@ -242,14 +249,27 @@ export default function ManageClientPage() {
     ]);
     const csv = [headers, ...rows].map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(",")).join("\n");
     downloadBlob(csv, "clients-export.csv", "text/csv;charset=utf-8;");
+    setMessage(`CSV export ready with ${filteredClients.length} client rows.`);
   }
 
-  function downloadSample() {
-    const csv = [
+  async function downloadSample() {
+    const rows = [
       ["Name", "Mobile", "Email", "DOB", "Gender", "Occupation", "Country", "State", "City", "Status"],
-      ["", "", "", "", "", "", "India", "", "", "Active"]
-    ].map((row) => row.map((cell) => `"${cell}"`).join(",")).join("\n");
-    downloadBlob(csv, "client-import-sample.csv", "text/csv;charset=utf-8;");
+      ["Sample Client", "+91 00000 00000", "sample@example.com", "", "", "", "India", "", "", "Active"]
+    ];
+
+    try {
+      const XLSX = await import("xlsx");
+      const worksheet = XLSX.utils.aoa_to_sheet(rows);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Sample");
+      XLSX.writeFile(workbook, "client-import-sample.xlsx");
+      setMessage("Sample Excel template downloaded.");
+    } catch {
+      const csv = rows.map((row) => row.map((cell) => `"${cell}"`).join(",")).join("\n");
+      downloadBlob(csv, "client-import-sample.csv", "text/csv;charset=utf-8;");
+      setMessage("Sample CSV template downloaded.");
+    }
   }
 
   function deleteClient(id: number) {
@@ -326,7 +346,7 @@ export default function ManageClientPage() {
               </button>
               <button className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50" onClick={downloadSample} type="button">
                 <FileSpreadsheet className="size-4" />
-                Sample
+                Sample Excel
               </button>
               <button className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-bold text-white hover:bg-indigo-700" onClick={exportXlsx} type="button">
                 <Download className="size-4" />
@@ -438,8 +458,13 @@ function downloadBlob(content: string, filename: string, type: string) {
   const link = document.createElement("a");
   link.href = url;
   link.download = filename;
+  link.style.display = "none";
+  document.body.appendChild(link);
   link.click();
-  URL.revokeObjectURL(url);
+  window.setTimeout(() => {
+    URL.revokeObjectURL(url);
+    link.remove();
+  }, 0);
 }
 
 function ClientEditor({ client, onChange, onClose, onSave }: { client: ClientRow; onChange: (client: ClientRow) => void; onClose: () => void; onSave: () => void }) {
