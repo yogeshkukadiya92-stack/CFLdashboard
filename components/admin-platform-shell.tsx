@@ -17,36 +17,69 @@ import {
   Target,
   TicketCheck,
   UserPlus,
-  UserRound,
   UsersRound,
   type LucideIcon
 } from "lucide-react";
 import { usePathname } from "next/navigation";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useMemo, useState } from "react";
 
 type NavItem = {
   href: string;
   icon: LucideIcon;
   label: string;
-  group?: string;
 };
 
-const navItems: NavItem[] = [
+type NavGroup = {
+  icon: LucideIcon;
+  items: NavItem[];
+  label: string;
+};
+
+const quickItems: NavItem[] = [
   { href: "/", icon: Home, label: "Dashboard" },
-  { href: "/workshop-master", icon: Layers3, label: "Workshop Master", group: "Masters" },
-  { href: "/workshop-scheduling-admin", icon: CalendarDays, label: "Workshop Schedule", group: "Masters" },
-  { href: "/manage-client", icon: UsersRound, label: "Manage Client", group: "Masters" },
-  { href: "/sales-person", icon: Target, label: "Sales Person", group: "CRM" },
-  { href: "/process/client-batch-transfer", icon: ClipboardCheck, label: "Client Batch Transfer", group: "Process" },
-  { href: "/process/refund", icon: TicketCheck, label: "Refund", group: "Process" },
-  { href: "/process/import-data-workshop-wise", icon: Import, label: "Import Data Workshop Wise", group: "Process" },
-  { href: "/process/merge-client", icon: Merge, label: "Merge Client", group: "Process" },
-  { href: "/process/apply-coupon", icon: Tags, label: "Apply Coupon", group: "Process" },
-  { href: "/process/re-check-failed-payment", icon: Activity, label: "Re-Check Failed Payment", group: "Process" },
-  { href: "/process/manual-client-registration", icon: UserPlus, label: "Manual Client Registration", group: "Process" },
-  { href: "/process/manual-client-part-payment", icon: Activity, label: "Manual Client Part Payment", group: "Process" },
-  { href: "/manage-client", icon: BarChart3, label: "Reports" },
   { href: "/settings", icon: Settings, label: "Settings" }
+];
+
+const navGroups: NavGroup[] = [
+  {
+    icon: Layers3,
+    label: "Workshop",
+    items: [
+      { href: "/workshop-master", icon: Layers3, label: "Workshop Master" },
+      { href: "/workshop-scheduling-admin", icon: CalendarDays, label: "Workshop Schedule" },
+      { href: "/process/import-data-workshop-wise", icon: Import, label: "Import Workshop Data" }
+    ]
+  },
+  {
+    icon: UsersRound,
+    label: "CRM / Clients",
+    items: [
+      { href: "/manage-client", icon: UsersRound, label: "Manage Client" },
+      { href: "/sales-person", icon: Target, label: "Sales Person" },
+      { href: "/process/manual-client-registration", icon: UserPlus, label: "Manual Registration" },
+      { href: "/process/merge-client", icon: Merge, label: "Merge Client" }
+    ]
+  },
+  {
+    icon: ClipboardCheck,
+    label: "Process",
+    items: [
+      { href: "/process/client-batch-transfer", icon: ClipboardCheck, label: "Batch Transfer" },
+      { href: "/process/refund", icon: TicketCheck, label: "Refund" },
+      { href: "/process/apply-coupon", icon: Tags, label: "Apply Coupon" },
+      { href: "/process/re-check-failed-payment", icon: Activity, label: "Failed Payment Check" },
+      { href: "/process/manual-client-part-payment", icon: Activity, label: "Part Payment" }
+    ]
+  },
+  {
+    icon: BarChart3,
+    label: "Reports",
+    items: [
+      { href: "/manage-client", icon: BarChart3, label: "Client Report" },
+      { href: "/process/refund", icon: TicketCheck, label: "Payment Report" },
+      { href: "/process/import-data-workshop-wise", icon: Import, label: "Import Report" }
+    ]
+  }
 ];
 
 export function AdminPlatformShell({
@@ -62,6 +95,12 @@ export function AdminPlatformShell({
 }) {
   const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const activeGroup = useMemo(() => navGroups.find((group) => group.items.some((item) => item.href === pathname))?.label ?? "Workshop", [pathname]);
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({ [activeGroup]: true });
+
+  function toggleGroup(label: string) {
+    setOpenGroups((current) => ({ ...current, [label]: !current[label] }));
+  }
 
   return (
     <main className="min-h-screen bg-[#f6f8fb] text-slate-950">
@@ -105,30 +144,76 @@ export function AdminPlatformShell({
 
       <div className="mx-auto grid max-w-[1540px] gap-4 px-4 py-4 lg:grid-cols-[280px_1fr] lg:px-6">
         <aside className={`${sidebarOpen ? "block" : "hidden"} rounded-3xl border border-slate-200 bg-white p-3 shadow-sm lg:block`}>
-          <div className="rounded-3xl bg-gradient-to-br from-slate-950 via-indigo-950 to-indigo-700 p-5 text-white">
+          <div className="rounded-2xl bg-gradient-to-br from-slate-950 via-indigo-950 to-indigo-700 p-4 text-white">
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-indigo-200">Unified Platform</p>
-            <p className="mt-2 text-2xl font-black">CFL Admin</p>
-            <p className="mt-1 text-sm text-indigo-100">Dashboard, masters, clients and schedules in one place.</p>
+            <p className="mt-1 text-xl font-black">CFL Admin</p>
+            <p className="mt-1 text-xs text-indigo-100">Compact grouped menu.</p>
           </div>
 
-          <nav className="mt-4 space-y-1">
-            {navItems.map((item) => {
+          <nav className="mt-3 space-y-1.5">
+            {quickItems.map((item) => {
               const Icon = item.icon;
-              const active = pathname === item.href && item.label === activeLabel || pathname === item.href;
+              const active = pathname === item.href;
               return (
                 <a
-                  className={`flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-bold transition ${
+                  className={`flex items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-bold transition ${
                     active ? "bg-indigo-50 text-indigo-700" : "text-slate-700 hover:bg-slate-50"
                   }`}
                   href={item.href}
                   key={item.label}
                 >
-                  <span className={`grid size-9 place-items-center rounded-xl ${active ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-600"}`}>
+                  <span className={`grid size-8 place-items-center rounded-xl ${active ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-600"}`}>
                     <Icon className="size-4" />
                   </span>
                   <span className="min-w-0 flex-1">{item.label}</span>
-                  {item.group ? <ChevronDown className="-rotate-90 size-4 text-slate-400" /> : null}
                 </a>
+              );
+            })}
+
+            <div className="my-3 border-t border-slate-100" />
+
+            {navGroups.map((group) => {
+              const GroupIcon = group.icon;
+              const groupActive = group.items.some((item) => item.href === pathname);
+              const open = openGroups[group.label] ?? groupActive;
+
+              return (
+                <div className="rounded-2xl border border-slate-100 bg-slate-50/60 p-1" key={group.label}>
+                  <button
+                    className={`flex w-full items-center gap-3 rounded-xl px-2.5 py-2 text-left text-sm font-black transition ${
+                      groupActive ? "bg-white text-indigo-700 shadow-sm" : "text-slate-800 hover:bg-white"
+                    }`}
+                    onClick={() => toggleGroup(group.label)}
+                    type="button"
+                  >
+                    <span className={`grid size-8 place-items-center rounded-lg ${groupActive ? "bg-indigo-600 text-white" : "bg-white text-slate-600"}`}>
+                      <GroupIcon className="size-4" />
+                    </span>
+                    <span className="min-w-0 flex-1">{group.label}</span>
+                    <ChevronDown className={`size-4 text-slate-400 transition ${open ? "rotate-180" : ""}`} />
+                  </button>
+
+                  {open ? (
+                    <div className="mt-1 space-y-1 px-1 pb-1">
+                      {group.items.map((item) => {
+                        const Icon = item.icon;
+                        const active = pathname === item.href;
+                        return (
+                          <a
+                            className={`flex items-center gap-2 rounded-xl px-3 py-2 text-[13px] font-bold transition ${
+                              active ? "bg-indigo-600 text-white" : "text-slate-600 hover:bg-white hover:text-slate-950"
+                            }`}
+                            href={item.href}
+                            key={`${group.label}-${item.label}`}
+                          >
+                            <Icon className="size-3.5" />
+                            <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                          </a>
+                        );
+                      })}
+                    </div>
+                  ) : null}
+                </div>
               );
             })}
           </nav>
