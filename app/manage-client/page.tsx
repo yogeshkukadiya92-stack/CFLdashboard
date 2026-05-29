@@ -279,7 +279,10 @@ export default function ManageClientPage() {
 
   function saveEdit() {
     if (!editing) return;
-    const next = editing.id ? clients.map((client) => (client.id === editing.id ? editing : client)) : [{ ...editing, id: Date.now() }, ...clients];
+    const exists = clients.some((client) => client.id === editing.id);
+    const next = exists
+      ? clients.map((client) => (client.id === editing.id ? editing : client))
+      : [{ ...editing, id: editing.id || Date.now() }, ...clients];
     save(next);
     setEditing(null);
     setMessage("Client saved.");
