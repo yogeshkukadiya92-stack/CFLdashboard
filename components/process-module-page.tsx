@@ -20,10 +20,47 @@ import {
   Upload,
   X
 } from "lucide-react";
-import { type FormEvent, type ReactNode, useMemo, useState } from "react";
+import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
 
 const inputClass =
   "w-full rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-sm outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100";
+const WORKSHOP_MASTER_STORAGE_KEY = "cfl_workshop_master_records_v1";
+const REGISTRATION_STORAGE_KEY = "cfl_registrations_v1";
+
+type WorkshopMasterRecord = {
+  id: string;
+  name: string;
+  type: string;
+  facilitator: string;
+  productGroup: string;
+  isPaid: boolean;
+  activeFields: string[];
+};
+
+type ManualRegistrationEntry = {
+  amountDue: number;
+  amountPaid: number;
+  city: string;
+  createdAt: string;
+  email: string;
+  fullName: string;
+  id: string;
+  mobile: string;
+  paymentMode: "Full" | "Part";
+  status: "Paid" | "Due";
+  workshopId: string;
+  workshopSlug: string;
+  workshopTitle: string;
+};
+
+function readLocalStorageArray<T>(key: string): T[] {
+  try {
+    const raw = window.localStorage.getItem(key);
+    return raw ? JSON.parse(raw) as T[] : [];
+  } catch {
+    return [];
+  }
+}
 
 export function ProcessModulePage({ slug }: { slug: string }) {
   if (slug === "client-batch-transfer") {
@@ -906,15 +943,68 @@ function MergeClientWorkflow() {
 }
 
 function ManualClientRegistrationWorkflow() {
+  const [workshops, setWorkshops] = useState<WorkshopMasterRecord[]>([]);
   const [workshop, setWorkshop] = useState("");
   const [batch, setBatch] = useState("");
+  const [name, setName] = useState("");
+  const [mobile, setMobile] = useState("");
   const [email, setEmail] = useState("");
   const [source, setSource] = useState("");
   const [success, setSuccess] = useState("");
+  const [isError, setIsError] = useState(false);
+
+  useEffect(() => {
+    setWorkshops(readLocalStorageArray<WorkshopMasterRecord>(WORKSHOP_MASTER_STORAGE_KEY));
+  }, []);
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setSuccess(`Free registration created for ${email || "client"}.`);
+    setIsError(false);
+    const selectedWorkshop = workshops.find((item) => item.id === workshop || item.name === workshop);
+    const mobileDigits = mobile.replace(/\D/g, "");
+
+    if (!selectedWorkshop) {
+      setIsError(true);
+      setSuccess("Please select a workshop first.");
+      return;
+    }
+
+    if (!name.trim() || mobileDigits.length < 10 || !email.trim()) {
+      setIsError(true);
+      setSuccess("Please fill client name, valid mobile and email.");
+      return;
+    }
+
+    const current = readLocalStorageArray<ManualRegistrationEntry>(REGISTRATION_STORAGE_KEY);
+    const registrationId = `manual-${selectedWorkshop.id}-${mobileDigits}`;
+    const payload: ManualRegistrationEntry = {
+      amountDue: 0,
+      amountPaid: 0,
+      city: "",
+      createdAt: new Date().toISOString().slice(0, 10),
+      email: email.trim(),
+      fullName: name.trim(),
+      id: registrationId,
+      mobile: `+91 ${mobileDigits}`,
+      paymentMode: "Full",
+      status: "Paid",
+      workshopId: selectedWorkshop.id,
+      workshopSlug: selectedWorkshop.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, ""),
+      workshopTitle: selectedWorkshop.name
+    };
+    const existingIndex = current.findIndex((item) => item.id === registrationId);
+    const next = existingIndex >= 0
+      ? current.map((item, index) => index === existingIndex ? payload : item)
+      : [payload, ...current];
+
+    window.localStorage.setItem(REGISTRATION_STORAGE_KEY, JSON.stringify(next));
+    setSuccess(`${payload.fullName} registered in ${selectedWorkshop.name}. Workshop Master View Data ma pan dekhase.`);
+    setWorkshop("");
+    setBatch("");
+    setName("");
+    setMobile("");
+    setEmail("");
+    setSource("");
   }
 
   return (
@@ -926,12 +1016,44 @@ function ManualClientRegistrationWorkflow() {
       <section className="mx-auto mt-2 w-full max-w-4xl rounded-2xl bg-white p-6 shadow-sm">
         <h3 className="mb-6 text-xl font-medium text-gray-800">Manage Manual Client Registration</h3>
 
-        {success ? <p className="mb-5 rounded-xl bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700">{success}</p> : null}
+        {success ? (
+          <p className={`mb-5 rounded-xl px-4 py-3 text-sm font-bold ${isError ? "bg-red-50 text-red-700" : "bg-emerald-50 text-emerald-700"}`}>
+            {success}
+          </p>
+        ) : null}
 
         <form onSubmit={submit}>
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-            <ManualSelect label="Select Workshop" onChange={setWorkshop} options={[]} placeholder="SELECT WORKSHOP" value={workshop} />
-            <ManualSelect label="Batch" onChange={setBatch} options={[]} placeholder="SELECT BATCH" value={batch} />
+            <ManualSelect
+              label="Select Workshop"
+              onChange={setWorkshop}
+              options={workshops.map((item) => ({ label: item.name, value: item.id }))}
+              placeholder={workshops.length ? "SELECT WORKSHOP" : "No workshop added yet"}
+              value={workshop}
+            />
+            <ManualSelect label="Batch" onChange={setBatch} options={[{ label: "Main Batch", value: "main" }]} placeholder="SELECT BATCH" value={batch} />
+
+            <label className="block">
+              <span className="mb-2 block text-sm font-semibold text-gray-600">Client Name</span>
+              <input
+                className="w-full rounded-md border border-gray-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-400"
+                onChange={(event) => setName(event.target.value)}
+                placeholder="Client Name"
+                required
+                value={name}
+              />
+            </label>
+
+            <label className="block">
+              <span className="mb-2 block text-sm font-semibold text-gray-600">Mobile No</span>
+              <input
+                className="w-full rounded-md border border-gray-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-400"
+                onChange={(event) => setMobile(event.target.value)}
+                placeholder="Mobile No"
+                required
+                value={mobile}
+              />
+            </label>
 
             <label className="block">
               <span className="mb-2 block text-sm font-semibold text-gray-600">Email ID</span>
@@ -974,7 +1096,7 @@ function ManualSelect({
 }: {
   label: string;
   onChange: (value: string) => void;
-  options: string[];
+  options: Array<{ label: string; value: string }>;
   placeholder: string;
   value: string;
 }) {
@@ -990,8 +1112,8 @@ function ManualSelect({
         >
           <option value="">{placeholder}</option>
           {options.map((option) => (
-            <option key={option} value={option}>
-              {option}
+            <option key={option.value} value={option.value}>
+              {option.label}
             </option>
           ))}
         </select>
