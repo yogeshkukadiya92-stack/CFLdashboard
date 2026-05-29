@@ -481,29 +481,31 @@ function ClientEditor({ client, onChange, onClose, onSave }: { client: ClientRow
   ];
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/40 p-4">
-      <div className="w-full max-w-3xl rounded-3xl bg-white p-5 shadow-2xl">
-        <div className="flex items-center justify-between">
+    <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-slate-950/40 p-3 sm:p-4">
+      <div className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b border-slate-100 p-5">
           <h3 className="text-xl font-black text-slate-950">Client Details</h3>
           <button className="grid size-10 place-items-center rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50" onClick={onClose} type="button"><X className="size-4" /></button>
         </div>
-        <div className="mt-5 grid gap-4 md:grid-cols-2">
-          <label className="block">
-            <span className="mb-1 block text-sm font-bold text-slate-600">Status</span>
-            <select className="w-full rounded-xl border border-slate-200 px-3 py-3 text-sm outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100" onChange={(event) => onChange({ ...client, status: event.target.value as ClientStatus })} value={client.status}>
-              <option>Active</option>
-              <option>Inactive</option>
-              <option>Suspect</option>
-            </select>
-          </label>
-          {fields.map(([key, label, type]) => (
-            <label className="block" key={key}>
-              <span className="mb-1 block text-sm font-bold text-slate-600">{label}</span>
-              <input className="w-full rounded-xl border border-slate-200 px-3 py-3 text-sm outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100" onChange={(event) => onChange({ ...client, [key]: event.target.value })} type={type} value={String(client[key])} />
+        <div className="overflow-y-auto p-5">
+          <div className="grid gap-4 md:grid-cols-2">
+            <label className="block">
+              <span className="mb-1 block text-sm font-bold text-slate-600">Status</span>
+              <select className="w-full rounded-xl border border-slate-200 px-3 py-3 text-sm outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100" onChange={(event) => onChange({ ...client, status: event.target.value as ClientStatus })} value={client.status}>
+                <option>Active</option>
+                <option>Inactive</option>
+                <option>Suspect</option>
+              </select>
             </label>
-          ))}
+            {fields.map(([key, label, type]) => (
+              <label className="block" key={key}>
+                <span className="mb-1 block text-sm font-bold text-slate-600">{label}</span>
+                <input className="w-full rounded-xl border border-slate-200 px-3 py-3 text-sm outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100" onChange={(event) => onChange({ ...client, [key]: event.target.value })} type={type} value={String(client[key])} />
+              </label>
+            ))}
+          </div>
         </div>
-        <div className="mt-6 flex justify-end gap-2">
+        <div className="sticky bottom-0 flex flex-col-reverse gap-2 border-t border-slate-100 bg-white p-5 sm:flex-row sm:justify-end">
           <button className="rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50" onClick={onClose} type="button">Cancel</button>
           <button className="rounded-xl bg-indigo-600 px-4 py-3 text-sm font-bold text-white hover:bg-indigo-700" onClick={onSave} type="button">Save Client</button>
         </div>
