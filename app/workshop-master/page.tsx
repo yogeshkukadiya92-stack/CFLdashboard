@@ -168,15 +168,16 @@ export default function WorkshopMasterPage() {
 
   return (
     <AdminPlatformShell activeLabel="Workshop Master" description="Create workshop/product masters and configure registration fields in one platform." title="Manage Workshop">
+      {!showData ? (
       <form className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm md:p-6" onSubmit={submit}>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-sm font-bold text-slate-500">Form completion</p>
             <p className="text-3xl font-black text-slate-950">{progress}%</p>
           </div>
-          <button className="inline-flex items-center gap-2 rounded-xl border border-indigo-300 px-4 py-2.5 text-sm font-bold text-indigo-700 hover:bg-indigo-50" onClick={() => setShowData((value) => !value)} type="button">
+          <button className="inline-flex items-center gap-2 rounded-xl border border-indigo-300 px-4 py-2.5 text-sm font-bold text-indigo-700 hover:bg-indigo-50" onClick={() => setShowData(true)} type="button">
             <Eye className="size-4" />
-            {showData ? "Hide Workshops" : `View Workshops (${records.length})`}
+            View Workshops ({records.length})
           </button>
         </div>
 
@@ -244,6 +245,7 @@ export default function WorkshopMasterPage() {
           </button>
         </div>
       </form>
+      ) : null}
 
       {showData ? (
         <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm md:p-6">
@@ -253,10 +255,22 @@ export default function WorkshopMasterPage() {
               <h3 className="mt-2 text-2xl font-black text-slate-950">Workshop Master List</h3>
               <p className="mt-1 text-sm text-slate-500">All saved workshops/products appear here. Search, edit, delete or export them.</p>
             </div>
-            <div className="grid grid-cols-3 gap-2 text-center">
-              <MiniStat label="Total" value={records.length} />
-              <MiniStat label="Paid" value={paidCount} />
-              <MiniStat label="Free" value={records.length - paidCount} />
+            <div className="flex flex-wrap items-start justify-end gap-2">
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <MiniStat label="Total" value={records.length} />
+                <MiniStat label="Paid" value={paidCount} />
+                <MiniStat label="Free" value={records.length - paidCount} />
+              </div>
+              <button
+                className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-bold text-white hover:bg-indigo-700"
+                onClick={() => {
+                  clearForm();
+                  setShowData(false);
+                }}
+                type="button"
+              >
+                Create Workshop
+              </button>
             </div>
           </div>
 
