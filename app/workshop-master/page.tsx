@@ -1,7 +1,8 @@
 "use client";
 
 import { AdminPlatformShell } from "@/components/admin-platform-shell";
-import { AlertCircle, Check, ChevronDown, Download, Edit3, Eye, HelpCircle, RefreshCw, Save, Search, Trash2 } from "lucide-react";
+import { AlertCircle, Check, ChevronDown, Download, Edit3, Eye, HelpCircle, RefreshCw, Save, Search, Trash2, UsersRound, X } from "lucide-react";
+import type { RegistrationEntry } from "@/lib/types";
 import { type FormEvent, useEffect, useMemo, useState } from "react";
 
 type WorkshopRecord = {
@@ -15,6 +16,7 @@ type WorkshopRecord = {
 };
 
 const STORAGE_KEY = "cfl_workshop_master_records_v1";
+const REGISTRATION_STORAGE_KEY = "cfl_registrations_v1";
 const workshopTypes = ["1-2-1 Coaching", "Workshop", "Online Event", "Offline Event", "Hybrid Program"];
 const facilitators = ["Dr Luv Patel", "Amit Verma", "Neha Kapoor", "Arjun Sharma"];
 const productGroups = ["Health", "Spiritual", "Leadership", "Sales", "Fitness", "Business Growth"];
@@ -51,10 +53,15 @@ export default function WorkshopMasterPage() {
   const [message, setMessage] = useState("");
   const [search, setSearch] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [selectedWorkshopId, setSelectedWorkshopId] = useState<string | null>(null);
+  const [showParticipants, setShowParticipants] = useState(false);
+  const [registrations, setRegistrations] = useState<RegistrationEntry[]>([]);
 
   useEffect(() => {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (raw) setRecords(JSON.parse(raw) as WorkshopRecord[]);
+    const registrationRaw = window.localStorage.getItem(REGISTRATION_STORAGE_KEY);
+    if (registrationRaw) setRegistrations(JSON.parse(registrationRaw) as RegistrationEntry[]);
   }, []);
 
   const progress = useMemo(() => Math.round(([name, type, facilitator, group].filter(Boolean).length / 4) * 100), [facilitator, group, name, type]);
@@ -68,6 +75,15 @@ export default function WorkshopMasterPage() {
     );
   }, [records, search]);
   const paidCount = records.filter((record) => record.isPaid).length;
+  const selectedWorkshop = records.find((record) => record.id === selectedWorkshopId) ?? null;
+  const selectedParticipants = useMemo(() => {
+    if (!selectedWorkshop) return [];
+    const selectedName = selectedWorkshop.name.trim().toLowerCase();
+    return registrations.filter((entry) =>
+      entry.workshopId === selectedWorkshop.id ||
+      entry.workshopTitle.trim().toLowerCase() === selectedName
+    );
+  }, [registrations, selectedWorkshop]);
 
   function saveRecords(next: WorkshopRecord[]) {
     setRecords(next);
@@ -114,8 +130,16 @@ export default function WorkshopMasterPage() {
     window.scrollTo({ behavior: "smooth", top: 0 });
   }
 
+  function openWorkshop(record: WorkshopRecord) {
+    const registrationRaw = window.localStorage.getItem(REGISTRATION_STORAGE_KEY);
+    setRegistrations(registrationRaw ? JSON.parse(registrationRaw) as RegistrationEntry[] : []);
+    setSelectedWorkshopId(record.id);
+    setShowParticipants(false);
+  }
+
   function deleteRecord(id: string) {
     saveRecords(records.filter((record) => record.id !== id));
+    if (selectedWorkshopId === id) setSelectedWorkshopId(null);
     setMessage("Workshop deleted.");
   }
 
@@ -270,7 +294,15 @@ export default function WorkshopMasterPage() {
                         </button>
                       </div>
                     </td>
-                    <td className="px-4 py-4 font-bold">{record.name}</td>
+                    <td className="px-4 py-4">
+                      <button
+                        className="text-left font-black text-indigo-700 underline-offset-4 hover:underline"
+                        onClick={() => openWorkshop(record)}
+                        type="button"
+                      >
+                        {record.name}
+                      </button>
+                    </td>
                     <td className="px-4 py-4">{record.type}</td>
                     <td className="px-4 py-4">{record.facilitator}</td>
                     <td className="px-4 py-4">{record.productGroup}</td>
@@ -285,6 +317,84 @@ export default function WorkshopMasterPage() {
               </tbody>
             </table>
           </div>
+
+          {selectedWorkshop ? (
+            <section className="mt-5 rounded-3xl border border-indigo-100 bg-indigo-50/50 p-5">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[0.2em] text-indigo-600">Workshop Opened</p>
+                  <h4 className="mt-2 text-2xl font-black text-slate-950">{selectedWorkshop.name}</h4>
+                  <p className="mt-1 text-sm font-semibold text-slate-600">
+                    {selectedWorkshop.type} | {selectedWorkshop.facilitator} | {selectedWorkshop.productGroup}
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-bold text-white hover:bg-indigo-700"
+                    onClick={() => setShowParticipants((value) => !value)}
+                    type="button"
+                  >
+                    <UsersRound className="size-4" />
+                    {showParticipants ? "Hide Data" : `View Data (${selectedParticipants.length})`}
+                  </button>
+                  <button
+                    className="grid size-11 place-items-center rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
+                    onClick={() => {
+                      setSelectedWorkshopId(null);
+                      setShowParticipants(false);
+                    }}
+                    type="button"
+                  >
+                    <X className="size-4" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                <MiniStat label="Users" value={selectedParticipants.length} />
+                <MiniStat label="Paid" value={selectedParticipants.filter((entry) => entry.status === "Paid").length} />
+                <MiniStat label="Due" value={selectedParticipants.filter((entry) => entry.status === "Due").length} />
+              </div>
+
+              {showParticipants ? (
+                <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+                  <table className="min-w-[860px] w-full text-left text-sm">
+                    <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+                      <tr>
+                        {["User", "Mobile", "Email", "City", "Payment", "Paid", "Due", "Reg. Date"].map((head) => (
+                          <th className="px-4 py-3" key={head}>{head}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {selectedParticipants.length ? selectedParticipants.map((entry) => (
+                        <tr className="hover:bg-indigo-50/40" key={entry.id}>
+                          <td className="px-4 py-4 font-black text-slate-950">{entry.fullName}</td>
+                          <td className="px-4 py-4">{entry.mobile}</td>
+                          <td className="px-4 py-4">{entry.email}</td>
+                          <td className="px-4 py-4">{entry.city}</td>
+                          <td className="px-4 py-4">
+                            <span className={`rounded-full px-3 py-1 text-xs font-black ${entry.status === "Paid" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
+                              {entry.status}
+                            </span>
+                          </td>
+                          <td className="px-4 py-4">INR {entry.amountPaid.toLocaleString("en-IN")}</td>
+                          <td className="px-4 py-4">INR {entry.amountDue.toLocaleString("en-IN")}</td>
+                          <td className="px-4 py-4">{entry.createdAt}</td>
+                        </tr>
+                      )) : (
+                        <tr>
+                          <td className="px-4 py-8 text-center text-slate-500" colSpan={8}>
+                            No users registered in this workshop yet.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              ) : null}
+            </section>
+          ) : null}
         </section>
       ) : null}
     </AdminPlatformShell>
