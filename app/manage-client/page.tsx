@@ -407,10 +407,10 @@ export default function ManageClientPage() {
                 <tr className="transition hover:bg-indigo-50/40" key={client.id}>
                   <td className="px-4 py-4">
                     <div className="flex gap-2">
-                      <button className="grid size-10 place-items-center rounded-xl bg-indigo-600 text-white hover:bg-indigo-700" onClick={() => setEditing(client)} type="button">
+                      <button aria-label="Edit client" className="grid size-10 place-items-center rounded-xl bg-indigo-600 text-white hover:bg-indigo-700" onClick={() => setEditing(client)} type="button">
                         <Edit3 className="size-4" />
                       </button>
-                      <button className="grid size-10 place-items-center rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-100" onClick={() => deleteClient(client.id)} type="button">
+                      <button aria-label="Delete client" className="grid size-10 place-items-center rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-100" onClick={() => deleteClient(client.id)} type="button">
                         <Trash2 className="size-4" />
                       </button>
                     </div>
@@ -488,7 +488,7 @@ function ClientEditor({ client, onChange, onClose, onSave }: { client: ClientRow
       <div className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
         <div className="flex items-center justify-between border-b border-slate-100 p-5">
           <h3 className="text-xl font-black text-slate-950">Client Details</h3>
-          <button className="grid size-10 place-items-center rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50" onClick={onClose} type="button"><X className="size-4" /></button>
+          <button aria-label="Close client details" className="grid size-10 place-items-center rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50" onClick={onClose} type="button"><X className="size-4" /></button>
         </div>
         <div className="overflow-y-auto p-5">
           <div className="grid gap-4 md:grid-cols-2">
