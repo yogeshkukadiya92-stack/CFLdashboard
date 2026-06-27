@@ -1,11 +1,9 @@
 "use client";
 
 import { LockKeyhole, LogIn, ShieldCheck } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { type FormEvent, useEffect, useState } from "react";
 
 export default function LoginPage() {
-  const router = useRouter();
   const [email, setEmail] = useState("coachforlife107@gmail.com");
   const [password, setPassword] = useState("");
   const [nextPath, setNextPath] = useState("/");
@@ -25,21 +23,31 @@ export default function LoginPage() {
     setError("");
     setLoading(true);
 
-    const response = await fetch("/api/auth/login", {
-      body: JSON.stringify({ email, password }),
-      headers: { "Content-Type": "application/json" },
-      method: "POST"
-    });
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), 12000);
 
-    if (!response.ok) {
-      const data = await response.json().catch(() => ({ message: "Login failed." }));
-      setError(data.message ?? "Login failed.");
+    try {
+      const response = await fetch("/api/auth/login", {
+        body: JSON.stringify({ email, password }),
+        headers: { "Content-Type": "application/json" },
+        method: "POST",
+        signal: controller.signal
+      });
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({ message: "Login failed." }));
+        setError(data.message ?? "Login failed.");
+        setLoading(false);
+        return;
+      }
+
+      window.location.assign(nextPath);
+    } catch {
+      setError("Login request failed. Check deployment environment variables and try again.");
       setLoading(false);
-      return;
+    } finally {
+      window.clearTimeout(timer);
     }
-
-    router.replace(nextPath);
-    router.refresh();
   }
 
   return (

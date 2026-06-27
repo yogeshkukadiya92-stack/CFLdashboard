@@ -25,14 +25,18 @@ function base64UrlDecode(value: string) {
 }
 
 async function signature(payload: string) {
-  const key = await crypto.subtle.importKey(
+  if (!globalThis.crypto?.subtle) {
+    throw new Error("Web Crypto is not available in this runtime.");
+  }
+
+  const key = await globalThis.crypto.subtle.importKey(
     "raw",
     new TextEncoder().encode(authSecret()),
     { hash: "SHA-256", name: "HMAC" },
     false,
     ["sign"]
   );
-  const signed = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(payload));
+  const signed = await globalThis.crypto.subtle.sign("HMAC", key, new TextEncoder().encode(payload));
   return base64UrlEncode(new Uint8Array(signed));
 }
 
