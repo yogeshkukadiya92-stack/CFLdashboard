@@ -1,0 +1,78 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  background: #f1f5f9;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  background: #f1f5f9;
+  color: #18211d;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  letter-spacing: 0;
+}
+
+::selection {
+  background: rgba(16, 185, 129, 0.22);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid #10a37f;
+  outline-offset: 2px;
+}
+
+.dark body {
+  color-scheme: dark;
+  background:
+    radial-gradient(circle at 12% 0%, rgba(16, 163, 127, 0.16), transparent 28rem),
+    radial-gradient(circle at 90% 0%, rgba(99, 102, 241, 0.14), transparent 24rem),
+    linear-gradient(140deg, #0f1412 0%, #101513 48%, #151b19 100%);
+}
+
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(99, 115, 107, 0.35) transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  height: 8px;
+  width: 8px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: rgba(99, 115, 107, 0.35);
+  border-radius: 999px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.001ms !important;
+  }
+}
