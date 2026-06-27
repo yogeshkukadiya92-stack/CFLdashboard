@@ -21,7 +21,7 @@ import {
   Upload,
   X
 } from "lucide-react";
-import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
+import { type FormEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
 const inputClass =
   "w-full rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-sm outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100";
@@ -981,10 +981,22 @@ function ManualClientRegistrationWorkflow() {
   const [success, setSuccess] = useState("");
   const [isError, setIsError] = useState(false);
   const [showClientList, setShowClientList] = useState(false);
+  const clientBoxRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setWorkshops(readLocalStorageArray<WorkshopMasterRecord>(WORKSHOP_MASTER_STORAGE_KEY));
     setClients(readLocalStorageArray<ClientStorageRecord>(CLIENTS_STORAGE_KEY).filter((client) => (client.name ?? "").trim()));
+  }, []);
+
+  // Close the suggestion list when clicking anywhere outside the combobox.
+  useEffect(() => {
+    function onPointerDown(event: MouseEvent) {
+      if (clientBoxRef.current && !clientBoxRef.current.contains(event.target as Node)) {
+        setShowClientList(false);
+      }
+    }
+    document.addEventListener("mousedown", onPointerDown);
+    return () => document.removeEventListener("mousedown", onPointerDown);
   }, []);
 
   const clientMatches = useMemo(() => {
@@ -1082,11 +1094,10 @@ function ManualClientRegistrationWorkflow() {
 
             <label className="block">
               <span className="mb-2 block text-sm font-semibold text-gray-600">Client Name</span>
-              <span className="relative block">
+              <span className="relative block" ref={clientBoxRef}>
                 <input
                   autoComplete="off"
                   className="w-full rounded-md border border-gray-300 px-3 py-2.5 pr-10 text-sm outline-none focus:ring-2 focus:ring-indigo-400"
-                  onBlur={() => window.setTimeout(() => setShowClientList(false), 150)}
                   onChange={(event) => {
                     setName(event.target.value);
                     setShowClientList(true);
@@ -1104,7 +1115,11 @@ function ManualClientRegistrationWorkflow() {
                       <button
                         className="flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left hover:bg-indigo-50"
                         key={client.id}
-                        onClick={() => selectExistingClient(client)}
+                        // onMouseDown fires before the input's blur, so the autofill always applies.
+                        onMouseDown={(event) => {
+                          event.preventDefault();
+                          selectExistingClient(client);
+                        }}
                         type="button"
                       >
                         <span className="min-w-0">
