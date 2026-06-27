@@ -1,11 +1,11 @@
 export const AUTH_COOKIE_NAME = "cfl_admin_session";
-export const ADMIN_EMAIL = process.env.ADMIN_EMAIL ?? "coachforlife107@gmail.com";
-export const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ?? "CFL12345";
+export const ADMIN_EMAIL = (process.env.ADMIN_EMAIL ?? "coachforlife107@gmail.com").trim();
+export const ADMIN_PASSWORD = (process.env.ADMIN_PASSWORD ?? "CFL12345").trim();
 
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 7;
 
 function authSecret() {
-  return process.env.AUTH_SECRET ?? "cfl-local-master-login-secret-change-before-production";
+  return (process.env.AUTH_SECRET ?? "cfl-local-master-login-secret-change-before-production").trim();
 }
 
 function base64UrlEncode(value: string | Uint8Array) {
