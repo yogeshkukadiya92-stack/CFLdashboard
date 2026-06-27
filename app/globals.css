@@ -20,8 +20,12 @@ body {
   margin: 0;
   background: #f1f5f9;
   color: #18211d;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   letter-spacing: 0;
+  text-rendering: geometricPrecision;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 ::selection {
@@ -33,6 +37,184 @@ input,
 select,
 textarea {
   font: inherit;
+}
+
+main {
+  --cfl-surface: #ffffff;
+  --cfl-border: rgba(148, 163, 184, 0.28);
+  --cfl-border-strong: rgba(100, 116, 139, 0.34);
+  --cfl-text: #07111f;
+  --cfl-muted: #64748b;
+  --cfl-accent: #059669;
+  --cfl-accent-soft: #ecfdf5;
+  --cfl-shadow: 0 18px 45px -34px rgba(15, 23, 42, 0.55);
+  color: var(--cfl-text);
+}
+
+main h1,
+main h2,
+main h3,
+main h4 {
+  color: var(--cfl-text);
+  letter-spacing: 0;
+  line-height: 1.12;
+}
+
+main p,
+main label,
+main td,
+main th,
+main input,
+main select,
+main textarea,
+main button,
+main a {
+  letter-spacing: 0;
+}
+
+main button,
+main a {
+  touch-action: manipulation;
+}
+
+main button,
+main a[class*="rounded"],
+main input,
+main select,
+main textarea {
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    color 160ms ease,
+    transform 160ms ease;
+}
+
+main button:not(:disabled):active,
+main a[class*="rounded"]:active {
+  transform: translateY(1px);
+}
+
+main button[class*="rounded-3xl"],
+main a[class*="rounded-3xl"],
+main div[class*="rounded-3xl"],
+main section[class*="rounded-3xl"],
+main form[class*="rounded-3xl"],
+main aside[class*="rounded-3xl"] {
+  border-radius: 16px !important;
+}
+
+main button[class*="rounded-2xl"],
+main a[class*="rounded-2xl"],
+main div[class*="rounded-2xl"],
+main section[class*="rounded-2xl"],
+main form[class*="rounded-2xl"],
+main aside[class*="rounded-2xl"] {
+  border-radius: 14px !important;
+}
+
+main button[class*="rounded-xl"],
+main a[class*="rounded-xl"],
+main input[class*="rounded-xl"],
+main select[class*="rounded-xl"],
+main textarea[class*="rounded-xl"] {
+  border-radius: 10px !important;
+}
+
+main section[class*="bg-white"],
+main form[class*="bg-white"],
+main div[class*="bg-white"][class*="border"] {
+  border-color: var(--cfl-border) !important;
+  box-shadow: var(--cfl-shadow);
+}
+
+main input,
+main select,
+main textarea {
+  min-height: 44px;
+  border-color: var(--cfl-border-strong) !important;
+  background-color: #ffffff;
+  color: var(--cfl-text);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+main textarea {
+  line-height: 1.55;
+}
+
+main input::placeholder,
+main textarea::placeholder {
+  color: #94a3b8;
+  font-weight: 600;
+}
+
+main input:hover,
+main select:hover,
+main textarea:hover {
+  border-color: rgba(5, 150, 105, 0.45) !important;
+}
+
+main input:focus,
+main select:focus,
+main textarea:focus {
+  border-color: rgba(5, 150, 105, 0.72) !important;
+  box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.13) !important;
+}
+
+main button {
+  font-size: 14px;
+  font-weight: 800;
+}
+
+main button[class*="bg-indigo-600"],
+main a[class*="bg-indigo-600"] {
+  background-color: #059669 !important;
+  box-shadow: 0 12px 24px -18px rgba(5, 150, 105, 0.85);
+}
+
+main button[class*="bg-indigo-600"]:hover,
+main a[class*="bg-indigo-600"]:hover {
+  background-color: #047857 !important;
+}
+
+main button[class*="bg-slate-950"],
+main a[class*="bg-slate-950"],
+main button[class*="bg-gray-800"],
+main a[class*="bg-gray-800"] {
+  background-color: #07111f !important;
+  box-shadow: 0 14px 28px -20px rgba(2, 6, 23, 0.95);
+}
+
+main button[class*="border"],
+main a[class*="border"] {
+  border-color: var(--cfl-border-strong) !important;
+}
+
+main table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+main thead {
+  background: #f8fafc !important;
+}
+
+main th {
+  color: #64748b !important;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+}
+
+main td {
+  color: #334155;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+main tbody tr {
+  transition: background-color 140ms ease;
 }
 
 button:focus-visible,

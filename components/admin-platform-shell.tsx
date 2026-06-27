@@ -148,7 +148,7 @@ export function AdminPlatformShell({
   title: string;
 }) {
   const pathname = usePathname();
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const activeGroup = useMemo(() => navGroups.find((group) => isGroupActive(group, pathname))?.label ?? "Workshop", [pathname]);
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({ [activeGroup]: true });
@@ -374,7 +374,7 @@ export function AdminPlatformShell({
             <div className="flex flex-wrap items-end justify-between gap-4">
               <div>
                 <p className="text-[11px] font-black uppercase tracking-[0.18em] text-emerald-700">Admin Platform</p>
-                <h2 className="mt-2 text-3xl font-black tracking-tight text-slate-950">{title}</h2>
+                <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-950 md:text-3xl">{title}</h2>
                 {description ? <p className="mt-1 max-w-3xl text-sm text-slate-500">{description}</p> : null}
               </div>
               <div className="flex flex-wrap gap-2">
