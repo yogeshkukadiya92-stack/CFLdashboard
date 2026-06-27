@@ -216,9 +216,9 @@ export default function FormBuilderPage() {
       description="Design a custom registration form for a workshop batch, then share a self-contained link."
       title="Registration Form Builder"
     >
-      <div className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
+      <div className="grid min-w-0 gap-4 xl:grid-cols-[1fr_1fr]">
         {/* ---------------- Builder ---------------- */}
-        <div className="space-y-4 min-w-0">
+        <div className="min-w-0 space-y-4">
           <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-soft">
             <h3 className="text-lg font-black text-slate-950">1. Workshop &amp; Batch</h3>
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
@@ -395,8 +395,8 @@ export default function FormBuilderPage() {
             {link ? (
               <div className="mt-4">
                 <span className="mb-2 block text-sm font-bold text-slate-600">Shareable Link</span>
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-2">
-                  <p className="mb-2 truncate px-2 text-sm font-semibold text-slate-700">{link}</p>
+                <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50 p-2">
+                  <p className="mb-2 break-all px-2 text-xs font-semibold text-slate-500 line-clamp-2">{link}</p>
                   <div className="flex gap-2">
                     <button className="inline-flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-lg bg-slate-950 px-3 py-2.5 text-sm font-bold text-white hover:bg-slate-800" onClick={copyLink} type="button">
                       <Copy className="size-4" />
@@ -417,7 +417,7 @@ export default function FormBuilderPage() {
         </div>
 
         {/* ---------------- Live preview ---------------- */}
-        <div className="xl:sticky xl:top-24 xl:self-start">
+        <div className="min-w-0 xl:sticky xl:top-24 xl:self-start">
           <p className="mb-2 text-xs font-black uppercase tracking-[0.2em] text-emerald-700">Live Preview</p>
           <FormPreview form={form} />
         </div>

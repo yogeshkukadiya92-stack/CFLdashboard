@@ -238,7 +238,7 @@ export function AdminPlatformShell({
   }
 
   return (
-    <main className="min-h-screen bg-slate-100 text-slate-950">
+    <main className="min-h-screen overflow-x-hidden bg-slate-100 text-slate-950">
       <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/90 shadow-[0_1px_24px_rgba(15,23,42,0.05)] backdrop-blur-xl">
         <div className="mx-auto flex max-w-[1540px] items-center justify-between gap-3 px-4 py-3 lg:px-6">
           <div className="flex items-center gap-3">
