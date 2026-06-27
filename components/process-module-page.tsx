@@ -2,6 +2,7 @@
 
 import { AdminPlatformShell } from "@/components/admin-platform-shell";
 import { processPageConfigs, type ProcessField } from "@/lib/process-pages";
+import { generateId } from "@/lib/utils";
 import {
   ArrowDown,
   ArrowUp,
@@ -118,7 +119,7 @@ export function ProcessModulePage({ slug }: { slug: string }) {
       return;
     }
 
-    setRows((current) => [{ ...form, id: crypto.randomUUID(), status: "Done", createdAt: new Date().toLocaleString() }, ...current]);
+    setRows((current) => [{ ...form, id: generateId(), status: "Done", createdAt: new Date().toLocaleString() }, ...current]);
     setShowData(true);
     setError("");
     setForm(initialForm);
@@ -278,7 +279,7 @@ function ClientBatchTransferWorkflow() {
       {
         client: clientSearch,
         from: sourceBatch,
-        id: crypto.randomUUID(),
+        id: generateId(),
         remarks: remarks || "-",
         status: "Transferred",
         to: destinationBatch

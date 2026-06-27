@@ -2,6 +2,7 @@
 
 import { AdminPlatformShell } from "@/components/admin-platform-shell";
 import { BadgePercent, CalendarDays, CheckCircle2, Eye, RefreshCw, Save, Wallet } from "lucide-react";
+import { generateId } from "@/lib/utils";
 import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
 
 type DiscountType = "percent" | "flat";
@@ -99,7 +100,7 @@ export default function ManageEventSchedulePage() {
       discountValue,
       facilitator,
       feesWithTax,
-      id: crypto.randomUUID(),
+      id: generateId(),
       isPaidEvent,
       isPartPaymentAllow,
       maxOrderQty,

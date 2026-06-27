@@ -2,6 +2,7 @@
 
 import { AdminPlatformShell } from "@/components/admin-platform-shell";
 import { Check, Edit3, Eye, RefreshCw, Save, Trash2, UserPlus } from "lucide-react";
+import { generateId } from "@/lib/utils";
 import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
 
 type CommissionRow = {
@@ -107,7 +108,7 @@ export default function SalesPersonPage() {
     } else {
       setCommissions((rows) => [
         ...rows,
-        { id: crypto.randomUUID(), workshop: commissionWorkshop, leadPercent, directPercent }
+        { id: generateId(), workshop: commissionWorkshop, leadPercent, directPercent }
       ]);
     }
 
@@ -138,7 +139,7 @@ export default function SalesPersonPage() {
         commissions,
         email,
         group,
-        id: crypto.randomUUID(),
+        id: generateId(),
         isActive,
         mobile,
         name: fullName

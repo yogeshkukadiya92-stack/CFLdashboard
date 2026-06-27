@@ -3,6 +3,7 @@
 import { AdminPlatformShell } from "@/components/admin-platform-shell";
 import { AlertCircle, Check, ChevronDown, Download, Edit3, Eye, HelpCircle, RefreshCw, Save, Search, Trash2, UsersRound, X } from "lucide-react";
 import type { RegistrationEntry } from "@/lib/types";
+import { generateId } from "@/lib/utils";
 import { type FormEvent, useEffect, useMemo, useState } from "react";
 
 type WorkshopRecord = {
@@ -111,7 +112,7 @@ export default function WorkshopMasterPage() {
       saveRecords(records.map((record) => record.id === editingId ? { ...record, name, type, facilitator, productGroup: group, isPaid, activeFields } : record));
       setMessage("Workshop updated successfully.");
     } else {
-      saveRecords([{ id: crypto.randomUUID(), name, type, facilitator, productGroup: group, isPaid, activeFields }, ...records]);
+      saveRecords([{ id: generateId(), name, type, facilitator, productGroup: group, isPaid, activeFields }, ...records]);
       setMessage("Workshop saved successfully.");
     }
     clearForm(false);
