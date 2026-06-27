@@ -158,4 +158,54 @@ export interface RegistrationEntry {
   amountDue: number;
   status: "Paid" | "Due";
   createdAt: string;
+  batch?: string;
+  answers?: Record<string, string>;
+}
+
+export type BuilderFieldType =
+  | "short_text"
+  | "paragraph"
+  | "email"
+  | "mobile"
+  | "number"
+  | "date"
+  | "dropdown"
+  | "radio"
+  | "checkbox"
+  | "heading";
+
+export interface BuilderField {
+  id: string;
+  type: BuilderFieldType;
+  label: string;
+  placeholder?: string;
+  required?: boolean;
+  options?: string[];
+  /** Maps a field to a core registration column so reports keep working. */
+  role?: "name" | "mobile" | "email" | "city";
+}
+
+export interface BuilderTheme {
+  fontFamily: string;
+  fontSize: number;
+  accent: string;
+  titleBold: boolean;
+  titleItalic: boolean;
+  align: "left" | "center";
+}
+
+export interface BuilderForm {
+  id: string;
+  workshopId: string;
+  workshopName: string;
+  workshopSlug: string;
+  batch: string;
+  title: string;
+  description: string;
+  theme: BuilderTheme;
+  paid: boolean;
+  fee: number;
+  partPayment: boolean;
+  fields: BuilderField[];
+  updatedAt: string;
 }

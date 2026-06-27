@@ -7,6 +7,7 @@ import {
   ChevronDown,
   ClipboardCheck,
   Home,
+  FileText,
   Import,
   Layers3,
   LogOut,
@@ -59,7 +60,8 @@ const navGroups: NavGroup[] = [
     items: [
       { href: "/workshop-master", icon: Layers3, label: "Workshop Master" },
       { href: "/workshop-scheduling-admin", icon: CalendarDays, label: "Workshop Schedule" },
-      { href: "/process/import-data-workshop-wise", icon: Import, label: "Import Workshop Data" }
+      { href: "/process/import-data-workshop-wise", icon: Import, label: "Import Workshop Data" },
+      { href: "/form-builder", icon: FileText, label: "Form Builder" }
     ]
   },
   {

@@ -1,8 +1,8 @@
 "use client";
 
 import { workshops as seedWorkshops } from "@/lib/data";
-import type { RegistrationEntry } from "@/lib/types";
-import { formatCurrency } from "@/lib/utils";
+import type { BuilderField, BuilderForm, BuilderTheme, RegistrationEntry } from "@/lib/types";
+import { decodeJsonParam, formatCurrency } from "@/lib/utils";
 import { AlertTriangle, CheckCircle2, ShieldCheck } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
@@ -11,38 +11,44 @@ const REGISTRATION_STORAGE_KEY = "cfl_registrations_v1";
 const WORKSHOP_MASTER_STORAGE_KEY = "cfl_workshop_master_records_v1";
 const CLIENTS_STORAGE_KEY = "cfl_clients_v1";
 
-type WorkshopMasterRecord = {
-  id: string;
-  name: string;
-  facilitator?: string;
-  productGroup?: string;
-  isPaid?: boolean;
-};
+type WorkshopMasterRecord = { id: string; name: string; facilitator?: string; isPaid?: boolean };
+type ClientRecord = { city?: string; email?: string; id: number | string; mobile?: string; name?: string };
 
-type ClientRecord = {
-  city?: string;
-  email?: string;
-  id: number | string;
-  mobile?: string;
-  name?: string;
-};
-
-type ResolvedWorkshop = {
+type FormModel = {
   id: string;
   slug: string;
   title: string;
+  description: string;
   facilitator: string;
-  city: string;
-  price: number;
-  isPaid: boolean;
+  venue: string;
+  batch: string;
+  paid: boolean;
+  fee: number;
+  partPayment: boolean;
+  theme: BuilderTheme;
+  fields: BuilderField[];
 };
 
+const defaultTheme: BuilderTheme = {
+  fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif",
+  fontSize: 16,
+  accent: "#059669",
+  titleBold: true,
+  titleItalic: false,
+  align: "left"
+};
+
+function simpleFields(): BuilderField[] {
+  return [
+    { id: "name", type: "short_text", label: "Full Name", placeholder: "Your full name", required: true, role: "name" },
+    { id: "mobile", type: "mobile", label: "Mobile Number", placeholder: "10-digit mobile", required: true, role: "mobile" },
+    { id: "email", type: "email", label: "Email", placeholder: "you@example.com", required: true, role: "email" },
+    { id: "city", type: "short_text", label: "City", placeholder: "Your city", role: "city" }
+  ];
+}
+
 function slugify(value: string) {
-  return value
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
+  return value.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 }
 
 function cleanMobile(value: string) {
@@ -54,44 +60,65 @@ export default function RegistrationPage() {
   const searchParams = useSearchParams();
   const slug = params.slug;
 
-  const batch = searchParams.get("batch") ?? "Main Batch";
-  const paidEnabled = searchParams.get("paid") !== "0";
-  const partEnabled = searchParams.get("part") === "1";
-  const feeParam = Number(searchParams.get("fee") || 0);
+  const formParam = searchParams.get("f");
   const titleParam = searchParams.get("title");
   const widParam = searchParams.get("wid");
   const facilitatorParam = searchParams.get("facilitator");
   const venueParam = searchParams.get("venue");
+  const batchParam = searchParams.get("batch");
+  const paidEnabled = searchParams.get("paid") !== "0";
+  const partEnabled = searchParams.get("part") === "1";
+  const feeParam = Number(searchParams.get("fee") || 0);
 
   const [ready, setReady] = useState(false);
-  const [workshop, setWorkshop] = useState<ResolvedWorkshop | null>(null);
+  const [model, setModel] = useState<FormModel | null>(null);
   const [clients, setClients] = useState<ClientRecord[]>([]);
   const [matchedClient, setMatchedClient] = useState<ClientRecord | null>(null);
-  const [form, setForm] = useState({
-    city: "",
-    email: "",
-    fullName: "",
-    mobile: "",
-    partAmount: "",
-    paymentMode: "Full" as "Full" | "Part"
-  });
+  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [paymentMode, setPaymentMode] = useState<"Full" | "Part">("Full");
+  const [partAmount, setPartAmount] = useState("");
   const [message, setMessage] = useState("");
   const [success, setSuccess] = useState(false);
 
-  // Resolve the workshop. A self-contained link (title in the query string)
-  // works on any device; otherwise fall back to saved records / static seed.
+  // Resolve the form: a builder form (?f=) wins; then a self-contained simple
+  // link (?title=); then saved master records; then the static seed.
   useEffect(() => {
-    let resolved: ResolvedWorkshop | null = null;
+    let resolved: FormModel | null = null;
 
-    if (titleParam) {
+    if (formParam) {
+      const decoded = decodeJsonParam<BuilderForm>(formParam);
+      if (decoded && Array.isArray(decoded.fields)) {
+        resolved = {
+          id: decoded.workshopId || decoded.id || slug,
+          slug: decoded.workshopSlug || slug,
+          title: decoded.title || decoded.workshopName || "Workshop Registration",
+          description: decoded.description || "",
+          facilitator: "",
+          venue: venueParam || "",
+          batch: decoded.batch || "",
+          paid: Boolean(decoded.paid) && (decoded.fee || 0) > 0,
+          fee: decoded.fee || 0,
+          partPayment: Boolean(decoded.partPayment),
+          theme: { ...defaultTheme, ...decoded.theme },
+          fields: decoded.fields
+        };
+      }
+    }
+
+    if (!resolved && titleParam) {
       resolved = {
         id: widParam || slug,
         slug,
         title: titleParam,
+        description: "",
         facilitator: facilitatorParam || "CFL Facilitator",
-        city: venueParam || "TBA",
-        price: feeParam > 0 ? feeParam : 0,
-        isPaid: paidEnabled && feeParam > 0
+        venue: venueParam || "TBA",
+        batch: batchParam || "Main Batch",
+        paid: paidEnabled && feeParam > 0,
+        fee: feeParam,
+        partPayment: partEnabled,
+        theme: defaultTheme,
+        fields: simpleFields()
       };
     }
 
@@ -105,10 +132,15 @@ export default function RegistrationPage() {
             id: match.id,
             slug: slugify(match.name) || match.id,
             title: match.name,
+            description: "",
             facilitator: match.facilitator || "CFL Facilitator",
-            city: venueParam || "TBA",
-            price: feeParam > 0 ? feeParam : 0,
-            isPaid: Boolean(match.isPaid)
+            venue: venueParam || "TBA",
+            batch: batchParam || "Main Batch",
+            paid: paidEnabled && feeParam > 0,
+            fee: feeParam,
+            partPayment: partEnabled,
+            theme: defaultTheme,
+            fields: simpleFields()
           };
         }
       } catch {
@@ -123,19 +155,23 @@ export default function RegistrationPage() {
           id: seed.id,
           slug: seed.slug,
           title: seed.title,
+          description: "",
           facilitator: seed.trainer,
-          city: seed.city,
-          price: feeParam > 0 ? feeParam : seed.price,
-          isPaid: seed.price > 0
+          venue: seed.city,
+          batch: batchParam || "Main Batch",
+          paid: seed.price > 0,
+          fee: feeParam > 0 ? feeParam : seed.price,
+          partPayment: partEnabled,
+          theme: defaultTheme,
+          fields: simpleFields()
         };
       }
     }
 
-    setWorkshop(resolved);
+    setModel(resolved);
     setReady(true);
-  }, [facilitatorParam, feeParam, paidEnabled, slug, titleParam, venueParam, widParam]);
+  }, [batchParam, facilitatorParam, feeParam, formParam, paidEnabled, partEnabled, slug, titleParam, venueParam, widParam]);
 
-  // Load saved clients so a known mobile number can auto-fill the form.
   useEffect(() => {
     try {
       const raw = window.localStorage.getItem(CLIENTS_STORAGE_KEY);
@@ -145,82 +181,119 @@ export default function RegistrationPage() {
     }
   }, []);
 
-  // When the entered mobile matches an existing client, auto-fill their details.
+  const roleField = (role: NonNullable<BuilderField["role"]>) => model?.fields.find((field) => field.role === role) ?? null;
+  const mobileFieldId = roleField("mobile")?.id;
+  const mobileValue = mobileFieldId ? answers[mobileFieldId] ?? "" : "";
+
+  // Auto-fill from a saved client when the mobile matches.
   useEffect(() => {
-    const digits = cleanMobile(form.mobile);
-    if (digits.length < 10 || clients.length === 0) {
+    const digits = cleanMobile(mobileValue);
+    if (!model || digits.length < 10 || clients.length === 0) {
       setMatchedClient(null);
       return;
     }
-    const found = clients.find((client) => cleanMobile(client.mobile ?? "").endsWith(digits) || digits.endsWith(cleanMobile(client.mobile ?? "")));
+    const found = clients.find((client) => {
+      const stored = cleanMobile(client.mobile ?? "");
+      return stored.length >= 10 && (stored.endsWith(digits) || digits.endsWith(stored));
+    });
     if (!found) {
       setMatchedClient(null);
       return;
     }
     setMatchedClient(found);
-    setForm((prev) => ({
-      ...prev,
-      fullName: prev.fullName.trim() ? prev.fullName : found.name ?? "",
-      email: prev.email.trim() ? prev.email : found.email ?? "",
-      city: prev.city.trim() ? prev.city : found.city ?? ""
-    }));
-  }, [clients, form.mobile]);
+    setAnswers((prev) => {
+      const next = { ...prev };
+      const nameId = roleField("name")?.id;
+      const emailId = roleField("email")?.id;
+      const cityId = roleField("city")?.id;
+      if (nameId && !next[nameId]?.trim() && found.name) next[nameId] = found.name;
+      if (emailId && !next[emailId]?.trim() && found.email) next[emailId] = found.email;
+      if (cityId && !next[cityId]?.trim() && found.city) next[cityId] = found.city;
+      return next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clients, mobileValue, model]);
 
-  const venue = searchParams.get("venue") ?? workshop?.city ?? "TBA";
-  const chargeable = paidEnabled && (workshop?.isPaid ?? true);
-  const fullAmount = chargeable ? workshop?.price ?? 0 : 0;
-  const partAmountRaw = Number(form.partAmount || 0);
-  const amountPaid = form.paymentMode === "Full" ? fullAmount : Math.max(0, Math.min(partAmountRaw, fullAmount));
+  const fullAmount = model?.paid ? model.fee : 0;
+  const amountPaid = paymentMode === "Full" ? fullAmount : Math.max(0, Math.min(Number(partAmount || 0), fullAmount));
   const amountDue = Math.max(0, fullAmount - amountPaid);
 
-  const canSubmit = useMemo(() => {
-    return Boolean(form.fullName.trim()) && cleanMobile(form.mobile).length >= 10 && Boolean(form.email.trim());
-  }, [form.email, form.fullName, form.mobile]);
+  const missingRequired = useMemo(() => {
+    if (!model) return true;
+    return model.fields.some((field) => {
+      if (field.type === "heading" || !field.required) return false;
+      const value = (answers[field.id] ?? "").trim();
+      if (!value) return true;
+      if (field.role === "mobile") return cleanMobile(value).length < 10;
+      return false;
+    });
+  }, [answers, model]);
+
+  function setAnswer(id: string, value: string) {
+    setAnswers((prev) => ({ ...prev, [id]: value }));
+  }
+
+  function toggleCheckbox(id: string, option: string) {
+    setAnswers((prev) => {
+      const selected = (prev[id] ?? "").split(" | ").filter(Boolean);
+      const next = selected.includes(option) ? selected.filter((item) => item !== option) : [...selected, option];
+      return { ...prev, [id]: next.join(" | ") };
+    });
+  }
 
   function submitRegistration() {
-    if (!workshop) {
-      setMessage("Workshop link is invalid.");
-      return;
-    }
-    const mobile = cleanMobile(form.mobile);
-    if (!canSubmit) {
-      setMessage("Please fill your name, a valid 10-digit mobile number, and email.");
+    if (!model) return;
+    if (missingRequired) {
+      setMessage("Please fill all required fields (and a valid 10-digit mobile).");
       return;
     }
 
-    const raw = localStorage.getItem(REGISTRATION_STORAGE_KEY);
-    const current: RegistrationEntry[] = raw ? JSON.parse(raw) : [];
-    const registrationId = `reg-${workshop.id}-${mobile}`;
-    const existingIndex = current.findIndex((item) => item.id === registrationId);
+    const name = (roleField("name")?.id ? answers[roleField("name")!.id] : "")?.trim() || "Guest";
+    const email = (roleField("email")?.id ? answers[roleField("email")!.id] : "")?.trim() || "";
+    const city = (roleField("city")?.id ? answers[roleField("city")!.id] : "")?.trim() || "Unknown";
+    const mobile = cleanMobile(mobileValue);
+
+    const extra: Record<string, string> = {};
+    model.fields.forEach((field) => {
+      if (field.type === "heading" || field.role) return;
+      const value = (answers[field.id] ?? "").trim();
+      if (value) extra[field.label] = value;
+    });
+
+    const registrationId = `reg-${model.id}-${mobile || Date.now().toString(36)}`;
     const payload: RegistrationEntry = {
       id: registrationId,
-      workshopId: workshop.id,
-      workshopSlug: workshop.slug,
-      workshopTitle: workshop.title,
-      fullName: form.fullName.trim(),
-      mobile: `+91 ${mobile}`,
-      email: form.email.trim(),
-      city: form.city.trim() || "Unknown",
-      paymentMode: form.paymentMode,
+      workshopId: model.id,
+      workshopSlug: model.slug,
+      workshopTitle: model.title,
+      fullName: name,
+      mobile: mobile ? `+91 ${mobile}` : "",
+      email,
+      city,
+      paymentMode,
       amountPaid,
       amountDue,
       status: amountDue > 0 ? "Due" : "Paid",
-      createdAt: new Date().toISOString().slice(0, 10)
+      createdAt: new Date().toISOString().slice(0, 10),
+      batch: model.batch,
+      answers: Object.keys(extra).length ? extra : undefined
     };
 
-    if (existingIndex >= 0) {
-      current[existingIndex] = payload;
-    } else {
-      current.unshift(payload);
+    try {
+      const raw = localStorage.getItem(REGISTRATION_STORAGE_KEY);
+      const current: RegistrationEntry[] = raw ? JSON.parse(raw) : [];
+      const existingIndex = current.findIndex((item) => item.id === registrationId);
+      if (existingIndex >= 0) current[existingIndex] = payload;
+      else current.unshift(payload);
+      localStorage.setItem(REGISTRATION_STORAGE_KEY, JSON.stringify(current));
+    } catch {
+      // ignore storage write failures
     }
-    localStorage.setItem(REGISTRATION_STORAGE_KEY, JSON.stringify(current));
+
     setSuccess(true);
-    setMessage(
-      existingIndex >= 0
-        ? "Your registration was updated. See you at the workshop!"
-        : "Registration confirmed. See you at the workshop!"
-    );
-    setForm((prev) => ({ ...prev, city: "", email: "", fullName: "", mobile: "", partAmount: "" }));
+    setMessage("Registration confirmed. See you at the workshop!");
+    setAnswers({});
+    setPartAmount("");
   }
 
   if (!ready) {
@@ -231,7 +304,7 @@ export default function RegistrationPage() {
     );
   }
 
-  if (!workshop) {
+  if (!model) {
     return (
       <main className="grid min-h-screen place-items-center bg-slate-100 p-6 text-slate-950">
         <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-soft">
@@ -247,128 +320,174 @@ export default function RegistrationPage() {
     );
   }
 
+  const theme = model.theme;
+  const metaLine = [model.batch && `Batch: ${model.batch}`, model.facilitator && `Facilitator: ${model.facilitator}`, model.venue && `Venue: ${model.venue}`].filter(Boolean);
+
   return (
-    <main className="min-h-screen bg-slate-100 px-4 py-8 text-slate-950 md:py-12">
+    <main className="min-h-screen bg-slate-100 px-4 py-8 text-slate-950 md:py-12" style={{ fontFamily: theme.fontFamily, fontSize: theme.fontSize }}>
       <section className="mx-auto max-w-3xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-panel">
-        <div className="bg-slate-950 p-6 text-white md:p-8">
-          <p className="text-[11px] font-black uppercase tracking-[0.18em] text-emerald-300">CFL Workshop Registration</p>
-          <h1 className="mt-2 text-3xl font-black tracking-tight">{workshop.title}</h1>
-          <p className="mt-3 flex flex-wrap gap-x-2 gap-y-1 text-sm font-semibold text-slate-300">
-            <span>Batch: {batch}</span>
-            <span aria-hidden>•</span>
-            <span>Facilitator: {workshop.facilitator}</span>
-            <span aria-hidden>•</span>
-            <span>Venue: {venue}</span>
-          </p>
-          <p className="mt-4 inline-flex rounded-lg bg-emerald-500 px-3 py-2 text-sm font-black text-white">
-            {chargeable ? `Fee: ${formatCurrency(fullAmount)}` : "Free Registration"}
+        <div className="p-6 md:p-8" style={{ textAlign: theme.align, borderTop: `5px solid ${theme.accent}` }}>
+          <p className="text-[11px] font-black uppercase tracking-[0.18em]" style={{ color: theme.accent }}>CFL Workshop Registration</p>
+          <h1
+            className="mt-2 tracking-tight"
+            style={{ fontWeight: theme.titleBold ? 800 : 600, fontStyle: theme.titleItalic ? "italic" : "normal", fontSize: theme.fontSize + 14 }}
+          >
+            {model.title}
+          </h1>
+          {model.description ? <p className="mt-2 text-slate-500">{model.description}</p> : null}
+          {metaLine.length ? <p className="mt-3 text-sm font-semibold text-slate-500">{metaLine.join("  •  ")}</p> : null}
+          <p className="mt-4 inline-flex rounded-lg px-3 py-2 text-sm font-black text-white" style={{ backgroundColor: theme.accent }}>
+            {model.paid ? `Fee: ${formatCurrency(fullAmount)}` : "Free Registration"}
           </p>
         </div>
 
         <div className="p-6 md:p-8">
           {success ? (
-            <div className="mb-6 flex items-start gap-3 rounded-xl bg-emerald-50 px-4 py-4 text-sm font-bold text-emerald-700">
+            <div className="flex items-start gap-3 rounded-xl bg-emerald-50 px-4 py-4 text-sm font-bold text-emerald-700">
               <CheckCircle2 className="mt-0.5 size-5 shrink-0" />
               <span>{message}</span>
             </div>
-          ) : null}
-
-          {matchedClient && !success ? (
-            <div className="mb-6 flex items-start gap-3 rounded-xl bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700">
-              <CheckCircle2 className="mt-0.5 size-5 shrink-0" />
-              <span>Welcome back, {matchedClient.name || "valued client"}! We found your details and filled them in — please review and confirm.</span>
-            </div>
-          ) : null}
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <Field label="Full Name" required value={form.fullName} onChange={(value) => setForm((prev) => ({ ...prev, fullName: value }))} placeholder="Your full name" />
-            <Field label="Mobile Number" required value={form.mobile} onChange={(value) => setForm((prev) => ({ ...prev, mobile: value }))} placeholder="10-digit mobile" inputMode="tel" />
-            <Field label="Email" required type="email" value={form.email} onChange={(value) => setForm((prev) => ({ ...prev, email: value }))} placeholder="you@example.com" />
-            <Field label="City" value={form.city} onChange={(value) => setForm((prev) => ({ ...prev, city: value }))} placeholder="Your city" />
-          </div>
-
-          {chargeable ? (
-            <div className="mt-5 rounded-xl border border-slate-200 p-4">
-              <p className="text-sm font-black text-slate-700">Payment Option</p>
-              <div className="mt-3 flex flex-wrap gap-4 text-sm font-semibold">
-                <label className="inline-flex items-center gap-2">
-                  <input checked={form.paymentMode === "Full"} onChange={() => setForm((prev) => ({ ...prev, paymentMode: "Full" }))} type="radio" className="size-4 accent-emerald-600" />
-                  Full Payment
-                </label>
-                {partEnabled ? (
-                  <label className="inline-flex items-center gap-2">
-                    <input checked={form.paymentMode === "Part"} onChange={() => setForm((prev) => ({ ...prev, paymentMode: "Part" }))} type="radio" className="size-4 accent-emerald-600" />
-                    Part Payment
-                  </label>
-                ) : null}
-              </div>
-              {form.paymentMode === "Part" ? (
-                <input
-                  className="mt-3 w-full rounded-xl border border-slate-300 px-3.5 py-3 text-sm font-semibold outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
-                  inputMode="numeric"
-                  onChange={(event) => setForm((prev) => ({ ...prev, partAmount: event.target.value }))}
-                  placeholder="Enter part amount"
-                  value={form.partAmount}
-                />
+          ) : (
+            <>
+              {matchedClient ? (
+                <div className="mb-6 flex items-start gap-3 rounded-xl bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700">
+                  <CheckCircle2 className="mt-0.5 size-5 shrink-0" />
+                  <span>Welcome back, {matchedClient.name || "valued client"}! We filled in your saved details — please review.</span>
+                </div>
               ) : null}
-              <div className="mt-3 grid grid-cols-2 gap-2 text-sm font-bold">
-                <div className="rounded-lg bg-emerald-50 px-3 py-2.5 text-emerald-700">Paying now: {formatCurrency(amountPaid)}</div>
-                <div className="rounded-lg bg-amber-50 px-3 py-2.5 text-amber-700">Balance due: {formatCurrency(amountDue)}</div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                {model.fields.map((field) => (
+                  <RenderField
+                    accent={theme.accent}
+                    field={field}
+                    key={field.id}
+                    onChange={(value) => setAnswer(field.id, value)}
+                    onToggle={(option) => toggleCheckbox(field.id, option)}
+                    value={answers[field.id] ?? ""}
+                  />
+                ))}
               </div>
-            </div>
-          ) : null}
 
-          {!success && message ? (
-            <p className="mt-5 rounded-xl bg-rose-50 px-4 py-3 text-sm font-black text-rose-700">{message}</p>
-          ) : null}
+              {model.paid ? (
+                <div className="mt-5 rounded-xl border border-slate-200 p-4">
+                  <p className="text-sm font-black text-slate-700">Payment Option</p>
+                  <div className="mt-3 flex flex-wrap gap-4 text-sm font-semibold">
+                    <label className="inline-flex items-center gap-2">
+                      <input checked={paymentMode === "Full"} onChange={() => setPaymentMode("Full")} type="radio" style={{ accentColor: theme.accent }} className="size-4" />
+                      Full Payment
+                    </label>
+                    {model.partPayment ? (
+                      <label className="inline-flex items-center gap-2">
+                        <input checked={paymentMode === "Part"} onChange={() => setPaymentMode("Part")} type="radio" style={{ accentColor: theme.accent }} className="size-4" />
+                        Part Payment
+                      </label>
+                    ) : null}
+                  </div>
+                  {paymentMode === "Part" ? (
+                    <input
+                      className="mt-3 w-full rounded-xl border border-slate-300 px-3.5 py-3 text-sm font-semibold outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
+                      inputMode="numeric"
+                      onChange={(event) => setPartAmount(event.target.value)}
+                      placeholder="Enter part amount"
+                      value={partAmount}
+                    />
+                  ) : null}
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-sm font-bold">
+                    <div className="rounded-lg bg-emerald-50 px-3 py-2.5 text-emerald-700">Paying now: {formatCurrency(amountPaid)}</div>
+                    <div className="rounded-lg bg-amber-50 px-3 py-2.5 text-amber-700">Balance due: {formatCurrency(amountDue)}</div>
+                  </div>
+                </div>
+              ) : null}
 
-          <button
-            className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-5 py-3.5 text-sm font-black text-white shadow-lg shadow-slate-950/20 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-            disabled={!canSubmit}
-            onClick={submitRegistration}
-            type="button"
-          >
-            <ShieldCheck className="size-4" />
-            {chargeable ? "Register & Pay" : "Confirm Registration"}
-          </button>
-          <p className="mt-3 text-center text-xs font-semibold text-slate-400">Your details are saved securely for this workshop only.</p>
+              {message ? <p className="mt-5 rounded-xl bg-rose-50 px-4 py-3 text-sm font-black text-rose-700">{message}</p> : null}
+
+              <button
+                className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-xl px-5 py-3.5 text-sm font-black text-white shadow-lg hover:opacity-95"
+                onClick={submitRegistration}
+                style={{ backgroundColor: theme.accent }}
+                type="button"
+              >
+                <ShieldCheck className="size-4" />
+                {model.paid ? "Register & Pay" : "Confirm Registration"}
+              </button>
+              <p className="mt-3 text-center text-xs font-semibold text-slate-400">Your details are saved securely for this workshop only.</p>
+            </>
+          )}
         </div>
       </section>
     </main>
   );
 }
 
-function Field({
-  inputMode,
-  label,
+function RenderField({
+  accent,
+  field,
   onChange,
-  placeholder,
-  required,
-  type = "text",
+  onToggle,
   value
 }: {
-  inputMode?: "tel" | "numeric" | "text";
-  label: string;
+  accent: string;
+  field: BuilderField;
   onChange: (value: string) => void;
-  placeholder?: string;
-  required?: boolean;
-  type?: string;
+  onToggle: (option: string) => void;
   value: string;
 }) {
-  return (
-    <label className="block">
-      <span className="mb-2 block text-sm font-black text-slate-700">
-        {label}
-        {required ? <span className="ml-1 text-rose-500">*</span> : null}
-      </span>
+  if (field.type === "heading") {
+    return <h3 className="md:col-span-2 border-b border-slate-100 pb-1 text-base font-black text-slate-900">{field.label}</h3>;
+  }
+
+  const labelNode = (
+    <span className="mb-2 block text-sm font-black text-slate-700">
+      {field.label}
+      {field.required ? <span style={{ color: accent }}> *</span> : null}
+    </span>
+  );
+  const inputClass = "w-full rounded-xl border border-slate-300 bg-white px-3.5 py-3 text-sm font-semibold outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100";
+  const wide = field.type === "paragraph" || field.type === "radio" || field.type === "checkbox";
+
+  let control: React.ReactNode;
+  if (field.type === "paragraph") {
+    control = <textarea className={inputClass} onChange={(event) => onChange(event.target.value)} placeholder={field.placeholder} rows={3} value={value} />;
+  } else if (field.type === "dropdown") {
+    control = (
+      <select className={inputClass} onChange={(event) => onChange(event.target.value)} value={value}>
+        <option value="">Select…</option>
+        {(field.options ?? []).map((option) => <option key={option} value={option}>{option}</option>)}
+      </select>
+    );
+  } else if (field.type === "radio" || field.type === "checkbox") {
+    const selected = value.split(" | ").filter(Boolean);
+    control = (
+      <div className="space-y-1.5">
+        {(field.options ?? []).map((option) => (
+          <label className="flex items-center gap-2 text-sm font-semibold text-slate-700" key={option}>
+            <input
+              checked={field.type === "radio" ? value === option : selected.includes(option)}
+              className="size-4"
+              name={field.id}
+              onChange={() => (field.type === "radio" ? onChange(option) : onToggle(option))}
+              style={{ accentColor: accent }}
+              type={field.type === "radio" ? "radio" : "checkbox"}
+            />
+            {option}
+          </label>
+        ))}
+      </div>
+    );
+  } else {
+    const inputType = field.type === "email" ? "email" : field.type === "number" ? "number" : field.type === "date" ? "date" : "text";
+    control = (
       <input
-        className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-3 text-sm font-semibold outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
-        inputMode={inputMode}
+        className={inputClass}
+        inputMode={field.type === "mobile" ? "tel" : field.type === "number" ? "numeric" : undefined}
         onChange={(event) => onChange(event.target.value)}
-        placeholder={placeholder}
-        type={type}
+        placeholder={field.placeholder}
+        type={inputType}
         value={value}
       />
-    </label>
-  );
+    );
+  }
+
+  return <label className={`block ${wide ? "md:col-span-2" : ""}`}>{labelNode}{control}</label>;
 }
