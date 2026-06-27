@@ -17,7 +17,7 @@ export async function POST(request: Request) {
     name: AUTH_COOKIE_NAME,
     path: "/",
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    secure: false,
     value: await createAuthToken(ADMIN_EMAIL)
   });
 
