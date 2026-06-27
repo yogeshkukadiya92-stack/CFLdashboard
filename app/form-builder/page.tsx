@@ -218,7 +218,7 @@ export default function FormBuilderPage() {
     >
       <div className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
         {/* ---------------- Builder ---------------- */}
-        <div className="space-y-4">
+        <div className="space-y-4 min-w-0">
           <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-soft">
             <h3 className="text-lg font-black text-slate-950">1. Workshop &amp; Batch</h3>
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
@@ -312,7 +312,7 @@ export default function FormBuilderPage() {
                   {accentOptions.map((color) => (
                     <button
                       aria-label={`Accent ${color}`}
-                      className={`size-7 rounded-full border-2 transition ${accent === color ? "border-slate-900" : "border-transparent"}`}
+                      className={`size-9 sm:size-7 rounded-full border-2 transition ${accent === color ? "border-slate-900" : "border-transparent"}`}
                       key={color}
                       onClick={() => setAccent(color)}
                       style={{ backgroundColor: color }}
@@ -348,10 +348,10 @@ export default function FormBuilderPage() {
 
             <div className="mt-4 border-t border-slate-100 pt-4">
               <p className="mb-2 text-sm font-bold text-slate-600">Add a field</p>
-              <div className="flex flex-wrap gap-2">
+              <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
                 {addableTypes.map((type) => (
                   <button
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:border-emerald-300 hover:bg-emerald-50"
+                    className="inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-xs font-bold text-slate-700 hover:border-emerald-300 hover:bg-emerald-50 sm:min-h-0 sm:py-2"
                     key={type}
                     onClick={() => addField(type)}
                     type="button"
@@ -385,9 +385,9 @@ export default function FormBuilderPage() {
           </section>
 
           <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-soft">
-            <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <h3 className="text-lg font-black text-slate-950">5. Save &amp; Share</h3>
-              <button className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white hover:bg-emerald-700" onClick={saveForm} type="button">
+              <button className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white hover:bg-emerald-700" onClick={saveForm} type="button">
                 Save Form
               </button>
             </div>
@@ -395,16 +395,18 @@ export default function FormBuilderPage() {
             {link ? (
               <div className="mt-4">
                 <span className="mb-2 block text-sm font-bold text-slate-600">Shareable Link</span>
-                <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-2">
-                  <span className="min-w-0 flex-1 truncate px-2 text-sm font-semibold text-slate-700">{link}</span>
-                  <button className="inline-flex items-center gap-2 rounded-lg bg-slate-950 px-3 py-2 text-sm font-bold text-white hover:bg-slate-800" onClick={copyLink} type="button">
-                    <Copy className="size-4" />
-                    {copied ? "Copied" : "Copy"}
-                  </button>
-                  <a className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50" href={link} rel="noreferrer" target="_blank">
-                    <ExternalLink className="size-4" />
-                    Open
-                  </a>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-2">
+                  <p className="mb-2 truncate px-2 text-sm font-semibold text-slate-700">{link}</p>
+                  <div className="flex gap-2">
+                    <button className="inline-flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-lg bg-slate-950 px-3 py-2.5 text-sm font-bold text-white hover:bg-slate-800" onClick={copyLink} type="button">
+                      <Copy className="size-4" />
+                      {copied ? "Copied!" : "Copy Link"}
+                    </button>
+                    <a className="inline-flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50" href={link} rel="noreferrer" target="_blank">
+                      <ExternalLink className="size-4" />
+                      Open
+                    </a>
+                  </div>
                 </div>
                 <p className="mt-2 text-xs font-semibold text-slate-400">Aakho form link ma j encode thay che — koi pan device par khulse. Mobile match thase to saved client details auto bharai jashe.</p>
               </div>
@@ -427,7 +429,7 @@ export default function FormBuilderPage() {
 function ToggleButton({ active, children, onClick, title }: { active: boolean; children: React.ReactNode; onClick: () => void; title: string }) {
   return (
     <button
-      className={`grid size-9 place-items-center rounded-lg transition ${active ? "bg-emerald-600 text-white" : "text-slate-600 hover:bg-slate-100"}`}
+      className={`grid size-11 sm:size-9 place-items-center rounded-lg transition ${active ? "bg-emerald-600 text-white" : "text-slate-600 hover:bg-slate-100"}`}
       onClick={onClick}
       title={title}
       type="button"
@@ -466,7 +468,7 @@ function FieldEditor({
           <Icon className="size-4" />
         </span>
         <input
-          className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-bold outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
+          className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm font-bold outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
           onChange={(event) => onChange({ label: event.target.value })}
           placeholder="Field label"
           value={field.label}
@@ -475,9 +477,9 @@ function FieldEditor({
       </div>
 
       {meta.hasOptions ? (
-        <div className="mt-2 pl-10">
+        <div className="mt-2 sm:pl-10">
           <textarea
-            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
+            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
             onChange={(event) => onChange({ options: event.target.value.split("\n").map((line) => line.trim()).filter(Boolean) })}
             placeholder="One option per line"
             rows={3}
@@ -486,12 +488,12 @@ function FieldEditor({
         </div>
       ) : null}
 
-      <div className="mt-2 flex items-center justify-between pl-10">
-        <label className="inline-flex items-center gap-2 text-xs font-bold text-slate-600">
-          <input checked={Boolean(field.required)} className="size-4 accent-emerald-600" onChange={(event) => onChange({ required: event.target.checked })} type="checkbox" />
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-2 sm:pl-10">
+        <label className="inline-flex min-h-[44px] items-center gap-2 text-xs font-bold text-slate-600">
+          <input checked={Boolean(field.required)} className="size-5 accent-emerald-600" onChange={(event) => onChange({ required: event.target.checked })} type="checkbox" />
           Required
         </label>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-0.5">
           <IconBtn disabled={index === 0} onClick={onMoveUp} title="Move up"><ArrowUp className="size-4" /></IconBtn>
           <IconBtn disabled={index === total - 1} onClick={onMoveDown} title="Move down"><ArrowDown className="size-4" /></IconBtn>
           <IconBtn onClick={onDuplicate} title="Duplicate"><Copy className="size-4" /></IconBtn>
@@ -505,7 +507,7 @@ function FieldEditor({
 function IconBtn({ children, disabled, onClick, title, tone }: { children: React.ReactNode; disabled?: boolean; onClick: () => void; title: string; tone?: "danger" }) {
   return (
     <button
-      className={`grid size-8 place-items-center rounded-lg transition disabled:cursor-not-allowed disabled:opacity-30 ${tone === "danger" ? "text-rose-600 hover:bg-rose-50" : "text-slate-500 hover:bg-slate-100"}`}
+      className={`grid size-10 sm:size-8 place-items-center rounded-lg transition disabled:cursor-not-allowed disabled:opacity-30 ${tone === "danger" ? "text-rose-600 hover:bg-rose-50" : "text-slate-500 hover:bg-slate-100"}`}
       disabled={disabled}
       onClick={onClick}
       title={title}
@@ -520,7 +522,7 @@ function FormPreview({ form }: { form: BuilderForm }) {
   const { theme } = form;
   return (
     <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-soft" style={{ fontFamily: theme.fontFamily, fontSize: theme.fontSize }}>
-      <div className="p-6" style={{ textAlign: theme.align, borderTop: `4px solid ${theme.accent}` }}>
+      <div className="p-4 sm:p-6" style={{ textAlign: theme.align, borderTop: `4px solid ${theme.accent}` }}>
         <h2 style={{ fontWeight: theme.titleBold ? 800 : 600, fontStyle: theme.titleItalic ? "italic" : "normal", fontSize: theme.fontSize + 12 }}>
           {form.title || "Untitled form"}
         </h2>
@@ -531,11 +533,11 @@ function FormPreview({ form }: { form: BuilderForm }) {
           </span>
         ) : null}
       </div>
-      <div className="space-y-4 px-6 pb-6">
+      <div className="space-y-4 px-4 pb-4 sm:px-6 sm:pb-6">
         {form.fields.map((field) => (
           <PreviewField field={field} key={field.id} accent={theme.accent} />
         ))}
-        <button className="w-full rounded-xl px-5 py-3 text-sm font-black text-white" style={{ backgroundColor: theme.accent }} type="button">
+        <button className="w-full min-h-[48px] rounded-xl px-5 py-3 text-sm font-black text-white" style={{ backgroundColor: theme.accent }} type="button">
           {form.paid ? "Register & Pay" : "Confirm Registration"}
         </button>
       </div>
@@ -553,7 +555,7 @@ function PreviewField({ field, accent }: { field: BuilderField; accent: string }
       {field.required ? <span style={{ color: accent }}> *</span> : null}
     </span>
   );
-  const inputClass = "w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none";
+  const inputClass = "w-full rounded-lg border border-slate-300 bg-white px-3 py-3 text-base sm:text-sm outline-none";
 
   if (field.type === "paragraph") {
     return <label className="block">{label}<textarea className={inputClass} placeholder={field.placeholder} rows={3} /></label>;

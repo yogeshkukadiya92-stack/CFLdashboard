@@ -373,13 +373,13 @@ export default function RegistrationPage() {
                 <div className="mt-5 rounded-xl border border-slate-200 p-4">
                   <p className="text-sm font-black text-slate-700">Payment Option</p>
                   <div className="mt-3 flex flex-wrap gap-4 text-sm font-semibold">
-                    <label className="inline-flex items-center gap-2">
-                      <input checked={paymentMode === "Full"} onChange={() => setPaymentMode("Full")} type="radio" style={{ accentColor: theme.accent }} className="size-4" />
+                    <label className="inline-flex min-h-[44px] items-center gap-3">
+                      <input checked={paymentMode === "Full"} onChange={() => setPaymentMode("Full")} type="radio" style={{ accentColor: theme.accent }} className="size-5" />
                       Full Payment
                     </label>
                     {model.partPayment ? (
-                      <label className="inline-flex items-center gap-2">
-                        <input checked={paymentMode === "Part"} onChange={() => setPaymentMode("Part")} type="radio" style={{ accentColor: theme.accent }} className="size-4" />
+                      <label className="inline-flex min-h-[44px] items-center gap-3">
+                        <input checked={paymentMode === "Part"} onChange={() => setPaymentMode("Part")} type="radio" style={{ accentColor: theme.accent }} className="size-5" />
                         Part Payment
                       </label>
                     ) : null}
@@ -403,7 +403,7 @@ export default function RegistrationPage() {
               {message ? <p className="mt-5 rounded-xl bg-rose-50 px-4 py-3 text-sm font-black text-rose-700">{message}</p> : null}
 
               <button
-                className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-xl px-5 py-3.5 text-sm font-black text-white shadow-lg hover:opacity-95"
+                className="mt-6 inline-flex min-h-[52px] w-full items-center justify-center gap-2 rounded-xl px-5 py-3.5 text-base sm:text-sm font-black text-white shadow-lg hover:opacity-95"
                 onClick={submitRegistration}
                 style={{ backgroundColor: theme.accent }}
                 type="button"
@@ -443,7 +443,7 @@ function RenderField({
       {field.required ? <span style={{ color: accent }}> *</span> : null}
     </span>
   );
-  const inputClass = "w-full rounded-xl border border-slate-300 bg-white px-3.5 py-3 text-sm font-semibold outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100";
+  const inputClass = "w-full rounded-xl border border-slate-300 bg-white px-3.5 py-3 text-base sm:text-sm font-semibold outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100";
   const wide = field.type === "paragraph" || field.type === "radio" || field.type === "checkbox";
 
   let control: React.ReactNode;
@@ -461,10 +461,10 @@ function RenderField({
     control = (
       <div className="space-y-1.5">
         {(field.options ?? []).map((option) => (
-          <label className="flex items-center gap-2 text-sm font-semibold text-slate-700" key={option}>
+          <label className="flex min-h-[44px] items-center gap-3 text-sm font-semibold text-slate-700" key={option}>
             <input
               checked={field.type === "radio" ? value === option : selected.includes(option)}
-              className="size-4"
+              className="size-5"
               name={field.id}
               onChange={() => (field.type === "radio" ? onChange(option) : onToggle(option))}
               style={{ accentColor: accent }}
