@@ -9,6 +9,7 @@ import {
   Home,
   Import,
   Layers3,
+  LogOut,
   Menu,
   Merge,
   Search,
@@ -167,6 +168,11 @@ export function AdminPlatformShell({
     setOpenReportSections((current) => ({ ...current, [label]: !current[label] }));
   }
 
+  async function logout() {
+    await fetch("/api/auth/logout", { method: "POST" });
+    window.location.href = "/login";
+  }
+
   return (
     <main className="min-h-screen bg-slate-100 text-slate-950">
       <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/90 shadow-[0_1px_24px_rgba(15,23,42,0.05)] backdrop-blur-xl">
@@ -225,6 +231,14 @@ export function AdminPlatformShell({
             <div className="grid size-10 place-items-center rounded-lg bg-slate-950 text-sm font-black text-white shadow-lg shadow-slate-950/20">
               AU
             </div>
+            <button
+              aria-label="Logout"
+              className="grid size-10 place-items-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700"
+              onClick={logout}
+              type="button"
+            >
+              <LogOut className="size-4" />
+            </button>
           </div>
         </div>
       </header>
