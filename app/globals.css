@@ -225,12 +225,152 @@ textarea:focus-visible {
   outline-offset: 2px;
 }
 
+:root.dark {
+  color-scheme: dark;
+  background: #0a0f1a;
+}
+
 .dark body {
   color-scheme: dark;
+  color: #e9eef5;
   background:
-    radial-gradient(circle at 12% 0%, rgba(16, 163, 127, 0.16), transparent 28rem),
-    radial-gradient(circle at 90% 0%, rgba(99, 102, 241, 0.14), transparent 24rem),
-    linear-gradient(140deg, #0f1412 0%, #101513 48%, #151b19 100%);
+    radial-gradient(circle at 12% 0%, rgba(16, 185, 129, 0.14), transparent 30rem),
+    radial-gradient(circle at 92% 0%, rgba(99, 102, 241, 0.12), transparent 26rem),
+    linear-gradient(140deg, #0a0f1a 0%, #0b1120 52%, #0d1426 100%);
+  background-attachment: fixed;
+}
+
+/* ============================================================
+   Dark theme — drives the chrome from CSS variables and maps
+   the neutral Tailwind utilities. Exact-token (~=) selectors
+   are used so hover:/focus:/md: variants are NOT matched.
+   Accent utilities (emerald/indigo/amber/rose-500+) are left
+   untouched so brand colors stay intact.
+   ============================================================ */
+.dark main {
+  --cfl-surface: #131b2c;
+  --cfl-border: rgba(148, 163, 184, 0.16);
+  --cfl-border-strong: rgba(148, 163, 184, 0.24);
+  --cfl-text: #e9eef5;
+  --cfl-muted: #8b97a9;
+  --cfl-shadow: 0 18px 45px -34px rgba(0, 0, 0, 0.85);
+  color: var(--cfl-text);
+  background: transparent;
+}
+
+/* Surfaces */
+.dark main [class~="bg-white"],
+.dark main [class~="bg-white/90"] {
+  background-color: #131b2c !important;
+}
+.dark main header[class~="bg-white/90"] {
+  background-color: rgba(13, 20, 34, 0.9) !important;
+}
+.dark main [class~="bg-slate-50"] {
+  background-color: rgba(148, 163, 184, 0.06) !important;
+}
+.dark main [class~="bg-slate-100"] {
+  background-color: rgba(148, 163, 184, 0.08) !important;
+}
+.dark main thead {
+  background: rgba(148, 163, 184, 0.06) !important;
+}
+.dark main input,
+.dark main select,
+.dark main textarea {
+  background-color: #0f1726 !important;
+  color: var(--cfl-text);
+}
+
+/* Sidebar + primary dark buttons */
+.dark main aside[class~="bg-slate-950"] {
+  background-color: #0c1322 !important;
+}
+.dark main button[class~="bg-slate-950"],
+.dark main a[class~="bg-slate-950"] {
+  background-color: #1e293b !important;
+}
+.dark main button[class~="bg-slate-950"]:hover,
+.dark main a[class~="bg-slate-950"]:hover {
+  background-color: #273449 !important;
+}
+
+/* Soft tinted backgrounds */
+.dark main [class~="bg-emerald-50"] {
+  background-color: rgba(16, 185, 129, 0.14) !important;
+}
+.dark main [class~="bg-indigo-50"] {
+  background-color: rgba(99, 102, 241, 0.16) !important;
+}
+.dark main [class~="bg-amber-50"] {
+  background-color: rgba(245, 158, 11, 0.16) !important;
+}
+.dark main [class~="bg-rose-50"],
+.dark main [class~="bg-red-50"] {
+  background-color: rgba(244, 63, 94, 0.16) !important;
+}
+
+/* Text */
+.dark main [class~="text-slate-950"],
+.dark main [class~="text-slate-900"] {
+  color: #e9eef5 !important;
+}
+.dark main [class~="text-slate-800"],
+.dark main [class~="text-slate-700"],
+.dark main [class~="text-slate-600"] {
+  color: #c2ccdb !important;
+}
+.dark main [class~="text-slate-500"],
+.dark main [class~="text-slate-400"] {
+  color: #8b97a9 !important;
+}
+.dark main td {
+  color: #c2ccdb;
+}
+.dark main th {
+  color: #8b97a9 !important;
+}
+.dark main [class~="text-emerald-700"],
+.dark main [class~="text-emerald-800"] {
+  color: #6ee7b7 !important;
+}
+.dark main [class~="text-indigo-700"],
+.dark main [class~="text-indigo-600"] {
+  color: #a5b4fc !important;
+}
+.dark main [class~="text-amber-700"] {
+  color: #fbbf24 !important;
+}
+.dark main [class~="text-rose-700"],
+.dark main [class~="text-rose-600"],
+.dark main [class~="text-red-700"] {
+  color: #fda4af !important;
+}
+
+/* Borders + dividers */
+.dark main [class~="border-slate-100"],
+.dark main [class~="border-slate-200"],
+.dark main [class~="border-slate-200/80"],
+.dark main [class~="border-slate-300"] {
+  border-color: rgba(148, 163, 184, 0.16) !important;
+}
+.dark main [class~="border-emerald-100"] {
+  border-color: rgba(16, 185, 129, 0.28) !important;
+}
+.dark main [class~="border-indigo-100"] {
+  border-color: rgba(99, 102, 241, 0.3) !important;
+}
+.dark main [class~="border-rose-100"],
+.dark main [class~="border-amber-100"] {
+  border-color: rgba(244, 63, 94, 0.28) !important;
+}
+.dark main [class~="divide-slate-100"] > :not([hidden]) ~ :not([hidden]) {
+  border-color: rgba(148, 163, 184, 0.14) !important;
+}
+
+/* Theme toggle + logout chrome in the header */
+.dark main header [class~="bg-white"] {
+  background-color: #1e293b !important;
 }
 
 .scrollbar-thin {

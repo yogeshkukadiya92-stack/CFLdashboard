@@ -13,14 +13,13 @@ Open `http://localhost:3000`.
 
 ## What Is Built
 
-- Premium SaaS dashboard inspired by the generated CFL OS product concept.
-- Universal mobile search.
-- CRM lead database and detail profile.
-- Pipeline movement and AI follow-up surfaces.
-- Workshop, batch, attendance, funnel, payment, marketing, reports, support, team, and security modules.
-- CSV import/export for leads.
-- Dark/light mode and EN/HI/GU mode toggle.
-- PostgreSQL SaaS schema baseline in `database/schema.sql`.
+- Master-admin login (HMAC-signed session cookie) protecting every admin route.
+- Premium admin dashboard with live KPIs sourced from saved data.
+- Command palette in the header — press `Ctrl/Cmd + K`, then use arrow keys + Enter to jump to any page.
+- Workshop Master, Workshop Scheduling, Manage Client, Sales Person, Process, and Reports modules.
+- Excel/CSV import, duplicate-merge, and export for clients and workshops.
+- Public workshop registration page at `/register/[slug]` with full/part payment capture.
+- Optional Razorpay order + webhook endpoints and an optional PostgreSQL persistence layer (`database/schema.sql`).
 
 ## Production Path
 

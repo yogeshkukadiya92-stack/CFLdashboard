@@ -21,8 +21,9 @@ import {
   UsersRound,
   type LucideIcon
 } from "lucide-react";
-import { usePathname } from "next/navigation";
-import { type ReactNode, useMemo, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 type NavItem = {
   href: string;
@@ -149,8 +150,13 @@ export function AdminPlatformShell({
   title: string;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [searchFocused, setSearchFocused] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const searchBoxRef = useRef<HTMLDivElement>(null);
   const activeGroup = useMemo(() => navGroups.find((group) => isGroupActive(group, pathname))?.label ?? "Workshop", [pathname]);
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({ [activeGroup]: true });
   const [openReportSections, setOpenReportSections] = useState<Record<string, boolean>>({ Workshop: true });
@@ -159,6 +165,62 @@ export function AdminPlatformShell({
     if (!value) return [];
     return allNavItems.filter((item) => item.label.toLowerCase().includes(value)).slice(0, 7);
   }, [searchQuery]);
+  const showResults = searchFocused && searchMatches.length > 0;
+
+  useEffect(() => {
+    setActiveIndex(0);
+  }, [searchQuery]);
+
+  // Global Ctrl/Cmd+K shortcut to focus the command palette.
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        searchInputRef.current?.focus();
+        searchInputRef.current?.select();
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
+  // Close the results dropdown when clicking outside the search box.
+  useEffect(() => {
+    function onPointerDown(event: MouseEvent) {
+      if (searchBoxRef.current && !searchBoxRef.current.contains(event.target as Node)) {
+        setSearchFocused(false);
+      }
+    }
+    document.addEventListener("mousedown", onPointerDown);
+    return () => document.removeEventListener("mousedown", onPointerDown);
+  }, []);
+
+  function goToMatch(href: string) {
+    setSearchQuery("");
+    setSearchFocused(false);
+    router.push(href);
+  }
+
+  function onSearchKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
+    if (event.key === "Escape") {
+      setSearchQuery("");
+      setSearchFocused(false);
+      searchInputRef.current?.blur();
+      return;
+    }
+    if (!searchMatches.length) return;
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setActiveIndex((index) => (index + 1) % searchMatches.length);
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setActiveIndex((index) => (index - 1 + searchMatches.length) % searchMatches.length);
+    } else if (event.key === "Enter") {
+      event.preventDefault();
+      const match = searchMatches[activeIndex] ?? searchMatches[0];
+      if (match) goToMatch(match.href);
+    }
+  }
 
   function toggleGroup(label: string) {
     setOpenGroups((current) => ({ ...current, [label]: !current[label] }));
@@ -192,27 +254,41 @@ export function AdminPlatformShell({
             </div>
           </div>
 
-          <div className="relative hidden min-w-[360px] max-w-xl flex-1 items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 md:flex">
+          <div
+            className="relative hidden min-w-[360px] max-w-xl flex-1 items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 transition focus-within:border-emerald-300 focus-within:bg-white focus-within:shadow-sm md:flex"
+            ref={searchBoxRef}
+          >
             <Search className="size-4 text-slate-400" />
             <input
+              aria-label="Search pages, reports and workflows"
               className="w-full bg-transparent text-sm font-semibold outline-none placeholder:text-slate-400"
               onChange={(event) => setSearchQuery(event.target.value)}
+              onFocus={() => setSearchFocused(true)}
+              onKeyDown={onSearchKeyDown}
               placeholder="Search pages, reports, workflows..."
+              ref={searchInputRef}
               value={searchQuery}
             />
             <kbd className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-black text-slate-400">Ctrl K</kbd>
-            {searchMatches.length ? (
+            {showResults ? (
               <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-50 overflow-hidden rounded-xl border border-slate-200 bg-white p-2 shadow-2xl">
-                {searchMatches.map((item) => {
+                {searchMatches.map((item, index) => {
                   const Icon = item.icon;
+                  const active = index === activeIndex;
                   return (
                     <a
-                      className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-bold text-slate-700 transition hover:bg-emerald-50 hover:text-emerald-800"
+                      className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-bold transition ${
+                        active ? "bg-emerald-50 text-emerald-800" : "text-slate-700 hover:bg-emerald-50 hover:text-emerald-800"
+                      }`}
                       href={item.href}
                       key={`${item.href}-${item.label}`}
-                      onClick={() => setSearchQuery("")}
+                      onClick={(event) => {
+                        event.preventDefault();
+                        goToMatch(item.href);
+                      }}
+                      onMouseEnter={() => setActiveIndex(index)}
                     >
-                      <span className="grid size-8 place-items-center rounded-lg bg-slate-100 text-slate-600">
+                      <span className={`grid size-8 place-items-center rounded-lg ${active ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>
                         <Icon className="size-4" />
                       </span>
                       {item.label}
@@ -231,6 +307,7 @@ export function AdminPlatformShell({
             <div className="grid size-10 place-items-center rounded-lg bg-slate-950 text-sm font-black text-white shadow-lg shadow-slate-950/20">
               AU
             </div>
+            <ThemeToggle />
             <button
               aria-label="Logout"
               className="grid size-10 place-items-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700"
