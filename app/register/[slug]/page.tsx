@@ -9,6 +9,7 @@ import { useParams, useSearchParams } from "next/navigation";
 
 const REGISTRATION_STORAGE_KEY = "cfl_registrations_v1";
 const WORKSHOP_MASTER_STORAGE_KEY = "cfl_workshop_master_records_v1";
+const CLIENTS_STORAGE_KEY = "cfl_clients_v1";
 
 type WorkshopMasterRecord = {
   id: string;
@@ -16,6 +17,14 @@ type WorkshopMasterRecord = {
   facilitator?: string;
   productGroup?: string;
   isPaid?: boolean;
+};
+
+type ClientRecord = {
+  city?: string;
+  email?: string;
+  id: number | string;
+  mobile?: string;
+  name?: string;
 };
 
 type ResolvedWorkshop = {
@@ -49,9 +58,15 @@ export default function RegistrationPage() {
   const paidEnabled = searchParams.get("paid") !== "0";
   const partEnabled = searchParams.get("part") === "1";
   const feeParam = Number(searchParams.get("fee") || 0);
+  const titleParam = searchParams.get("title");
+  const widParam = searchParams.get("wid");
+  const facilitatorParam = searchParams.get("facilitator");
+  const venueParam = searchParams.get("venue");
 
   const [ready, setReady] = useState(false);
   const [workshop, setWorkshop] = useState<ResolvedWorkshop | null>(null);
+  const [clients, setClients] = useState<ClientRecord[]>([]);
+  const [matchedClient, setMatchedClient] = useState<ClientRecord | null>(null);
   const [form, setForm] = useState({
     city: "",
     email: "",
@@ -63,27 +78,42 @@ export default function RegistrationPage() {
   const [message, setMessage] = useState("");
   const [success, setSuccess] = useState(false);
 
-  // Resolve the workshop from saved master records first, then the static seed.
+  // Resolve the workshop. A self-contained link (title in the query string)
+  // works on any device; otherwise fall back to saved records / static seed.
   useEffect(() => {
     let resolved: ResolvedWorkshop | null = null;
 
-    try {
-      const raw = window.localStorage.getItem(WORKSHOP_MASTER_STORAGE_KEY);
-      const records = raw ? (JSON.parse(raw) as WorkshopMasterRecord[]) : [];
-      const match = records.find((record) => slugify(record.name) === slug || record.id === slug);
-      if (match) {
-        resolved = {
-          id: match.id,
-          slug: slugify(match.name) || match.id,
-          title: match.name,
-          facilitator: match.facilitator || "CFL Facilitator",
-          city: "TBA",
-          price: feeParam > 0 ? feeParam : 0,
-          isPaid: Boolean(match.isPaid)
-        };
+    if (titleParam) {
+      resolved = {
+        id: widParam || slug,
+        slug,
+        title: titleParam,
+        facilitator: facilitatorParam || "CFL Facilitator",
+        city: venueParam || "TBA",
+        price: feeParam > 0 ? feeParam : 0,
+        isPaid: paidEnabled && feeParam > 0
+      };
+    }
+
+    if (!resolved) {
+      try {
+        const raw = window.localStorage.getItem(WORKSHOP_MASTER_STORAGE_KEY);
+        const records = raw ? (JSON.parse(raw) as WorkshopMasterRecord[]) : [];
+        const match = records.find((record) => slugify(record.name) === slug || record.id === slug || record.id === widParam);
+        if (match) {
+          resolved = {
+            id: match.id,
+            slug: slugify(match.name) || match.id,
+            title: match.name,
+            facilitator: match.facilitator || "CFL Facilitator",
+            city: venueParam || "TBA",
+            price: feeParam > 0 ? feeParam : 0,
+            isPaid: Boolean(match.isPaid)
+          };
+        }
+      } catch {
+        resolved = null;
       }
-    } catch {
-      resolved = null;
     }
 
     if (!resolved) {
@@ -103,7 +133,38 @@ export default function RegistrationPage() {
 
     setWorkshop(resolved);
     setReady(true);
-  }, [feeParam, slug]);
+  }, [facilitatorParam, feeParam, paidEnabled, slug, titleParam, venueParam, widParam]);
+
+  // Load saved clients so a known mobile number can auto-fill the form.
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(CLIENTS_STORAGE_KEY);
+      setClients(raw ? (JSON.parse(raw) as ClientRecord[]) : []);
+    } catch {
+      setClients([]);
+    }
+  }, []);
+
+  // When the entered mobile matches an existing client, auto-fill their details.
+  useEffect(() => {
+    const digits = cleanMobile(form.mobile);
+    if (digits.length < 10 || clients.length === 0) {
+      setMatchedClient(null);
+      return;
+    }
+    const found = clients.find((client) => cleanMobile(client.mobile ?? "").endsWith(digits) || digits.endsWith(cleanMobile(client.mobile ?? "")));
+    if (!found) {
+      setMatchedClient(null);
+      return;
+    }
+    setMatchedClient(found);
+    setForm((prev) => ({
+      ...prev,
+      fullName: prev.fullName.trim() ? prev.fullName : found.name ?? "",
+      email: prev.email.trim() ? prev.email : found.email ?? "",
+      city: prev.city.trim() ? prev.city : found.city ?? ""
+    }));
+  }, [clients, form.mobile]);
 
   const venue = searchParams.get("venue") ?? workshop?.city ?? "TBA";
   const chargeable = paidEnabled && (workshop?.isPaid ?? true);
@@ -209,6 +270,13 @@ export default function RegistrationPage() {
             <div className="mb-6 flex items-start gap-3 rounded-xl bg-emerald-50 px-4 py-4 text-sm font-bold text-emerald-700">
               <CheckCircle2 className="mt-0.5 size-5 shrink-0" />
               <span>{message}</span>
+            </div>
+          ) : null}
+
+          {matchedClient && !success ? (
+            <div className="mb-6 flex items-start gap-3 rounded-xl bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700">
+              <CheckCircle2 className="mt-0.5 size-5 shrink-0" />
+              <span>Welcome back, {matchedClient.name || "valued client"}! We found your details and filled them in — please review and confirm.</span>
             </div>
           ) : null}
 

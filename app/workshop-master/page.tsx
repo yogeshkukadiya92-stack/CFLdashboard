@@ -1,7 +1,7 @@
 "use client";
 
 import { AdminPlatformShell } from "@/components/admin-platform-shell";
-import { AlertCircle, Check, ChevronDown, Download, Edit3, Eye, HelpCircle, RefreshCw, Save, Search, Trash2, UsersRound, X } from "lucide-react";
+import { AlertCircle, Check, ChevronDown, Copy, Download, Edit3, ExternalLink, Eye, HelpCircle, Link2, RefreshCw, Save, Search, Trash2, UsersRound, X } from "lucide-react";
 import type { RegistrationEntry } from "@/lib/types";
 import { generateId } from "@/lib/utils";
 import { type FormEvent, useEffect, useMemo, useState } from "react";
@@ -57,6 +57,7 @@ export default function WorkshopMasterPage() {
   const [selectedWorkshopId, setSelectedWorkshopId] = useState<string | null>(null);
   const [showParticipants, setShowParticipants] = useState(false);
   const [registrations, setRegistrations] = useState<RegistrationEntry[]>([]);
+  const [linkWorkshop, setLinkWorkshop] = useState<WorkshopRecord | null>(null);
 
   useEffect(() => {
     const raw = window.localStorage.getItem(STORAGE_KEY);
@@ -301,10 +302,13 @@ export default function WorkshopMasterPage() {
                   <tr className="hover:bg-indigo-50/40" key={record.id}>
                     <td className="px-4 py-4">
                       <div className="flex gap-2">
-                        <button className="grid size-9 place-items-center rounded-xl bg-indigo-600 text-white hover:bg-indigo-700" onClick={() => editRecord(record)} type="button">
+                        <button className="grid size-9 place-items-center rounded-xl bg-emerald-600 text-white hover:bg-emerald-700" onClick={() => setLinkWorkshop(record)} title="Registration link" type="button">
+                          <Link2 className="size-4" />
+                        </button>
+                        <button className="grid size-9 place-items-center rounded-xl bg-indigo-600 text-white hover:bg-indigo-700" onClick={() => editRecord(record)} title="Edit" type="button">
                           <Edit3 className="size-4" />
                         </button>
-                        <button className="grid size-9 place-items-center rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-100" onClick={() => deleteRecord(record.id)} type="button">
+                        <button className="grid size-9 place-items-center rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-100" onClick={() => deleteRecord(record.id)} title="Delete" type="button">
                           <Trash2 className="size-4" />
                         </button>
                       </div>
@@ -412,7 +416,128 @@ export default function WorkshopMasterPage() {
           ) : null}
         </section>
       ) : null}
+
+      {linkWorkshop ? <RegistrationLinkModal workshop={linkWorkshop} onClose={() => setLinkWorkshop(null)} /> : null}
     </AdminPlatformShell>
+  );
+}
+
+function workshopSlug(value: string) {
+  return value.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+}
+
+function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord; onClose: () => void }) {
+  const [paid, setPaid] = useState(workshop.isPaid);
+  const [fee, setFee] = useState("");
+  const [partPayment, setPartPayment] = useState(false);
+  const [batch, setBatch] = useState("Main Batch");
+  const [venue, setVenue] = useState("");
+  const [copied, setCopied] = useState(false);
+
+  const link = useMemo(() => {
+    if (typeof window === "undefined") return "";
+    const slug = workshopSlug(workshop.name) || workshop.id;
+    const params = new URLSearchParams();
+    params.set("wid", workshop.id);
+    params.set("title", workshop.name);
+    if (workshop.facilitator) params.set("facilitator", workshop.facilitator);
+    if (batch.trim()) params.set("batch", batch.trim());
+    if (venue.trim()) params.set("venue", venue.trim());
+    if (paid) {
+      params.set("paid", "1");
+      params.set("fee", String(Number(fee) || 0));
+      params.set("part", partPayment ? "1" : "0");
+    } else {
+      params.set("paid", "0");
+    }
+    return `${window.location.origin}/register/${slug}?${params.toString()}`;
+  }, [batch, fee, paid, partPayment, venue, workshop]);
+
+  async function copyLink() {
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopied(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-slate-950/40 p-3 sm:p-4">
+      <div className="flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b border-slate-100 p-5">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.2em] text-emerald-600">Registration Link</p>
+            <h3 className="mt-1 text-xl font-black text-slate-950">{workshop.name}</h3>
+          </div>
+          <button className="grid size-10 place-items-center rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50" onClick={onClose} type="button"><X className="size-4" /></button>
+        </div>
+
+        <div className="space-y-5 overflow-y-auto p-5">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="block">
+              <span className="mb-2 block text-sm font-bold text-slate-600">Batch</span>
+              <input className={inputClass} onChange={(event) => setBatch(event.target.value)} placeholder="Main Batch" value={batch} />
+            </label>
+            <label className="block">
+              <span className="mb-2 block text-sm font-bold text-slate-600">Venue</span>
+              <input className={inputClass} onChange={(event) => setVenue(event.target.value)} placeholder="Online / City / Address" value={venue} />
+            </label>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 p-4">
+            <div className="flex flex-wrap gap-3">
+              <button
+                className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-bold ${!paid ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-slate-200 text-slate-600 hover:bg-slate-50"}`}
+                onClick={() => setPaid(false)}
+                type="button"
+              >
+                Free Registration
+              </button>
+              <button
+                className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-bold ${paid ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-slate-200 text-slate-600 hover:bg-slate-50"}`}
+                onClick={() => setPaid(true)}
+                type="button"
+              >
+                Paid Registration
+              </button>
+            </div>
+
+            {paid ? (
+              <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                <label className="block">
+                  <span className="mb-2 block text-sm font-bold text-slate-600">Fee (INR)</span>
+                  <input className={inputClass} inputMode="numeric" onChange={(event) => setFee(event.target.value)} placeholder="0" value={fee} />
+                </label>
+                <label className="flex min-h-[44px] items-center gap-3 self-end rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700">
+                  <input checked={partPayment} className="size-5 accent-emerald-600" onChange={(event) => setPartPayment(event.target.checked)} type="checkbox" />
+                  Allow part payment
+                </label>
+              </div>
+            ) : null}
+          </div>
+
+          <div>
+            <span className="mb-2 block text-sm font-bold text-slate-600">Shareable Link</span>
+            <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-2">
+              <span className="min-w-0 flex-1 truncate px-2 text-sm font-semibold text-slate-700">{link}</span>
+              <button className="inline-flex items-center gap-2 rounded-lg bg-slate-950 px-3 py-2 text-sm font-bold text-white hover:bg-slate-800" onClick={copyLink} type="button">
+                <Copy className="size-4" />
+                {copied ? "Copied" : "Copy"}
+              </button>
+              <a className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50" href={link} rel="noreferrer" target="_blank">
+                <ExternalLink className="size-4" />
+                Open
+              </a>
+            </div>
+            <p className="mt-2 text-xs font-semibold text-slate-400">
+              Aa link koi pan device par khule che. Mobile number nakhse ane e tamaro saved client hoy to details auto bharai jashe (e for same-device data).
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
