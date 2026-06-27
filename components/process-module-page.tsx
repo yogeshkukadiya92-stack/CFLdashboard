@@ -41,6 +41,7 @@ type WorkshopMasterRecord = {
 
 type ClientStorageRecord = {
   city?: string;
+  email?: string;
   id: number | string;
   mobile?: string;
   name?: string;
@@ -970,6 +971,7 @@ function MergeClientWorkflow() {
 
 function ManualClientRegistrationWorkflow() {
   const [workshops, setWorkshops] = useState<WorkshopMasterRecord[]>([]);
+  const [clients, setClients] = useState<ClientStorageRecord[]>([]);
   const [workshop, setWorkshop] = useState("");
   const [batch, setBatch] = useState("");
   const [name, setName] = useState("");
@@ -978,10 +980,29 @@ function ManualClientRegistrationWorkflow() {
   const [source, setSource] = useState("");
   const [success, setSuccess] = useState("");
   const [isError, setIsError] = useState(false);
+  const [showClientList, setShowClientList] = useState(false);
 
   useEffect(() => {
     setWorkshops(readLocalStorageArray<WorkshopMasterRecord>(WORKSHOP_MASTER_STORAGE_KEY));
+    setClients(readLocalStorageArray<ClientStorageRecord>(CLIENTS_STORAGE_KEY).filter((client) => (client.name ?? "").trim()));
   }, []);
+
+  const clientMatches = useMemo(() => {
+    const normalized = name.trim().toLowerCase();
+    const list = normalized
+      ? clients.filter((client) =>
+          `${client.name ?? ""} ${client.mobile ?? ""} ${client.email ?? ""}`.toLowerCase().includes(normalized)
+        )
+      : clients;
+    return list.slice(0, 8);
+  }, [clients, name]);
+
+  function selectExistingClient(client: ClientStorageRecord) {
+    setName(client.name ?? "");
+    if (client.mobile) setMobile(client.mobile);
+    if (client.email) setEmail(client.email);
+    setShowClientList(false);
+  }
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -1061,13 +1082,45 @@ function ManualClientRegistrationWorkflow() {
 
             <label className="block">
               <span className="mb-2 block text-sm font-semibold text-gray-600">Client Name</span>
-              <input
-                className="w-full rounded-md border border-gray-300 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-400"
-                onChange={(event) => setName(event.target.value)}
-                placeholder="Client Name"
-                required
-                value={name}
-              />
+              <span className="relative block">
+                <input
+                  autoComplete="off"
+                  className="w-full rounded-md border border-gray-300 px-3 py-2.5 pr-10 text-sm outline-none focus:ring-2 focus:ring-indigo-400"
+                  onBlur={() => window.setTimeout(() => setShowClientList(false), 150)}
+                  onChange={(event) => {
+                    setName(event.target.value);
+                    setShowClientList(true);
+                  }}
+                  onFocus={() => setShowClientList(true)}
+                  placeholder="Type a new name or pick an existing client"
+                  required
+                  value={name}
+                />
+                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-gray-400" />
+                {showClientList && clientMatches.length ? (
+                  <div className="absolute z-20 mt-2 max-h-64 w-full overflow-auto rounded-xl border border-slate-200 bg-white p-2 shadow-xl">
+                    <p className="px-3 pb-1 pt-1 text-[11px] font-bold uppercase tracking-wide text-slate-400">Existing clients</p>
+                    {clientMatches.map((client) => (
+                      <button
+                        className="flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left hover:bg-indigo-50"
+                        key={client.id}
+                        onClick={() => selectExistingClient(client)}
+                        type="button"
+                      >
+                        <span className="min-w-0">
+                          <span className="block truncate text-sm font-bold text-slate-900">{client.name}</span>
+                          <span className="block truncate text-xs font-semibold text-slate-500">
+                            {[client.mobile, client.email].filter(Boolean).join(" · ") || "No contact saved"}
+                          </span>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </span>
+              <span className="mt-1 block text-xs font-semibold text-slate-400">
+                {clients.length ? "Saved client select karo, athva navu naam type karo." : "Koi saved client nathi — navu naam type karo."}
+              </span>
             </label>
 
             <label className="block">
