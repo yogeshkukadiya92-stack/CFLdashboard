@@ -215,6 +215,7 @@ export interface BuilderForm {
   fee: number;
   partPayment: boolean;
   tiers?: PaymentTier[];
+  highlights?: string[];
   fields: BuilderField[];
   updatedAt: string;
 }

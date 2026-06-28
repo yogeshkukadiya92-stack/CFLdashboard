@@ -9,6 +9,7 @@ import {
   ArrowDown,
   ArrowUp,
   Bold,
+  Check,
   CheckSquare,
   ChevronDown,
   Circle,
@@ -123,6 +124,7 @@ export default function FormBuilderPage() {
   const [fee, setFee] = useState("");
   const [partPayment, setPartPayment] = useState(false);
   const [tiers, setTiers] = useState<PaymentTier[]>([]);
+  const [highlights, setHighlights] = useState<string[]>([]);
   const [fields, setFields] = useState<BuilderField[]>(defaultFields);
   const [fontFamily, setFontFamily] = useState(fontOptions[0].value);
   const [fontSize, setFontSize] = useState(16);
@@ -161,10 +163,11 @@ export default function FormBuilderPage() {
       fee: Number(fee) || 0,
       partPayment,
       tiers: tiers.length > 0 ? tiers : undefined,
+      highlights: highlights.filter(Boolean).length > 0 ? highlights.filter(Boolean) : undefined,
       fields,
       updatedAt: new Date().toISOString()
     };
-  }, [accent, align, bannerUrl, batch, description, fee, fields, fontFamily, fontSize, logoUrl, paid, partPayment, tiers, title, titleBold, titleItalic, workshop, workshopId]);
+  }, [accent, align, bannerUrl, batch, description, fee, fields, fontFamily, fontSize, highlights, logoUrl, paid, partPayment, tiers, title, titleBold, titleItalic, workshop, workshopId]);
 
   const link = useMemo(() => {
     if (typeof window === "undefined" || !workshopId) return "";
@@ -504,8 +507,41 @@ export default function FormBuilderPage() {
           </section>
 
           <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-soft">
+            <h3 className="text-lg font-black text-slate-950">5. What&apos;s Included</h3>
+            <p className="mt-1 text-xs font-semibold text-slate-400">Workshop ma shu shu milse e add karo — &quot;What you will get&quot;</p>
+            <div className="mt-4 space-y-2">
+              {highlights.map((item, i) => (
+                <div className="flex items-center gap-2" key={i}>
+                  <Check className="size-4 shrink-0 text-emerald-600" />
+                  <input
+                    className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
+                    onChange={(e) => setHighlights((prev) => prev.map((v, j) => j === i ? e.target.value : v))}
+                    placeholder="e.g. Certificate of completion"
+                    value={item}
+                  />
+                  <button
+                    className="grid size-9 shrink-0 place-items-center rounded-lg text-rose-500 hover:bg-rose-50"
+                    onClick={() => setHighlights((prev) => prev.filter((_, j) => j !== i))}
+                    type="button"
+                  >
+                    <Trash2 className="size-4" />
+                  </button>
+                </div>
+              ))}
+              <button
+                className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-slate-300 px-3 py-2.5 text-xs font-bold text-slate-500 hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700"
+                onClick={() => setHighlights((prev) => [...prev, ""])}
+                type="button"
+              >
+                <Plus className="size-3.5" />
+                Add Item
+              </button>
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-soft">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <h3 className="text-lg font-black text-slate-950">5. Save &amp; Share</h3>
+              <h3 className="text-lg font-black text-slate-950">6. Save &amp; Share</h3>
               <button className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white hover:bg-emerald-700" onClick={saveForm} type="button">
                 Save Form
               </button>
@@ -723,6 +759,19 @@ function FormPreview({ form }: { form: BuilderForm }) {
           </div>
         ) : null}
       </div>
+      {form.highlights && form.highlights.length > 0 ? (
+        <div className="mx-4 mb-0 rounded-xl border border-slate-100 bg-slate-50 p-4 sm:mx-6">
+          <p className="mb-2 text-sm font-black text-slate-800">What you&apos;ll get</p>
+          <ul className="space-y-1.5">
+            {form.highlights.map((item, i) => (
+              <li className="flex items-start gap-2 text-sm font-semibold text-slate-700" key={i}>
+                <Check className="mt-0.5 size-4 shrink-0" style={{ color: theme.accent }} />
+                {item}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
       <div className="space-y-4 px-4 pb-4 sm:px-6 sm:pb-6">
         {form.paid && form.tiers && form.tiers.length > 0 ? (
           <div>

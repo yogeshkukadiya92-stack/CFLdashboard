@@ -3,7 +3,7 @@
 import { workshops as seedWorkshops } from "@/lib/data";
 import type { BuilderField, BuilderForm, BuilderTheme, PaymentTier, RegistrationEntry } from "@/lib/types";
 import { decodeJsonParam, formatCurrency } from "@/lib/utils";
-import { AlertTriangle, CheckCircle2, ShieldCheck } from "lucide-react";
+import { AlertTriangle, Check, CheckCircle2, ShieldCheck } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 
@@ -26,6 +26,7 @@ type FormModel = {
   fee: number;
   partPayment: boolean;
   tiers?: PaymentTier[];
+  highlights?: string[];
   theme: BuilderTheme;
   fields: BuilderField[];
 };
@@ -102,6 +103,7 @@ export default function RegistrationPage() {
           fee: decoded.fee || 0,
           partPayment: Boolean(decoded.partPayment),
           tiers: decoded.tiers && decoded.tiers.length > 0 ? decoded.tiers : undefined,
+          highlights: decoded.highlights && decoded.highlights.length > 0 ? decoded.highlights : undefined,
           theme: { ...defaultTheme, ...decoded.theme },
           fields: decoded.fields
         };
@@ -355,6 +357,22 @@ export default function RegistrationPage() {
             {model.paid ? (hasTiers ? `Starting ${formatCurrency(Math.min(...tierList.map((t) => t.fee)))}` : `Fee: ${formatCurrency(fullAmount)}`) : "Free Registration"}
           </p>
         </div>
+
+        {model.highlights && model.highlights.length > 0 ? (
+          <div className="mx-6 rounded-xl border border-emerald-100 bg-emerald-50/50 p-5 md:mx-8">
+            <p className="mb-3 text-sm font-black text-slate-800">What you&apos;ll get</p>
+            <ul className="grid gap-2 sm:grid-cols-2">
+              {model.highlights.map((item, i) => (
+                <li className="flex items-start gap-2.5 text-sm font-semibold text-slate-700" key={i}>
+                  <span className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-full" style={{ backgroundColor: theme.accent }}>
+                    <Check className="size-3 text-white" />
+                  </span>
+                  {item}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
 
         <div className="p-6 md:p-8">
           {success ? (
