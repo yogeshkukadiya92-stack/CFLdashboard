@@ -18,8 +18,10 @@ type WorkshopRecord = {
 
 const STORAGE_KEY = "cfl_workshop_master_records_v1";
 const REGISTRATION_STORAGE_KEY = "cfl_registrations_v1";
-const workshopTypes = ["1-2-1 Coaching", "Workshop", "Online Event", "Offline Event", "Hybrid Program"];
-const facilitators = ["Dr Luv Patel", "Amit Verma", "Neha Kapoor", "Arjun Sharma"];
+const WORKSHOP_TYPES_STORAGE_KEY = "cfl_workshop_types_v1";
+const FACILITATORS_STORAGE_KEY = "cfl_facilitators_v1";
+const defaultWorkshopTypes = ["1-2-1 Coaching", "Workshop", "Online Event", "Offline Event", "Hybrid Program"];
+const defaultFacilitators = ["Dr Luv Patel", "Amit Verma", "Neha Kapoor", "Arjun Sharma"];
 const productGroups = ["Health", "Spiritual", "Leadership", "Sales", "Fitness", "Business Growth"];
 const fields = [
   ["firstName", "First Name", true],
@@ -51,6 +53,8 @@ export default function WorkshopMasterPage() {
   const [isPaid, setIsPaid] = useState(false);
   const [activeFields, setActiveFields] = useState<string[]>([...defaultFields]);
   const [records, setRecords] = useState<WorkshopRecord[]>([]);
+  const [workshopTypes, setWorkshopTypes] = useState<string[]>(defaultWorkshopTypes);
+  const [facilitators, setFacilitators] = useState<string[]>(defaultFacilitators);
   const [message, setMessage] = useState("");
   const [search, setSearch] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -62,6 +66,8 @@ export default function WorkshopMasterPage() {
   useEffect(() => {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (raw) setRecords(JSON.parse(raw) as WorkshopRecord[]);
+    setWorkshopTypes(readMasterNames(WORKSHOP_TYPES_STORAGE_KEY, defaultWorkshopTypes));
+    setFacilitators(readMasterNames(FACILITATORS_STORAGE_KEY, defaultFacilitators));
     const registrationRaw = window.localStorage.getItem(REGISTRATION_STORAGE_KEY);
     if (registrationRaw) setRegistrations(JSON.parse(registrationRaw) as RegistrationEntry[]);
   }, []);
@@ -424,6 +430,18 @@ export default function WorkshopMasterPage() {
 
 function workshopSlug(value: string) {
   return value.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+}
+
+function readMasterNames(key: string, defaults: string[]) {
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return defaults;
+    const records = JSON.parse(raw) as Array<{ name?: string }>;
+    const names = records.map((record) => record.name?.trim()).filter(Boolean) as string[];
+    return names.length ? names : defaults;
+  } catch {
+    return defaults;
+  }
 }
 
 function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord; onClose: () => void }) {

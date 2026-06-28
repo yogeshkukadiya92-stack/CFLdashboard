@@ -32,11 +32,13 @@ type ScheduleRecord = {
 };
 
 const WORKSHOP_STORAGE_KEY = "cfl_workshop_master_records_v1";
+const FACILITATORS_STORAGE_KEY = "cfl_facilitators_v1";
 const SCHEDULE_STORAGE_KEY = "cfl_event_schedules_v1";
 const inputClass = "w-full rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-sm outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 disabled:bg-slate-100 disabled:text-slate-400";
 
 export default function ManageEventSchedulePage() {
   const [workshops, setWorkshops] = useState<WorkshopRecord[]>([]);
+  const [facilitatorMasters, setFacilitatorMasters] = useState<string[]>([]);
   const [schedules, setSchedules] = useState<ScheduleRecord[]>([]);
   const [showData, setShowData] = useState(false);
   const [transferLeadToCrm, setTransferLeadToCrm] = useState(false);
@@ -59,6 +61,7 @@ export default function ManageEventSchedulePage() {
   useEffect(() => {
     try {
       setWorkshops(JSON.parse(window.localStorage.getItem(WORKSHOP_STORAGE_KEY) || "[]") as WorkshopRecord[]);
+      setFacilitatorMasters(readMasterNames(FACILITATORS_STORAGE_KEY));
       setSchedules(JSON.parse(window.localStorage.getItem(SCHEDULE_STORAGE_KEY) || "[]") as ScheduleRecord[]);
     } catch {
       setWorkshops([]);
@@ -71,7 +74,7 @@ export default function ManageEventSchedulePage() {
     return Math.round((values.filter(Boolean).length / values.length) * 100);
   }, [batch, discountValue, facilitator, feesWithTax, isPaidEvent, maxOrderQty, minOrderQty, orderQtyTitle, selectedEvent]);
   const eventOptions = workshops.map((workshop) => workshop.name);
-  const facilitatorOptions = Array.from(new Set(workshops.map((workshop) => workshop.facilitator).filter(Boolean)));
+  const facilitatorOptions = Array.from(new Set([...facilitatorMasters, ...workshops.map((workshop) => workshop.facilitator)].filter(Boolean)));
 
   function clear() {
     setTransferLeadToCrm(false);
@@ -258,4 +261,12 @@ function SelectBox({ label, onChange, options, value }: { label: string; onChang
 }
 function Preview({ label, value }: { label: string; value: string }) {
   return <div className="flex justify-between gap-3 border-b border-slate-100 py-2 text-sm last:border-0"><span className="text-slate-500">{label}</span><span className="text-right font-bold text-slate-900">{value}</span></div>;
+}
+function readMasterNames(key: string) {
+  try {
+    const records = JSON.parse(window.localStorage.getItem(key) || "[]") as Array<{ name?: string }>;
+    return records.map((record) => record.name?.trim()).filter(Boolean) as string[];
+  } catch {
+    return [];
+  }
 }
