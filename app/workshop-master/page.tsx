@@ -1,7 +1,7 @@
 "use client";
 
 import { AdminPlatformShell } from "@/components/admin-platform-shell";
-import { AlertCircle, ArrowDown, ArrowUp, Check, CheckSquare, ChevronDown, Circle, Copy, Download, Edit3, ExternalLink, Eye, Heading, HelpCircle, Link2, Mail, Plus, QrCode, RefreshCw, Save, Search, Smartphone, Trash2, Type, UsersRound, X } from "lucide-react";
+import { AlertCircle, ArrowDown, ArrowUp, Check, CheckSquare, ChevronDown, Circle, Copy, Download, Edit3, ExternalLink, Eye, Heading, Link2, Mail, Plus, QrCode, RefreshCw, Save, Search, Smartphone, Trash2, Type, UsersRound, X } from "lucide-react";
 import type { BuilderField, BuilderFieldType, BuilderForm, BuilderTheme, RegistrationEntry } from "@/lib/types";
 import { generateId } from "@/lib/utils";
 import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
@@ -25,7 +25,6 @@ type WorkshopRecord = {
   productGroup: string;
   isPaid: boolean;
   transferLeadToCrm?: boolean;
-  activeFields: string[];
 };
 type DiscountType = "percent" | "flat";
 type RegistrationLinkConfig = {
@@ -49,25 +48,6 @@ const FACILITATORS_STORAGE_KEY = "cfl_facilitators_v1";
 const defaultWorkshopTypes = ["1-2-1 Coaching", "Workshop", "Online Event", "Offline Event", "Hybrid Program"];
 const defaultFacilitators = ["Dr Luv Patel", "Amit Verma", "Neha Kapoor", "Arjun Sharma"];
 const productGroups = ["Health", "Spiritual", "Leadership", "Sales", "Fitness", "Business Growth"];
-const fields = [
-  ["firstName", "First Name", true],
-  ["lastName", "Last Name", true],
-  ["mobile", "Mobile", true],
-  ["email", "Email", true],
-  ["country", "Country", true],
-  ["state", "State", false],
-  ["city", "City", false],
-  ["address", "Address", false],
-  ["age", "Age", false],
-  ["gender", "Gender", false],
-  ["occupation", "Occupation", false],
-  ["firstTime", "First Time", false],
-  ["source", "Lead Source", false],
-  ["referral", "Referral", false],
-  ["businessInfo", "Business Info", false],
-  ["notes", "Notes", false]
-] as const;
-const defaultFields = fields.filter((field) => field[2]).map((field) => field[0]);
 const inputClass = "w-full rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-sm outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100";
 const defaultTheme: BuilderTheme = {
   fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif",
@@ -119,7 +99,6 @@ export default function WorkshopMasterPage() {
   const [minOrderQty, setMinOrderQty] = useState("");
   const [maxOrderQty, setMaxOrderQty] = useState("");
   const [transferLeadToCrm, setTransferLeadToCrm] = useState(false);
-  const [activeFields, setActiveFields] = useState<string[]>([...defaultFields]);
   const [records, setRecords] = useState<WorkshopRecord[]>([]);
   const [workshopTypes, setWorkshopTypes] = useState<string[]>(defaultWorkshopTypes);
   const [facilitators, setFacilitators] = useState<string[]>(defaultFacilitators);
@@ -188,7 +167,6 @@ export default function WorkshopMasterPage() {
     setMinOrderQty("");
     setMaxOrderQty("");
     setTransferLeadToCrm(false);
-    setActiveFields([...defaultFields]);
     resetBuilderForm();
     if (clearMessage) setMessage("");
     setEditingId(null);
@@ -233,7 +211,6 @@ export default function WorkshopMasterPage() {
     setMinOrderQty(record.minOrderQty ?? "");
     setMaxOrderQty(record.maxOrderQty ?? "");
     setTransferLeadToCrm(Boolean(record.transferLeadToCrm));
-    setActiveFields(record.activeFields);
     setEditingId(record.id);
     loadBuilderForm(record);
     setMessage("Editing selected workshop.");
@@ -256,7 +233,6 @@ export default function WorkshopMasterPage() {
 
   function buildWorkshopRecord(id: string): WorkshopRecord {
     return {
-      activeFields,
       batch: batch.trim() || "Main Batch",
       discountCodeEod,
       discountDescription,
@@ -390,14 +366,16 @@ export default function WorkshopMasterPage() {
   }
 
   function exportCsv() {
-    const headers = ["Workshop", "Type", "Facilitator", "Product Group", "Paid", "Active Fields"];
+    const headers = ["Workshop", "Type", "Facilitator", "Product Group", "Paid", "Batch", "Fee", "CRM"];
     const rows = filteredRecords.map((record) => [
       record.name,
       record.type,
       record.facilitator,
       record.productGroup,
       record.isPaid ? "Paid" : "Free",
-      record.activeFields.length
+      record.batch || "Main Batch",
+      record.feesWithTax || "0",
+      record.transferLeadToCrm ? "Yes" : "No"
     ]);
     const csv = [headers, ...rows].map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(",")).join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
@@ -514,37 +492,6 @@ export default function WorkshopMasterPage() {
               <input className={inputClass} inputMode="numeric" onChange={(event) => setMaxOrderQty(event.target.value)} placeholder="10" value={maxOrderQty} />
             </label>
           </div>
-        </div>
-
-        <div className="my-7 flex items-center gap-4">
-          <div className="h-px flex-1 bg-slate-200" />
-          <p className="whitespace-nowrap text-sm font-black text-slate-700">Registration Form Settings</p>
-          <div className="h-px flex-1 bg-slate-200" />
-        </div>
-
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {fields.map(([key, label, required]) => {
-            const checked = activeFields.includes(key);
-            return (
-              <button
-                className={`group flex items-center justify-between gap-3 rounded-2xl border px-4 py-4 text-left transition ${checked ? "border-indigo-200 bg-indigo-50" : "border-slate-200 hover:bg-slate-50"}`}
-                key={key}
-                onClick={() => {
-                  if (!required) setActiveFields((current) => checked ? current.filter((item) => item !== key) : [...current, key]);
-                }}
-                type="button"
-              >
-                <span className="flex items-center gap-3">
-                  <span className={`grid size-6 place-items-center rounded-md ${checked ? "bg-indigo-600 text-white" : "border border-slate-300"}`}>{checked ? <Check className="size-4" /> : null}</span>
-                  <span>
-                    <span className="block text-sm font-black text-slate-900">{label}</span>
-                    {required ? <span className="text-xs font-bold text-indigo-600">Required</span> : null}
-                  </span>
-                </span>
-                <HelpCircle className="size-4 text-slate-400" />
-              </button>
-            );
-          })}
         </div>
 
         <div className="mt-7 rounded-3xl border border-emerald-100 bg-emerald-50/40 p-4 md:p-5">
@@ -684,7 +631,7 @@ export default function WorkshopMasterPage() {
           <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200">
             <table className="min-w-[760px] w-full text-left text-sm">
               <thead className="bg-slate-50 text-xs uppercase text-slate-500">
-                <tr>{["Action", "Workshop", "Type", "Facilitator", "Group", "Paid", "Fields"].map((head) => <th className="px-4 py-3" key={head}>{head}</th>)}</tr>
+                <tr>{["Action", "Workshop", "Type", "Facilitator", "Group", "Paid", "Batch"].map((head) => <th className="px-4 py-3" key={head}>{head}</th>)}</tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {filteredRecords.length ? filteredRecords.map((record) => (
@@ -719,7 +666,7 @@ export default function WorkshopMasterPage() {
                         {record.isPaid ? "Paid" : "Free"}
                       </span>
                     </td>
-                    <td className="px-4 py-4">{record.activeFields.length}</td>
+                    <td className="px-4 py-4">{record.batch || "Main Batch"}</td>
                   </tr>
                 )) : <tr><td className="px-4 py-8 text-center text-slate-500" colSpan={7}>No workshop records yet.</td></tr>}
               </tbody>

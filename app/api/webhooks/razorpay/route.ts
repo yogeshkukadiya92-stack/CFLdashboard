@@ -1,8 +1,9 @@
 import { createHmac, timingSafeEqual } from "crypto";
 import { NextResponse } from "next/server";
+import { getRazorpayConfig } from "@/lib/integrations";
 
 export async function POST(request: Request) {
-  const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
+  const { webhookSecret: secret } = await getRazorpayConfig();
   const signature = request.headers.get("x-razorpay-signature") || "";
   const rawBody = await request.text();
 

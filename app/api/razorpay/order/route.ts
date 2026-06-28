@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
+import { getRazorpayConfig } from "@/lib/integrations";
 
 export async function POST(request: Request) {
-  const keyId = process.env.RAZORPAY_KEY_ID;
-  const keySecret = process.env.RAZORPAY_KEY_SECRET;
+  const { keyId, keySecret } = await getRazorpayConfig();
 
   if (!keyId || !keySecret) {
     return NextResponse.json(
