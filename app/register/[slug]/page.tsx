@@ -9,10 +9,22 @@ import { useParams, useSearchParams } from "next/navigation";
 
 const REGISTRATION_STORAGE_KEY = "cfl_registrations_v1";
 const WORKSHOP_MASTER_STORAGE_KEY = "cfl_workshop_master_records_v1";
+const REGISTRATION_LINK_CONFIG_STORAGE_KEY = "cfl_registration_link_configs_v1";
 const CLIENTS_STORAGE_KEY = "cfl_clients_v1";
 
 type WorkshopMasterRecord = { id: string; name: string; facilitator?: string; isPaid?: boolean };
 type ClientRecord = { city?: string; email?: string; id: number | string; mobile?: string; name?: string };
+type RegistrationLinkConfig = {
+  batch?: string;
+  facilitator?: string;
+  fee?: number;
+  id?: string;
+  paid?: boolean;
+  partPayment?: boolean;
+  slug?: string;
+  title?: string;
+  venue?: string;
+};
 
 type FormModel = {
   id: string;
@@ -125,6 +137,33 @@ export default function RegistrationPage() {
         theme: defaultTheme,
         fields: simpleFields()
       };
+    }
+
+    if (!resolved) {
+      try {
+        const raw = window.localStorage.getItem(REGISTRATION_LINK_CONFIG_STORAGE_KEY);
+        const configs = raw ? (JSON.parse(raw) as Record<string, RegistrationLinkConfig>) : {};
+        const config = configs[slug];
+        if (config?.title) {
+          const fee = Number(config.fee || 0);
+          resolved = {
+            id: config.id || slug,
+            slug: config.slug || slug,
+            title: config.title,
+            description: "",
+            facilitator: config.facilitator || "CFL Facilitator",
+            venue: config.venue || "TBA",
+            batch: config.batch || "Main Batch",
+            paid: Boolean(config.paid) && fee > 0,
+            fee,
+            partPayment: Boolean(config.partPayment),
+            theme: defaultTheme,
+            fields: simpleFields()
+          };
+        }
+      } catch {
+        resolved = null;
+      }
     }
 
     if (!resolved) {

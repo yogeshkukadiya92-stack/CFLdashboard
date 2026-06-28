@@ -1,7 +1,7 @@
 "use client";
 
 import { AdminPlatformShell } from "@/components/admin-platform-shell";
-import { AlertCircle, Check, ChevronDown, Copy, Download, Edit3, ExternalLink, Eye, HelpCircle, Link2, RefreshCw, Save, Search, Trash2, UsersRound, X } from "lucide-react";
+import { AlertCircle, Check, ChevronDown, Copy, Download, Edit3, ExternalLink, Eye, HelpCircle, Link2, QrCode, RefreshCw, Save, Search, Trash2, UsersRound, X } from "lucide-react";
 import type { RegistrationEntry } from "@/lib/types";
 import { generateId } from "@/lib/utils";
 import { type FormEvent, useEffect, useMemo, useState } from "react";
@@ -18,6 +18,7 @@ type WorkshopRecord = {
 
 const STORAGE_KEY = "cfl_workshop_master_records_v1";
 const REGISTRATION_STORAGE_KEY = "cfl_registrations_v1";
+const REGISTRATION_LINK_CONFIG_STORAGE_KEY = "cfl_registration_link_configs_v1";
 const WORKSHOP_TYPES_STORAGE_KEY = "cfl_workshop_types_v1";
 const FACILITATORS_STORAGE_KEY = "cfl_facilitators_v1";
 const defaultWorkshopTypes = ["1-2-1 Coaching", "Workshop", "Online Event", "Offline Event", "Hybrid Program"];
@@ -432,6 +433,12 @@ function workshopSlug(value: string) {
   return value.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 }
 
+function registrationSlug(workshop: WorkshopRecord) {
+  const base = workshopSlug(workshop.name) || "workshop";
+  const shortId = workshop.id.replace(/[^a-zA-Z0-9]/g, "").slice(0, 6).toLowerCase();
+  return shortId ? `${base}-${shortId}` : base;
+}
+
 function readMasterNames(key: string, defaults: string[]) {
   try {
     const raw = window.localStorage.getItem(key);
@@ -451,25 +458,35 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
   const [batch, setBatch] = useState("Main Batch");
   const [venue, setVenue] = useState("");
   const [copied, setCopied] = useState(false);
+  const shortSlug = useMemo(() => registrationSlug(workshop), [workshop]);
 
   const link = useMemo(() => {
     if (typeof window === "undefined") return "";
-    const slug = workshopSlug(workshop.name) || workshop.id;
-    const params = new URLSearchParams();
-    params.set("wid", workshop.id);
-    params.set("title", workshop.name);
-    if (workshop.facilitator) params.set("facilitator", workshop.facilitator);
-    if (batch.trim()) params.set("batch", batch.trim());
-    if (venue.trim()) params.set("venue", venue.trim());
-    if (paid) {
-      params.set("paid", "1");
-      params.set("fee", String(Number(fee) || 0));
-      params.set("part", partPayment ? "1" : "0");
-    } else {
-      params.set("paid", "0");
+    return `${window.location.origin}/register/${shortSlug}`;
+  }, [shortSlug]);
+  const qrUrl = link ? `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=12&data=${encodeURIComponent(link)}` : "";
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = window.localStorage.getItem(REGISTRATION_LINK_CONFIG_STORAGE_KEY);
+      const configs = raw ? JSON.parse(raw) as Record<string, unknown> : {};
+      configs[shortSlug] = {
+        batch: batch.trim() || "Main Batch",
+        facilitator: workshop.facilitator || "CFL Facilitator",
+        fee: paid ? Number(fee) || 0 : 0,
+        id: workshop.id,
+        paid,
+        partPayment,
+        slug: shortSlug,
+        title: workshop.name,
+        venue: venue.trim() || "TBA"
+      };
+      window.localStorage.setItem(REGISTRATION_LINK_CONFIG_STORAGE_KEY, JSON.stringify(configs));
+    } catch {
+      // The link still opens from Workshop Master fallback if storage is unavailable.
     }
-    return `${window.location.origin}/register/${slug}?${params.toString()}`;
-  }, [batch, fee, paid, partPayment, venue, workshop]);
+  }, [batch, fee, paid, partPayment, shortSlug, venue, workshop]);
 
   async function copyLink() {
     try {
@@ -536,7 +553,8 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
             ) : null}
           </div>
 
-          <div>
+          <div className="grid gap-4 lg:grid-cols-[1fr_240px]">
+            <div>
             <span className="mb-2 block text-sm font-bold text-slate-600">Shareable Link</span>
             <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-2">
               <span className="min-w-0 flex-1 truncate px-2 text-sm font-semibold text-slate-700">{link}</span>
@@ -550,8 +568,22 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
               </a>
             </div>
             <p className="mt-2 text-xs font-semibold text-slate-400">
-              Aa link koi pan device par khule che. Mobile number nakhse ane e tamaro saved client hoy to details auto bharai jashe (e for same-device data).
+              Short link save thai gayi che. Open par click karo athva QR scan kari registration form kholo.
             </p>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 text-center">
+              <div className="mx-auto mb-3 flex items-center justify-center gap-2 text-sm font-black text-slate-700">
+                <QrCode className="size-4" />
+                Registration QR
+              </div>
+              {qrUrl ? <img alt="Registration QR code" className="mx-auto size-44 rounded-xl border border-slate-100 bg-white p-2" src={qrUrl} /> : null}
+              {qrUrl ? (
+                <a className="mt-3 inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-black text-slate-700 hover:bg-slate-50" download={`qr-${shortSlug}.png`} href={qrUrl}>
+                  <Download className="size-3.5" />
+                  Download QR
+                </a>
+              ) : null}
+            </div>
           </div>
         </div>
       </div>
