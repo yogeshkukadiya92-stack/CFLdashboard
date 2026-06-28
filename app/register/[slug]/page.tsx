@@ -22,6 +22,8 @@ type RegistrationLinkConfig = {
   id?: string;
   paid?: boolean;
   partPayment?: boolean;
+  publishUntil?: string;
+  published?: boolean;
   slug?: string;
   title?: string;
   venue?: string;
@@ -122,6 +124,7 @@ export default function RegistrationPage() {
   // link (?title=); then saved master records; then the static seed.
   useEffect(() => {
     let resolved: FormModel | null = null;
+    let linkBlocked = false;
 
     if (formParam) {
       const decoded = decodeJsonParam<BuilderForm>(formParam);
@@ -156,6 +159,10 @@ export default function RegistrationPage() {
         const configs = raw ? (JSON.parse(raw) as Record<string, RegistrationLinkConfig>) : {};
         const config = configs[slug];
         if (config?.title) {
+          const expiresAt = config.publishUntil ? new Date(config.publishUntil).getTime() : 0;
+          linkBlocked = config.published === false || (expiresAt > 0 && expiresAt <= Date.now());
+        }
+        if (config?.title && !linkBlocked) {
           const fee = Number(config.fee || 0);
           const formsRaw = window.localStorage.getItem(FORMS_STORAGE_KEY);
           const forms = formsRaw ? JSON.parse(formsRaw) as BuilderForm[] : [];
@@ -191,7 +198,7 @@ export default function RegistrationPage() {
       }
     }
 
-    if (!resolved) {
+    if (!resolved && !linkBlocked) {
       try {
         const raw = window.localStorage.getItem(WORKSHOP_MASTER_STORAGE_KEY);
         const records = raw ? (JSON.parse(raw) as WorkshopMasterRecord[]) : [];
@@ -231,7 +238,7 @@ export default function RegistrationPage() {
       }
     }
 
-    if (!resolved) {
+    if (!resolved && !linkBlocked) {
       const seed = seedWorkshops.find((item) => item.slug === slug);
       if (seed) {
         resolved = {
@@ -251,7 +258,7 @@ export default function RegistrationPage() {
       }
     }
 
-    setModel(resolved);
+    setModel(linkBlocked ? null : resolved);
     setReady(true);
   }, [batchParam, facilitatorParam, feeParam, formParam, paidEnabled, partEnabled, slug, titleParam, venueParam, widParam]);
 

@@ -34,6 +34,8 @@ type RegistrationLinkConfig = {
   id?: string;
   paid?: boolean;
   partPayment?: boolean;
+  publishUntil?: string;
+  published?: boolean;
   slug?: string;
   title?: string;
   venue?: string;
@@ -795,6 +797,8 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
   const [partPayment, setPartPayment] = useState(Boolean(workshop.isPartPaymentAllow));
   const [batch, setBatch] = useState(workshop.batch ?? "Main Batch");
   const [venue, setVenue] = useState("");
+  const [published, setPublished] = useState(true);
+  const [publishUntil, setPublishUntil] = useState("");
   const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "failed">("idle");
   const [saveStatus, setSaveStatus] = useState<"idle" | "saved">("idle");
   const [linkSettingsLoaded, setLinkSettingsLoaded] = useState(false);
@@ -805,6 +809,9 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
     return `${window.location.origin}/register/${shortSlug}`;
   }, [shortSlug]);
   const qrUrl = link ? `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=12&data=${encodeURIComponent(link)}` : "";
+  const linkExpired = publishUntil ? new Date(publishUntil).getTime() <= Date.now() : false;
+  const linkStatus = !published ? "Unpublished" : linkExpired ? "Expired" : "Published";
+  const linkStatusClass = published && !linkExpired ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700";
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -818,6 +825,8 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
         setPaid(Boolean(existing.paid));
         setPartPayment(Boolean(existing.partPayment));
         setVenue(existing.venue === "TBA" ? "" : existing.venue || "");
+        setPublished(existing.published !== false);
+        setPublishUntil(existing.publishUntil || "");
       }
     } catch {
       // Use defaults if saved link settings are not readable.
@@ -839,6 +848,8 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
         id: workshop.id,
         paid,
         partPayment,
+        publishUntil: publishUntil || undefined,
+        published,
         slug: shortSlug,
         title: workshop.name,
         venue: venue.trim() || "TBA"
@@ -850,7 +861,7 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
     } catch {
       // The link still opens from Workshop Master fallback if storage is unavailable.
     }
-  }, [batch, fee, linkSettingsLoaded, paid, partPayment, shortSlug, venue, workshop]);
+  }, [batch, fee, linkSettingsLoaded, paid, partPayment, publishUntil, published, shortSlug, venue, workshop]);
 
   async function copyLink() {
     let copied = false;
@@ -899,6 +910,30 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
         </div>
 
         <div className="space-y-5 overflow-y-auto p-5">
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-black text-slate-800">Link Publish Status</p>
+                <p className="mt-1 text-xs font-semibold text-slate-500">Time set karsho to ena pachi registration link automatic unpublished jevi bandh thai jashe.</p>
+              </div>
+              <span className={`rounded-full px-3 py-1 text-xs font-black ${linkStatusClass}`}>{linkStatus}</span>
+            </div>
+            <div className="mt-4 grid gap-4 sm:grid-cols-[auto_1fr]">
+              <button
+                className={`inline-flex min-h-[44px] items-center justify-center rounded-xl px-4 py-2.5 text-sm font-black text-white ${published ? "bg-rose-600 hover:bg-rose-700" : "bg-emerald-600 hover:bg-emerald-700"}`}
+                onClick={() => setPublished((value) => !value)}
+                type="button"
+              >
+                {published ? "Unpublish Link" : "Publish Link"}
+              </button>
+              <label className="block">
+                <span className="mb-2 block text-sm font-bold text-slate-600">Publish Until</span>
+                <input className={inputClass} onChange={(event) => setPublishUntil(event.target.value)} type="datetime-local" value={publishUntil} />
+                <span className="mt-1 block text-xs font-semibold text-slate-400">Blank rakhsho to expiry time set nahi thay.</span>
+              </label>
+            </div>
+          </div>
+
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="block">
               <span className="mb-2 block text-sm font-bold text-slate-600">Batch</span>
