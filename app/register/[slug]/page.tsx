@@ -40,6 +40,7 @@ type FormModel = {
   partPayment: boolean;
   tiers?: PaymentTier[];
   highlights?: string[];
+  whatsappGroupUrl?: string;
   theme: BuilderTheme;
   fields: BuilderField[];
 };
@@ -84,6 +85,7 @@ function modelFromBuilderForm(form: BuilderForm, overrides?: Partial<Pick<FormMo
     partPayment: overrides?.partPayment ?? Boolean(form.partPayment),
     tiers: form.tiers && form.tiers.length > 0 ? form.tiers : undefined,
     highlights: form.highlights && form.highlights.length > 0 ? form.highlights : undefined,
+    whatsappGroupUrl: form.whatsappGroupUrl,
     theme: { ...defaultTheme, ...form.theme },
     fields: form.fields?.length ? form.fields : simpleFields()
   };
@@ -114,6 +116,7 @@ export default function RegistrationPage() {
   const [selectedTierId, setSelectedTierId] = useState("");
   const [message, setMessage] = useState("");
   const [success, setSuccess] = useState(false);
+  const [redirectCountdown, setRedirectCountdown] = useState(5);
 
   // Resolve the form: a builder form (?f=) wins; then a self-contained simple
   // link (?title=); then saved master records; then the static seed.
@@ -261,6 +264,25 @@ export default function RegistrationPage() {
     }
   }, []);
 
+  useEffect(() => {
+    if (!success || !model?.whatsappGroupUrl) {
+      return;
+    }
+
+    setRedirectCountdown(5);
+    const countdownTimer = window.setInterval(() => {
+      setRedirectCountdown((value) => Math.max(0, value - 1));
+    }, 1000);
+    const redirectTimer = window.setTimeout(() => {
+      window.location.href = model.whatsappGroupUrl as string;
+    }, 5000);
+
+    return () => {
+      window.clearInterval(countdownTimer);
+      window.clearTimeout(redirectTimer);
+    };
+  }, [model?.whatsappGroupUrl, success]);
+
   const roleField = (role: NonNullable<BuilderField["role"]>) => model?.fields.find((field) => field.role === role) ?? null;
   const mobileFieldId = roleField("mobile")?.id;
   const mobileValue = mobileFieldId ? answers[mobileFieldId] ?? "" : "";
@@ -375,6 +397,7 @@ export default function RegistrationPage() {
     }
 
     setSuccess(true);
+    setRedirectCountdown(5);
     setMessage("Registration confirmed. See you at the workshop!");
     setAnswers({});
     setPartAmount("");
@@ -471,9 +494,26 @@ export default function RegistrationPage() {
 
         <div className="p-6 md:p-8">
           {success ? (
-            <div className="flex items-start gap-3 rounded-xl bg-emerald-50 px-4 py-4 text-sm font-bold text-emerald-700">
-              <CheckCircle2 className="mt-0.5 size-5 shrink-0" />
-              <span>{message}</span>
+            <div className="rounded-2xl bg-emerald-50 px-4 py-5 text-sm font-bold text-emerald-700">
+              <div className="flex items-start gap-3">
+                <CheckCircle2 className="mt-0.5 size-5 shrink-0" />
+                <div>
+                  <p>{message}</p>
+                  {model.whatsappGroupUrl ? (
+                    <p className="mt-2 text-emerald-800">WhatsApp group {redirectCountdown} second ma open thase.</p>
+                  ) : null}
+                </div>
+              </div>
+              {model.whatsappGroupUrl ? (
+                <a
+                  className="mt-4 inline-flex rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-black text-white shadow-sm hover:bg-emerald-700"
+                  href={model.whatsappGroupUrl}
+                  rel="noreferrer"
+                  target="_blank"
+                >
+                  Join WhatsApp Group Now
+                </a>
+              ) : null}
             </div>
           ) : (
             <>

@@ -106,6 +106,7 @@ export default function WorkshopMasterPage() {
   const [formDescription, setFormDescription] = useState("Please fill in your details to confirm your seat.");
   const [formFields, setFormFields] = useState<BuilderField[]>(defaultBuilderFields);
   const [formHighlights, setFormHighlights] = useState<string[]>([]);
+  const [whatsappGroupUrl, setWhatsappGroupUrl] = useState("");
   const [message, setMessage] = useState("");
   const [search, setSearch] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -259,6 +260,7 @@ export default function WorkshopMasterPage() {
     setFormDescription("Please fill in your details to confirm your seat.");
     setFormFields(defaultBuilderFields());
     setFormHighlights([]);
+    setWhatsappGroupUrl("");
   }
 
   function buildRegistrationForm(record: WorkshopRecord): BuilderForm {
@@ -275,6 +277,7 @@ export default function WorkshopMasterPage() {
       fee: Number(record.feesWithTax || 0),
       partPayment: Boolean(record.isPartPaymentAllow),
       highlights: formHighlights.map((item) => item.trim()).filter(Boolean),
+      whatsappGroupUrl: whatsappGroupUrl.trim() || undefined,
       fields: formFields,
       updatedAt: new Date().toISOString()
     };
@@ -308,6 +311,7 @@ export default function WorkshopMasterPage() {
       setFormDescription(savedForm.description || "");
       setFormFields(savedForm.fields?.length ? savedForm.fields : defaultBuilderFields());
       setFormHighlights(savedForm.highlights ?? []);
+      setWhatsappGroupUrl(savedForm.whatsappGroupUrl ?? "");
     } catch {
       resetBuilderForm();
     }
@@ -512,6 +516,11 @@ export default function WorkshopMasterPage() {
             <label className="block">
               <span className="mb-2 block text-sm font-bold text-slate-600">Form Description</span>
               <input className={inputClass} onChange={(event) => setFormDescription(event.target.value)} placeholder="Short instruction for clients" value={formDescription} />
+            </label>
+            <label className="block md:col-span-2">
+              <span className="mb-2 block text-sm font-bold text-slate-600">WhatsApp Group Invite Link</span>
+              <input className={inputClass} onChange={(event) => setWhatsappGroupUrl(event.target.value)} placeholder="https://chat.whatsapp.com/xxxxxxxx" value={whatsappGroupUrl} />
+              <span className="mt-1 block text-xs font-semibold text-slate-400">Registration pachi thank-you page 5 second wait kari aa group link open karse.</span>
             </label>
           </div>
 

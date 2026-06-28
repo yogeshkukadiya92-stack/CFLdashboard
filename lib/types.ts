@@ -216,6 +216,7 @@ export interface BuilderForm {
   partPayment: boolean;
   tiers?: PaymentTier[];
   highlights?: string[];
+  whatsappGroupUrl?: string;
   fields: BuilderField[];
   updatedAt: string;
 }

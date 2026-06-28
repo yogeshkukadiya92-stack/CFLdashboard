@@ -125,6 +125,7 @@ export default function FormBuilderPage() {
   const [partPayment, setPartPayment] = useState(false);
   const [tiers, setTiers] = useState<PaymentTier[]>([]);
   const [highlights, setHighlights] = useState<string[]>([]);
+  const [whatsappGroupUrl, setWhatsappGroupUrl] = useState("");
   const [fields, setFields] = useState<BuilderField[]>(defaultFields);
   const [fontFamily, setFontFamily] = useState(fontOptions[0].value);
   const [fontSize, setFontSize] = useState(16);
@@ -164,10 +165,11 @@ export default function FormBuilderPage() {
       partPayment,
       tiers: tiers.length > 0 ? tiers : undefined,
       highlights: highlights.filter(Boolean).length > 0 ? highlights.filter(Boolean) : undefined,
+      whatsappGroupUrl: whatsappGroupUrl.trim() || undefined,
       fields,
       updatedAt: new Date().toISOString()
     };
-  }, [accent, align, bannerUrl, batch, description, fee, fields, fontFamily, fontSize, highlights, logoUrl, paid, partPayment, tiers, title, titleBold, titleItalic, workshop, workshopId]);
+  }, [accent, align, bannerUrl, batch, description, fee, fields, fontFamily, fontSize, highlights, logoUrl, paid, partPayment, tiers, title, titleBold, titleItalic, whatsappGroupUrl, workshop, workshopId]);
 
   const link = useMemo(() => {
     if (typeof window === "undefined" || !workshopId) return "";
@@ -303,6 +305,16 @@ export default function FormBuilderPage() {
                   rows={2}
                   value={description}
                 />
+              </label>
+              <label className="block">
+                <span className="mb-2 block text-sm font-bold text-slate-600">WhatsApp Group Invite Link</span>
+                <input
+                  className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-3 text-sm font-semibold outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
+                  onChange={(event) => setWhatsappGroupUrl(event.target.value)}
+                  placeholder="https://chat.whatsapp.com/xxxxxxxx"
+                  value={whatsappGroupUrl}
+                />
+                <span className="mt-1 block text-xs font-semibold text-slate-400">Registration pachi thank-you page 5 second wait kari aa group link open karse.</span>
               </label>
 
               <div className="grid gap-4 sm:grid-cols-2">
