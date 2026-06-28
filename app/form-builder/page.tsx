@@ -20,12 +20,39 @@ import {
   Plus,
   Smartphone,
   Trash2,
-  Type
+  Type,
+  Image,
+  X
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 const WORKSHOP_MASTER_STORAGE_KEY = "cfl_workshop_master_records_v1";
 const FORMS_STORAGE_KEY = "cfl_forms_v1";
+const MAX_IMAGE_WIDTH = 800;
+const IMAGE_QUALITY = 0.7;
+
+function compressImage(file: File, maxWidth: number): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new window.Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        const scale = img.width > maxWidth ? maxWidth / img.width : 1;
+        canvas.width = img.width * scale;
+        canvas.height = img.height * scale;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) { reject(new Error("Canvas not supported")); return; }
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL("image/jpeg", IMAGE_QUALITY));
+      };
+      img.onerror = reject;
+      img.src = reader.result as string;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
 
 type WorkshopMasterRecord = {
   id: string;
@@ -103,6 +130,8 @@ export default function FormBuilderPage() {
   const [titleBold, setTitleBold] = useState(true);
   const [titleItalic, setTitleItalic] = useState(false);
   const [align, setAlign] = useState<"left" | "center">("left");
+  const [bannerUrl, setBannerUrl] = useState("");
+  const [logoUrl, setLogoUrl] = useState("");
   const [copied, setCopied] = useState(false);
   const [saved, setSaved] = useState("");
 
@@ -127,7 +156,7 @@ export default function FormBuilderPage() {
       batch,
       title,
       description,
-      theme: { fontFamily, fontSize, accent, titleBold, titleItalic, align },
+      theme: { fontFamily, fontSize, accent, titleBold, titleItalic, align, bannerUrl: bannerUrl || undefined, logoUrl: logoUrl || undefined },
       paid,
       fee: Number(fee) || 0,
       partPayment,
@@ -135,7 +164,7 @@ export default function FormBuilderPage() {
       fields,
       updatedAt: new Date().toISOString()
     };
-  }, [accent, align, batch, description, fee, fields, fontFamily, fontSize, paid, partPayment, tiers, title, titleBold, titleItalic, workshop, workshopId]);
+  }, [accent, align, bannerUrl, batch, description, fee, fields, fontFamily, fontSize, logoUrl, paid, partPayment, tiers, title, titleBold, titleItalic, workshop, workshopId]);
 
   const link = useMemo(() => {
     if (typeof window === "undefined" || !workshopId) return "";
@@ -323,6 +352,23 @@ export default function FormBuilderPage() {
                   ))}
                 </div>
               </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <ImageUploader
+                  label="Banner Image"
+                  hint="Top banner — recommended 800×200"
+                  value={bannerUrl}
+                  onChange={setBannerUrl}
+                  aspect="banner"
+                />
+                <ImageUploader
+                  label="Logo"
+                  hint="Square logo — recommended 200×200"
+                  value={logoUrl}
+                  onChange={setLogoUrl}
+                  aspect="logo"
+                />
+              </div>
             </div>
           </section>
 
@@ -499,6 +545,60 @@ export default function FormBuilderPage() {
   );
 }
 
+function ImageUploader({ label, hint, value, onChange, aspect }: { label: string; hint: string; value: string; onChange: (v: string) => void; aspect: "banner" | "logo" }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  async function handleFile(file: File | undefined) {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) return;
+    try {
+      const dataUrl = await compressImage(file, aspect === "banner" ? MAX_IMAGE_WIDTH : 200);
+      onChange(dataUrl);
+    } catch {
+      // ignore
+    }
+  }
+
+  return (
+    <div>
+      <span className="mb-2 block text-sm font-bold text-slate-600">{label}</span>
+      {value ? (
+        <div className="relative">
+          <img
+            alt={label}
+            className={`w-full rounded-xl border border-slate-200 object-cover ${aspect === "banner" ? "h-28" : "size-24"}`}
+            src={value}
+          />
+          <button
+            className="absolute right-2 top-2 grid size-7 place-items-center rounded-full bg-white/90 text-slate-600 shadow hover:bg-white"
+            onClick={() => onChange("")}
+            type="button"
+          >
+            <X className="size-4" />
+          </button>
+        </div>
+      ) : (
+        <button
+          className={`flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 text-sm font-bold text-slate-500 hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 ${aspect === "banner" ? "h-28" : "h-24"}`}
+          onClick={() => inputRef.current?.click()}
+          type="button"
+        >
+          <Image className="size-5" />
+          Upload {label}
+        </button>
+      )}
+      <input
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => handleFile(e.target.files?.[0])}
+        ref={inputRef}
+        type="file"
+      />
+      <p className="mt-1 text-xs font-semibold text-slate-400">{hint}</p>
+    </div>
+  );
+}
+
 function ToggleButton({ active, children, onClick, title }: { active: boolean; children: React.ReactNode; onClick: () => void; title: string }) {
   return (
     <button
@@ -595,7 +695,15 @@ function FormPreview({ form }: { form: BuilderForm }) {
   const { theme } = form;
   return (
     <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-soft" style={{ fontFamily: theme.fontFamily, fontSize: theme.fontSize }}>
-      <div className="p-4 sm:p-6" style={{ textAlign: theme.align, borderTop: `4px solid ${theme.accent}` }}>
+      {theme.bannerUrl ? (
+        <img alt="Banner" className="h-32 w-full object-cover" src={theme.bannerUrl} />
+      ) : (
+        <div style={{ borderTop: `4px solid ${theme.accent}` }} />
+      )}
+      <div className="p-4 sm:p-6" style={{ textAlign: theme.align }}>
+        {theme.logoUrl ? (
+          <img alt="Logo" className={`mb-3 size-16 rounded-xl object-cover ${theme.align === "center" ? "mx-auto" : ""}`} src={theme.logoUrl} />
+        ) : null}
         <h2 style={{ fontWeight: theme.titleBold ? 800 : 600, fontStyle: theme.titleItalic ? "italic" : "normal", fontSize: theme.fontSize + 12 }}>
           {form.title || "Untitled form"}
         </h2>

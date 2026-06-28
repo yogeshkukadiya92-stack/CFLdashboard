@@ -192,6 +192,8 @@ export interface BuilderTheme {
   titleBold: boolean;
   titleItalic: boolean;
   align: "left" | "center";
+  bannerUrl?: string;
+  logoUrl?: string;
 }
 
 export interface PaymentTier {

@@ -333,7 +333,15 @@ export default function RegistrationPage() {
   return (
     <main className="min-h-screen bg-slate-100 px-4 py-8 text-slate-950 md:py-12" style={{ fontFamily: theme.fontFamily, fontSize: theme.fontSize }}>
       <section className="mx-auto max-w-3xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-panel">
-        <div className="p-6 md:p-8" style={{ textAlign: theme.align, borderTop: `5px solid ${theme.accent}` }}>
+        {theme.bannerUrl ? (
+          <img alt="" className="h-40 w-full object-cover sm:h-48" src={theme.bannerUrl} />
+        ) : (
+          <div style={{ borderTop: `5px solid ${theme.accent}` }} />
+        )}
+        <div className="p-6 md:p-8" style={{ textAlign: theme.align }}>
+          {theme.logoUrl ? (
+            <img alt="" className={`mb-4 size-20 rounded-2xl border border-slate-100 object-cover shadow-sm ${theme.align === "center" ? "mx-auto" : ""}`} src={theme.logoUrl} />
+          ) : null}
           <p className="text-[11px] font-black uppercase tracking-[0.18em]" style={{ color: theme.accent }}>CFL Workshop Registration</p>
           <h1
             className="mt-2 tracking-tight"
