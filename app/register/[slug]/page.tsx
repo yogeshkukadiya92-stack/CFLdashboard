@@ -333,39 +333,59 @@ export default function RegistrationPage() {
   const metaLine = [model.batch && `Batch: ${model.batch}`, model.facilitator && `Facilitator: ${model.facilitator}`, model.venue && `Venue: ${model.venue}`].filter(Boolean);
 
   return (
-    <main className="min-h-screen bg-slate-100 px-4 py-8 text-slate-950 md:py-12" style={{ fontFamily: theme.fontFamily, fontSize: theme.fontSize }}>
-      <section className="mx-auto max-w-3xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-panel">
+    <main className="min-h-screen bg-gradient-to-br from-slate-50 via-slate-100 to-slate-200 px-4 py-8 text-slate-950 md:py-12" style={{ fontFamily: theme.fontFamily, fontSize: theme.fontSize }}>
+      <section
+        className="mx-auto max-w-3xl overflow-hidden rounded-3xl bg-white"
+        style={{ boxShadow: `0 2px 0 0 ${theme.accent}22, 0 8px 30px -6px rgba(0,0,0,0.12), 0 25px 60px -15px rgba(0,0,0,0.08), 0 0 0 1px rgba(0,0,0,0.04)` }}
+      >
         {theme.bannerUrl ? (
-          <img alt="" className="h-40 w-full object-cover sm:h-48" src={theme.bannerUrl} />
+          <div className="relative">
+            <img alt="" className="h-44 w-full object-cover sm:h-52" src={theme.bannerUrl} />
+            <div className="absolute inset-0" style={{ background: `linear-gradient(180deg, transparent 30%, ${theme.accent}18 100%)` }} />
+          </div>
         ) : (
-          <div style={{ borderTop: `5px solid ${theme.accent}` }} />
+          <div className="h-2.5 rounded-t-3xl" style={{ background: `linear-gradient(90deg, ${theme.accent}, ${theme.accent}88)` }} />
         )}
-        <div className="p-6 md:p-8" style={{ textAlign: theme.align }}>
+        <div className="relative p-6 md:p-8" style={{ textAlign: theme.align }}>
           {theme.logoUrl ? (
-            <img alt="" className={`mb-4 size-20 rounded-2xl border border-slate-100 object-cover shadow-sm ${theme.align === "center" ? "mx-auto" : ""}`} src={theme.logoUrl} />
+            <img
+              alt=""
+              className={`mb-4 size-20 rounded-2xl object-cover ${theme.align === "center" ? "mx-auto" : ""}`}
+              src={theme.logoUrl}
+              style={{ boxShadow: "0 4px 24px -6px rgba(0,0,0,0.15), 0 0 0 3px white, 0 0 0 4px rgba(0,0,0,0.06)" }}
+            />
           ) : null}
-          <p className="text-[11px] font-black uppercase tracking-[0.18em]" style={{ color: theme.accent }}>CFL Workshop Registration</p>
+          <p className="text-[11px] font-black uppercase tracking-[0.2em]" style={{ color: theme.accent }}>CFL Workshop Registration</p>
           <h1
             className="mt-2 tracking-tight"
-            style={{ fontWeight: theme.titleBold ? 800 : 600, fontStyle: theme.titleItalic ? "italic" : "normal", fontSize: theme.fontSize + 14 }}
+            style={{ fontWeight: theme.titleBold ? 800 : 600, fontStyle: theme.titleItalic ? "italic" : "normal", fontSize: theme.fontSize + 16, lineHeight: 1.2 }}
           >
             {model.title}
           </h1>
-          {model.description ? <p className="mt-2 text-slate-500">{model.description}</p> : null}
-          {metaLine.length ? <p className="mt-3 text-sm font-semibold text-slate-500">{metaLine.join("  •  ")}</p> : null}
-          <p className="mt-4 inline-flex rounded-lg px-3 py-2 text-sm font-black text-white" style={{ backgroundColor: theme.accent }}>
+          {model.description ? <p className="mt-3 leading-relaxed text-slate-500">{model.description}</p> : null}
+          {metaLine.length ? <p className="mt-3 text-sm font-semibold text-slate-400">{metaLine.join("  •  ")}</p> : null}
+          <p
+            className="mt-5 inline-flex rounded-xl px-4 py-2.5 text-sm font-black text-white"
+            style={{ backgroundColor: theme.accent, boxShadow: `0 4px 14px -3px ${theme.accent}55` }}
+          >
             {model.paid ? (hasTiers ? `Starting ${formatCurrency(Math.min(...tierList.map((t) => t.fee)))}` : `Fee: ${formatCurrency(fullAmount)}`) : "Free Registration"}
           </p>
         </div>
 
         {model.highlights && model.highlights.length > 0 ? (
-          <div className="mx-6 rounded-xl border border-emerald-100 bg-emerald-50/50 p-5 md:mx-8">
-            <p className="mb-3 text-sm font-black text-slate-800">What you&apos;ll get</p>
-            <ul className="grid gap-2 sm:grid-cols-2">
+          <div
+            className="mx-6 rounded-2xl p-5 md:mx-8"
+            style={{ background: `linear-gradient(135deg, ${theme.accent}06, ${theme.accent}12)`, border: `1px solid ${theme.accent}18` }}
+          >
+            <p className="mb-3 flex items-center gap-2 text-sm font-black text-slate-800">
+              <span className="grid size-6 place-items-center rounded-lg text-white" style={{ backgroundColor: theme.accent, boxShadow: `0 2px 8px -2px ${theme.accent}88` }}>✦</span>
+              What you&apos;ll get
+            </p>
+            <ul className="grid gap-2.5 sm:grid-cols-2">
               {model.highlights.map((item, i) => (
                 <li className="flex items-start gap-2.5 text-sm font-semibold text-slate-700" key={i}>
-                  <span className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-full" style={{ backgroundColor: theme.accent }}>
-                    <Check className="size-3 text-white" />
+                  <span className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-full text-white" style={{ backgroundColor: theme.accent }}>
+                    <Check className="size-3" />
                   </span>
                   {item}
                 </li>
@@ -403,16 +423,16 @@ export default function RegistrationPage() {
               </div>
 
               {model.paid && hasTiers ? (
-                <div className="mt-5 rounded-xl border border-slate-200 p-4">
-                  <p className="text-sm font-black text-slate-700">Registration Type</p>
-                  <div className="mt-3 space-y-2">
+                <div className="mt-5 rounded-2xl border border-slate-100 bg-slate-50/50 p-5">
+                  <p className="text-sm font-black text-slate-700">Choose your plan</p>
+                  <div className="mt-3 space-y-2.5">
                     {tierList.map((tier) => {
                       const isActive = activeTier?.id === tier.id;
                       return (
                         <label
-                          className={`flex min-h-[52px] cursor-pointer items-center gap-3 rounded-xl border-2 px-4 py-3 text-sm font-bold transition ${isActive ? "border-current bg-opacity-10" : "border-slate-200"}`}
+                          className="flex min-h-[52px] cursor-pointer items-center gap-3 rounded-2xl border-2 bg-white px-4 py-3.5 text-sm font-bold transition-all"
                           key={tier.id}
-                          style={isActive ? { borderColor: theme.accent, backgroundColor: `${theme.accent}10` } : undefined}
+                          style={isActive ? { borderColor: theme.accent, backgroundColor: `${theme.accent}06`, boxShadow: `0 0 0 1px ${theme.accent}33, 0 4px 12px -4px ${theme.accent}22` } : { borderColor: "#e2e8f0" }}
                         >
                           <input
                             checked={isActive}
@@ -423,7 +443,7 @@ export default function RegistrationPage() {
                             type="radio"
                           />
                           <span className="flex-1">{tier.label}</span>
-                          <span className="font-black" style={{ color: theme.accent }}>{formatCurrency(tier.fee)}</span>
+                          <span className="rounded-lg px-2.5 py-1 text-xs font-black text-white" style={{ backgroundColor: theme.accent }}>{formatCurrency(tier.fee)}</span>
                         </label>
                       );
                     })}
@@ -465,9 +485,9 @@ export default function RegistrationPage() {
               {message ? <p className="mt-5 rounded-xl bg-rose-50 px-4 py-3 text-sm font-black text-rose-700">{message}</p> : null}
 
               <button
-                className="mt-6 inline-flex min-h-[52px] w-full items-center justify-center gap-2 rounded-xl px-5 py-3.5 text-base sm:text-sm font-black text-white shadow-lg hover:opacity-95"
+                className="mt-6 inline-flex min-h-[52px] w-full items-center justify-center gap-2 rounded-2xl px-5 py-3.5 text-base sm:text-sm font-black tracking-wide text-white uppercase transition-transform hover:scale-[1.01] active:scale-[0.99]"
                 onClick={submitRegistration}
-                style={{ backgroundColor: theme.accent }}
+                style={{ backgroundColor: theme.accent, boxShadow: `0 6px 20px -4px ${theme.accent}55, 0 2px 4px -1px ${theme.accent}33` }}
                 type="button"
               >
                 <ShieldCheck className="size-4" />
@@ -505,7 +525,7 @@ function RenderField({
       {field.required ? <span style={{ color: accent }}> *</span> : null}
     </span>
   );
-  const inputClass = "w-full rounded-xl border border-slate-300 bg-white px-3.5 py-3 text-base sm:text-sm font-semibold outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100";
+  const inputClass = "w-full rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-3 text-base sm:text-sm font-semibold outline-none transition-all focus:border-slate-300 focus:bg-white focus:ring-4 focus:ring-slate-100";
   const wide = field.type === "paragraph" || field.type === "radio" || field.type === "checkbox";
 
   let control: React.ReactNode;

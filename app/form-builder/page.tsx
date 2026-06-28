@@ -730,29 +730,51 @@ function IconBtn({ children, disabled, onClick, title, tone }: { children: React
 function FormPreview({ form }: { form: BuilderForm }) {
   const { theme } = form;
   return (
-    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-soft" style={{ fontFamily: theme.fontFamily, fontSize: theme.fontSize }}>
+    <div
+      className="overflow-hidden rounded-3xl bg-white"
+      style={{
+        fontFamily: theme.fontFamily,
+        fontSize: theme.fontSize,
+        boxShadow: `0 2px 0 0 ${theme.accent}22, 0 8px 30px -6px rgba(0,0,0,0.12), 0 20px 50px -12px rgba(0,0,0,0.08), 0 0 0 1px rgba(0,0,0,0.04)`,
+      }}
+    >
       {theme.bannerUrl ? (
-        <img alt="Banner" className="h-32 w-full object-cover" src={theme.bannerUrl} />
+        <div className="relative">
+          <img alt="Banner" className="h-36 w-full object-cover" src={theme.bannerUrl} />
+          <div className="absolute inset-0" style={{ background: `linear-gradient(180deg, transparent 40%, ${theme.accent}18 100%)` }} />
+        </div>
       ) : (
-        <div style={{ borderTop: `4px solid ${theme.accent}` }} />
+        <div className="h-2 rounded-t-3xl" style={{ background: `linear-gradient(90deg, ${theme.accent}, ${theme.accent}99)` }} />
       )}
-      <div className="p-4 sm:p-6" style={{ textAlign: theme.align }}>
+      <div className="relative p-5 sm:p-7" style={{ textAlign: theme.align }}>
         {theme.logoUrl ? (
-          <img alt="Logo" className={`mb-3 size-16 rounded-xl object-cover ${theme.align === "center" ? "mx-auto" : ""}`} src={theme.logoUrl} />
+          <img
+            alt="Logo"
+            className={`mb-4 size-[72px] rounded-2xl object-cover ${theme.align === "center" ? "mx-auto" : ""}`}
+            src={theme.logoUrl}
+            style={{ boxShadow: "0 4px 20px -4px rgba(0,0,0,0.15), 0 0 0 3px white, 0 0 0 4px rgba(0,0,0,0.06)" }}
+          />
         ) : null}
-        <h2 style={{ fontWeight: theme.titleBold ? 800 : 600, fontStyle: theme.titleItalic ? "italic" : "normal", fontSize: theme.fontSize + 12 }}>
+        <h2 className="tracking-tight" style={{ fontWeight: theme.titleBold ? 800 : 600, fontStyle: theme.titleItalic ? "italic" : "normal", fontSize: theme.fontSize + 14, lineHeight: 1.2 }}>
           {form.title || "Untitled form"}
         </h2>
-        {form.description ? <p className="mt-2 text-slate-500">{form.description}</p> : null}
+        {form.description ? <p className="mt-2.5 leading-relaxed text-slate-500">{form.description}</p> : null}
         {form.paid && (!form.tiers || form.tiers.length === 0) ? (
-          <span className="mt-3 inline-flex rounded-lg px-3 py-1.5 text-sm font-black text-white" style={{ backgroundColor: theme.accent }}>
+          <span
+            className="mt-4 inline-flex rounded-xl px-4 py-2 text-sm font-black text-white"
+            style={{ backgroundColor: theme.accent, boxShadow: `0 4px 14px -3px ${theme.accent}66` }}
+          >
             Fee: INR {form.fee.toLocaleString("en-IN")}
           </span>
         ) : null}
         {form.paid && form.tiers && form.tiers.length > 0 ? (
-          <div className="mt-3 flex flex-wrap gap-2" style={{ textAlign: "left" }}>
+          <div className="mt-4 flex flex-wrap gap-2" style={{ textAlign: "left" }}>
             {form.tiers.map((tier) => (
-              <span className="inline-flex rounded-lg px-3 py-1.5 text-sm font-black text-white" key={tier.id} style={{ backgroundColor: theme.accent }}>
+              <span
+                className="inline-flex rounded-xl px-4 py-2 text-sm font-black text-white"
+                key={tier.id}
+                style={{ backgroundColor: theme.accent, boxShadow: `0 4px 14px -3px ${theme.accent}66` }}
+              >
                 {tier.label || "Tier"}: ₹{tier.fee.toLocaleString("en-IN")}
               </span>
             ))}
@@ -760,27 +782,40 @@ function FormPreview({ form }: { form: BuilderForm }) {
         ) : null}
       </div>
       {form.highlights && form.highlights.length > 0 ? (
-        <div className="mx-4 mb-0 rounded-xl border border-slate-100 bg-slate-50 p-4 sm:mx-6">
-          <p className="mb-2 text-sm font-black text-slate-800">What you&apos;ll get</p>
-          <ul className="space-y-1.5">
+        <div
+          className="mx-5 mb-2 rounded-2xl p-5 sm:mx-7"
+          style={{ background: `linear-gradient(135deg, ${theme.accent}08, ${theme.accent}15)`, border: `1px solid ${theme.accent}20` }}
+        >
+          <p className="mb-3 flex items-center gap-2 text-sm font-black text-slate-800">
+            <span className="grid size-6 place-items-center rounded-lg text-white" style={{ backgroundColor: theme.accent, boxShadow: `0 2px 8px -2px ${theme.accent}88` }}>✦</span>
+            What you&apos;ll get
+          </p>
+          <ul className="space-y-2">
             {form.highlights.map((item, i) => (
-              <li className="flex items-start gap-2 text-sm font-semibold text-slate-700" key={i}>
-                <Check className="mt-0.5 size-4 shrink-0" style={{ color: theme.accent }} />
+              <li className="flex items-start gap-2.5 text-sm font-semibold text-slate-700" key={i}>
+                <span className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-full text-white" style={{ backgroundColor: theme.accent }}>
+                  <Check className="size-3" />
+                </span>
                 {item}
               </li>
             ))}
           </ul>
         </div>
       ) : null}
-      <div className="space-y-4 px-4 pb-4 sm:px-6 sm:pb-6">
+      <div className="space-y-4 px-5 pb-5 pt-3 sm:px-7 sm:pb-7">
         {form.paid && form.tiers && form.tiers.length > 0 ? (
           <div>
-            <span className="mb-1.5 block text-sm font-bold text-slate-700">Registration Type <span style={{ color: theme.accent }}>*</span></span>
-            <div className="space-y-1.5">
+            <span className="mb-2 block text-sm font-bold text-slate-700">Registration Type <span style={{ color: theme.accent }}>*</span></span>
+            <div className="space-y-2">
               {form.tiers.map((tier, i) => (
-                <label className="flex min-h-[44px] items-center gap-3 text-sm font-semibold text-slate-700" key={tier.id}>
+                <label
+                  className="flex min-h-[48px] cursor-pointer items-center gap-3 rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700 transition-all hover:border-slate-300"
+                  key={tier.id}
+                  style={i === 0 ? { borderColor: theme.accent, backgroundColor: `${theme.accent}08`, boxShadow: `0 0 0 1px ${theme.accent}33` } : {}}
+                >
                   <input className="size-5" style={{ accentColor: theme.accent }} type="radio" name="preview-tier" defaultChecked={i === 0} />
-                  {tier.label || "Tier"} — ₹{tier.fee.toLocaleString("en-IN")}
+                  <span className="flex-1">{tier.label || "Tier"}</span>
+                  <span className="font-black" style={{ color: theme.accent }}>₹{tier.fee.toLocaleString("en-IN")}</span>
                 </label>
               ))}
             </div>
@@ -789,7 +824,11 @@ function FormPreview({ form }: { form: BuilderForm }) {
         {form.fields.map((field) => (
           <PreviewField field={field} key={field.id} accent={theme.accent} />
         ))}
-        <button className="w-full min-h-[48px] rounded-xl px-5 py-3 text-sm font-black text-white" style={{ backgroundColor: theme.accent }} type="button">
+        <button
+          className="w-full min-h-[52px] rounded-2xl px-5 py-3.5 text-sm font-black tracking-wide text-white uppercase transition-transform hover:scale-[1.01] active:scale-[0.99]"
+          style={{ backgroundColor: theme.accent, boxShadow: `0 6px 20px -4px ${theme.accent}55, 0 2px 4px -1px ${theme.accent}33` }}
+          type="button"
+        >
           {form.paid ? "Register & Pay" : "Confirm Registration"}
         </button>
       </div>
@@ -807,7 +846,7 @@ function PreviewField({ field, accent }: { field: BuilderField; accent: string }
       {field.required ? <span style={{ color: accent }}> *</span> : null}
     </span>
   );
-  const inputClass = "w-full rounded-lg border border-slate-300 bg-white px-3 py-3 text-base sm:text-sm outline-none";
+  const inputClass = "w-full rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-3 text-base sm:text-sm outline-none transition-all focus:border-slate-300 focus:bg-white focus:ring-4 focus:ring-slate-100";
 
   if (field.type === "paragraph") {
     return <label className="block">{label}<textarea className={inputClass} placeholder={field.placeholder} rows={3} /></label>;
