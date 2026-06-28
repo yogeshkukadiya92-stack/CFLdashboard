@@ -93,6 +93,18 @@ export function ProcessModulePage({ slug }: { slug: string }) {
     return <ManualClientRegistrationWorkflow />;
   }
 
+  if (slug === "apply-coupon") {
+    return <ApplyCouponWorkflow />;
+  }
+
+  if (slug === "re-check-failed-payment") {
+    return <ReCheckFailedPaymentWorkflow />;
+  }
+
+  if (slug === "manual-client-part-payment") {
+    return <ManualClientPartPaymentWorkflow />;
+  }
+
   const config = processPageConfigs[slug];
   const initialForm = useMemo(
     () => Object.fromEntries(config.fields.map((field) => [field.key, ""])) as Record<string, string>,
@@ -227,6 +239,619 @@ export function ProcessModulePage({ slug }: { slug: string }) {
                     </td>
                   </tr>
                 )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      ) : null}
+    </AdminPlatformShell>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Apply Coupon Workflow
+// ---------------------------------------------------------------------------
+
+const COUPONS_STORAGE_KEY = "cfl_coupons_v1";
+
+type CouponRecord = {
+  id: string;
+  clientName: string;
+  clientId: string;
+  workshopId: string;
+  workshopName: string;
+  couponCode: string;
+  discount: number;
+  appliedAt: string;
+};
+
+function ApplyCouponWorkflow() {
+  const [clients, setClients] = useState<ClientStorageRecord[]>([]);
+  const [workshops, setWorkshops] = useState<WorkshopMasterRecord[]>([]);
+  const [coupons, setCoupons] = useState<CouponRecord[]>([]);
+
+  const [clientQuery, setClientQuery] = useState("");
+  const [selectedClient, setSelectedClient] = useState<ClientStorageRecord | null>(null);
+  const [showClientList, setShowClientList] = useState(false);
+  const clientBoxRef = useRef<HTMLDivElement>(null);
+
+  const [workshopId, setWorkshopId] = useState("");
+  const [couponCode, setCouponCode] = useState("");
+  const [discountAmount, setDiscountAmount] = useState("");
+
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+
+  useEffect(() => {
+    setClients(readLocalStorageArray<ClientStorageRecord>(CLIENTS_STORAGE_KEY).filter((c) => (c.name ?? "").trim()));
+    setWorkshops(readLocalStorageArray<WorkshopMasterRecord>(WORKSHOP_MASTER_STORAGE_KEY));
+    setCoupons(readLocalStorageArray<CouponRecord>(COUPONS_STORAGE_KEY));
+  }, []);
+
+  useEffect(() => {
+    function onPointerDown(event: MouseEvent) {
+      if (clientBoxRef.current && !clientBoxRef.current.contains(event.target as Node)) {
+        setShowClientList(false);
+      }
+    }
+    document.addEventListener("mousedown", onPointerDown);
+    return () => document.removeEventListener("mousedown", onPointerDown);
+  }, []);
+
+  const clientMatches = useMemo(() => {
+    const q = clientQuery.trim().toLowerCase();
+    const list = q
+      ? clients.filter((c) => `${c.name ?? ""} ${c.mobile ?? ""}`.toLowerCase().includes(q))
+      : clients;
+    return list.slice(0, 8);
+  }, [clients, clientQuery]);
+
+  function applyCoupon(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError("");
+    setSuccess("");
+
+    if (!selectedClient) { setError("Please select a client."); return; }
+    if (!workshopId) { setError("Please select a workshop."); return; }
+    if (!couponCode.trim()) { setError("Please enter a coupon code."); return; }
+    const disc = Number(discountAmount);
+    if (!disc || disc <= 0) { setError("Please enter a valid discount amount."); return; }
+
+    const selectedWorkshop = workshops.find((w) => w.id === workshopId);
+    if (!selectedWorkshop) { setError("Workshop not found."); return; }
+
+    // Find registration
+    const regs = readLocalStorageArray<ManualRegistrationEntry>(REGISTRATION_STORAGE_KEY);
+    const regIndex = regs.findIndex(
+      (r) => r.workshopId === workshopId && (r.fullName === selectedClient.name || r.mobile?.replace(/\D/g, "") === (selectedClient.mobile ?? "").replace(/\D/g, ""))
+    );
+
+    if (regIndex < 0) {
+      setError(`No registration found for ${selectedClient.name} in ${selectedWorkshop.name}.`);
+      return;
+    }
+
+    const reg = regs[regIndex];
+    const newDue = Math.max(0, (reg.amountDue ?? 0) - disc);
+    const updatedReg = {
+      ...reg,
+      amountDue: newDue,
+      status: newDue === 0 ? "Paid" as const : reg.status,
+    };
+    regs[regIndex] = updatedReg;
+    window.localStorage.setItem(REGISTRATION_STORAGE_KEY, JSON.stringify(regs));
+
+    const coupon: CouponRecord = {
+      id: generateId(),
+      clientName: selectedClient.name ?? "",
+      clientId: String(selectedClient.id),
+      workshopId,
+      workshopName: selectedWorkshop.name,
+      couponCode: couponCode.trim(),
+      discount: disc,
+      appliedAt: new Date().toISOString().slice(0, 16).replace("T", " "),
+    };
+    const nextCoupons = [coupon, ...coupons];
+    setCoupons(nextCoupons);
+    window.localStorage.setItem(COUPONS_STORAGE_KEY, JSON.stringify(nextCoupons));
+
+    setSuccess(`Coupon "${couponCode.trim()}" applied. Discount: ₹${disc}. New amount due: ₹${newDue}.`);
+    setCouponCode("");
+    setDiscountAmount("");
+  }
+
+  function deleteCoupon(id: string) {
+    const next = coupons.filter((c) => c.id !== id);
+    setCoupons(next);
+    window.localStorage.setItem(COUPONS_STORAGE_KEY, JSON.stringify(next));
+  }
+
+  return (
+    <AdminPlatformShell activeLabel="Apply Coupon" description="Apply coupon codes to client workshop registrations and track discount history." title="Apply Coupon">
+      <form className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm md:p-6" onSubmit={applyCoupon}>
+        <div>
+          <p className="text-sm font-bold text-slate-500">Coupon Management</p>
+          <h3 className="mt-1 text-2xl font-black text-slate-950">Apply Coupon</h3>
+        </div>
+
+        {error ? <p className="mt-5 rounded-xl bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{error}</p> : null}
+        {success ? <p className="mt-5 rounded-xl bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700">{success}</p> : null}
+
+        <div className="mt-6 grid gap-4 md:grid-cols-2">
+          {/* Client search combobox */}
+          <label className="block">
+            <span className="mb-2 block text-sm font-bold text-slate-600">Search Client</span>
+            <span className="relative block" ref={clientBoxRef}>
+              <input
+                autoComplete="off"
+                className={inputClass}
+                onChange={(e) => { setClientQuery(e.target.value); setSelectedClient(null); setShowClientList(true); }}
+                onFocus={() => setShowClientList(true)}
+                placeholder="Search by name or mobile"
+                value={clientQuery}
+              />
+              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
+              {showClientList && clientMatches.length ? (
+                <div className="absolute z-20 mt-2 max-h-64 w-full overflow-auto rounded-xl border border-slate-200 bg-white p-2 shadow-xl">
+                  {clientMatches.map((c) => (
+                    <button
+                      className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left hover:bg-indigo-50"
+                      key={c.id}
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        setSelectedClient(c);
+                        setClientQuery(`${c.name ?? ""} - ${c.mobile ?? ""}`);
+                        setShowClientList(false);
+                      }}
+                      type="button"
+                    >
+                      <span>
+                        <span className="block text-sm font-bold text-slate-900">{c.name}</span>
+                        <span className="block text-xs text-slate-500">{c.mobile ?? ""}</span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </span>
+          </label>
+
+          {/* Workshop select */}
+          <label className="block">
+            <span className="mb-2 block text-sm font-bold text-slate-600">Select Workshop</span>
+            <select className={inputClass} onChange={(e) => setWorkshopId(e.target.value)} value={workshopId}>
+              <option value="">SELECT WORKSHOP</option>
+              {workshops.map((w) => (
+                <option key={w.id} value={w.id}>{w.name}</option>
+              ))}
+            </select>
+          </label>
+
+          <label className="block">
+            <span className="mb-2 block text-sm font-bold text-slate-600">Coupon Code</span>
+            <input className={inputClass} onChange={(e) => setCouponCode(e.target.value)} placeholder="Enter coupon code" value={couponCode} />
+          </label>
+
+          <label className="block">
+            <span className="mb-2 block text-sm font-bold text-slate-600">Discount Amount (₹)</span>
+            <input className={inputClass} min="0" onChange={(e) => setDiscountAmount(e.target.value)} placeholder="0" type="number" value={discountAmount} />
+          </label>
+        </div>
+
+        <div className="mt-6 flex flex-wrap gap-3">
+          <button className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-3 text-sm font-bold text-white hover:bg-indigo-700" type="submit">
+            <Save className="size-4" />
+            Apply Coupon
+          </button>
+          <button
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-300 px-5 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50"
+            onClick={() => { setClientQuery(""); setSelectedClient(null); setWorkshopId(""); setCouponCode(""); setDiscountAmount(""); setError(""); setSuccess(""); }}
+            type="button"
+          >
+            <RefreshCw className="size-4" />
+            Clear
+          </button>
+        </div>
+      </form>
+
+      <section className="grid gap-4 md:grid-cols-3">
+        <Metric label="Total Coupons Applied" value={String(coupons.length)} />
+        <Metric label="Total Discount Given" value={`₹${coupons.reduce((s, c) => s + c.discount, 0).toLocaleString("en-IN")}`} />
+        <Metric label="Workflow Status" value="Ready" />
+      </section>
+
+      {coupons.length ? (
+        <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm md:p-6">
+          <h3 className="text-xl font-black text-slate-950">Applied Coupons</h3>
+          <p className="text-sm font-semibold text-slate-500">History of all coupon discounts applied.</p>
+          <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200">
+            <table className="min-w-[820px] w-full text-left text-sm">
+              <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                <tr>
+                  {["Client", "Workshop", "Coupon Code", "Discount", "Applied At", "Action"].map((h) => (
+                    <th className="px-4 py-3" key={h}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {coupons.map((c) => (
+                  <tr className="hover:bg-indigo-50/40" key={c.id}>
+                    <td className="px-4 py-4 font-bold text-slate-900">{c.clientName}</td>
+                    <td className="px-4 py-4 text-slate-700">{c.workshopName}</td>
+                    <td className="px-4 py-4 font-mono text-slate-700">{c.couponCode}</td>
+                    <td className="px-4 py-4 font-black text-slate-950">₹{c.discount.toLocaleString("en-IN")}</td>
+                    <td className="px-4 py-4 text-slate-700">{c.appliedAt}</td>
+                    <td className="px-4 py-4">
+                      <button className="grid size-9 place-items-center rounded-xl bg-red-50 text-red-600 hover:bg-red-100" onClick={() => deleteCoupon(c.id)} type="button">
+                        <Trash2 className="size-4" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      ) : null}
+    </AdminPlatformShell>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Re-Check Failed Payment Workflow
+// ---------------------------------------------------------------------------
+
+function ReCheckFailedPaymentWorkflow() {
+  const [registrations, setRegistrations] = useState<ManualRegistrationEntry[]>([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [success, setSuccess] = useState("");
+
+  function loadData() {
+    const all = readLocalStorageArray<ManualRegistrationEntry>(REGISTRATION_STORAGE_KEY);
+    setRegistrations(all.filter((r) => r.status === "Due"));
+  }
+
+  useEffect(() => { loadData(); }, []);
+
+  const filtered = useMemo(() => {
+    const q = searchTerm.trim().toLowerCase();
+    if (!q) return registrations;
+    return registrations.filter((r) =>
+      `${r.fullName} ${r.mobile} ${r.workshopTitle}`.toLowerCase().includes(q)
+    );
+  }, [registrations, searchTerm]);
+
+  function markAsPaid(regId: string) {
+    const all = readLocalStorageArray<ManualRegistrationEntry>(REGISTRATION_STORAGE_KEY);
+    const idx = all.findIndex((r) => r.id === regId);
+    if (idx < 0) return;
+    const reg = all[idx];
+    all[idx] = {
+      ...reg,
+      amountPaid: (reg.amountPaid ?? 0) + (reg.amountDue ?? 0),
+      amountDue: 0,
+      status: "Paid",
+    };
+    window.localStorage.setItem(REGISTRATION_STORAGE_KEY, JSON.stringify(all));
+    setSuccess(`${reg.fullName} marked as Paid for ${reg.workshopTitle}.`);
+    loadData();
+  }
+
+  return (
+    <AdminPlatformShell
+      activeLabel="Re-Check Failed Payment"
+      description="Review registrations with pending payments and mark them as paid after verification."
+      title="Re-Check Failed Payment"
+    >
+      <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm md:p-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-bold text-slate-500">Payment Verification</p>
+            <h3 className="mt-1 text-2xl font-black text-slate-950">Re-Check Failed Payments</h3>
+          </div>
+          <button
+            className="inline-flex items-center gap-2 rounded-xl bg-slate-950 px-4 py-3 text-sm font-bold text-white shadow-sm hover:bg-indigo-700"
+            onClick={() => { loadData(); setSuccess("Data reloaded from storage."); }}
+            type="button"
+          >
+            <RefreshCw className="size-4" />
+            Re-check
+          </button>
+        </div>
+
+        {success ? <p className="mt-5 rounded-xl bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700">{success}</p> : null}
+
+        <div className="mt-5">
+          <label className="relative block w-full max-w-md">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
+            <input
+              className="w-full rounded-xl border border-slate-200 bg-white py-3 pl-10 pr-3 text-sm outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100"
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search by client name, mobile, or workshop..."
+              value={searchTerm}
+            />
+          </label>
+        </div>
+      </section>
+
+      <section className="grid gap-4 md:grid-cols-3">
+        <Metric label="Pending Payments" value={String(registrations.length)} />
+        <Metric label="Total Amount Due" value={`₹${registrations.reduce((s, r) => s + (r.amountDue ?? 0), 0).toLocaleString("en-IN")}`} />
+        <Metric label="Filtered Results" value={String(filtered.length)} />
+      </section>
+
+      <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm md:p-6">
+        <h3 className="text-xl font-black text-slate-950">Due Registrations</h3>
+        <p className="text-sm font-semibold text-slate-500">All registrations with outstanding payment.</p>
+        <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200">
+          <table className="min-w-[820px] w-full text-left text-sm">
+            <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+              <tr>
+                {["Client", "Mobile", "Workshop", "Amount Due", "Registration Date", "Action"].map((h) => (
+                  <th className="px-4 py-3" key={h}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {filtered.length ? (
+                filtered.map((r) => (
+                  <tr className="hover:bg-indigo-50/40" key={r.id}>
+                    <td className="px-4 py-4 font-bold text-slate-900">{r.fullName}</td>
+                    <td className="px-4 py-4 text-slate-700">{r.mobile}</td>
+                    <td className="px-4 py-4 text-slate-700">{r.workshopTitle}</td>
+                    <td className="px-4 py-4 font-black text-slate-950">₹{(r.amountDue ?? 0).toLocaleString("en-IN")}</td>
+                    <td className="px-4 py-4 text-slate-700">{r.createdAt}</td>
+                    <td className="px-4 py-4">
+                      <button
+                        className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-700"
+                        onClick={() => markAsPaid(r.id)}
+                        type="button"
+                      >
+                        <CheckCircle2 className="size-3.5" />
+                        Mark as Paid
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td className="px-4 py-10 text-center text-slate-500" colSpan={6}>
+                    No pending payment registrations found.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </AdminPlatformShell>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Manual Client Part Payment Workflow
+// ---------------------------------------------------------------------------
+
+const PART_PAYMENTS_STORAGE_KEY = "cfl_part_payments_v1";
+
+type PartPaymentRecord = {
+  id: string;
+  clientName: string;
+  registrationId: string;
+  workshopTitle: string;
+  amount: number;
+  previousDue: number;
+  newDue: number;
+  date: string;
+};
+
+function ManualClientPartPaymentWorkflow() {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [dueRegistrations, setDueRegistrations] = useState<ManualRegistrationEntry[]>([]);
+  const [selectedReg, setSelectedReg] = useState<ManualRegistrationEntry | null>(null);
+  const [paymentAmount, setPaymentAmount] = useState("");
+  const [payments, setPayments] = useState<PartPaymentRecord[]>([]);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+
+  useEffect(() => {
+    const all = readLocalStorageArray<ManualRegistrationEntry>(REGISTRATION_STORAGE_KEY);
+    setDueRegistrations(all.filter((r) => (r.amountDue ?? 0) > 0));
+    setPayments(readLocalStorageArray<PartPaymentRecord>(PART_PAYMENTS_STORAGE_KEY));
+  }, []);
+
+  const matchedRegs = useMemo(() => {
+    const q = searchTerm.trim().toLowerCase();
+    if (!q) return dueRegistrations.slice(0, 10);
+    return dueRegistrations
+      .filter((r) => `${r.fullName} ${r.mobile} ${r.workshopTitle}`.toLowerCase().includes(q))
+      .slice(0, 10);
+  }, [dueRegistrations, searchTerm]);
+
+  function savePayment(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError("");
+    setSuccess("");
+
+    if (!selectedReg) { setError("Please select a registration."); return; }
+    const amt = Number(paymentAmount);
+    if (!amt || amt <= 0) { setError("Please enter a valid payment amount."); return; }
+    if (amt > (selectedReg.amountDue ?? 0)) { setError(`Payment amount cannot exceed amount due (₹${selectedReg.amountDue}).`); return; }
+
+    const all = readLocalStorageArray<ManualRegistrationEntry>(REGISTRATION_STORAGE_KEY);
+    const idx = all.findIndex((r) => r.id === selectedReg.id);
+    if (idx < 0) { setError("Registration not found in storage."); return; }
+
+    const previousDue = all[idx].amountDue ?? 0;
+    const newDue = previousDue - amt;
+    all[idx] = {
+      ...all[idx],
+      amountPaid: (all[idx].amountPaid ?? 0) + amt,
+      amountDue: newDue,
+      paymentMode: "Part",
+      status: newDue === 0 ? "Paid" : all[idx].status,
+    };
+    window.localStorage.setItem(REGISTRATION_STORAGE_KEY, JSON.stringify(all));
+
+    const payment: PartPaymentRecord = {
+      id: generateId(),
+      clientName: selectedReg.fullName,
+      registrationId: selectedReg.id,
+      workshopTitle: selectedReg.workshopTitle,
+      amount: amt,
+      previousDue,
+      newDue,
+      date: new Date().toISOString().slice(0, 16).replace("T", " "),
+    };
+    const nextPayments = [payment, ...payments];
+    setPayments(nextPayments);
+    window.localStorage.setItem(PART_PAYMENTS_STORAGE_KEY, JSON.stringify(nextPayments));
+
+    // Refresh due registrations
+    setDueRegistrations(all.filter((r) => (r.amountDue ?? 0) > 0));
+    setSelectedReg(null);
+    setPaymentAmount("");
+    setSuccess(`Part payment of ₹${amt} recorded for ${selectedReg.fullName}. New due: ₹${newDue}.`);
+  }
+
+  function deletePayment(id: string) {
+    const next = payments.filter((p) => p.id !== id);
+    setPayments(next);
+    window.localStorage.setItem(PART_PAYMENTS_STORAGE_KEY, JSON.stringify(next));
+  }
+
+  return (
+    <AdminPlatformShell
+      activeLabel="Manual Client Part Payment"
+      description="Record part payments against client workshop registrations and track payment history."
+      title="Manual Client Part Payment"
+    >
+      <form className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm md:p-6" onSubmit={savePayment}>
+        <div>
+          <p className="text-sm font-bold text-slate-500">Payment Management</p>
+          <h3 className="mt-1 text-2xl font-black text-slate-950">Manual Client Part Payment</h3>
+        </div>
+
+        {error ? <p className="mt-5 rounded-xl bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{error}</p> : null}
+        {success ? <p className="mt-5 rounded-xl bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700">{success}</p> : null}
+
+        <div className="mt-6">
+          <label className="mb-2 block text-sm font-bold text-slate-600">Search Client (from registrations with amount due)</label>
+          <div className="relative w-full max-w-md">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
+            <input
+              className="w-full rounded-xl border border-slate-200 bg-white py-3 pl-10 pr-3 text-sm outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100"
+              onChange={(e) => { setSearchTerm(e.target.value); setSelectedReg(null); }}
+              placeholder="Search by client name, mobile, or workshop..."
+              value={searchTerm}
+            />
+          </div>
+        </div>
+
+        {matchedRegs.length && !selectedReg ? (
+          <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                <tr>
+                  {["Client", "Workshop", "Amount Due", ""].map((h) => (
+                    <th className="px-4 py-3" key={h}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {matchedRegs.map((r) => (
+                  <tr className="hover:bg-indigo-50/40" key={r.id}>
+                    <td className="px-4 py-3 font-bold text-slate-900">{r.fullName}</td>
+                    <td className="px-4 py-3 text-slate-700">{r.workshopTitle}</td>
+                    <td className="px-4 py-3 font-black text-slate-950">₹{(r.amountDue ?? 0).toLocaleString("en-IN")}</td>
+                    <td className="px-4 py-3">
+                      <button
+                        className="rounded-lg bg-indigo-50 px-3 py-1.5 text-xs font-bold text-indigo-700 hover:bg-indigo-100"
+                        onClick={() => setSelectedReg(r)}
+                        type="button"
+                      >
+                        Select
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : null}
+
+        {selectedReg ? (
+          <div className="mt-4 rounded-2xl border border-indigo-100 bg-indigo-50 p-4 text-sm">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-black text-slate-950">{selectedReg.fullName}</p>
+                <p className="mt-1 font-semibold text-indigo-700">{selectedReg.workshopTitle} — Due: ₹{(selectedReg.amountDue ?? 0).toLocaleString("en-IN")}</p>
+              </div>
+              <button className="text-xs font-bold text-indigo-600 hover:text-indigo-800" onClick={() => setSelectedReg(null)} type="button">Change</button>
+            </div>
+          </div>
+        ) : null}
+
+        {selectedReg ? (
+          <div className="mt-5 max-w-xs">
+            <label className="block">
+              <span className="mb-2 block text-sm font-bold text-slate-600">Part Payment Amount (₹)</span>
+              <input className={inputClass} max={selectedReg.amountDue ?? 0} min="1" onChange={(e) => setPaymentAmount(e.target.value)} placeholder="0" type="number" value={paymentAmount} />
+            </label>
+          </div>
+        ) : null}
+
+        <div className="mt-6 flex flex-wrap gap-3">
+          <button className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-3 text-sm font-bold text-white hover:bg-indigo-700 disabled:opacity-50" disabled={!selectedReg} type="submit">
+            <Save className="size-4" />
+            Save Payment
+          </button>
+          <button
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-300 px-5 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50"
+            onClick={() => { setSearchTerm(""); setSelectedReg(null); setPaymentAmount(""); setError(""); setSuccess(""); }}
+            type="button"
+          >
+            <RefreshCw className="size-4" />
+            Clear
+          </button>
+        </div>
+      </form>
+
+      <section className="grid gap-4 md:grid-cols-3">
+        <Metric label="Total Part Payments" value={String(payments.length)} />
+        <Metric label="Total Collected" value={`₹${payments.reduce((s, p) => s + p.amount, 0).toLocaleString("en-IN")}`} />
+        <Metric label="Workflow Status" value="Ready" />
+      </section>
+
+      {payments.length ? (
+        <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm md:p-6">
+          <h3 className="text-xl font-black text-slate-950">Payment History</h3>
+          <p className="text-sm font-semibold text-slate-500">All recorded part payments.</p>
+          <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200">
+            <table className="min-w-[820px] w-full text-left text-sm">
+              <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                <tr>
+                  {["Client", "Workshop", "Amount", "Previous Due", "New Due", "Date", "Action"].map((h) => (
+                    <th className="px-4 py-3" key={h}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {payments.map((p) => (
+                  <tr className="hover:bg-indigo-50/40" key={p.id}>
+                    <td className="px-4 py-4 font-bold text-slate-900">{p.clientName}</td>
+                    <td className="px-4 py-4 text-slate-700">{p.workshopTitle}</td>
+                    <td className="px-4 py-4 font-black text-emerald-700">₹{p.amount.toLocaleString("en-IN")}</td>
+                    <td className="px-4 py-4 text-slate-700">₹{p.previousDue.toLocaleString("en-IN")}</td>
+                    <td className="px-4 py-4 font-black text-slate-950">₹{p.newDue.toLocaleString("en-IN")}</td>
+                    <td className="px-4 py-4 text-slate-700">{p.date}</td>
+                    <td className="px-4 py-4">
+                      <button className="grid size-9 place-items-center rounded-xl bg-red-50 text-red-600 hover:bg-red-100" onClick={() => deletePayment(p.id)} type="button">
+                        <Trash2 className="size-4" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
