@@ -194,6 +194,12 @@ export interface BuilderTheme {
   align: "left" | "center";
 }
 
+export interface PaymentTier {
+  id: string;
+  label: string;
+  fee: number;
+}
+
 export interface BuilderForm {
   id: string;
   workshopId: string;
@@ -206,6 +212,7 @@ export interface BuilderForm {
   paid: boolean;
   fee: number;
   partPayment: boolean;
+  tiers?: PaymentTier[];
   fields: BuilderField[];
   updatedAt: string;
 }

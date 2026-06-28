@@ -1,7 +1,7 @@
 "use client";
 
 import { workshops as seedWorkshops } from "@/lib/data";
-import type { BuilderField, BuilderForm, BuilderTheme, RegistrationEntry } from "@/lib/types";
+import type { BuilderField, BuilderForm, BuilderTheme, PaymentTier, RegistrationEntry } from "@/lib/types";
 import { decodeJsonParam, formatCurrency } from "@/lib/utils";
 import { AlertTriangle, CheckCircle2, ShieldCheck } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -25,6 +25,7 @@ type FormModel = {
   paid: boolean;
   fee: number;
   partPayment: boolean;
+  tiers?: PaymentTier[];
   theme: BuilderTheme;
   fields: BuilderField[];
 };
@@ -77,6 +78,7 @@ export default function RegistrationPage() {
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [paymentMode, setPaymentMode] = useState<"Full" | "Part">("Full");
   const [partAmount, setPartAmount] = useState("");
+  const [selectedTierId, setSelectedTierId] = useState("");
   const [message, setMessage] = useState("");
   const [success, setSuccess] = useState(false);
 
@@ -96,9 +98,10 @@ export default function RegistrationPage() {
           facilitator: "",
           venue: venueParam || "",
           batch: decoded.batch || "",
-          paid: Boolean(decoded.paid) && (decoded.fee || 0) > 0,
+          paid: Boolean(decoded.paid) && ((decoded.fee || 0) > 0 || Boolean(decoded.tiers && decoded.tiers.length > 0)),
           fee: decoded.fee || 0,
           partPayment: Boolean(decoded.partPayment),
+          tiers: decoded.tiers && decoded.tiers.length > 0 ? decoded.tiers : undefined,
           theme: { ...defaultTheme, ...decoded.theme },
           fields: decoded.fields
         };
@@ -214,7 +217,10 @@ export default function RegistrationPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clients, mobileValue, model]);
 
-  const fullAmount = model?.paid ? model.fee : 0;
+  const tierList = model?.tiers ?? [];
+  const hasTiers = tierList.length > 0;
+  const activeTier = hasTiers ? tierList.find((t) => t.id === selectedTierId) ?? tierList[0] : null;
+  const fullAmount = model?.paid ? (activeTier ? activeTier.fee : model.fee) : 0;
   const amountPaid = paymentMode === "Full" ? fullAmount : Math.max(0, Math.min(Number(partAmount || 0), fullAmount));
   const amountDue = Math.max(0, fullAmount - amountPaid);
 
@@ -254,6 +260,7 @@ export default function RegistrationPage() {
     const mobile = cleanMobile(mobileValue);
 
     const extra: Record<string, string> = {};
+    if (activeTier) extra["Registration Type"] = activeTier.label;
     model.fields.forEach((field) => {
       if (field.type === "heading" || field.role) return;
       const value = (answers[field.id] ?? "").trim();
@@ -337,7 +344,7 @@ export default function RegistrationPage() {
           {model.description ? <p className="mt-2 text-slate-500">{model.description}</p> : null}
           {metaLine.length ? <p className="mt-3 text-sm font-semibold text-slate-500">{metaLine.join("  •  ")}</p> : null}
           <p className="mt-4 inline-flex rounded-lg px-3 py-2 text-sm font-black text-white" style={{ backgroundColor: theme.accent }}>
-            {model.paid ? `Fee: ${formatCurrency(fullAmount)}` : "Free Registration"}
+            {model.paid ? (hasTiers ? `Starting ${formatCurrency(Math.min(...tierList.map((t) => t.fee)))}` : `Fee: ${formatCurrency(fullAmount)}`) : "Free Registration"}
           </p>
         </div>
 
@@ -368,6 +375,35 @@ export default function RegistrationPage() {
                   />
                 ))}
               </div>
+
+              {model.paid && hasTiers ? (
+                <div className="mt-5 rounded-xl border border-slate-200 p-4">
+                  <p className="text-sm font-black text-slate-700">Registration Type</p>
+                  <div className="mt-3 space-y-2">
+                    {tierList.map((tier) => {
+                      const isActive = activeTier?.id === tier.id;
+                      return (
+                        <label
+                          className={`flex min-h-[52px] cursor-pointer items-center gap-3 rounded-xl border-2 px-4 py-3 text-sm font-bold transition ${isActive ? "border-current bg-opacity-10" : "border-slate-200"}`}
+                          key={tier.id}
+                          style={isActive ? { borderColor: theme.accent, backgroundColor: `${theme.accent}10` } : undefined}
+                        >
+                          <input
+                            checked={isActive}
+                            className="size-5"
+                            name="payment-tier"
+                            onChange={() => setSelectedTierId(tier.id)}
+                            style={{ accentColor: theme.accent }}
+                            type="radio"
+                          />
+                          <span className="flex-1">{tier.label}</span>
+                          <span className="font-black" style={{ color: theme.accent }}>{formatCurrency(tier.fee)}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
 
               {model.paid ? (
                 <div className="mt-5 rounded-xl border border-slate-200 p-4">

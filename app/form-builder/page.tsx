@@ -1,7 +1,7 @@
 "use client";
 
 import { AdminPlatformShell } from "@/components/admin-platform-shell";
-import type { BuilderField, BuilderFieldType, BuilderForm } from "@/lib/types";
+import type { BuilderField, BuilderFieldType, BuilderForm, PaymentTier } from "@/lib/types";
 import { encodeJsonParam, generateId } from "@/lib/utils";
 import {
   AlignCenter,
@@ -95,6 +95,7 @@ export default function FormBuilderPage() {
   const [paid, setPaid] = useState(false);
   const [fee, setFee] = useState("");
   const [partPayment, setPartPayment] = useState(false);
+  const [tiers, setTiers] = useState<PaymentTier[]>([]);
   const [fields, setFields] = useState<BuilderField[]>(defaultFields);
   const [fontFamily, setFontFamily] = useState(fontOptions[0].value);
   const [fontSize, setFontSize] = useState(16);
@@ -130,10 +131,11 @@ export default function FormBuilderPage() {
       paid,
       fee: Number(fee) || 0,
       partPayment,
+      tiers: tiers.length > 0 ? tiers : undefined,
       fields,
       updatedAt: new Date().toISOString()
     };
-  }, [accent, align, batch, description, fee, fields, fontFamily, fontSize, paid, partPayment, title, titleBold, titleItalic, workshop, workshopId]);
+  }, [accent, align, batch, description, fee, fields, fontFamily, fontSize, paid, partPayment, tiers, title, titleBold, titleItalic, workshop, workshopId]);
 
   const link = useMemo(() => {
     if (typeof window === "undefined" || !workshopId) return "";
@@ -371,15 +373,86 @@ export default function FormBuilderPage() {
               <button className={`rounded-xl border px-4 py-2.5 text-sm font-bold ${paid ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-slate-200 text-slate-600 hover:bg-slate-50"}`} onClick={() => setPaid(true)} type="button">Paid</button>
             </div>
             {paid ? (
-              <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                <label className="block">
-                  <span className="mb-2 block text-sm font-bold text-slate-600">Fee (INR)</span>
-                  <input className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-3 text-sm font-semibold outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100" inputMode="numeric" onChange={(event) => setFee(event.target.value)} placeholder="0" value={fee} />
-                </label>
-                <label className="flex min-h-[44px] items-center gap-3 self-end rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700">
-                  <input checked={partPayment} className="size-5 accent-emerald-600" onChange={(event) => setPartPayment(event.target.checked)} type="checkbox" />
-                  Allow part payment
-                </label>
+              <div className="mt-4 space-y-4">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <label className="block">
+                    <span className="mb-2 block text-sm font-bold text-slate-600">Default Fee (INR)</span>
+                    <input className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-3 text-sm font-semibold outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100" inputMode="numeric" onChange={(event) => setFee(event.target.value)} placeholder="0" value={fee} />
+                  </label>
+                  <label className="flex min-h-[44px] items-center gap-3 self-end rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700">
+                    <input checked={partPayment} className="size-5 accent-emerald-600" onChange={(event) => setPartPayment(event.target.checked)} type="checkbox" />
+                    Allow part payment
+                  </label>
+                </div>
+
+                <div className="rounded-xl border border-slate-200 p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-black text-slate-700">Payment Tiers</p>
+                      <p className="mt-0.5 text-xs font-semibold text-slate-400">Single, Couple, Family — alag alag price set karo</p>
+                    </div>
+                    {tiers.length === 0 ? (
+                      <button
+                        className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700 hover:bg-emerald-100"
+                        onClick={() => setTiers([
+                          { id: generateId(), label: "Single", fee: Number(fee) || 0 },
+                          { id: generateId(), label: "Couple", fee: 0 },
+                        ])}
+                        type="button"
+                      >
+                        + Add Tiers
+                      </button>
+                    ) : (
+                      <button
+                        className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-bold text-rose-600 hover:bg-rose-100"
+                        onClick={() => setTiers([])}
+                        type="button"
+                      >
+                        Remove Tiers
+                      </button>
+                    )}
+                  </div>
+
+                  {tiers.length > 0 ? (
+                    <div className="mt-3 space-y-2">
+                      {tiers.map((tier) => (
+                        <div className="flex items-center gap-2" key={tier.id}>
+                          <input
+                            className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm font-bold outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
+                            onChange={(e) => setTiers((prev) => prev.map((t) => t.id === tier.id ? { ...t, label: e.target.value } : t))}
+                            placeholder="Tier name (e.g. Single)"
+                            value={tier.label}
+                          />
+                          <div className="relative">
+                            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">₹</span>
+                            <input
+                              className="w-28 rounded-lg border border-slate-200 bg-white py-2.5 pl-7 pr-3 text-sm font-bold outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
+                              inputMode="numeric"
+                              onChange={(e) => setTiers((prev) => prev.map((t) => t.id === tier.id ? { ...t, fee: Number(e.target.value) || 0 } : t))}
+                              placeholder="0"
+                              value={tier.fee || ""}
+                            />
+                          </div>
+                          <button
+                            className="grid size-10 shrink-0 place-items-center rounded-lg text-rose-500 hover:bg-rose-50"
+                            onClick={() => setTiers((prev) => prev.filter((t) => t.id !== tier.id))}
+                            type="button"
+                          >
+                            <Trash2 className="size-4" />
+                          </button>
+                        </div>
+                      ))}
+                      <button
+                        className="mt-1 inline-flex items-center gap-1.5 rounded-lg border border-dashed border-slate-300 px-3 py-2 text-xs font-bold text-slate-500 hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700"
+                        onClick={() => setTiers((prev) => [...prev, { id: generateId(), label: "", fee: 0 }])}
+                        type="button"
+                      >
+                        <Plus className="size-3.5" />
+                        Add Tier
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
               </div>
             ) : null}
           </section>
@@ -527,13 +600,35 @@ function FormPreview({ form }: { form: BuilderForm }) {
           {form.title || "Untitled form"}
         </h2>
         {form.description ? <p className="mt-2 text-slate-500">{form.description}</p> : null}
-        {form.paid ? (
+        {form.paid && (!form.tiers || form.tiers.length === 0) ? (
           <span className="mt-3 inline-flex rounded-lg px-3 py-1.5 text-sm font-black text-white" style={{ backgroundColor: theme.accent }}>
             Fee: INR {form.fee.toLocaleString("en-IN")}
           </span>
         ) : null}
+        {form.paid && form.tiers && form.tiers.length > 0 ? (
+          <div className="mt-3 flex flex-wrap gap-2" style={{ textAlign: "left" }}>
+            {form.tiers.map((tier) => (
+              <span className="inline-flex rounded-lg px-3 py-1.5 text-sm font-black text-white" key={tier.id} style={{ backgroundColor: theme.accent }}>
+                {tier.label || "Tier"}: ₹{tier.fee.toLocaleString("en-IN")}
+              </span>
+            ))}
+          </div>
+        ) : null}
       </div>
       <div className="space-y-4 px-4 pb-4 sm:px-6 sm:pb-6">
+        {form.paid && form.tiers && form.tiers.length > 0 ? (
+          <div>
+            <span className="mb-1.5 block text-sm font-bold text-slate-700">Registration Type <span style={{ color: theme.accent }}>*</span></span>
+            <div className="space-y-1.5">
+              {form.tiers.map((tier, i) => (
+                <label className="flex min-h-[44px] items-center gap-3 text-sm font-semibold text-slate-700" key={tier.id}>
+                  <input className="size-5" style={{ accentColor: theme.accent }} type="radio" name="preview-tier" defaultChecked={i === 0} />
+                  {tier.label || "Tier"} — ₹{tier.fee.toLocaleString("en-IN")}
+                </label>
+              ))}
+            </div>
+          </div>
+        ) : null}
         {form.fields.map((field) => (
           <PreviewField field={field} key={field.id} accent={theme.accent} />
         ))}
