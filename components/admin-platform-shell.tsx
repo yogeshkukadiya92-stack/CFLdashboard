@@ -471,12 +471,12 @@ export function AdminPlatformShell({
                 <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-950 md:text-3xl">{title}</h2>
                 {description ? <p className="mt-1 max-w-3xl text-sm text-slate-500">{description}</p> : null}
               </div>
-              <div className="flex flex-wrap gap-2">
-                <a className="rounded-lg bg-slate-950 px-4 py-3 text-sm font-bold text-white shadow-lg shadow-slate-950/15 hover:bg-slate-800" href="/manage-client">
-                  Import / Export
+              <div className="flex shrink-0 items-center gap-2">
+                <a aria-label="Import / Export" className="grid size-10 place-items-center rounded-lg bg-slate-950 text-white shadow-lg shadow-slate-950/15 hover:bg-slate-800" href="/manage-client" title="Import / Export">
+                  <Import className="size-4" />
                 </a>
-                <a className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-800 hover:bg-emerald-100" href="/settings">
-                  Integrations
+                <a aria-label="Integrations" className="grid size-10 place-items-center rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100" href="/settings" title="Integrations">
+                  <Settings className="size-4" />
                 </a>
               </div>
             </div>

@@ -15,6 +15,17 @@ type WorkshopRecord = {
   isPaid: boolean;
   activeFields: string[];
 };
+type RegistrationLinkConfig = {
+  batch?: string;
+  facilitator?: string;
+  fee?: number;
+  id?: string;
+  paid?: boolean;
+  partPayment?: boolean;
+  slug?: string;
+  title?: string;
+  venue?: string;
+};
 
 const STORAGE_KEY = "cfl_workshop_master_records_v1";
 const REGISTRATION_STORAGE_KEY = "cfl_registrations_v1";
@@ -540,7 +551,7 @@ export default function WorkshopMasterPage() {
                   <tr className="hover:bg-indigo-50/40" key={record.id}>
                     <td className="px-4 py-4">
                       <div className="flex gap-2">
-                        <button className="grid size-9 place-items-center rounded-xl bg-emerald-600 text-white hover:bg-emerald-700" onClick={() => setLinkWorkshop(record)} title="Registration link" type="button">
+                        <button aria-label="Edit registration link" className="grid size-9 place-items-center rounded-xl bg-emerald-600 text-white hover:bg-emerald-700" onClick={() => setLinkWorkshop(record)} title="Edit registration link" type="button">
                           <Link2 className="size-4" />
                         </button>
                         <button className="grid size-9 place-items-center rounded-xl bg-indigo-600 text-white hover:bg-indigo-700" onClick={() => editRecord(record)} title="Edit" type="button">
@@ -689,6 +700,8 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
   const [batch, setBatch] = useState("Main Batch");
   const [venue, setVenue] = useState("");
   const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "failed">("idle");
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saved">("idle");
+  const [linkSettingsLoaded, setLinkSettingsLoaded] = useState(false);
   const shortSlug = useMemo(() => registrationSlug(workshop), [workshop]);
 
   const link = useMemo(() => {
@@ -701,7 +714,28 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
     if (typeof window === "undefined") return;
     try {
       const raw = window.localStorage.getItem(REGISTRATION_LINK_CONFIG_STORAGE_KEY);
-      const configs = raw ? JSON.parse(raw) as Record<string, unknown> : {};
+      const configs = raw ? JSON.parse(raw) as Record<string, RegistrationLinkConfig> : {};
+      const existing = configs[shortSlug] ?? Object.values(configs).find((config) => config.id === workshop.id);
+      if (existing) {
+        setBatch(existing.batch || "Main Batch");
+        setFee(existing.fee ? String(existing.fee) : "");
+        setPaid(Boolean(existing.paid));
+        setPartPayment(Boolean(existing.partPayment));
+        setVenue(existing.venue === "TBA" ? "" : existing.venue || "");
+      }
+    } catch {
+      // Use defaults if saved link settings are not readable.
+    } finally {
+      setLinkSettingsLoaded(true);
+    }
+  }, [shortSlug, workshop.id]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!linkSettingsLoaded) return;
+    try {
+      const raw = window.localStorage.getItem(REGISTRATION_LINK_CONFIG_STORAGE_KEY);
+      const configs = raw ? JSON.parse(raw) as Record<string, RegistrationLinkConfig> : {};
       configs[shortSlug] = {
         batch: batch.trim() || "Main Batch",
         facilitator: workshop.facilitator || "CFL Facilitator",
@@ -714,10 +748,13 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
         venue: venue.trim() || "TBA"
       };
       window.localStorage.setItem(REGISTRATION_LINK_CONFIG_STORAGE_KEY, JSON.stringify(configs));
+      setSaveStatus("saved");
+      const timeout = window.setTimeout(() => setSaveStatus("idle"), 1600);
+      return () => window.clearTimeout(timeout);
     } catch {
       // The link still opens from Workshop Master fallback if storage is unavailable.
     }
-  }, [batch, fee, paid, partPayment, shortSlug, venue, workshop]);
+  }, [batch, fee, linkSettingsLoaded, paid, partPayment, shortSlug, venue, workshop]);
 
   async function copyLink() {
     let copied = false;
@@ -758,8 +795,9 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
       <div className="flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
         <div className="flex items-center justify-between border-b border-slate-100 p-5">
           <div>
-            <p className="text-xs font-black uppercase tracking-[0.2em] text-emerald-600">Registration Link</p>
+            <p className="text-xs font-black uppercase tracking-[0.2em] text-emerald-600">Edit Registration Link</p>
             <h3 className="mt-1 text-xl font-black text-slate-950">{workshop.name}</h3>
+            <p className="mt-1 text-xs font-bold text-slate-400">{saveStatus === "saved" ? "Link settings saved" : "Change batch, venue, payment and QR anytime."}</p>
           </div>
           <button className="grid size-10 place-items-center rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50" onClick={onClose} type="button"><X className="size-4" /></button>
         </div>
