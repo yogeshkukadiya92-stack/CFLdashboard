@@ -457,7 +457,7 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
   const [partPayment, setPartPayment] = useState(false);
   const [batch, setBatch] = useState("Main Batch");
   const [venue, setVenue] = useState("");
-  const [copied, setCopied] = useState(false);
+  const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "failed">("idle");
   const shortSlug = useMemo(() => registrationSlug(workshop), [workshop]);
 
   const link = useMemo(() => {
@@ -489,13 +489,37 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
   }, [batch, fee, paid, partPayment, shortSlug, venue, workshop]);
 
   async function copyLink() {
+    let copied = false;
     try {
-      await navigator.clipboard.writeText(link);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 2000);
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(link);
+        copied = true;
+      }
     } catch {
-      setCopied(false);
+      copied = false;
     }
+
+    if (!copied) {
+      const textarea = document.createElement("textarea");
+      textarea.value = link;
+      textarea.setAttribute("readonly", "");
+      textarea.style.position = "fixed";
+      textarea.style.left = "-9999px";
+      textarea.style.top = "0";
+      document.body.appendChild(textarea);
+      textarea.focus();
+      textarea.select();
+      textarea.setSelectionRange(0, textarea.value.length);
+      try {
+        copied = document.execCommand("copy");
+      } catch {
+        copied = false;
+      }
+      textarea.remove();
+    }
+
+    setCopyStatus(copied ? "copied" : "failed");
+    window.setTimeout(() => setCopyStatus("idle"), 2400);
   }
 
   return (
@@ -560,7 +584,7 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
               <span className="min-w-0 flex-1 truncate px-2 text-sm font-semibold text-slate-700">{link}</span>
               <button className="inline-flex items-center gap-2 rounded-lg bg-slate-950 px-3 py-2 text-sm font-bold text-white hover:bg-slate-800" onClick={copyLink} type="button">
                 <Copy className="size-4" />
-                {copied ? "Copied" : "Copy"}
+                {copyStatus === "copied" ? "Copied" : "Copy"}
               </button>
               <a className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50" href={link} rel="noreferrer" target="_blank">
                 <ExternalLink className="size-4" />
@@ -568,7 +592,7 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
               </a>
             </div>
             <p className="mt-2 text-xs font-semibold text-slate-400">
-              Short link save thai gayi che. Open par click karo athva QR scan kari registration form kholo.
+              {copyStatus === "failed" ? "Copy block thayu. Link select kari manual copy karo." : "Short link save thai gayi che. Open par click karo athva QR scan kari registration form kholo."}
             </p>
             </div>
             <div className="rounded-2xl border border-slate-200 bg-white p-4 text-center">
