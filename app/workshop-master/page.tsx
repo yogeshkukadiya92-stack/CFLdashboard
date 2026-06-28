@@ -7,14 +7,27 @@ import { generateId } from "@/lib/utils";
 import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
 
 type WorkshopRecord = {
+  batch?: string;
+  discountCodeEod?: string;
+  discountDescription?: string;
+  discountType?: DiscountType;
+  discountValue?: string;
+  feesWithTax?: string;
   id: string;
+  isPartPaymentAllow?: boolean;
   name: string;
+  maxOrderQty?: string;
+  minOrderQty?: string;
+  minimumPartPayment?: string;
+  orderQtyTitle?: string;
   type: string;
   facilitator: string;
   productGroup: string;
   isPaid: boolean;
+  transferLeadToCrm?: boolean;
   activeFields: string[];
 };
+type DiscountType = "percent" | "flat";
 type RegistrationLinkConfig = {
   batch?: string;
   facilitator?: string;
@@ -88,12 +101,24 @@ function defaultBuilderFields(): BuilderField[] {
 }
 
 export default function WorkshopMasterPage() {
-  const [showData, setShowData] = useState(false);
+  const [showData, setShowData] = useState(true);
   const [name, setName] = useState("");
   const [type, setType] = useState("");
   const [facilitator, setFacilitator] = useState("");
   const [group, setGroup] = useState("");
   const [isPaid, setIsPaid] = useState(false);
+  const [batch, setBatch] = useState("");
+  const [feesWithTax, setFeesWithTax] = useState("");
+  const [isPartPaymentAllow, setIsPartPaymentAllow] = useState(false);
+  const [minimumPartPayment, setMinimumPartPayment] = useState("");
+  const [discountCodeEod, setDiscountCodeEod] = useState("");
+  const [discountType, setDiscountType] = useState<DiscountType>("percent");
+  const [discountValue, setDiscountValue] = useState("");
+  const [discountDescription, setDiscountDescription] = useState("");
+  const [orderQtyTitle, setOrderQtyTitle] = useState("");
+  const [minOrderQty, setMinOrderQty] = useState("");
+  const [maxOrderQty, setMaxOrderQty] = useState("");
+  const [transferLeadToCrm, setTransferLeadToCrm] = useState(false);
   const [activeFields, setActiveFields] = useState<string[]>([...defaultFields]);
   const [records, setRecords] = useState<WorkshopRecord[]>([]);
   const [workshopTypes, setWorkshopTypes] = useState<string[]>(defaultWorkshopTypes);
@@ -151,6 +176,18 @@ export default function WorkshopMasterPage() {
     setFacilitator("");
     setGroup("");
     setIsPaid(false);
+    setBatch("");
+    setFeesWithTax("");
+    setIsPartPaymentAllow(false);
+    setMinimumPartPayment("");
+    setDiscountCodeEod("");
+    setDiscountType("percent");
+    setDiscountValue("");
+    setDiscountDescription("");
+    setOrderQtyTitle("");
+    setMinOrderQty("");
+    setMaxOrderQty("");
+    setTransferLeadToCrm(false);
     setActiveFields([...defaultFields]);
     resetBuilderForm();
     if (clearMessage) setMessage("");
@@ -164,12 +201,12 @@ export default function WorkshopMasterPage() {
       return;
     }
     if (editingId) {
-      const updatedRecord = { id: editingId, name, type, facilitator, productGroup: group, isPaid, activeFields };
+      const updatedRecord = buildWorkshopRecord(editingId);
       saveRecords(records.map((record) => record.id === editingId ? updatedRecord : record));
       saveBuilderForm(updatedRecord);
       setMessage("Workshop updated successfully.");
     } else {
-      const newRecord = { id: generateId(), name, type, facilitator, productGroup: group, isPaid, activeFields };
+      const newRecord = buildWorkshopRecord(generateId());
       saveRecords([newRecord, ...records]);
       saveBuilderForm(newRecord);
       setMessage("Workshop saved successfully.");
@@ -184,6 +221,18 @@ export default function WorkshopMasterPage() {
     setFacilitator(record.facilitator);
     setGroup(record.productGroup);
     setIsPaid(record.isPaid);
+    setBatch(record.batch ?? "");
+    setFeesWithTax(record.feesWithTax ?? "");
+    setIsPartPaymentAllow(Boolean(record.isPartPaymentAllow));
+    setMinimumPartPayment(record.minimumPartPayment ?? "");
+    setDiscountCodeEod(record.discountCodeEod ?? "");
+    setDiscountType(record.discountType ?? "percent");
+    setDiscountValue(record.discountValue ?? "");
+    setDiscountDescription(record.discountDescription ?? "");
+    setOrderQtyTitle(record.orderQtyTitle ?? "");
+    setMinOrderQty(record.minOrderQty ?? "");
+    setMaxOrderQty(record.maxOrderQty ?? "");
+    setTransferLeadToCrm(Boolean(record.transferLeadToCrm));
     setActiveFields(record.activeFields);
     setEditingId(record.id);
     loadBuilderForm(record);
@@ -205,6 +254,30 @@ export default function WorkshopMasterPage() {
     setMessage("Workshop deleted.");
   }
 
+  function buildWorkshopRecord(id: string): WorkshopRecord {
+    return {
+      activeFields,
+      batch: batch.trim() || "Main Batch",
+      discountCodeEod,
+      discountDescription,
+      discountType,
+      discountValue,
+      facilitator,
+      feesWithTax,
+      id,
+      isPaid,
+      isPartPaymentAllow,
+      maxOrderQty,
+      minOrderQty,
+      minimumPartPayment,
+      name,
+      orderQtyTitle,
+      productGroup: group,
+      transferLeadToCrm,
+      type
+    };
+  }
+
   function resetBuilderForm() {
     setFormTitle("Workshop Registration");
     setFormDescription("Please fill in your details to confirm your seat.");
@@ -218,13 +291,13 @@ export default function WorkshopMasterPage() {
       workshopId: record.id,
       workshopName: record.name,
       workshopSlug: workshopSlug(record.name) || record.id,
-      batch: "Main Batch",
+      batch: record.batch || "Main Batch",
       title: formTitle.trim() || `${record.name} Registration`,
       description: formDescription,
       theme: defaultTheme,
       paid: record.isPaid,
-      fee: 0,
-      partPayment: false,
+      fee: Number(record.feesWithTax || 0),
+      partPayment: Boolean(record.isPartPaymentAllow),
       highlights: formHighlights.map((item) => item.trim()).filter(Boolean),
       fields: formFields,
       updatedAt: new Date().toISOString()
@@ -374,6 +447,73 @@ export default function WorkshopMasterPage() {
             <input checked={isPaid} className="size-5 accent-indigo-600" onChange={(event) => setIsPaid(event.target.checked)} type="checkbox" />
             Is Paid?
           </label>
+        </div>
+
+        <div className="mt-7 rounded-3xl border border-slate-200 bg-slate-50/60 p-4 md:p-5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-indigo-600">Workshop Schedule Settings</p>
+              <h3 className="mt-1 text-xl font-black text-slate-950">Pricing, discount, CRM and order rules</h3>
+              <p className="mt-1 text-sm font-semibold text-slate-500">Aa settings schedule page mathi ahi merge kari che.</p>
+            </div>
+            <label className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700">
+              <input checked={transferLeadToCrm} className="size-5 accent-indigo-600" onChange={(event) => setTransferLeadToCrm(event.target.checked)} type="checkbox" />
+              Transfer lead to CRM
+            </label>
+          </div>
+
+          <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <label className="block">
+              <span className="mb-2 block text-sm font-bold text-slate-600">Batch</span>
+              <input className={inputClass} onChange={(event) => setBatch(event.target.value)} placeholder="Main Batch" value={batch} />
+            </label>
+            <label className="block">
+              <span className="mb-2 block text-sm font-bold text-slate-600">Fees With Tax</span>
+              <input className={inputClass} disabled={!isPaid} inputMode="numeric" onChange={(event) => setFeesWithTax(event.target.value)} placeholder="0" value={feesWithTax} />
+            </label>
+            <label className="flex min-h-[74px] items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700">
+              <input checked={isPartPaymentAllow} className="size-5 accent-indigo-600" disabled={!isPaid} onChange={(event) => setIsPartPaymentAllow(event.target.checked)} type="checkbox" />
+              Is Part Payment Allow?
+            </label>
+            <label className="block">
+              <span className="mb-2 block text-sm font-bold text-slate-600">Minimum Part Payment</span>
+              <input className={inputClass} disabled={!isPaid || !isPartPaymentAllow} inputMode="numeric" onChange={(event) => setMinimumPartPayment(event.target.value)} placeholder="0" value={minimumPartPayment} />
+            </label>
+            <label className="block">
+              <span className="mb-2 block text-sm font-bold text-slate-600">Discount Code/EOD</span>
+              <input className={inputClass} onChange={(event) => setDiscountCodeEod(event.target.value)} placeholder="DISCOUNT10" value={discountCodeEod} />
+            </label>
+            <div>
+              <span className="mb-2 block text-sm font-bold text-slate-600">Discount Type</span>
+              <div className="flex min-h-[48px] items-center gap-4 rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold">
+                <label className="inline-flex items-center gap-2"><input checked={discountType === "percent"} className="accent-indigo-600" onChange={() => setDiscountType("percent")} type="radio" />%</label>
+                <label className="inline-flex items-center gap-2"><input checked={discountType === "flat"} className="accent-indigo-600" onChange={() => setDiscountType("flat")} type="radio" />Flat Amount</label>
+              </div>
+            </div>
+            <label className="block">
+              <span className="mb-2 block text-sm font-bold text-slate-600">Discount Value</span>
+              <input className={inputClass} inputMode="numeric" onChange={(event) => setDiscountValue(event.target.value)} placeholder="0" value={discountValue} />
+            </label>
+            <label className="block md:col-span-2">
+              <span className="mb-2 block text-sm font-bold text-slate-600">Discount Description</span>
+              <input className={inputClass} onChange={(event) => setDiscountDescription(event.target.value)} placeholder="Short note for offer" value={discountDescription} />
+            </label>
+          </div>
+
+          <div className="mt-5 grid gap-4 md:grid-cols-3">
+            <label className="block">
+              <span className="mb-2 block text-sm font-bold text-slate-600">Order Qty Title</span>
+              <input className={inputClass} onChange={(event) => setOrderQtyTitle(event.target.value)} placeholder="Seats" value={orderQtyTitle} />
+            </label>
+            <label className="block">
+              <span className="mb-2 block text-sm font-bold text-slate-600">Min Order Qty</span>
+              <input className={inputClass} inputMode="numeric" onChange={(event) => setMinOrderQty(event.target.value)} placeholder="1" value={minOrderQty} />
+            </label>
+            <label className="block">
+              <span className="mb-2 block text-sm font-bold text-slate-600">Max Order Qty</span>
+              <input className={inputClass} inputMode="numeric" onChange={(event) => setMaxOrderQty(event.target.value)} placeholder="10" value={maxOrderQty} />
+            </label>
+          </div>
         </div>
 
         <div className="my-7 flex items-center gap-4">
@@ -695,9 +835,9 @@ function readMasterNames(key: string, defaults: string[]) {
 
 function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord; onClose: () => void }) {
   const [paid, setPaid] = useState(workshop.isPaid);
-  const [fee, setFee] = useState("");
-  const [partPayment, setPartPayment] = useState(false);
-  const [batch, setBatch] = useState("Main Batch");
+  const [fee, setFee] = useState(workshop.feesWithTax ?? "");
+  const [partPayment, setPartPayment] = useState(Boolean(workshop.isPartPaymentAllow));
+  const [batch, setBatch] = useState(workshop.batch ?? "Main Batch");
   const [venue, setVenue] = useState("");
   const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "failed">("idle");
   const [saveStatus, setSaveStatus] = useState<"idle" | "saved">("idle");
