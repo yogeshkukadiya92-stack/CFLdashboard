@@ -1,10 +1,10 @@
 "use client";
 
 import { AdminPlatformShell } from "@/components/admin-platform-shell";
-import { AlertCircle, Check, ChevronDown, Copy, Download, Edit3, ExternalLink, Eye, HelpCircle, Link2, QrCode, RefreshCw, Save, Search, Trash2, UsersRound, X } from "lucide-react";
-import type { RegistrationEntry } from "@/lib/types";
+import { AlertCircle, ArrowDown, ArrowUp, Check, CheckSquare, ChevronDown, Circle, Copy, Download, Edit3, ExternalLink, Eye, Heading, HelpCircle, Link2, Mail, Plus, QrCode, RefreshCw, Save, Search, Smartphone, Trash2, Type, UsersRound, X } from "lucide-react";
+import type { BuilderField, BuilderFieldType, BuilderForm, BuilderTheme, RegistrationEntry } from "@/lib/types";
 import { generateId } from "@/lib/utils";
-import { type FormEvent, useEffect, useMemo, useState } from "react";
+import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
 
 type WorkshopRecord = {
   id: string;
@@ -18,6 +18,7 @@ type WorkshopRecord = {
 
 const STORAGE_KEY = "cfl_workshop_master_records_v1";
 const REGISTRATION_STORAGE_KEY = "cfl_registrations_v1";
+const FORMS_STORAGE_KEY = "cfl_forms_v1";
 const REGISTRATION_LINK_CONFIG_STORAGE_KEY = "cfl_registration_link_configs_v1";
 const WORKSHOP_TYPES_STORAGE_KEY = "cfl_workshop_types_v1";
 const FACILITATORS_STORAGE_KEY = "cfl_facilitators_v1";
@@ -44,6 +45,36 @@ const fields = [
 ] as const;
 const defaultFields = fields.filter((field) => field[2]).map((field) => field[0]);
 const inputClass = "w-full rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-sm outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100";
+const defaultTheme: BuilderTheme = {
+  fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif",
+  fontSize: 16,
+  accent: "#059669",
+  titleBold: true,
+  titleItalic: false,
+  align: "left"
+};
+const fieldTypeMeta: Record<BuilderFieldType, { label: string; hasOptions: boolean }> = {
+  short_text: { label: "Short Text", hasOptions: false },
+  paragraph: { label: "Paragraph", hasOptions: false },
+  email: { label: "Email", hasOptions: false },
+  mobile: { label: "Mobile", hasOptions: false },
+  number: { label: "Number", hasOptions: false },
+  date: { label: "Date", hasOptions: false },
+  dropdown: { label: "Dropdown", hasOptions: true },
+  radio: { label: "Multiple Choice", hasOptions: true },
+  checkbox: { label: "Checkboxes", hasOptions: true },
+  heading: { label: "Section Heading", hasOptions: false }
+};
+const addableTypes: BuilderFieldType[] = ["short_text", "paragraph", "email", "mobile", "number", "date", "dropdown", "radio", "checkbox", "heading"];
+
+function defaultBuilderFields(): BuilderField[] {
+  return [
+    { id: generateId(), type: "short_text", label: "Full Name", placeholder: "Your full name", required: true, role: "name" },
+    { id: generateId(), type: "mobile", label: "Mobile Number", placeholder: "10-digit mobile", required: true, role: "mobile" },
+    { id: generateId(), type: "email", label: "Email", placeholder: "you@example.com", required: true, role: "email" },
+    { id: generateId(), type: "short_text", label: "City", placeholder: "Your city", role: "city" }
+  ];
+}
 
 export default function WorkshopMasterPage() {
   const [showData, setShowData] = useState(false);
@@ -56,6 +87,10 @@ export default function WorkshopMasterPage() {
   const [records, setRecords] = useState<WorkshopRecord[]>([]);
   const [workshopTypes, setWorkshopTypes] = useState<string[]>(defaultWorkshopTypes);
   const [facilitators, setFacilitators] = useState<string[]>(defaultFacilitators);
+  const [formTitle, setFormTitle] = useState("Workshop Registration");
+  const [formDescription, setFormDescription] = useState("Please fill in your details to confirm your seat.");
+  const [formFields, setFormFields] = useState<BuilderField[]>(defaultBuilderFields);
+  const [formHighlights, setFormHighlights] = useState<string[]>([]);
   const [message, setMessage] = useState("");
   const [search, setSearch] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -106,6 +141,7 @@ export default function WorkshopMasterPage() {
     setGroup("");
     setIsPaid(false);
     setActiveFields([...defaultFields]);
+    resetBuilderForm();
     if (clearMessage) setMessage("");
     setEditingId(null);
   }
@@ -117,10 +153,14 @@ export default function WorkshopMasterPage() {
       return;
     }
     if (editingId) {
-      saveRecords(records.map((record) => record.id === editingId ? { ...record, name, type, facilitator, productGroup: group, isPaid, activeFields } : record));
+      const updatedRecord = { id: editingId, name, type, facilitator, productGroup: group, isPaid, activeFields };
+      saveRecords(records.map((record) => record.id === editingId ? updatedRecord : record));
+      saveBuilderForm(updatedRecord);
       setMessage("Workshop updated successfully.");
     } else {
-      saveRecords([{ id: generateId(), name, type, facilitator, productGroup: group, isPaid, activeFields }, ...records]);
+      const newRecord = { id: generateId(), name, type, facilitator, productGroup: group, isPaid, activeFields };
+      saveRecords([newRecord, ...records]);
+      saveBuilderForm(newRecord);
       setMessage("Workshop saved successfully.");
     }
     clearForm(false);
@@ -135,6 +175,7 @@ export default function WorkshopMasterPage() {
     setIsPaid(record.isPaid);
     setActiveFields(record.activeFields);
     setEditingId(record.id);
+    loadBuilderForm(record);
     setMessage("Editing selected workshop.");
     window.scrollTo({ behavior: "smooth", top: 0 });
   }
@@ -148,8 +189,120 @@ export default function WorkshopMasterPage() {
 
   function deleteRecord(id: string) {
     saveRecords(records.filter((record) => record.id !== id));
+    deleteBuilderForm(id);
     if (selectedWorkshopId === id) setSelectedWorkshopId(null);
     setMessage("Workshop deleted.");
+  }
+
+  function resetBuilderForm() {
+    setFormTitle("Workshop Registration");
+    setFormDescription("Please fill in your details to confirm your seat.");
+    setFormFields(defaultBuilderFields());
+    setFormHighlights([]);
+  }
+
+  function buildRegistrationForm(record: WorkshopRecord): BuilderForm {
+    return {
+      id: `form-${record.id}-main`,
+      workshopId: record.id,
+      workshopName: record.name,
+      workshopSlug: workshopSlug(record.name) || record.id,
+      batch: "Main Batch",
+      title: formTitle.trim() || `${record.name} Registration`,
+      description: formDescription,
+      theme: defaultTheme,
+      paid: record.isPaid,
+      fee: 0,
+      partPayment: false,
+      highlights: formHighlights.map((item) => item.trim()).filter(Boolean),
+      fields: formFields,
+      updatedAt: new Date().toISOString()
+    };
+  }
+
+  function saveBuilderForm(record: WorkshopRecord) {
+    try {
+      const raw = window.localStorage.getItem(FORMS_STORAGE_KEY);
+      const forms = raw ? JSON.parse(raw) as BuilderForm[] : [];
+      const form = buildRegistrationForm(record);
+      const next = [form, ...forms.filter((item) => item.id !== form.id && item.workshopId !== record.id)];
+      window.localStorage.setItem(FORMS_STORAGE_KEY, JSON.stringify(next));
+    } catch {
+      // Workshop save should still work if local form storage is unavailable.
+    }
+  }
+
+  function loadBuilderForm(record: WorkshopRecord) {
+    try {
+      const raw = window.localStorage.getItem(FORMS_STORAGE_KEY);
+      const forms = raw ? JSON.parse(raw) as BuilderForm[] : [];
+      const savedForm = forms.find((item) => item.workshopId === record.id || item.workshopSlug === workshopSlug(record.name));
+      if (!savedForm) {
+        setFormTitle(`${record.name} Registration`);
+        setFormDescription("Please fill in your details to confirm your seat.");
+        setFormFields(defaultBuilderFields());
+        setFormHighlights([]);
+        return;
+      }
+      setFormTitle(savedForm.title || `${record.name} Registration`);
+      setFormDescription(savedForm.description || "");
+      setFormFields(savedForm.fields?.length ? savedForm.fields : defaultBuilderFields());
+      setFormHighlights(savedForm.highlights ?? []);
+    } catch {
+      resetBuilderForm();
+    }
+  }
+
+  function deleteBuilderForm(id: string) {
+    try {
+      const raw = window.localStorage.getItem(FORMS_STORAGE_KEY);
+      const forms = raw ? JSON.parse(raw) as BuilderForm[] : [];
+      window.localStorage.setItem(FORMS_STORAGE_KEY, JSON.stringify(forms.filter((item) => item.workshopId !== id)));
+    } catch {
+      // ignore storage cleanup failures
+    }
+  }
+
+  function updateFormField(id: string, patch: Partial<BuilderField>) {
+    setFormFields((current) => current.map((field) => field.id === id ? { ...field, ...patch } : field));
+  }
+
+  function addFormField(fieldType: BuilderFieldType) {
+    const meta = fieldTypeMeta[fieldType];
+    setFormFields((current) => [
+      ...current,
+      {
+        id: generateId(),
+        type: fieldType,
+        label: meta.label,
+        required: false,
+        options: meta.hasOptions ? ["Option 1", "Option 2"] : undefined
+      }
+    ]);
+  }
+
+  function moveFormField(index: number, direction: -1 | 1) {
+    setFormFields((current) => {
+      const target = index + direction;
+      if (target < 0 || target >= current.length) return current;
+      const next = [...current];
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+  }
+
+  function duplicateFormField(id: string) {
+    setFormFields((current) => {
+      const index = current.findIndex((field) => field.id === id);
+      if (index < 0) return current;
+      const next = [...current];
+      next.splice(index + 1, 0, { ...current[index], id: generateId(), role: undefined });
+      return next;
+    });
+  }
+
+  function removeFormField(id: string) {
+    setFormFields((current) => current.filter((field) => field.id !== id));
   }
 
   function exportCsv() {
@@ -241,6 +394,84 @@ export default function WorkshopMasterPage() {
               </button>
             );
           })}
+        </div>
+
+        <div className="mt-7 rounded-3xl border border-emerald-100 bg-emerald-50/40 p-4 md:p-5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-700">Registration Form Builder</p>
+              <h3 className="mt-1 text-xl font-black text-slate-950">Create registration form with workshop</h3>
+              <p className="mt-1 text-sm font-semibold text-slate-500">Aa fields public registration page par dekhase.</p>
+            </div>
+            <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-emerald-700">{formFields.length} fields</span>
+          </div>
+
+          <div className="mt-5 grid gap-4 md:grid-cols-2">
+            <label className="block">
+              <span className="mb-2 block text-sm font-bold text-slate-600">Form Title</span>
+              <input className={inputClass} onChange={(event) => setFormTitle(event.target.value)} placeholder="Workshop Registration" value={formTitle} />
+            </label>
+            <label className="block">
+              <span className="mb-2 block text-sm font-bold text-slate-600">Form Description</span>
+              <input className={inputClass} onChange={(event) => setFormDescription(event.target.value)} placeholder="Short instruction for clients" value={formDescription} />
+            </label>
+          </div>
+
+          <div className="mt-5 space-y-3">
+            {formFields.map((field, index) => (
+              <FieldEditor
+                field={field}
+                index={index}
+                key={field.id}
+                onChange={(patch) => updateFormField(field.id, patch)}
+                onDuplicate={() => duplicateFormField(field.id)}
+                onMoveDown={() => moveFormField(index, 1)}
+                onMoveUp={() => moveFormField(index, -1)}
+                onRemove={() => removeFormField(field.id)}
+                total={formFields.length}
+              />
+            ))}
+          </div>
+
+          <div className="mt-4 border-t border-emerald-100 pt-4">
+            <p className="mb-2 text-sm font-bold text-slate-600">Add field</p>
+            <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+              {addableTypes.map((fieldType) => (
+                <button
+                  className="inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-xs font-bold text-slate-700 hover:border-emerald-300 hover:bg-emerald-50 sm:min-h-0 sm:py-2"
+                  key={fieldType}
+                  onClick={() => addFormField(fieldType)}
+                  type="button"
+                >
+                  <Plus className="size-3.5" />
+                  {fieldTypeMeta[fieldType].label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-5 border-t border-emerald-100 pt-4">
+            <p className="mb-2 text-sm font-bold text-slate-600">What's Included</p>
+            <div className="space-y-2">
+              {formHighlights.map((item, index) => (
+                <div className="flex gap-2" key={index}>
+                  <input
+                    className={inputClass}
+                    onChange={(event) => setFormHighlights((current) => current.map((value, itemIndex) => itemIndex === index ? event.target.value : value))}
+                    placeholder="e.g. Certificate of completion"
+                    value={item}
+                  />
+                  <button className="grid size-11 shrink-0 place-items-center rounded-xl text-rose-500 hover:bg-rose-50" onClick={() => setFormHighlights((current) => current.filter((_, itemIndex) => itemIndex !== index))} type="button">
+                    <Trash2 className="size-4" />
+                  </button>
+                </div>
+              ))}
+              <button className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-slate-300 bg-white px-3 py-2.5 text-xs font-bold text-slate-500 hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700" onClick={() => setFormHighlights((current) => [...current, ""])} type="button">
+                <Plus className="size-3.5" />
+                Add Item
+              </button>
+            </div>
+          </div>
         </div>
 
         <div className="mt-7 flex flex-wrap justify-end gap-3">
@@ -612,6 +843,97 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
         </div>
       </div>
     </div>
+  );
+}
+
+function FieldEditor({
+  field,
+  index,
+  onChange,
+  onDuplicate,
+  onMoveDown,
+  onMoveUp,
+  onRemove,
+  total
+}: {
+  field: BuilderField;
+  index: number;
+  onChange: (patch: Partial<BuilderField>) => void;
+  onDuplicate: () => void;
+  onMoveDown: () => void;
+  onMoveUp: () => void;
+  onRemove: () => void;
+  total: number;
+}) {
+  const meta = fieldTypeMeta[field.type];
+  const Icon = field.type === "email" ? Mail : field.type === "mobile" ? Smartphone : field.type === "heading" ? Heading : field.type === "checkbox" ? CheckSquare : field.type === "radio" ? Circle : Type;
+  const lockedRole = Boolean(field.role);
+
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-3">
+      <div className="flex items-center gap-2">
+        <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-slate-100 text-slate-600">
+          <Icon className="size-4" />
+        </span>
+        <input
+          className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm font-bold outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
+          onChange={(event) => onChange({ label: event.target.value })}
+          placeholder="Field label"
+          value={field.label}
+        />
+        <span className="hidden rounded-md bg-slate-100 px-2 py-1 text-[11px] font-bold text-slate-500 sm:inline">{meta.label}</span>
+      </div>
+
+      {field.type !== "heading" ? (
+        <div className="mt-2 sm:pl-11">
+          <input
+            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
+            onChange={(event) => onChange({ placeholder: event.target.value })}
+            placeholder="Placeholder text"
+            value={field.placeholder ?? ""}
+          />
+        </div>
+      ) : null}
+
+      {meta.hasOptions ? (
+        <div className="mt-2 sm:pl-11">
+          <textarea
+            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
+            onChange={(event) => onChange({ options: event.target.value.split("\n").map((line) => line.trim()).filter(Boolean) })}
+            placeholder="One option per line"
+            rows={3}
+            value={(field.options ?? []).join("\n")}
+          />
+        </div>
+      ) : null}
+
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-2 sm:pl-11">
+        <label className="inline-flex min-h-[40px] items-center gap-2 text-xs font-bold text-slate-600">
+          <input checked={Boolean(field.required)} className="size-5 accent-emerald-600" disabled={lockedRole} onChange={(event) => onChange({ required: event.target.checked })} type="checkbox" />
+          Required
+        </label>
+        <div className="flex items-center gap-0.5">
+          <IconButton disabled={index === 0} onClick={onMoveUp} title="Move up"><ArrowUp className="size-4" /></IconButton>
+          <IconButton disabled={index === total - 1} onClick={onMoveDown} title="Move down"><ArrowDown className="size-4" /></IconButton>
+          <IconButton onClick={onDuplicate} title="Duplicate"><Copy className="size-4" /></IconButton>
+          <IconButton disabled={lockedRole} onClick={onRemove} title={lockedRole ? "Core field" : "Delete"} tone="danger"><Trash2 className="size-4" /></IconButton>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function IconButton({ children, disabled, onClick, title, tone }: { children: ReactNode; disabled?: boolean; onClick: () => void; title: string; tone?: "danger" }) {
+  return (
+    <button
+      className={`grid size-9 place-items-center rounded-lg transition disabled:cursor-not-allowed disabled:opacity-30 ${tone === "danger" ? "text-rose-600 hover:bg-rose-50" : "text-slate-500 hover:bg-slate-100"}`}
+      disabled={disabled}
+      onClick={onClick}
+      title={title}
+      type="button"
+    >
+      {children}
+    </button>
   );
 }
 

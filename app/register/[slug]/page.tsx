@@ -9,6 +9,7 @@ import { useParams, useSearchParams } from "next/navigation";
 
 const REGISTRATION_STORAGE_KEY = "cfl_registrations_v1";
 const WORKSHOP_MASTER_STORAGE_KEY = "cfl_workshop_master_records_v1";
+const FORMS_STORAGE_KEY = "cfl_forms_v1";
 const REGISTRATION_LINK_CONFIG_STORAGE_KEY = "cfl_registration_link_configs_v1";
 const CLIENTS_STORAGE_KEY = "cfl_clients_v1";
 
@@ -69,6 +70,25 @@ function cleanMobile(value: string) {
   return value.replace(/\D/g, "");
 }
 
+function modelFromBuilderForm(form: BuilderForm, overrides?: Partial<Pick<FormModel, "batch" | "facilitator" | "fee" | "paid" | "partPayment" | "venue">>): FormModel {
+  return {
+    id: form.workshopId || form.id,
+    slug: form.workshopSlug || slugify(form.workshopName) || form.id,
+    title: form.title || form.workshopName || "Workshop Registration",
+    description: form.description || "",
+    facilitator: overrides?.facilitator || "",
+    venue: overrides?.venue || "",
+    batch: overrides?.batch || form.batch || "Main Batch",
+    paid: overrides?.paid ?? Boolean(form.paid),
+    fee: overrides?.fee ?? form.fee ?? 0,
+    partPayment: overrides?.partPayment ?? Boolean(form.partPayment),
+    tiers: form.tiers && form.tiers.length > 0 ? form.tiers : undefined,
+    highlights: form.highlights && form.highlights.length > 0 ? form.highlights : undefined,
+    theme: { ...defaultTheme, ...form.theme },
+    fields: form.fields?.length ? form.fields : simpleFields()
+  };
+}
+
 export default function RegistrationPage() {
   const params = useParams<{ slug: string }>();
   const searchParams = useSearchParams();
@@ -103,22 +123,10 @@ export default function RegistrationPage() {
     if (formParam) {
       const decoded = decodeJsonParam<BuilderForm>(formParam);
       if (decoded && Array.isArray(decoded.fields)) {
-        resolved = {
-          id: decoded.workshopId || decoded.id || slug,
-          slug: decoded.workshopSlug || slug,
-          title: decoded.title || decoded.workshopName || "Workshop Registration",
-          description: decoded.description || "",
-          facilitator: "",
+        resolved = modelFromBuilderForm(decoded, {
           venue: venueParam || "",
-          batch: decoded.batch || "",
-          paid: Boolean(decoded.paid) && ((decoded.fee || 0) > 0 || Boolean(decoded.tiers && decoded.tiers.length > 0)),
-          fee: decoded.fee || 0,
-          partPayment: Boolean(decoded.partPayment),
-          tiers: decoded.tiers && decoded.tiers.length > 0 ? decoded.tiers : undefined,
-          highlights: decoded.highlights && decoded.highlights.length > 0 ? decoded.highlights : undefined,
-          theme: { ...defaultTheme, ...decoded.theme },
-          fields: decoded.fields
-        };
+          paid: Boolean(decoded.paid) && ((decoded.fee || 0) > 0 || Boolean(decoded.tiers && decoded.tiers.length > 0))
+        });
       }
     }
 
@@ -146,20 +154,34 @@ export default function RegistrationPage() {
         const config = configs[slug];
         if (config?.title) {
           const fee = Number(config.fee || 0);
-          resolved = {
-            id: config.id || slug,
-            slug: config.slug || slug,
-            title: config.title,
-            description: "",
-            facilitator: config.facilitator || "CFL Facilitator",
-            venue: config.venue || "TBA",
-            batch: config.batch || "Main Batch",
-            paid: Boolean(config.paid) && fee > 0,
-            fee,
-            partPayment: Boolean(config.partPayment),
-            theme: defaultTheme,
-            fields: simpleFields()
-          };
+          const formsRaw = window.localStorage.getItem(FORMS_STORAGE_KEY);
+          const forms = formsRaw ? JSON.parse(formsRaw) as BuilderForm[] : [];
+          const savedForm = forms.find((item) => item.workshopId === config.id || item.workshopSlug === slug || item.workshopSlug === config.slug);
+          if (savedForm) {
+            resolved = modelFromBuilderForm(savedForm, {
+              batch: config.batch || savedForm.batch || "Main Batch",
+              facilitator: config.facilitator || "CFL Facilitator",
+              fee,
+              paid: Boolean(config.paid) && (fee > 0 || Boolean(savedForm.tiers?.length)),
+              partPayment: Boolean(config.partPayment),
+              venue: config.venue || "TBA"
+            });
+          } else {
+            resolved = {
+              id: config.id || slug,
+              slug: config.slug || slug,
+              title: config.title,
+              description: "",
+              facilitator: config.facilitator || "CFL Facilitator",
+              venue: config.venue || "TBA",
+              batch: config.batch || "Main Batch",
+              paid: Boolean(config.paid) && fee > 0,
+              fee,
+              partPayment: Boolean(config.partPayment),
+              theme: defaultTheme,
+              fields: simpleFields()
+            };
+          }
         }
       } catch {
         resolved = null;
@@ -172,20 +194,34 @@ export default function RegistrationPage() {
         const records = raw ? (JSON.parse(raw) as WorkshopMasterRecord[]) : [];
         const match = records.find((record) => slugify(record.name) === slug || record.id === slug || record.id === widParam);
         if (match) {
-          resolved = {
-            id: match.id,
-            slug: slugify(match.name) || match.id,
-            title: match.name,
-            description: "",
-            facilitator: match.facilitator || "CFL Facilitator",
-            venue: venueParam || "TBA",
-            batch: batchParam || "Main Batch",
-            paid: paidEnabled && feeParam > 0,
-            fee: feeParam,
-            partPayment: partEnabled,
-            theme: defaultTheme,
-            fields: simpleFields()
-          };
+          const formsRaw = window.localStorage.getItem(FORMS_STORAGE_KEY);
+          const forms = formsRaw ? JSON.parse(formsRaw) as BuilderForm[] : [];
+          const savedForm = forms.find((item) => item.workshopId === match.id || item.workshopSlug === slugify(match.name));
+          if (savedForm) {
+            resolved = modelFromBuilderForm(savedForm, {
+              batch: batchParam || savedForm.batch || "Main Batch",
+              facilitator: match.facilitator || "CFL Facilitator",
+              fee: feeParam,
+              paid: paidEnabled && (feeParam > 0 || Boolean(savedForm.tiers?.length)),
+              partPayment: partEnabled,
+              venue: venueParam || "TBA"
+            });
+          } else {
+            resolved = {
+              id: match.id,
+              slug: slugify(match.name) || match.id,
+              title: match.name,
+              description: "",
+              facilitator: match.facilitator || "CFL Facilitator",
+              venue: venueParam || "TBA",
+              batch: batchParam || "Main Batch",
+              paid: paidEnabled && feeParam > 0,
+              fee: feeParam,
+              partPayment: partEnabled,
+              theme: defaultTheme,
+              fields: simpleFields()
+            };
+          }
         }
       } catch {
         resolved = null;
