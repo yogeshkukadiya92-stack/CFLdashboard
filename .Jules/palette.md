@@ -1,0 +1,1 @@
+## YYYY-MM-DD - Initializing Palette Journal\n**Learning:** Icon-only buttons often lack ARIA labels, creating accessibility issues for screen reader users.\n**Action:** Add `aria-label` attributes to icon-only buttons to improve accessibility.
