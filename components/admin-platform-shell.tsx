@@ -94,12 +94,12 @@ const navGroups: NavGroup[] = [
         label: "Workshop",
         items: [
           { href: "/reports/daily-report", icon: Activity, label: "Daily Report" },
-          { href: "/reports/workshop-url-status", icon: Activity, label: "WorkShop Url & Status" },
+          { href: "/reports/workshop-url-status", icon: Activity, label: "Workshop URL & Status" },
           { href: "/reports/yearly-public-session", icon: Activity, label: "Yearly Public Session" },
           { href: "/reports/yearly-workshop", icon: Activity, label: "Yearly Workshop" },
           { href: "/reports/facilitators-performance", icon: Activity, label: "Facilitators Performance" },
           { href: "/reports/workshop-summary", icon: Activity, label: "Workshop Summary" },
-          { href: "/reports/batch-wise-workshop-summary", icon: Activity, label: "Batch Wise Workshop summary" }
+          { href: "/reports/batch-wise-workshop-summary", icon: Activity, label: "Batch-wise Workshop Summary" }
         ]
       },
       {
@@ -109,7 +109,7 @@ const navGroups: NavGroup[] = [
           { href: "/reports/client-milestone", icon: Activity, label: "Client Milestone" },
           { href: "/reports/failed-payment", icon: Activity, label: "Failed Payment" },
           { href: "/reports/part-payment", icon: Activity, label: "Part Payment" },
-          { href: "/reports/workshop-wise-member", icon: Activity, label: "Workshop wise Member" },
+          { href: "/reports/workshop-wise-member", icon: Activity, label: "Workshop-wise Member" },
           { href: "/reports/member-attend-more-workshop", icon: Activity, label: "Member Attend More Workshop" },
           { href: "/reports/member-details", icon: Activity, label: "Member Details" },
           { href: "/reports/member-details-part-payment", icon: Activity, label: "Member Details (Part Payment)" },
@@ -239,19 +239,19 @@ export function AdminPlatformShell({
   return (
     <main className="min-h-screen overflow-x-hidden bg-slate-100 text-slate-950">
       <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/90 shadow-[0_1px_24px_rgba(15,23,42,0.05)] backdrop-blur-xl">
-        <div className="mx-auto flex max-w-[1540px] items-center justify-between gap-3 px-4 py-3 lg:px-6">
-          <div className="flex items-center gap-3">
+        <div className="mx-auto flex max-w-[1540px] items-center justify-between gap-2 px-3 py-3 sm:gap-3 sm:px-4 lg:px-6">
+          <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
             <button
               aria-label="Toggle sidebar"
-              className="grid size-10 place-items-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700"
+              className="grid size-10 shrink-0 place-items-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700"
               onClick={() => setSidebarOpen((open) => !open)}
               type="button"
             >
               <Menu className="size-5" />
             </button>
-            <div>
+            <div className="min-w-0">
               <p className="text-[11px] font-black uppercase tracking-[0.18em] text-emerald-700">CFL Admin</p>
-              <h1 className="text-lg font-black text-slate-950">{activeLabel}</h1>
+              <h1 className="truncate text-lg font-black text-slate-950">{activeLabel}</h1>
             </div>
           </div>
 
@@ -300,12 +300,12 @@ export function AdminPlatformShell({
             ) : null}
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex shrink-0 items-center gap-2 sm:gap-3">
             <div className="hidden text-right sm:block">
               <p className="text-xs font-semibold text-slate-500">Welcome</p>
               <p className="text-sm font-bold text-slate-900">Admin User</p>
             </div>
-            <div className="grid size-10 place-items-center rounded-lg bg-slate-950 text-sm font-black text-white shadow-lg shadow-slate-950/20">
+            <div className="hidden size-10 place-items-center rounded-lg bg-slate-950 text-sm font-black text-white shadow-lg shadow-slate-950/20 min-[380px]:grid">
               AU
             </div>
             <ThemeToggle />

@@ -100,7 +100,7 @@ export default function SettingsPage() {
               <div>
                 <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-700">App Plugins</p>
                 <h2 className="mt-1 text-2xl font-black text-slate-950">Install Razorpay from app</h2>
-                <p className="mt-1 text-sm text-slate-500">Keys ahin save karo. Railway variables optional fallback tarike j rehse.</p>
+                <p className="mt-1 text-sm text-slate-500">Save keys here. Deployment environment variables remain available as an optional fallback.</p>
               </div>
               <button className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-bold text-white hover:bg-indigo-700" disabled={loading} onClick={save} type="button">
                 <Save className="size-4" />
@@ -164,7 +164,7 @@ export default function SettingsPage() {
                 <Copy className="size-4" />
               </button>
             </div>
-            <p className="mt-3 text-sm text-indigo-900">Razorpay dashboard ma aa webhook URL add karvo padse. Key/secret app mathi save thai jashe.</p>
+            <p className="mt-3 text-sm text-indigo-900">Add this webhook URL in the Razorpay dashboard. Keys and secrets can be saved from this app.</p>
           </div>
 
           <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">

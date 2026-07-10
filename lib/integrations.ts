@@ -40,10 +40,18 @@ function normalizeSettings(input: Partial<IntegrationSettings> | null | undefine
 
 export async function getIntegrationSettings() {
   if (await isDbEnabled()) {
-    const state = await getAppState();
-    return normalizeSettings(state?.integrations as Partial<IntegrationSettings> | undefined);
+    try {
+      const state = await getAppState();
+      return normalizeSettings(state?.integrations as Partial<IntegrationSettings> | undefined);
+    } catch {
+      return readFallbackSettings();
+    }
   }
 
+  return readFallbackSettings();
+}
+
+async function readFallbackSettings() {
   try {
     const raw = await readFile(fallbackPath, "utf8");
     return normalizeSettings(JSON.parse(raw) as Partial<IntegrationSettings>);

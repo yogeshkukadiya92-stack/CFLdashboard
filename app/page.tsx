@@ -2,6 +2,7 @@
 
 import { AdminPlatformShell } from "@/components/admin-platform-shell";
 import { CalendarDays, ClipboardCheck, Download, FileSpreadsheet, IndianRupee, Plus, TrendingUp, UserPlus, UsersRound } from "lucide-react";
+import { hydrateLiveState, LIVE_STATE_STORAGE_KEYS, readLocalArray } from "@/lib/live-state";
 import { useEffect, useMemo, useState } from "react";
 
 type ClientRow = {
@@ -47,20 +48,6 @@ type ScheduleRecord = {
   transferLeadToCrm: boolean;
 };
 
-const CLIENTS_STORAGE_KEY = "cfl_clients_v1";
-const WORKSHOP_STORAGE_KEY = "cfl_workshop_master_records_v1";
-const REGISTRATION_STORAGE_KEY = "cfl_registrations_v1";
-const SCHEDULE_STORAGE_KEY = "cfl_event_schedules_v1";
-
-function readArray<T>(key: string): T[] {
-  try {
-    const raw = window.localStorage.getItem(key);
-    return raw ? (JSON.parse(raw) as T[]) : [];
-  } catch {
-    return [];
-  }
-}
-
 function formatInr(value: number) {
   return `INR ${value.toLocaleString("en-IN")}`;
 }
@@ -87,13 +74,14 @@ export default function DashboardPage() {
 
   useEffect(() => {
     function load() {
-      setClients(readArray<ClientRow>(CLIENTS_STORAGE_KEY));
-      setWorkshops(readArray<WorkshopRecord>(WORKSHOP_STORAGE_KEY));
-      setRegistrations(readArray<RegistrationEntry>(REGISTRATION_STORAGE_KEY));
-      setSchedules(readArray<ScheduleRecord>(SCHEDULE_STORAGE_KEY));
+      setClients(readLocalArray<ClientRow>(LIVE_STATE_STORAGE_KEYS.clients));
+      setWorkshops(readLocalArray<WorkshopRecord>(LIVE_STATE_STORAGE_KEYS.workshops));
+      setRegistrations(readLocalArray<RegistrationEntry>(LIVE_STATE_STORAGE_KEYS.registrations));
+      setSchedules(readLocalArray<ScheduleRecord>(LIVE_STATE_STORAGE_KEYS.schedules));
     }
 
     load();
+    hydrateLiveState().then(load);
     window.addEventListener("storage", load);
     window.addEventListener("focus", load);
     return () => {
@@ -261,7 +249,7 @@ export default function DashboardPage() {
             type="button"
           >
             <Download className="size-4" />
-            Excel Download
+            Download CSV
           </button>
         </div>
         {message ? <p className="mt-4 rounded-xl bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700">{message}</p> : null}

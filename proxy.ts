@@ -5,6 +5,7 @@ const publicPrefixes = [
   "/login",
   "/register",
   "/api/auth",
+  "/api/public-registration-state",
   "/api/razorpay/order",
   "/api/webhooks/razorpay",
   "/_next",

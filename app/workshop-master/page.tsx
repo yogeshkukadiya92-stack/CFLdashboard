@@ -2,6 +2,7 @@
 
 import { AdminPlatformShell } from "@/components/admin-platform-shell";
 import { AlertCircle, ArrowDown, ArrowUp, Check, CheckSquare, ChevronDown, Circle, Copy, Download, Edit3, ExternalLink, Eye, Heading, Link2, Mail, Plus, QrCode, RefreshCw, Save, Search, Smartphone, Trash2, Type, UsersRound, X } from "lucide-react";
+import { hydrateLiveState, readLocalArray, readLocalObject, saveLiveState } from "@/lib/live-state";
 import type { BuilderField, BuilderFieldType, BuilderForm, BuilderTheme, RegistrationEntry } from "@/lib/types";
 import { generateId } from "@/lib/utils";
 import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
@@ -118,12 +119,15 @@ export default function WorkshopMasterPage() {
   const [linkWorkshop, setLinkWorkshop] = useState<WorkshopRecord | null>(null);
 
   useEffect(() => {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (raw) setRecords(JSON.parse(raw) as WorkshopRecord[]);
-    setWorkshopTypes(readMasterNames(WORKSHOP_TYPES_STORAGE_KEY, defaultWorkshopTypes));
-    setFacilitators(readMasterNames(FACILITATORS_STORAGE_KEY, defaultFacilitators));
-    const registrationRaw = window.localStorage.getItem(REGISTRATION_STORAGE_KEY);
-    if (registrationRaw) setRegistrations(JSON.parse(registrationRaw) as RegistrationEntry[]);
+    function loadLocal() {
+      setRecords(readLocalArray<WorkshopRecord>(STORAGE_KEY));
+      setWorkshopTypes(readMasterNames(WORKSHOP_TYPES_STORAGE_KEY, defaultWorkshopTypes));
+      setFacilitators(readMasterNames(FACILITATORS_STORAGE_KEY, defaultFacilitators));
+      setRegistrations(readLocalArray<RegistrationEntry>(REGISTRATION_STORAGE_KEY));
+    }
+
+    loadLocal();
+    hydrateLiveState().then(loadLocal);
   }, []);
 
   const progress = useMemo(() => Math.round(([name, type, facilitator, group].filter(Boolean).length / 4) * 100), [facilitator, group, name, type]);
@@ -149,7 +153,7 @@ export default function WorkshopMasterPage() {
 
   function saveRecords(next: WorkshopRecord[]) {
     setRecords(next);
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    void saveLiveState({ workshops: next });
   }
 
   function clearForm(clearMessage = true) {
@@ -221,8 +225,7 @@ export default function WorkshopMasterPage() {
   }
 
   function openWorkshop(record: WorkshopRecord) {
-    const registrationRaw = window.localStorage.getItem(REGISTRATION_STORAGE_KEY);
-    setRegistrations(registrationRaw ? JSON.parse(registrationRaw) as RegistrationEntry[] : []);
+    setRegistrations(readLocalArray<RegistrationEntry>(REGISTRATION_STORAGE_KEY));
     setSelectedWorkshopId(record.id);
     setShowParticipants(false);
   }
@@ -287,11 +290,10 @@ export default function WorkshopMasterPage() {
 
   function saveBuilderForm(record: WorkshopRecord) {
     try {
-      const raw = window.localStorage.getItem(FORMS_STORAGE_KEY);
-      const forms = raw ? JSON.parse(raw) as BuilderForm[] : [];
+      const forms = readLocalArray<BuilderForm>(FORMS_STORAGE_KEY);
       const form = buildRegistrationForm(record);
       const next = [form, ...forms.filter((item) => item.id !== form.id && item.workshopId !== record.id)];
-      window.localStorage.setItem(FORMS_STORAGE_KEY, JSON.stringify(next));
+      void saveLiveState({ forms: next });
     } catch {
       // Workshop save should still work if local form storage is unavailable.
     }
@@ -299,8 +301,7 @@ export default function WorkshopMasterPage() {
 
   function loadBuilderForm(record: WorkshopRecord) {
     try {
-      const raw = window.localStorage.getItem(FORMS_STORAGE_KEY);
-      const forms = raw ? JSON.parse(raw) as BuilderForm[] : [];
+      const forms = readLocalArray<BuilderForm>(FORMS_STORAGE_KEY);
       const savedForm = forms.find((item) => item.workshopId === record.id || item.workshopSlug === workshopSlug(record.name));
       if (!savedForm) {
         setFormTitle(`${record.name} Registration`);
@@ -321,9 +322,8 @@ export default function WorkshopMasterPage() {
 
   function deleteBuilderForm(id: string) {
     try {
-      const raw = window.localStorage.getItem(FORMS_STORAGE_KEY);
-      const forms = raw ? JSON.parse(raw) as BuilderForm[] : [];
-      window.localStorage.setItem(FORMS_STORAGE_KEY, JSON.stringify(forms.filter((item) => item.workshopId !== id)));
+      const forms = readLocalArray<BuilderForm>(FORMS_STORAGE_KEY);
+      void saveLiveState({ forms: forms.filter((item) => item.workshopId !== id) });
     } catch {
       // ignore storage cleanup failures
     }
@@ -438,7 +438,7 @@ export default function WorkshopMasterPage() {
             <div>
               <p className="text-xs font-black uppercase tracking-[0.18em] text-indigo-600">Workshop Schedule Settings</p>
               <h3 className="mt-1 text-xl font-black text-slate-950">Pricing, discount, CRM and order rules</h3>
-              <p className="mt-1 text-sm font-semibold text-slate-500">Aa settings schedule page mathi ahi merge kari che.</p>
+              <p className="mt-1 text-sm font-semibold text-slate-500">These defaults are reused when schedules and registration links are created.</p>
             </div>
             <label className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700">
               <input checked={transferLeadToCrm} className="size-5 accent-indigo-600" onChange={(event) => setTransferLeadToCrm(event.target.checked)} type="checkbox" />
@@ -505,7 +505,7 @@ export default function WorkshopMasterPage() {
             <div>
               <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-700">Registration Form Builder</p>
               <h3 className="mt-1 text-xl font-black text-slate-950">Create registration form with workshop</h3>
-              <p className="mt-1 text-sm font-semibold text-slate-500">Aa fields public registration page par dekhase.</p>
+              <p className="mt-1 text-sm font-semibold text-slate-500">These fields appear on the public registration page for this workshop.</p>
             </div>
             <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-emerald-700">{formFields.length} fields</span>
           </div>
@@ -522,7 +522,7 @@ export default function WorkshopMasterPage() {
             <label className="block md:col-span-2">
               <span className="mb-2 block text-sm font-bold text-slate-600">WhatsApp Group Invite Link</span>
               <input className={inputClass} onChange={(event) => setWhatsappGroupUrl(event.target.value)} placeholder="https://chat.whatsapp.com/xxxxxxxx" value={whatsappGroupUrl} />
-              <span className="mt-1 block text-xs font-semibold text-slate-400">Registration pachi thank-you page 5 second wait kari aa group link open karse.</span>
+              <span className="mt-1 block text-xs font-semibold text-slate-400">After registration, the thank-you page can redirect to this group link after 5 seconds.</span>
             </label>
           </div>
 
@@ -781,9 +781,7 @@ function registrationSlug(workshop: WorkshopRecord) {
 
 function readMasterNames(key: string, defaults: string[]) {
   try {
-    const raw = window.localStorage.getItem(key);
-    if (!raw) return defaults;
-    const records = JSON.parse(raw) as Array<{ name?: string }>;
+    const records = readLocalArray<{ name?: string }>(key);
     const names = records.map((record) => record.name?.trim()).filter(Boolean) as string[];
     return names.length ? names : defaults;
   } catch {
@@ -816,8 +814,7 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
   useEffect(() => {
     if (typeof window === "undefined") return;
     try {
-      const raw = window.localStorage.getItem(REGISTRATION_LINK_CONFIG_STORAGE_KEY);
-      const configs = raw ? JSON.parse(raw) as Record<string, RegistrationLinkConfig> : {};
+      const configs = readLocalObject<Record<string, RegistrationLinkConfig>>(REGISTRATION_LINK_CONFIG_STORAGE_KEY);
       const existing = configs[shortSlug] ?? Object.values(configs).find((config) => config.id === workshop.id);
       if (existing) {
         setBatch(existing.batch || "Main Batch");
@@ -839,8 +836,7 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
     if (typeof window === "undefined") return;
     if (!linkSettingsLoaded) return;
     try {
-      const raw = window.localStorage.getItem(REGISTRATION_LINK_CONFIG_STORAGE_KEY);
-      const configs = raw ? JSON.parse(raw) as Record<string, RegistrationLinkConfig> : {};
+      const configs = readLocalObject<Record<string, RegistrationLinkConfig>>(REGISTRATION_LINK_CONFIG_STORAGE_KEY);
       configs[shortSlug] = {
         batch: batch.trim() || "Main Batch",
         facilitator: workshop.facilitator || "CFL Facilitator",
@@ -854,7 +850,7 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
         title: workshop.name,
         venue: venue.trim() || "TBA"
       };
-      window.localStorage.setItem(REGISTRATION_LINK_CONFIG_STORAGE_KEY, JSON.stringify(configs));
+      void saveLiveState({ registrationLinks: configs });
       setSaveStatus("saved");
       const timeout = window.setTimeout(() => setSaveStatus("idle"), 1600);
       return () => window.clearTimeout(timeout);
@@ -914,7 +910,7 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-sm font-black text-slate-800">Link Publish Status</p>
-                <p className="mt-1 text-xs font-semibold text-slate-500">Time set karsho to ena pachi registration link automatic unpublished jevi bandh thai jashe.</p>
+                <p className="mt-1 text-xs font-semibold text-slate-500">Set an expiry time to automatically close this registration link.</p>
               </div>
               <span className={`rounded-full px-3 py-1 text-xs font-black ${linkStatusClass}`}>{linkStatus}</span>
             </div>
@@ -929,7 +925,7 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
               <label className="block">
                 <span className="mb-2 block text-sm font-bold text-slate-600">Publish Until</span>
                 <input className={inputClass} onChange={(event) => setPublishUntil(event.target.value)} type="datetime-local" value={publishUntil} />
-                <span className="mt-1 block text-xs font-semibold text-slate-400">Blank rakhsho to expiry time set nahi thay.</span>
+                <span className="mt-1 block text-xs font-semibold text-slate-400">Leave blank if the link should not expire automatically.</span>
               </label>
             </div>
           </div>
@@ -992,7 +988,7 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
               </a>
             </div>
             <p className="mt-2 text-xs font-semibold text-slate-400">
-              {copyStatus === "failed" ? "Copy block thayu. Link select kari manual copy karo." : "Short link save thai gayi che. Open par click karo athva QR scan kari registration form kholo."}
+              {copyStatus === "failed" ? "Copy was blocked. Select the link and copy it manually." : "Short link saved. Open the link or scan the QR code to view the registration form."}
             </p>
             </div>
             <div className="rounded-2xl border border-slate-200 bg-white p-4 text-center">

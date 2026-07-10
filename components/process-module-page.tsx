@@ -1,6 +1,7 @@
 "use client";
 
 import { AdminPlatformShell } from "@/components/admin-platform-shell";
+import { hydrateLiveState, readLocalArray, saveLiveState } from "@/lib/live-state";
 import { processPageConfigs, type ProcessField } from "@/lib/process-pages";
 import { generateId } from "@/lib/utils";
 import {
@@ -64,12 +65,7 @@ type ManualRegistrationEntry = {
 };
 
 function readLocalStorageArray<T>(key: string): T[] {
-  try {
-    const raw = window.localStorage.getItem(key);
-    return raw ? JSON.parse(raw) as T[] : [];
-  } catch {
-    return [];
-  }
+  return readLocalArray<T>(key);
 }
 
 export function ProcessModulePage({ slug }: { slug: string }) {
@@ -283,9 +279,14 @@ function ApplyCouponWorkflow() {
   const [success, setSuccess] = useState("");
 
   useEffect(() => {
-    setClients(readLocalStorageArray<ClientStorageRecord>(CLIENTS_STORAGE_KEY).filter((c) => (c.name ?? "").trim()));
-    setWorkshops(readLocalStorageArray<WorkshopMasterRecord>(WORKSHOP_MASTER_STORAGE_KEY));
-    setCoupons(readLocalStorageArray<CouponRecord>(COUPONS_STORAGE_KEY));
+    function loadLocal() {
+      setClients(readLocalStorageArray<ClientStorageRecord>(CLIENTS_STORAGE_KEY).filter((c) => (c.name ?? "").trim()));
+      setWorkshops(readLocalStorageArray<WorkshopMasterRecord>(WORKSHOP_MASTER_STORAGE_KEY));
+      setCoupons(readLocalStorageArray<CouponRecord>(COUPONS_STORAGE_KEY));
+    }
+
+    loadLocal();
+    hydrateLiveState().then(loadLocal);
   }, []);
 
   useEffect(() => {
@@ -339,7 +340,7 @@ function ApplyCouponWorkflow() {
       status: newDue === 0 ? "Paid" as const : reg.status,
     };
     regs[regIndex] = updatedReg;
-    window.localStorage.setItem(REGISTRATION_STORAGE_KEY, JSON.stringify(regs));
+    void saveLiveState({ registrations: regs });
 
     const coupon: CouponRecord = {
       id: generateId(),
@@ -511,7 +512,10 @@ function ReCheckFailedPaymentWorkflow() {
     setRegistrations(all.filter((r) => r.status === "Due"));
   }
 
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => {
+    loadData();
+    hydrateLiveState().then(loadData);
+  }, []);
 
   const filtered = useMemo(() => {
     const q = searchTerm.trim().toLowerCase();
@@ -532,7 +536,7 @@ function ReCheckFailedPaymentWorkflow() {
       amountDue: 0,
       status: "Paid",
     };
-    window.localStorage.setItem(REGISTRATION_STORAGE_KEY, JSON.stringify(all));
+    void saveLiveState({ registrations: all });
     setSuccess(`${reg.fullName} marked as Paid for ${reg.workshopTitle}.`);
     loadData();
   }
@@ -655,9 +659,14 @@ function ManualClientPartPaymentWorkflow() {
   const [success, setSuccess] = useState("");
 
   useEffect(() => {
-    const all = readLocalStorageArray<ManualRegistrationEntry>(REGISTRATION_STORAGE_KEY);
-    setDueRegistrations(all.filter((r) => (r.amountDue ?? 0) > 0));
-    setPayments(readLocalStorageArray<PartPaymentRecord>(PART_PAYMENTS_STORAGE_KEY));
+    function loadLocal() {
+      const all = readLocalStorageArray<ManualRegistrationEntry>(REGISTRATION_STORAGE_KEY);
+      setDueRegistrations(all.filter((r) => (r.amountDue ?? 0) > 0));
+      setPayments(readLocalStorageArray<PartPaymentRecord>(PART_PAYMENTS_STORAGE_KEY));
+    }
+
+    loadLocal();
+    hydrateLiveState().then(loadLocal);
   }, []);
 
   const matchedRegs = useMemo(() => {
@@ -691,7 +700,7 @@ function ManualClientPartPaymentWorkflow() {
       paymentMode: "Part",
       status: newDue === 0 ? "Paid" : all[idx].status,
     };
-    window.localStorage.setItem(REGISTRATION_STORAGE_KEY, JSON.stringify(all));
+    void saveLiveState({ registrations: all });
 
     const payment: PartPaymentRecord = {
       id: generateId(),
@@ -1384,9 +1393,9 @@ function ImportWorkshopDataWorkflow() {
 
   return (
     <AdminPlatformShell
-      activeLabel="Import Data Workshop Wise"
+      activeLabel="Import Data Workshop-wise"
       description="Bulk upload workshop-wise data using CSV or Excel templates."
-      title="Import Data Workshop Wise"
+      title="Import Data Workshop-wise"
     >
       <section className="mx-auto w-full max-w-4xl rounded-3xl border border-slate-200 bg-white p-6 shadow-sm md:p-8">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1438,7 +1447,7 @@ function ImportWorkshopDataWorkflow() {
         </div>
 
         <footer className="mt-8 border-t border-slate-200 pt-5 text-center text-xs font-semibold text-slate-500">
-          Copyright © 2026 CRM System. Maintained by Developer.
+          Copyright © 2026 CFL Business OS. All rights reserved.
         </footer>
       </section>
     </AdminPlatformShell>
@@ -1463,13 +1472,18 @@ function MergeClientWorkflow() {
   const [success, setSuccess] = useState("");
 
   useEffect(() => {
-    const stored = readLocalStorageArray<ClientStorageRecord>(CLIENTS_STORAGE_KEY);
-    setClients(stored.map((client) => ({
-      city: client.city || "",
-      id: String(client.id),
-      mobile: client.mobile || "",
-      name: client.name || "Unnamed Client"
-    })));
+    function loadLocal() {
+      const stored = readLocalStorageArray<ClientStorageRecord>(CLIENTS_STORAGE_KEY);
+      setClients(stored.map((client) => ({
+        city: client.city || "",
+        id: String(client.id),
+        mobile: client.mobile || "",
+        name: client.name || "Unnamed Client"
+      })));
+    }
+
+    loadLocal();
+    hydrateLiveState().then(loadLocal);
   }, []);
 
   const retainResults = filterMergeClients(clients, retainQuery, removeClient?.id);
@@ -1495,7 +1509,7 @@ function MergeClientWorkflow() {
     if (!retainClient || !removeClient) return;
     const stored = readLocalStorageArray<ClientStorageRecord>(CLIENTS_STORAGE_KEY);
     const nextStored = stored.filter((client) => String(client.id) !== removeClient.id);
-    window.localStorage.setItem(CLIENTS_STORAGE_KEY, JSON.stringify(nextStored));
+    void saveLiveState({ clients: nextStored });
     setClients((current) => current.filter((client) => client.id !== removeClient.id));
     setSuccess(`${removeClient.name} merged into ${retainClient.name}. Duplicate client removed from workflow.`);
     setRemoveClient(null);
@@ -1560,7 +1574,7 @@ function MergeClientWorkflow() {
       </section>
 
       <footer className="rounded-2xl bg-white p-4 text-center text-xs font-semibold text-slate-500 shadow-sm">
-        Copyright © 2026 CRM System. Maintained by Developer.
+        Copyright © 2026 CFL Business OS. All rights reserved.
       </footer>
 
       {confirmOpen && retainClient && removeClient ? (
@@ -1609,8 +1623,13 @@ function ManualClientRegistrationWorkflow() {
   const clientBoxRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    setWorkshops(readLocalStorageArray<WorkshopMasterRecord>(WORKSHOP_MASTER_STORAGE_KEY));
-    setClients(readLocalStorageArray<ClientStorageRecord>(CLIENTS_STORAGE_KEY).filter((client) => (client.name ?? "").trim()));
+    function loadLocal() {
+      setWorkshops(readLocalStorageArray<WorkshopMasterRecord>(WORKSHOP_MASTER_STORAGE_KEY));
+      setClients(readLocalStorageArray<ClientStorageRecord>(CLIENTS_STORAGE_KEY).filter((client) => (client.name ?? "").trim()));
+    }
+
+    loadLocal();
+    hydrateLiveState().then(loadLocal);
   }, []);
 
   // Close the suggestion list when clicking anywhere outside the combobox.
@@ -1681,8 +1700,8 @@ function ManualClientRegistrationWorkflow() {
       ? current.map((item, index) => index === existingIndex ? payload : item)
       : [payload, ...current];
 
-    window.localStorage.setItem(REGISTRATION_STORAGE_KEY, JSON.stringify(next));
-    setSuccess(`${payload.fullName} registered in ${selectedWorkshop.name}. Workshop Master View Data ma pan dekhase.`);
+    void saveLiveState({ registrations: next });
+    setSuccess(`${payload.fullName} registered in ${selectedWorkshop.name}. The registration will also appear in Workshop Master view data.`);
     setWorkshop("");
     setBatch("");
     setName("");
@@ -1759,7 +1778,7 @@ function ManualClientRegistrationWorkflow() {
                 ) : null}
               </span>
               <span className="mt-1 block text-xs font-semibold text-slate-400">
-                {clients.length ? "Saved client select karo, athva navu naam type karo." : "Koi saved client nathi — navu naam type karo."}
+                {clients.length ? "Select a saved client or type a new name." : "No saved clients yet. Type a new client name."}
               </span>
             </label>
 

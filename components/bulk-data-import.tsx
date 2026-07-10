@@ -65,9 +65,8 @@ export function BulkDataImportPage() {
       </main>
 
       <footer className="sticky bottom-0 border-t border-gray-200 bg-white px-4 py-3 text-center text-xs text-gray-500">
-        Copyright © 2024 Your Company
+        Copyright © 2026 CFL OS
       </footer>
     </div>
   );
 }
-

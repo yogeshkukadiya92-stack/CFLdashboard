@@ -5,13 +5,14 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "preview": "node scripts/start-preview.mjs",
     "start": "next start",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "clsx": "^2.1.1",
     "lucide-react": "^0.468.0",
-    "next": "latest",
+    "next": "^16.2.10",
     "pg": "^8.20.0",
     "react": "latest",
     "react-dom": "latest",

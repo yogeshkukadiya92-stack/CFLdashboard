@@ -1,6 +1,7 @@
 "use client";
 
 import { AdminPlatformShell } from "@/components/admin-platform-shell";
+import { hydrateLiveState, LIVE_STATE_STORAGE_KEYS, readLocalArray } from "@/lib/live-state";
 import { formatCurrency } from "@/lib/utils";
 import { ChevronLeft, ChevronRight, Download, Search } from "lucide-react";
 import { useParams } from "next/navigation";
@@ -17,11 +18,11 @@ const titles = new Map<string, string>([
   ["yearly-workshop", "Yearly Workshop"],
   ["facilitators-performance", "Facilitators Performance"],
   ["workshop-summary", "Workshop Summary"],
-  ["batch-wise-workshop-summary", "Batch Wise Workshop Summary"],
+  ["batch-wise-workshop-summary", "Batch-wise Workshop Summary"],
   ["client-milestone", "Client Milestone"],
   ["failed-payment", "Failed Payment"],
   ["part-payment", "Part Payment"],
-  ["workshop-wise-member", "Workshop Wise Member"],
+  ["workshop-wise-member", "Workshop-wise Member"],
   ["member-attend-more-workshop", "Member Attend More Workshop"],
   ["member-details", "Member Details"],
   ["member-details-part-payment", "Member Details (Part Payment)"],
@@ -95,11 +96,7 @@ type SalesPerson = {
 /* ------------------------------------------------------------------ */
 
 function loadJson<T>(key: string): T[] {
-  try {
-    return JSON.parse(window.localStorage.getItem(key) || "[]") as T[];
-  } catch {
-    return [];
-  }
+  return readLocalArray<T>(key);
 }
 
 function downloadCsv(filename: string, rows: string[][]) {
@@ -940,10 +937,15 @@ export default function ReportPage() {
   const [currentPage, setCurrentPage] = useState(1);
 
   useEffect(() => {
-    setRegistrations(loadJson<Registration>("cfl_registrations_v1"));
-    setWorkshops(loadJson<Workshop>("cfl_workshop_master_records_v1"));
-    setClients(loadJson<Client>("cfl_clients_v1"));
-    setSalesPeople(loadJson<SalesPerson>("cfl_sales_people_v1"));
+    function loadLocal() {
+      setRegistrations(readLocalArray<Registration>(LIVE_STATE_STORAGE_KEYS.registrations));
+      setWorkshops(readLocalArray<Workshop>(LIVE_STATE_STORAGE_KEYS.workshops));
+      setClients(readLocalArray<Client>(LIVE_STATE_STORAGE_KEYS.clients));
+      setSalesPeople(readLocalArray<SalesPerson>(LIVE_STATE_STORAGE_KEYS.salesPeople));
+    }
+
+    loadLocal();
+    hydrateLiveState().then(loadLocal);
   }, []);
 
   // Reset page when filters change

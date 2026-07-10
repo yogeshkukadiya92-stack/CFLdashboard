@@ -52,7 +52,7 @@ export const processPageConfigs: Record<string, ProcessPageConfig> = {
       { key: "notes", label: "Import Notes", placeholder: "Optional notes", type: "textarea" }
     ],
     tableColumns: ["Workshop", "File", "Rows", "Import Status", "Uploaded At"],
-    title: "Import Data Workshop Wise"
+    title: "Import Data Workshop-wise"
   },
   "merge-client": {
     actionLabel: "Merge Client",

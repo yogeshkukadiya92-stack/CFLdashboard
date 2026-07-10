@@ -1,6 +1,7 @@
 "use client";
 
 import { AdminPlatformShell } from "@/components/admin-platform-shell";
+import { hydrateLiveState, readLocalArray, saveLiveState } from "@/lib/live-state";
 import type { BuilderField, BuilderFieldType, BuilderForm, PaymentTier } from "@/lib/types";
 import { encodeJsonParam, generateId } from "@/lib/utils";
 import {
@@ -139,12 +140,12 @@ export default function FormBuilderPage() {
   const [saved, setSaved] = useState("");
 
   useEffect(() => {
-    try {
-      const raw = window.localStorage.getItem(WORKSHOP_MASTER_STORAGE_KEY);
-      setWorkshops(raw ? (JSON.parse(raw) as WorkshopMasterRecord[]) : []);
-    } catch {
-      setWorkshops([]);
+    function loadLocal() {
+      setWorkshops(readLocalArray<WorkshopMasterRecord>(WORKSHOP_MASTER_STORAGE_KEY));
     }
+
+    loadLocal();
+    hydrateLiveState().then(loadLocal);
   }, []);
 
   const workshop = workshops.find((item) => item.id === workshopId) ?? null;
@@ -225,10 +226,9 @@ export default function FormBuilderPage() {
       return;
     }
     try {
-      const raw = window.localStorage.getItem(FORMS_STORAGE_KEY);
-      const list = raw ? (JSON.parse(raw) as BuilderForm[]) : [];
+      const list = readLocalArray<BuilderForm>(FORMS_STORAGE_KEY);
       const next = [form, ...list.filter((item) => item.id !== form.id)];
-      window.localStorage.setItem(FORMS_STORAGE_KEY, JSON.stringify(next));
+      void saveLiveState({ forms: next });
       setSaved("Form saved. Copy the link below and share it with clients.");
     } catch {
       setSaved("Could not save the form locally.");
@@ -314,7 +314,7 @@ export default function FormBuilderPage() {
                   placeholder="https://chat.whatsapp.com/xxxxxxxx"
                   value={whatsappGroupUrl}
                 />
-                <span className="mt-1 block text-xs font-semibold text-slate-400">Registration pachi thank-you page 5 second wait kari aa group link open karse.</span>
+                <span className="mt-1 block text-xs font-semibold text-slate-400">After registration, the thank-you page can redirect to this group link after 5 seconds.</span>
               </label>
 
               <div className="grid gap-4 sm:grid-cols-2">
@@ -450,7 +450,7 @@ export default function FormBuilderPage() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm font-black text-slate-700">Payment Tiers</p>
-                      <p className="mt-0.5 text-xs font-semibold text-slate-400">Single, Couple, Family — alag alag price set karo</p>
+                      <p className="mt-0.5 text-xs font-semibold text-slate-400">Set separate prices for Single, Couple, Family, or any custom tier.</p>
                     </div>
                     {tiers.length === 0 ? (
                       <button
@@ -520,7 +520,7 @@ export default function FormBuilderPage() {
 
           <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-soft">
             <h3 className="text-lg font-black text-slate-950">5. What&apos;s Included</h3>
-            <p className="mt-1 text-xs font-semibold text-slate-400">Workshop ma shu shu milse e add karo — &quot;What you will get&quot;</p>
+            <p className="mt-1 text-xs font-semibold text-slate-400">Add the benefits participants will receive, such as materials, recordings, or certificates.</p>
             <div className="mt-4 space-y-2">
               {highlights.map((item, i) => (
                 <div className="flex items-center gap-2" key={i}>
@@ -575,7 +575,7 @@ export default function FormBuilderPage() {
                     </a>
                   </div>
                 </div>
-                <p className="mt-2 text-xs font-semibold text-slate-400">Aakho form link ma j encode thay che — koi pan device par khulse. Mobile match thase to saved client details auto bharai jashe.</p>
+                <p className="mt-2 text-xs font-semibold text-slate-400">The share link includes the form setup and opens on any device. Matching mobile numbers can prefill saved client details.</p>
               </div>
             ) : (
               <p className="mt-4 text-sm font-semibold text-slate-400">Select a workshop to generate the shareable link.</p>

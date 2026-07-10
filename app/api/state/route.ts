@@ -1,9 +1,23 @@
 import { NextResponse } from "next/server";
 import { getAppState, isDbEnabled, saveAppState } from "@/lib/db";
 
+const arrayFields = [
+  "clients",
+  "facilitators",
+  "forms",
+  "leads",
+  "registrations",
+  "salesPeople",
+  "schedules",
+  "workshopTypes",
+  "workshops"
+] as const;
+
+const objectFields = ["integrations", "registrationLinks"] as const;
+
 export async function GET() {
   if (!(await isDbEnabled())) {
-    return NextResponse.json({ clients: null, dbEnabled: false, leads: null, workshops: null });
+    return NextResponse.json({ dbEnabled: false });
   }
   try {
     const state = await getAppState();
@@ -19,13 +33,18 @@ export async function POST(request: Request) {
   }
   try {
     const body = await request.json();
-    const clients = Array.isArray(body?.clients) ? body.clients : undefined;
-    const leads = Array.isArray(body?.leads) ? body.leads : undefined;
-    const workshops = Array.isArray(body?.workshops) ? body.workshops : undefined;
-    await saveAppState({ clients, leads, workshops });
+    const patch: Record<string, unknown> = {};
+    arrayFields.forEach((field) => {
+      if (Array.isArray(body?.[field])) patch[field] = body[field];
+    });
+    objectFields.forEach((field) => {
+      if (body?.[field] && typeof body[field] === "object" && !Array.isArray(body[field])) {
+        patch[field] = body[field];
+      }
+    });
+    await saveAppState(patch);
     return NextResponse.json({ ok: true, dbEnabled: true });
   } catch {
     return NextResponse.json({ ok: false, error: "Failed to save DB state" }, { status: 500 });
   }
 }
-

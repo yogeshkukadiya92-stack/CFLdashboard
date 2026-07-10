@@ -2,6 +2,34 @@ import { Pool } from "pg";
 
 let pool: Pool | null = null;
 
+type AppState = {
+  clients: unknown[];
+  facilitators: unknown[];
+  forms: unknown[];
+  integrations: Record<string, unknown>;
+  leads: unknown[];
+  registrationLinks: Record<string, unknown>;
+  registrations: unknown[];
+  salesPeople: unknown[];
+  schedules: unknown[];
+  workshopTypes: unknown[];
+  workshops: unknown[];
+};
+
+const emptyAppState: AppState = {
+  clients: [],
+  facilitators: [],
+  forms: [],
+  integrations: {},
+  leads: [],
+  registrationLinks: {},
+  registrations: [],
+  salesPeople: [],
+  schedules: [],
+  workshopTypes: [],
+  workshops: []
+};
+
 function getPool() {
   if (!process.env.DATABASE_URL) {
     return null;
@@ -25,21 +53,57 @@ export async function ensurePersistenceTable() {
       clients JSONB NOT NULL DEFAULT '[]'::jsonb,
       leads JSONB NOT NULL DEFAULT '[]'::jsonb,
       workshops JSONB NOT NULL DEFAULT '[]'::jsonb,
+      registrations JSONB NOT NULL DEFAULT '[]'::jsonb,
+      schedules JSONB NOT NULL DEFAULT '[]'::jsonb,
+      forms JSONB NOT NULL DEFAULT '[]'::jsonb,
+      registration_links JSONB NOT NULL DEFAULT '{}'::jsonb,
+      sales_people JSONB NOT NULL DEFAULT '[]'::jsonb,
+      workshop_types JSONB NOT NULL DEFAULT '[]'::jsonb,
+      facilitators JSONB NOT NULL DEFAULT '[]'::jsonb,
       integrations JSONB NOT NULL DEFAULT '{}'::jsonb,
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
+  await client.query(`ALTER TABLE app_state ADD COLUMN IF NOT EXISTS clients JSONB NOT NULL DEFAULT '[]'::jsonb;`);
+  await client.query(`ALTER TABLE app_state ADD COLUMN IF NOT EXISTS leads JSONB NOT NULL DEFAULT '[]'::jsonb;`);
+  await client.query(`ALTER TABLE app_state ADD COLUMN IF NOT EXISTS workshops JSONB NOT NULL DEFAULT '[]'::jsonb;`);
+  await client.query(`ALTER TABLE app_state ADD COLUMN IF NOT EXISTS registrations JSONB NOT NULL DEFAULT '[]'::jsonb;`);
+  await client.query(`ALTER TABLE app_state ADD COLUMN IF NOT EXISTS schedules JSONB NOT NULL DEFAULT '[]'::jsonb;`);
+  await client.query(`ALTER TABLE app_state ADD COLUMN IF NOT EXISTS forms JSONB NOT NULL DEFAULT '[]'::jsonb;`);
+  await client.query(`ALTER TABLE app_state ADD COLUMN IF NOT EXISTS registration_links JSONB NOT NULL DEFAULT '{}'::jsonb;`);
+  await client.query(`ALTER TABLE app_state ADD COLUMN IF NOT EXISTS sales_people JSONB NOT NULL DEFAULT '[]'::jsonb;`);
+  await client.query(`ALTER TABLE app_state ADD COLUMN IF NOT EXISTS workshop_types JSONB NOT NULL DEFAULT '[]'::jsonb;`);
+  await client.query(`ALTER TABLE app_state ADD COLUMN IF NOT EXISTS facilitators JSONB NOT NULL DEFAULT '[]'::jsonb;`);
+  await client.query(`ALTER TABLE app_state ADD COLUMN IF NOT EXISTS integrations JSONB NOT NULL DEFAULT '{}'::jsonb;`);
   await client.query(`
-    ALTER TABLE app_state
-    ADD COLUMN IF NOT EXISTS clients JSONB NOT NULL DEFAULT '[]'::jsonb;
-  `);
-  await client.query(`
-    ALTER TABLE app_state
-    ADD COLUMN IF NOT EXISTS integrations JSONB NOT NULL DEFAULT '{}'::jsonb;
-  `);
-  await client.query(`
-    INSERT INTO app_state (id, clients, leads, workshops, integrations)
-    VALUES (1, '[]'::jsonb, '[]'::jsonb, '[]'::jsonb, '{}'::jsonb)
+    INSERT INTO app_state (
+      id,
+      clients,
+      leads,
+      workshops,
+      registrations,
+      schedules,
+      forms,
+      registration_links,
+      sales_people,
+      workshop_types,
+      facilitators,
+      integrations
+    )
+    VALUES (
+      1,
+      '[]'::jsonb,
+      '[]'::jsonb,
+      '[]'::jsonb,
+      '[]'::jsonb,
+      '[]'::jsonb,
+      '[]'::jsonb,
+      '{}'::jsonb,
+      '[]'::jsonb,
+      '[]'::jsonb,
+      '[]'::jsonb,
+      '{}'::jsonb
+    )
     ON CONFLICT (id) DO NOTHING;
   `);
   return true;
@@ -49,23 +113,62 @@ export async function getAppState() {
   const client = getPool();
   if (!client) return null;
   await ensurePersistenceTable();
-  const result = await client.query("SELECT clients, leads, workshops, integrations FROM app_state WHERE id = 1 LIMIT 1");
-  if (!result.rows[0]) return { clients: [], leads: [], workshops: [], integrations: {} };
+  const result = await client.query(`
+    SELECT
+      clients,
+      leads,
+      workshops,
+      registrations,
+      schedules,
+      forms,
+      registration_links AS "registrationLinks",
+      sales_people AS "salesPeople",
+      workshop_types AS "workshopTypes",
+      facilitators,
+      integrations
+    FROM app_state
+    WHERE id = 1
+    LIMIT 1
+  `);
+  if (!result.rows[0]) return emptyAppState;
   return result.rows[0];
 }
 
-export async function saveAppState(input: { clients?: unknown[]; integrations?: Record<string, unknown>; leads?: unknown[]; workshops?: unknown[] }) {
+export async function saveAppState(input: Partial<AppState>) {
   const client = getPool();
   if (!client) return false;
   await ensurePersistenceTable();
-  const current = await getAppState();
+  const current = { ...emptyAppState, ...(await getAppState()) };
   await client.query(
-    `UPDATE app_state SET clients = $1::jsonb, leads = $2::jsonb, workshops = $3::jsonb, integrations = $4::jsonb, updated_at = NOW() WHERE id = 1`,
+    `
+      UPDATE app_state
+      SET
+        clients = $1::jsonb,
+        leads = $2::jsonb,
+        workshops = $3::jsonb,
+        registrations = $4::jsonb,
+        schedules = $5::jsonb,
+        forms = $6::jsonb,
+        registration_links = $7::jsonb,
+        sales_people = $8::jsonb,
+        workshop_types = $9::jsonb,
+        facilitators = $10::jsonb,
+        integrations = $11::jsonb,
+        updated_at = NOW()
+      WHERE id = 1
+    `,
     [
-      JSON.stringify(input.clients ?? current?.clients ?? []),
-      JSON.stringify(input.leads ?? current?.leads ?? []),
-      JSON.stringify(input.workshops ?? current?.workshops ?? []),
-      JSON.stringify(input.integrations ?? current?.integrations ?? {})
+      JSON.stringify(input.clients ?? current.clients),
+      JSON.stringify(input.leads ?? current.leads),
+      JSON.stringify(input.workshops ?? current.workshops),
+      JSON.stringify(input.registrations ?? current.registrations),
+      JSON.stringify(input.schedules ?? current.schedules),
+      JSON.stringify(input.forms ?? current.forms),
+      JSON.stringify(input.registrationLinks ?? current.registrationLinks),
+      JSON.stringify(input.salesPeople ?? current.salesPeople),
+      JSON.stringify(input.workshopTypes ?? current.workshopTypes),
+      JSON.stringify(input.facilitators ?? current.facilitators),
+      JSON.stringify(input.integrations ?? current.integrations)
     ]
   );
   return true;

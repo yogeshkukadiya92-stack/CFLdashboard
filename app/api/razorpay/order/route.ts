@@ -16,24 +16,28 @@ export async function POST(request: Request) {
   const currency = String(body?.currency || "INR");
   const receipt = String(body?.receipt || `receipt_${Date.now()}`);
 
-  if (!amount || amount < 1) {
+  if (!Number.isFinite(amount) || amount < 1) {
     return NextResponse.json({ error: "Valid amount is required." }, { status: 400 });
   }
 
-  const response = await fetch("https://api.razorpay.com/v1/orders", {
-    body: JSON.stringify({
-      amount: Math.round(amount * 100),
-      currency,
-      notes: body?.notes || {},
-      receipt
-    }),
-    headers: {
-      Authorization: `Basic ${Buffer.from(`${keyId}:${keySecret}`).toString("base64")}`,
-      "Content-Type": "application/json"
-    },
-    method: "POST"
-  });
+  try {
+    const response = await fetch("https://api.razorpay.com/v1/orders", {
+      body: JSON.stringify({
+        amount: Math.round(amount * 100),
+        currency,
+        notes: body?.notes || {},
+        receipt
+      }),
+      headers: {
+        Authorization: `Basic ${Buffer.from(`${keyId}:${keySecret}`).toString("base64")}`,
+        "Content-Type": "application/json"
+      },
+      method: "POST"
+    });
 
-  const data = await response.json();
-  return NextResponse.json(data, { status: response.status });
+    const data = await response.json().catch(() => ({ error: "Invalid response from Razorpay." }));
+    return NextResponse.json(data, { status: response.status });
+  } catch {
+    return NextResponse.json({ error: "Unable to create Razorpay order." }, { status: 502 });
+  }
 }

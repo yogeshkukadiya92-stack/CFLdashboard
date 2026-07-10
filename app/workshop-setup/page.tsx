@@ -2,6 +2,7 @@
 
 import { AdminPlatformShell } from "@/components/admin-platform-shell";
 import { Check, Edit3, Plus, RefreshCw, Search, Trash2, UserRound, Workflow } from "lucide-react";
+import { hydrateLiveState, readLocalArray, saveLiveState } from "@/lib/live-state";
 import { generateId } from "@/lib/utils";
 import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
 
@@ -24,11 +25,8 @@ function recordsFromNames(names: string[]) {
 
 function readRecords(key: string, defaults: string[]) {
   try {
-    const raw = window.localStorage.getItem(key);
-    if (raw) {
-      const parsed = JSON.parse(raw) as MasterRecord[];
-      if (Array.isArray(parsed)) return parsed.filter((item) => item.name?.trim());
-    }
+    const parsed = readLocalArray<MasterRecord>(key);
+    if (Array.isArray(parsed) && parsed.length > 0) return parsed.filter((item) => item.name?.trim());
   } catch {
     return recordsFromNames(defaults);
   }
@@ -48,8 +46,13 @@ export default function WorkshopSetupPage() {
   const [search, setSearch] = useState("");
 
   useEffect(() => {
-    setWorkshopTypes(readRecords(WORKSHOP_TYPES_STORAGE_KEY, defaultWorkshopTypes));
-    setFacilitators(readRecords(FACILITATORS_STORAGE_KEY, defaultFacilitators));
+    function loadLocal() {
+      setWorkshopTypes(readRecords(WORKSHOP_TYPES_STORAGE_KEY, defaultWorkshopTypes));
+      setFacilitators(readRecords(FACILITATORS_STORAGE_KEY, defaultFacilitators));
+    }
+
+    loadLocal();
+    hydrateLiveState().then(loadLocal);
   }, []);
 
   const filteredWorkshopTypes = useMemo(() => filterRecords(workshopTypes, search), [search, workshopTypes]);
@@ -57,12 +60,12 @@ export default function WorkshopSetupPage() {
 
   function saveWorkshopTypes(next: MasterRecord[]) {
     setWorkshopTypes(next);
-    window.localStorage.setItem(WORKSHOP_TYPES_STORAGE_KEY, JSON.stringify(next));
+    void saveLiveState({ workshopTypes: next });
   }
 
   function saveFacilitators(next: MasterRecord[]) {
     setFacilitators(next);
-    window.localStorage.setItem(FACILITATORS_STORAGE_KEY, JSON.stringify(next));
+    void saveLiveState({ facilitators: next });
   }
 
   function saveMaster(kind: MasterKind, event: FormEvent<HTMLFormElement>) {

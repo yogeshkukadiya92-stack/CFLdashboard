@@ -2,6 +2,7 @@
 
 import { AdminPlatformShell } from "@/components/admin-platform-shell";
 import { BadgePercent, CalendarDays, CheckCircle2, Eye, RefreshCw, Save, Wallet } from "lucide-react";
+import { hydrateLiveState, readLocalArray, saveLiveState } from "@/lib/live-state";
 import { generateId } from "@/lib/utils";
 import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
 
@@ -59,14 +60,14 @@ export default function ManageEventSchedulePage() {
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    try {
-      setWorkshops(JSON.parse(window.localStorage.getItem(WORKSHOP_STORAGE_KEY) || "[]") as WorkshopRecord[]);
+    function loadLocal() {
+      setWorkshops(readLocalArray<WorkshopRecord>(WORKSHOP_STORAGE_KEY));
       setFacilitatorMasters(readMasterNames(FACILITATORS_STORAGE_KEY));
-      setSchedules(JSON.parse(window.localStorage.getItem(SCHEDULE_STORAGE_KEY) || "[]") as ScheduleRecord[]);
-    } catch {
-      setWorkshops([]);
-      setSchedules([]);
+      setSchedules(readLocalArray<ScheduleRecord>(SCHEDULE_STORAGE_KEY));
     }
+
+    loadLocal();
+    hydrateLiveState().then(loadLocal);
   }, []);
 
   const completion = useMemo(() => {
@@ -115,7 +116,7 @@ export default function ManageEventSchedulePage() {
     };
     const next = [payload, ...schedules];
     setSchedules(next);
-    window.localStorage.setItem(SCHEDULE_STORAGE_KEY, JSON.stringify(next));
+    void saveLiveState({ schedules: next });
     setSaved(true);
     setShowData(true);
   }
@@ -227,7 +228,7 @@ export default function ManageEventSchedulePage() {
                         onClick={() => {
                           const next = schedules.filter((item) => item.id !== row.id);
                           setSchedules(next);
-                          window.localStorage.setItem(SCHEDULE_STORAGE_KEY, JSON.stringify(next));
+                          void saveLiveState({ schedules: next });
                         }}
                         type="button"
                       >
@@ -264,7 +265,7 @@ function Preview({ label, value }: { label: string; value: string }) {
 }
 function readMasterNames(key: string) {
   try {
-    const records = JSON.parse(window.localStorage.getItem(key) || "[]") as Array<{ name?: string }>;
+    const records = readLocalArray<{ name?: string }>(key);
     return records.map((record) => record.name?.trim()).filter(Boolean) as string[];
   } catch {
     return [];

@@ -20,6 +20,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid webhook signature." }, { status: 401 });
   }
 
-  const event = JSON.parse(rawBody);
+  let event: { event?: string };
+  try {
+    event = JSON.parse(rawBody) as { event?: string };
+  } catch {
+    return NextResponse.json({ error: "Invalid webhook payload." }, { status: 400 });
+  }
+
   return NextResponse.json({ event: event?.event || "received", ok: true });
 }

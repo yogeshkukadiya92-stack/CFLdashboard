@@ -1,6 +1,7 @@
 "use client";
 
 import { workshops as seedWorkshops } from "@/lib/data";
+import { hydratePublicRegistrationState, readLocalArray, readLocalObject, savePublicRegistration } from "@/lib/live-state";
 import type { BuilderField, BuilderForm, BuilderTheme, PaymentTier, RegistrationEntry } from "@/lib/types";
 import { decodeJsonParam, formatCurrency } from "@/lib/utils";
 import { AlertTriangle, Check, CheckCircle2, ShieldCheck } from "lucide-react";
@@ -123,152 +124,155 @@ export default function RegistrationPage() {
   // Resolve the form: a builder form (?f=) wins; then a self-contained simple
   // link (?title=); then saved master records; then the static seed.
   useEffect(() => {
-    let resolved: FormModel | null = null;
-    let linkBlocked = false;
+    let cancelled = false;
 
-    if (formParam) {
-      const decoded = decodeJsonParam<BuilderForm>(formParam);
-      if (decoded && Array.isArray(decoded.fields)) {
-        resolved = modelFromBuilderForm(decoded, {
-          venue: venueParam || "",
-          paid: Boolean(decoded.paid) && ((decoded.fee || 0) > 0 || Boolean(decoded.tiers && decoded.tiers.length > 0))
-        });
-      }
-    }
+    async function resolveForm() {
+      await hydratePublicRegistrationState();
+      if (cancelled) return;
 
-    if (!resolved && titleParam) {
-      resolved = {
-        id: widParam || slug,
-        slug,
-        title: titleParam,
-        description: "",
-        facilitator: facilitatorParam || "CFL Facilitator",
-        venue: venueParam || "TBA",
-        batch: batchParam || "Main Batch",
-        paid: paidEnabled && feeParam > 0,
-        fee: feeParam,
-        partPayment: partEnabled,
-        theme: defaultTheme,
-        fields: simpleFields()
-      };
-    }
+      let resolved: FormModel | null = null;
+      let linkBlocked = false;
 
-    if (!resolved) {
-      try {
-        const raw = window.localStorage.getItem(REGISTRATION_LINK_CONFIG_STORAGE_KEY);
-        const configs = raw ? (JSON.parse(raw) as Record<string, RegistrationLinkConfig>) : {};
-        const config = configs[slug];
-        if (config?.title) {
-          const expiresAt = config.publishUntil ? new Date(config.publishUntil).getTime() : 0;
-          linkBlocked = config.published === false || (expiresAt > 0 && expiresAt <= Date.now());
+      if (formParam) {
+        const decoded = decodeJsonParam<BuilderForm>(formParam);
+        if (decoded && Array.isArray(decoded.fields)) {
+          resolved = modelFromBuilderForm(decoded, {
+            venue: venueParam || "",
+            paid: Boolean(decoded.paid) && ((decoded.fee || 0) > 0 || Boolean(decoded.tiers && decoded.tiers.length > 0))
+          });
         }
-        if (config?.title && !linkBlocked) {
-          const fee = Number(config.fee || 0);
-          const formsRaw = window.localStorage.getItem(FORMS_STORAGE_KEY);
-          const forms = formsRaw ? JSON.parse(formsRaw) as BuilderForm[] : [];
-          const savedForm = forms.find((item) => item.workshopId === config.id || item.workshopSlug === slug || item.workshopSlug === config.slug);
-          if (savedForm) {
-            resolved = modelFromBuilderForm(savedForm, {
-              batch: config.batch || savedForm.batch || "Main Batch",
-              facilitator: config.facilitator || "CFL Facilitator",
-              fee,
-              paid: Boolean(config.paid) && (fee > 0 || Boolean(savedForm.tiers?.length)),
-              partPayment: Boolean(config.partPayment),
-              venue: config.venue || "TBA"
-            });
-          } else {
-            resolved = {
-              id: config.id || slug,
-              slug: config.slug || slug,
-              title: config.title,
-              description: "",
-              facilitator: config.facilitator || "CFL Facilitator",
-              venue: config.venue || "TBA",
-              batch: config.batch || "Main Batch",
-              paid: Boolean(config.paid) && fee > 0,
-              fee,
-              partPayment: Boolean(config.partPayment),
-              theme: defaultTheme,
-              fields: simpleFields()
-            };
-          }
-        }
-      } catch {
-        resolved = null;
       }
-    }
 
-    if (!resolved && !linkBlocked) {
-      try {
-        const raw = window.localStorage.getItem(WORKSHOP_MASTER_STORAGE_KEY);
-        const records = raw ? (JSON.parse(raw) as WorkshopMasterRecord[]) : [];
-        const match = records.find((record) => slugify(record.name) === slug || record.id === slug || record.id === widParam);
-        if (match) {
-          const formsRaw = window.localStorage.getItem(FORMS_STORAGE_KEY);
-          const forms = formsRaw ? JSON.parse(formsRaw) as BuilderForm[] : [];
-          const savedForm = forms.find((item) => item.workshopId === match.id || item.workshopSlug === slugify(match.name));
-          if (savedForm) {
-            resolved = modelFromBuilderForm(savedForm, {
-              batch: batchParam || savedForm.batch || "Main Batch",
-              facilitator: match.facilitator || "CFL Facilitator",
-              fee: feeParam,
-              paid: paidEnabled && (feeParam > 0 || Boolean(savedForm.tiers?.length)),
-              partPayment: partEnabled,
-              venue: venueParam || "TBA"
-            });
-          } else {
-            resolved = {
-              id: match.id,
-              slug: slugify(match.name) || match.id,
-              title: match.name,
-              description: "",
-              facilitator: match.facilitator || "CFL Facilitator",
-              venue: venueParam || "TBA",
-              batch: batchParam || "Main Batch",
-              paid: paidEnabled && feeParam > 0,
-              fee: feeParam,
-              partPayment: partEnabled,
-              theme: defaultTheme,
-              fields: simpleFields()
-            };
-          }
-        }
-      } catch {
-        resolved = null;
-      }
-    }
-
-    if (!resolved && !linkBlocked) {
-      const seed = seedWorkshops.find((item) => item.slug === slug);
-      if (seed) {
+      if (!resolved && titleParam) {
         resolved = {
-          id: seed.id,
-          slug: seed.slug,
-          title: seed.title,
+          id: widParam || slug,
+          slug,
+          title: titleParam,
           description: "",
-          facilitator: seed.trainer,
-          venue: seed.city,
+          facilitator: facilitatorParam || "CFL Facilitator",
+          venue: venueParam || "TBA",
           batch: batchParam || "Main Batch",
-          paid: seed.price > 0,
-          fee: feeParam > 0 ? feeParam : seed.price,
+          paid: paidEnabled && feeParam > 0,
+          fee: feeParam,
           partPayment: partEnabled,
           theme: defaultTheme,
           fields: simpleFields()
         };
       }
+
+      if (!resolved) {
+        try {
+          const configs = readLocalObject<Record<string, RegistrationLinkConfig>>(REGISTRATION_LINK_CONFIG_STORAGE_KEY);
+          const config = configs[slug];
+          if (config?.title) {
+            const expiresAt = config.publishUntil ? new Date(config.publishUntil).getTime() : 0;
+            linkBlocked = config.published === false || (expiresAt > 0 && expiresAt <= Date.now());
+          }
+          if (config?.title && !linkBlocked) {
+            const fee = Number(config.fee || 0);
+            const forms = readLocalArray<BuilderForm>(FORMS_STORAGE_KEY);
+            const savedForm = forms.find((item) => item.workshopId === config.id || item.workshopSlug === slug || item.workshopSlug === config.slug);
+            if (savedForm) {
+              resolved = modelFromBuilderForm(savedForm, {
+                batch: config.batch || savedForm.batch || "Main Batch",
+                facilitator: config.facilitator || "CFL Facilitator",
+                fee,
+                paid: Boolean(config.paid) && (fee > 0 || Boolean(savedForm.tiers?.length)),
+                partPayment: Boolean(config.partPayment),
+                venue: config.venue || "TBA"
+              });
+            } else {
+              resolved = {
+                id: config.id || slug,
+                slug: config.slug || slug,
+                title: config.title,
+                description: "",
+                facilitator: config.facilitator || "CFL Facilitator",
+                venue: config.venue || "TBA",
+                batch: config.batch || "Main Batch",
+                paid: Boolean(config.paid) && fee > 0,
+                fee,
+                partPayment: Boolean(config.partPayment),
+                theme: defaultTheme,
+                fields: simpleFields()
+              };
+            }
+          }
+        } catch {
+          resolved = null;
+        }
+      }
+
+      if (!resolved && !linkBlocked) {
+        try {
+          const records = readLocalArray<WorkshopMasterRecord>(WORKSHOP_MASTER_STORAGE_KEY);
+          const match = records.find((record) => slugify(record.name) === slug || record.id === slug || record.id === widParam);
+          if (match) {
+            const forms = readLocalArray<BuilderForm>(FORMS_STORAGE_KEY);
+            const savedForm = forms.find((item) => item.workshopId === match.id || item.workshopSlug === slugify(match.name));
+            if (savedForm) {
+              resolved = modelFromBuilderForm(savedForm, {
+                batch: batchParam || savedForm.batch || "Main Batch",
+                facilitator: match.facilitator || "CFL Facilitator",
+                fee: feeParam,
+                paid: paidEnabled && (feeParam > 0 || Boolean(savedForm.tiers?.length)),
+                partPayment: partEnabled,
+                venue: venueParam || "TBA"
+              });
+            } else {
+              resolved = {
+                id: match.id,
+                slug: slugify(match.name) || match.id,
+                title: match.name,
+                description: "",
+                facilitator: match.facilitator || "CFL Facilitator",
+                venue: venueParam || "TBA",
+                batch: batchParam || "Main Batch",
+                paid: paidEnabled && feeParam > 0,
+                fee: feeParam,
+                partPayment: partEnabled,
+                theme: defaultTheme,
+                fields: simpleFields()
+              };
+            }
+          }
+        } catch {
+          resolved = null;
+        }
+      }
+
+      if (!resolved && !linkBlocked) {
+        const seed = seedWorkshops.find((item) => item.slug === slug);
+        if (seed) {
+          resolved = {
+            id: seed.id,
+            slug: seed.slug,
+            title: seed.title,
+            description: "",
+            facilitator: seed.trainer,
+            venue: seed.city,
+            batch: batchParam || "Main Batch",
+            paid: seed.price > 0,
+            fee: feeParam > 0 ? feeParam : seed.price,
+            partPayment: partEnabled,
+            theme: defaultTheme,
+            fields: simpleFields()
+          };
+        }
+      }
+
+      setModel(linkBlocked ? null : resolved);
+      setReady(true);
     }
 
-    setModel(linkBlocked ? null : resolved);
-    setReady(true);
+    void resolveForm();
+    return () => {
+      cancelled = true;
+    };
   }, [batchParam, facilitatorParam, feeParam, formParam, paidEnabled, partEnabled, slug, titleParam, venueParam, widParam]);
 
   useEffect(() => {
-    try {
-      const raw = window.localStorage.getItem(CLIENTS_STORAGE_KEY);
-      setClients(raw ? (JSON.parse(raw) as ClientRecord[]) : []);
-    } catch {
-      setClients([]);
-    }
+    setClients(readLocalArray<ClientRecord>(CLIENTS_STORAGE_KEY));
   }, []);
 
   useEffect(() => {
@@ -393,12 +397,11 @@ export default function RegistrationPage() {
     };
 
     try {
-      const raw = localStorage.getItem(REGISTRATION_STORAGE_KEY);
-      const current: RegistrationEntry[] = raw ? JSON.parse(raw) : [];
+      const current = readLocalArray<RegistrationEntry>(REGISTRATION_STORAGE_KEY);
       const existingIndex = current.findIndex((item) => item.id === registrationId);
       if (existingIndex >= 0) current[existingIndex] = payload;
       else current.unshift(payload);
-      localStorage.setItem(REGISTRATION_STORAGE_KEY, JSON.stringify(current));
+      void savePublicRegistration(payload, current);
     } catch {
       // ignore storage write failures
     }
@@ -507,7 +510,7 @@ export default function RegistrationPage() {
                 <div>
                   <p>{message}</p>
                   {model.whatsappGroupUrl ? (
-                    <p className="mt-2 text-emerald-800">WhatsApp group {redirectCountdown} second ma open thase.</p>
+                    <p className="mt-2 text-emerald-800">WhatsApp group opens in {redirectCountdown} seconds.</p>
                   ) : null}
                 </div>
               </div>

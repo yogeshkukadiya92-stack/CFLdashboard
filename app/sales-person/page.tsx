@@ -2,6 +2,7 @@
 
 import { AdminPlatformShell } from "@/components/admin-platform-shell";
 import { Check, Edit3, Eye, RefreshCw, Save, Trash2, UserPlus } from "lucide-react";
+import { hydrateLiveState, readLocalArray, saveLiveState } from "@/lib/live-state";
 import { generateId } from "@/lib/utils";
 import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
 
@@ -56,19 +57,19 @@ export default function SalesPersonPage() {
   const fullName = useMemo(() => [firstName, middleName, lastName].filter(Boolean).join(" ") || "New sales person", [firstName, lastName, middleName]);
 
   useEffect(() => {
-    try {
-      const workshopRecords = JSON.parse(window.localStorage.getItem(WORKSHOP_STORAGE_KEY) || "[]") as WorkshopRecord[];
+    function loadLocal() {
+      const workshopRecords = readLocalArray<WorkshopRecord>(WORKSHOP_STORAGE_KEY);
       setWorkshops(workshopRecords.map((item) => item.name).filter(Boolean));
-      setRecords(JSON.parse(window.localStorage.getItem(SALES_STORAGE_KEY) || "[]") as SalesPersonRecord[]);
-    } catch {
-      setWorkshops([]);
-      setRecords([]);
+      setRecords(readLocalArray<SalesPersonRecord>(SALES_STORAGE_KEY));
     }
+
+    loadLocal();
+    hydrateLiveState().then(loadLocal);
   }, []);
 
   function saveRecords(next: SalesPersonRecord[]) {
     setRecords(next);
-    window.localStorage.setItem(SALES_STORAGE_KEY, JSON.stringify(next));
+    void saveLiveState({ salesPeople: next });
   }
 
   function clearForm() {
@@ -215,9 +216,9 @@ export default function SalesPersonPage() {
         </section>
 
         <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm md:p-6">
-          <h3 className="text-xl font-black text-slate-950">Manage Workshop wise Commission & Commission [Direct Client]</h3>
+          <h3 className="text-xl font-black text-slate-950">Manage Workshop-wise Commission and Direct Client Commission</h3>
           <div className="mt-5 grid gap-4 lg:grid-cols-[1fr_220px_220px_auto]">
-            <Field label="Select WorkShop">
+            <Field label="Select Workshop">
               <select className={inputClass} onChange={(event) => setCommissionWorkshop(event.target.value)} value={commissionWorkshop}>
                 <option value="">Select Workshop</option>
                 {workshops.map((item) => <option key={item} value={item}>{item}</option>)}
