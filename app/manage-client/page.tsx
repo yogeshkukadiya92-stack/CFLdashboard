@@ -1,6 +1,8 @@
 "use client";
 
 import { AdminPlatformShell } from "@/components/admin-platform-shell";
+import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
+import { hydrateLiveState, readLocalArray, saveLiveState } from "@/lib/live-state";
 import {
   ArrowDown,
   ArrowUp,
@@ -121,29 +123,20 @@ export default function ManageClientPage() {
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
   const [message, setMessage] = useState("");
   const [editing, setEditing] = useState<ClientRow | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ClientRow | null>(null);
 
   useEffect(() => {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (raw) setClients(JSON.parse(raw) as ClientRow[]);
-    fetch("/api/state")
-      .then((response) => response.json())
-      .then((state) => {
-        if (state?.dbEnabled && Array.isArray(state.clients)) {
-          setClients(state.clients as ClientRow[]);
-          window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state.clients));
-        }
-      })
-      .catch(() => undefined);
+    function loadLocal() {
+      setClients(readLocalArray<ClientRow>(STORAGE_KEY));
+    }
+
+    loadLocal();
+    hydrateLiveState().then(loadLocal);
   }, []);
 
   function save(next: ClientRow[]) {
     setClients(next);
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-    void fetch("/api/state", {
-      body: JSON.stringify({ clients: next }),
-      headers: { "Content-Type": "application/json" },
-      method: "POST"
-    }).catch(() => undefined);
+    void saveLiveState({ clients: next });
   }
 
   const filteredClients = useMemo(() => {
@@ -274,11 +267,16 @@ export default function ManageClientPage() {
 
   function deleteClient(id: number) {
     save(clients.filter((client) => client.id !== id));
+    setDeleteTarget(null);
     setMessage("Client deleted.");
   }
 
   function saveEdit() {
     if (!editing) return;
+    if (!editing.name.trim() || !editing.mobile.trim()) {
+      setMessage("Client name and mobile are required.");
+      return;
+    }
     const exists = clients.some((client) => client.id === editing.id);
     const next = exists
       ? clients.map((client) => (client.id === editing.id ? editing : client))
@@ -410,7 +408,7 @@ export default function ManageClientPage() {
                       <button className="grid size-10 place-items-center rounded-xl bg-indigo-600 text-white hover:bg-indigo-700" onClick={() => setEditing(client)} type="button">
                         <Edit3 className="size-4" />
                       </button>
-                      <button className="grid size-10 place-items-center rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-100" onClick={() => deleteClient(client.id)} type="button">
+                      <button aria-label={`Delete ${client.name}`} className="grid size-10 place-items-center rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-100" onClick={() => setDeleteTarget(client)} type="button">
                         <Trash2 className="size-4" />
                       </button>
                     </div>
@@ -451,6 +449,16 @@ export default function ManageClientPage() {
       </section>
 
       {editing ? <ClientEditor client={editing} onChange={setEditing} onClose={() => setEditing(null)} onSave={saveEdit} /> : null}
+      <ConfirmDialog
+        confirmLabel="Delete Client"
+        description="This removes the client from the CRM list and synced app state."
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={() => deleteTarget ? deleteClient(deleteTarget.id) : undefined}
+        open={Boolean(deleteTarget)}
+        title="Delete client?"
+      >
+        {deleteTarget ? <span>{deleteTarget.name} · {deleteTarget.mobile || "No mobile"}</span> : null}
+      </ConfirmDialog>
     </AdminPlatformShell>
   );
 }

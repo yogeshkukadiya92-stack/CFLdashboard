@@ -1,7 +1,8 @@
 "use client";
 
 import { AdminPlatformShell } from "@/components/admin-platform-shell";
-import { BadgePercent, CalendarDays, CheckCircle2, Eye, RefreshCw, Save, Wallet } from "lucide-react";
+import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
+import { BadgePercent, CalendarDays, CheckCircle2, Edit3, Eye, RefreshCw, Save, Trash2, Wallet } from "lucide-react";
 import { hydrateLiveState, readLocalArray, saveLiveState } from "@/lib/live-state";
 import { generateId } from "@/lib/utils";
 import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
@@ -17,6 +18,8 @@ type WorkshopRecord = {
 };
 type ScheduleRecord = {
   batch: string;
+  discountCodeEod?: string;
+  discountDescription?: string;
   discountType: DiscountType;
   discountValue: string;
   facilitator: string;
@@ -58,6 +61,9 @@ export default function ManageEventSchedulePage() {
   const [minOrderQty, setMinOrderQty] = useState("");
   const [maxOrderQty, setMaxOrderQty] = useState("");
   const [saved, setSaved] = useState(false);
+  const [scheduleMessage, setScheduleMessage] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ScheduleRecord | null>(null);
 
   useEffect(() => {
     function loadLocal() {
@@ -94,17 +100,57 @@ export default function ManageEventSchedulePage() {
     setMinOrderQty("");
     setMaxOrderQty("");
     setSaved(false);
+    setScheduleMessage("");
+    setEditingId(null);
+  }
+
+  function editSchedule(row: ScheduleRecord) {
+    setTransferLeadToCrm(Boolean(row.transferLeadToCrm));
+    setSelectedEvent(row.selectedEvent);
+    setFacilitator(row.facilitator);
+    setBatch(row.batch);
+    setIsPaidEvent(Boolean(row.isPaidEvent));
+    setFeesWithTax(row.feesWithTax ?? "");
+    setIsPartPaymentAllow(Boolean(row.isPartPaymentAllow));
+    setMinimumPartPayment(row.minimumPartPayment ?? "");
+    setDiscountCodeEod(row.discountCodeEod ?? "");
+    setDiscountType(row.discountType ?? "percent");
+    setDiscountValue(row.discountValue ?? "");
+    setDiscountDescription(row.discountDescription ?? "");
+    setOrderQtyTitle(row.orderQtyTitle ?? "");
+    setMinOrderQty(row.minOrderQty ?? "");
+    setMaxOrderQty(row.maxOrderQty ?? "");
+    setEditingId(row.id);
+    setSaved(false);
+    setScheduleMessage(`Editing ${row.selectedEvent}.`);
+    window.requestAnimationFrame(() => window.scrollTo({ behavior: "smooth", top: 0 }));
+  }
+
+  function deleteSchedule(row: ScheduleRecord) {
+    const next = schedules.filter((item) => item.id !== row.id);
+    setSchedules(next);
+    void saveLiveState({ schedules: next });
+    if (editingId === row.id) clear();
+    setDeleteTarget(null);
   }
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!selectedEvent || !facilitator) {
+      setSaved(false);
+      setScheduleMessage("Select event and facilitator before saving.");
+      return;
+    }
+    const wasEditing = Boolean(editingId);
     const payload: ScheduleRecord = {
       batch: batch.trim() || "Main Batch",
+      discountCodeEod,
+      discountDescription,
       discountType,
       discountValue,
       facilitator,
       feesWithTax,
-      id: generateId(),
+      id: editingId ?? generateId(),
       isPaidEvent,
       isPartPaymentAllow,
       maxOrderQty,
@@ -114,11 +160,15 @@ export default function ManageEventSchedulePage() {
       selectedEvent,
       transferLeadToCrm
     };
-    const next = [payload, ...schedules];
+    const next = editingId
+      ? schedules.map((schedule) => schedule.id === editingId ? payload : schedule)
+      : [payload, ...schedules];
     setSchedules(next);
     void saveLiveState({ schedules: next });
     setSaved(true);
+    setScheduleMessage(wasEditing ? "Schedule updated." : "Schedule saved.");
     setShowData(true);
+    setEditingId(payload.id);
   }
 
   return (
@@ -193,9 +243,13 @@ export default function ManageEventSchedulePage() {
             <Preview label="Discount" value={`${discountType === "percent" ? "%" : "Flat"} ${discountValue || "0"}`} />
           </Panel>
           <Panel title="Actions">
-            {saved ? <p className="mb-3 rounded-xl bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-700">Schedule saved.</p> : null}
+            {scheduleMessage ? (
+              <p className={`mb-3 rounded-xl px-3 py-2 text-sm font-bold ${saved ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
+                {scheduleMessage}
+              </p>
+            ) : null}
             <div className="grid gap-2">
-              <button className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 py-3 text-sm font-bold text-white hover:bg-indigo-700" type="submit"><Save className="size-4" />Save</button>
+              <button className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 py-3 text-sm font-bold text-white hover:bg-indigo-700" type="submit"><Save className="size-4" />{editingId ? "Update" : "Save"}</button>
               <button className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 px-5 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50" onClick={clear} type="button"><RefreshCw className="size-4" />Clear</button>
               <button className="inline-flex items-center justify-center gap-2 rounded-xl border border-indigo-300 px-5 py-3 text-sm font-bold text-indigo-700 hover:bg-indigo-50" onClick={() => setShowData((value) => !value)} type="button"><Eye className="size-4" />{showData ? "Hide Data" : "View Data"}</button>
             </div>
@@ -220,20 +274,20 @@ export default function ManageEventSchedulePage() {
                     <td className="px-4 py-4">{row.batch}</td>
                     <td className="px-4 py-4">{row.facilitator}</td>
                     <td className="px-4 py-4">{row.isPaidEvent ? `Paid ${row.feesWithTax || ""}` : "Free"}</td>
-                    <td className="px-4 py-4">{row.discountType === "percent" ? `${row.discountValue || 0}%` : `INR ${row.discountValue || 0}`}</td>
+                    <td className="px-4 py-4">
+                      <span className="font-bold">{row.discountType === "percent" ? `${row.discountValue || 0}%` : `INR ${row.discountValue || 0}`}</span>
+                      {row.discountCodeEod ? <span className="ml-2 rounded-full bg-slate-100 px-2 py-1 text-xs font-black text-slate-600">{row.discountCodeEod}</span> : null}
+                    </td>
                     <td className="px-4 py-4">{row.transferLeadToCrm ? "Yes" : "No"}</td>
                     <td className="px-4 py-4">
-                      <button
-                        className="rounded-lg bg-rose-50 px-3 py-2 text-xs font-black text-rose-700 hover:bg-rose-100"
-                        onClick={() => {
-                          const next = schedules.filter((item) => item.id !== row.id);
-                          setSchedules(next);
-                          void saveLiveState({ schedules: next });
-                        }}
-                        type="button"
-                      >
-                        Delete
-                      </button>
+                      <div className="flex gap-2">
+                        <button className="grid size-9 place-items-center rounded-xl bg-indigo-600 text-white hover:bg-indigo-700" onClick={() => editSchedule(row)} title="Edit" type="button">
+                          <Edit3 className="size-4" />
+                        </button>
+                        <button className="grid size-9 place-items-center rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-100" onClick={() => setDeleteTarget(row)} title="Delete" type="button">
+                          <Trash2 className="size-4" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 )) : (
@@ -244,6 +298,16 @@ export default function ManageEventSchedulePage() {
           </div>
         </section>
       ) : null}
+      <ConfirmDialog
+        confirmLabel="Delete Schedule"
+        description="This removes the saved schedule from dashboard reports and synced app state."
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={() => deleteTarget ? deleteSchedule(deleteTarget) : undefined}
+        open={Boolean(deleteTarget)}
+        title="Delete schedule?"
+      >
+        {deleteTarget ? `${deleteTarget.selectedEvent} · ${deleteTarget.batch}` : null}
+      </ConfirmDialog>
     </AdminPlatformShell>
   );
 }

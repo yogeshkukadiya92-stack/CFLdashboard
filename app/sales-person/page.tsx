@@ -1,6 +1,7 @@
 "use client";
 
 import { AdminPlatformShell } from "@/components/admin-platform-shell";
+import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
 import { Check, Edit3, Eye, RefreshCw, Save, Trash2, UserPlus } from "lucide-react";
 import { hydrateLiveState, readLocalArray, saveLiveState } from "@/lib/live-state";
 import { generateId } from "@/lib/utils";
@@ -15,7 +16,9 @@ type CommissionRow = {
 type SalesPersonRecord = {
   canViewOther: boolean;
   commissions: CommissionRow[];
+  directClient?: string;
   email: string;
+  generalAssign?: string;
   group: string;
   id: string;
   isActive: boolean;
@@ -51,6 +54,8 @@ export default function SalesPersonPage() {
   const [directPercent, setDirectPercent] = useState("5");
   const [commissions, setCommissions] = useState<CommissionRow[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingSalesId, setEditingSalesId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<SalesPersonRecord | null>(null);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
 
@@ -89,6 +94,8 @@ export default function SalesPersonPage() {
     setDirectPercent("5");
     setCommissions([]);
     setEditingId(null);
+    setEditingSalesId(null);
+    setDeleteTarget(null);
     setError("");
     setSaved(false);
   }
@@ -129,26 +136,55 @@ export default function SalesPersonPage() {
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSaved(false);
-    if (!firstName || !lastName || !mobile || !password || !email || !group) {
+    if (!firstName || !lastName || !mobile || (!editingSalesId && !password) || !email || !group) {
       setError("Please fill all required salesperson fields.");
       return;
     }
     setError("");
-    saveRecords([
-      {
-        canViewOther,
-        commissions,
-        email,
-        group,
-        id: generateId(),
-        isActive,
-        mobile,
-        name: fullName
-      },
-      ...records
-    ]);
+    const payload: SalesPersonRecord = {
+      canViewOther,
+      commissions,
+      directClient,
+      email,
+      generalAssign,
+      group,
+      id: editingSalesId ?? generateId(),
+      isActive,
+      mobile,
+      name: fullName
+    };
+    saveRecords(editingSalesId ? records.map((record) => record.id === editingSalesId ? payload : record) : [payload, ...records]);
     setSaved(true);
     setShowData(true);
+    clearForm();
+    setSaved(true);
+  }
+
+  function editSalesPerson(record: SalesPersonRecord) {
+    const parts = record.name.split(" ").filter(Boolean);
+    setFirstName(parts[0] ?? "");
+    setMiddleName(parts.length > 2 ? parts.slice(1, -1).join(" ") : "");
+    setLastName(parts.length > 1 ? parts[parts.length - 1] : "");
+    setMobile(record.mobile);
+    setPassword("");
+    setEmail(record.email);
+    setGroup(record.group);
+    setCanViewOther(record.canViewOther);
+    setIsActive(record.isActive);
+    setGeneralAssign(record.generalAssign ?? "");
+    setDirectClient(record.directClient ?? "");
+    setCommissions(record.commissions ?? []);
+    setEditingSalesId(record.id);
+    setEditingId(null);
+    setError("");
+    setSaved(false);
+    window.requestAnimationFrame(() => window.scrollTo({ behavior: "smooth", top: 0 }));
+  }
+
+  function deleteSalesPerson(record: SalesPersonRecord) {
+    saveRecords(records.filter((item) => item.id !== record.id));
+    if (editingSalesId === record.id) clearForm();
+    setDeleteTarget(null);
   }
 
   return (
@@ -178,7 +214,7 @@ export default function SalesPersonPage() {
             <Field label="Middle Name"><input className={inputClass} onChange={(event) => setMiddleName(event.target.value)} placeholder="Middle Name" value={middleName} /></Field>
             <Field label="Last Name *"><input className={inputClass} onChange={(event) => setLastName(event.target.value)} placeholder="Last Name" value={lastName} /></Field>
             <Field label="Mobile No [Login ID] *"><input className={inputClass} onChange={(event) => setMobile(event.target.value)} placeholder="Mobile No" value={mobile} /></Field>
-            <Field label="Password *"><input className={inputClass} onChange={(event) => setPassword(event.target.value)} placeholder="Password" type="password" value={password} /></Field>
+            <Field label={editingSalesId ? "Password (leave blank to keep unchanged)" : "Password *"}><input className={inputClass} onChange={(event) => setPassword(event.target.value)} placeholder="Password" type="password" value={password} /></Field>
             <Field label="Email Id *"><input className={inputClass} onChange={(event) => setEmail(event.target.value)} placeholder="Email Id" type="email" value={email} /></Field>
           </div>
 
@@ -277,7 +313,14 @@ export default function SalesPersonPage() {
                       </td>
                       <td className="px-4 py-4">{record.commissions.length}</td>
                       <td className="px-4 py-4">
-                        <button className="rounded-lg bg-rose-50 px-3 py-2 text-xs font-black text-rose-700" onClick={() => saveRecords(records.filter((item) => item.id !== record.id))} type="button">Delete</button>
+                        <div className="flex gap-2">
+                          <button className="grid size-9 place-items-center rounded-xl bg-indigo-600 text-white hover:bg-indigo-700" onClick={() => editSalesPerson(record)} title="Edit" type="button">
+                            <Edit3 className="size-4" />
+                          </button>
+                          <button className="grid size-9 place-items-center rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-100" onClick={() => setDeleteTarget(record)} title="Delete" type="button">
+                            <Trash2 className="size-4" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   )) : (
@@ -296,10 +339,20 @@ export default function SalesPersonPage() {
           </button>
           <button className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-3 text-sm font-bold text-white hover:bg-indigo-700" type="submit">
             <Save className="size-4" />
-            Save
+            {editingSalesId ? "Update" : "Save"}
           </button>
         </div>
       </form>
+      <ConfirmDialog
+        confirmLabel="Delete Sales Person"
+        description="This removes the salesperson profile and commission rules from synced app state."
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={() => deleteTarget ? deleteSalesPerson(deleteTarget) : undefined}
+        open={Boolean(deleteTarget)}
+        title="Delete salesperson?"
+      >
+        {deleteTarget ? `${deleteTarget.name} · ${deleteTarget.mobile}` : null}
+      </ConfirmDialog>
     </AdminPlatformShell>
   );
 }

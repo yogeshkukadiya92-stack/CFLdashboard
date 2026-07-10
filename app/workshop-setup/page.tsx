@@ -1,6 +1,7 @@
 "use client";
 
 import { AdminPlatformShell } from "@/components/admin-platform-shell";
+import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
 import { Check, Edit3, Plus, RefreshCw, Search, Trash2, UserRound, Workflow } from "lucide-react";
 import { hydrateLiveState, readLocalArray, saveLiveState } from "@/lib/live-state";
 import { generateId } from "@/lib/utils";
@@ -44,6 +45,7 @@ export default function WorkshopSetupPage() {
   const [editingFacilitatorId, setEditingFacilitatorId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [search, setSearch] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<{ kind: MasterKind; record: MasterRecord } | null>(null);
 
   useEffect(() => {
     function loadLocal() {
@@ -135,6 +137,12 @@ export default function WorkshopSetupPage() {
     setMessage("Facilitator deleted.");
   }
 
+  function confirmDelete() {
+    if (!deleteTarget) return;
+    deleteRecord(deleteTarget.kind, deleteTarget.record.id);
+    setDeleteTarget(null);
+  }
+
   function clearForm(kind: MasterKind) {
     if (kind === "workshopType") {
       setWorkshopTypeName("");
@@ -178,7 +186,7 @@ export default function WorkshopSetupPage() {
           kind="workshopType"
           name={workshopTypeName}
           onClear={() => clearForm("workshopType")}
-          onDelete={(id) => deleteRecord("workshopType", id)}
+          onDelete={(record) => setDeleteTarget({ kind: "workshopType", record })}
           onEdit={(record) => editRecord("workshopType", record)}
           onNameChange={setWorkshopTypeName}
           onSubmit={(event) => saveMaster("workshopType", event)}
@@ -191,7 +199,7 @@ export default function WorkshopSetupPage() {
           kind="facilitator"
           name={facilitatorName}
           onClear={() => clearForm("facilitator")}
-          onDelete={(id) => deleteRecord("facilitator", id)}
+          onDelete={(record) => setDeleteTarget({ kind: "facilitator", record })}
           onEdit={(record) => editRecord("facilitator", record)}
           onNameChange={setFacilitatorName}
           onSubmit={(event) => saveMaster("facilitator", event)}
@@ -199,6 +207,16 @@ export default function WorkshopSetupPage() {
           title="Facilitator"
         />
       </div>
+      <ConfirmDialog
+        confirmLabel="Delete"
+        description="This master value will no longer be available in new workshop forms."
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={confirmDelete}
+        open={Boolean(deleteTarget)}
+        title={`Delete ${deleteTarget?.kind === "facilitator" ? "facilitator" : "workshop type"}?`}
+      >
+        {deleteTarget?.record.name}
+      </ConfirmDialog>
     </AdminPlatformShell>
   );
 }
@@ -237,7 +255,7 @@ function MasterPanel({
   kind: MasterKind;
   name: string;
   onClear: () => void;
-  onDelete: (id: string) => void;
+  onDelete: (record: MasterRecord) => void;
   onEdit: (record: MasterRecord) => void;
   onNameChange: (value: string) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
@@ -289,7 +307,7 @@ function MasterPanel({
                     <button className="grid size-9 place-items-center rounded-xl bg-indigo-600 text-white hover:bg-indigo-700" onClick={() => onEdit(record)} title="Edit" type="button">
                       <Edit3 className="size-4" />
                     </button>
-                    <button className="grid size-9 place-items-center rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-100" onClick={() => onDelete(record.id)} title="Delete" type="button">
+                    <button className="grid size-9 place-items-center rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-100" onClick={() => onDelete(record)} title="Delete" type="button">
                       <Trash2 className="size-4" />
                     </button>
                   </div>

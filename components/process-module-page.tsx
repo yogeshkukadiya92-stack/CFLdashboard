@@ -1,6 +1,7 @@
 "use client";
 
 import { AdminPlatformShell } from "@/components/admin-platform-shell";
+import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
 import { hydrateLiveState, readLocalArray, saveLiveState } from "@/lib/live-state";
 import { processPageConfigs, type ProcessField } from "@/lib/process-pages";
 import { generateId } from "@/lib/utils";
@@ -68,6 +69,19 @@ function readLocalStorageArray<T>(key: string): T[] {
   return readLocalArray<T>(key);
 }
 
+function downloadCsv(filename: string, rows: string[][]) {
+  const csv = rows.map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(",")).join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
 export function ProcessModulePage({ slug }: { slug: string }) {
   if (slug === "client-batch-transfer") {
     return <ClientBatchTransferWorkflow />;
@@ -110,6 +124,7 @@ export function ProcessModulePage({ slug }: { slug: string }) {
   const [rows, setRows] = useState<Array<Record<string, string>>>([]);
   const [error, setError] = useState("");
   const [showData, setShowData] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Record<string, string> | null>(null);
 
   function update(key: string, value: string) {
     setForm((current) => ({ ...current, [key]: value }));
@@ -132,6 +147,22 @@ export function ProcessModulePage({ slug }: { slug: string }) {
     setShowData(true);
     setError("");
     setForm(initialForm);
+  }
+
+  function exportRows() {
+    downloadCsv(`${slug}-export.csv`, [
+      [...config.tableColumns, "Status", "Created At"],
+      ...rows.map((row) => [
+        ...config.fields.map((field) => row[field.key] ?? ""),
+        row.status ?? "",
+        row.createdAt ?? ""
+      ])
+    ]);
+  }
+
+  function deleteRow(row: Record<string, string>) {
+    setRows((current) => current.filter((item) => item.id !== row.id));
+    setDeleteTarget(null);
   }
 
   return (
@@ -191,7 +222,7 @@ export function ProcessModulePage({ slug }: { slug: string }) {
               <h3 className="text-xl font-black text-slate-950">{config.title} Data</h3>
               <p className="text-sm font-semibold text-slate-500">Latest process entries for this workflow.</p>
             </div>
-            <button className="inline-flex items-center gap-2 rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50" type="button">
+            <button className="inline-flex items-center gap-2 rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50" disabled={!rows.length} onClick={exportRows} type="button">
               <Download className="size-4" />
               Export
             </button>
@@ -220,7 +251,7 @@ export function ProcessModulePage({ slug }: { slug: string }) {
                       <td className="px-4 py-4">
                         <button
                           className="grid size-9 place-items-center rounded-xl bg-red-50 text-red-600 hover:bg-red-100"
-                          onClick={() => setRows((current) => current.filter((item) => item.id !== row.id))}
+                          onClick={() => setDeleteTarget(row)}
                           type="button"
                         >
                           <Trash2 className="size-4" />
@@ -240,6 +271,16 @@ export function ProcessModulePage({ slug }: { slug: string }) {
           </div>
         </section>
       ) : null}
+      <ConfirmDialog
+        confirmLabel="Delete Row"
+        description="This removes the process row from the current workflow table."
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={() => deleteTarget ? deleteRow(deleteTarget) : undefined}
+        open={Boolean(deleteTarget)}
+        title="Delete process row?"
+      >
+        {deleteTarget ? Object.values(deleteTarget).filter(Boolean).slice(0, 3).join(" · ") : null}
+      </ConfirmDialog>
     </AdminPlatformShell>
   );
 }
@@ -871,6 +912,7 @@ function ManualClientPartPaymentWorkflow() {
 }
 
 function ClientBatchTransferWorkflow() {
+  type TransferRow = { client: string; from: string; id: string; remarks: string; status: string; to: string };
   const [clientSearch, setClientSearch] = useState("");
   const [sourceBatch, setSourceBatch] = useState("");
   const [destinationBatch, setDestinationBatch] = useState("");
@@ -878,7 +920,8 @@ function ClientBatchTransferWorkflow() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [showReport, setShowReport] = useState(false);
-  const [transfers, setTransfers] = useState<Array<{ client: string; from: string; id: string; remarks: string; status: string; to: string }>>([]);
+  const [transfers, setTransfers] = useState<TransferRow[]>([]);
+  const [deleteTarget, setDeleteTarget] = useState<TransferRow | null>(null);
   const [batches, setBatches] = useState<string[]>([]);
 
   useEffect(() => {
@@ -928,6 +971,21 @@ function ClientBatchTransferWorkflow() {
     setSourceBatch("");
     setDestinationBatch("");
     setRemarks("");
+  }
+
+  function exportTransfers() {
+    downloadCsv("batch-transfer-report.csv", [
+      ["Client", "From Batch", "To Batch", "Remarks", "Status"],
+      ...transfers.map((transfer) => [transfer.client, transfer.from, transfer.to, transfer.remarks, transfer.status])
+    ]);
+    setSuccess(`Exported ${transfers.length} transfer rows.`);
+    setError("");
+  }
+
+  function deleteTransfer(row: TransferRow) {
+    setTransfers((current) => current.filter((item) => item.id !== row.id));
+    setDeleteTarget(null);
+    setSuccess("Transfer row deleted.");
   }
 
   return (
@@ -1030,7 +1088,7 @@ function ClientBatchTransferWorkflow() {
               <h3 className="text-xl font-black text-slate-950">Batch Transfer Report</h3>
               <p className="text-sm font-semibold text-slate-500">Recent transfer logs for manual batch movements.</p>
             </div>
-            <button className="inline-flex items-center gap-2 rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50" type="button">
+            <button className="inline-flex items-center gap-2 rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50" disabled={!transfers.length} onClick={exportTransfers} type="button">
               <Download className="size-4" />
               Export
             </button>
@@ -1061,7 +1119,7 @@ function ClientBatchTransferWorkflow() {
                       <td className="px-4 py-4">
                         <button
                           className="grid size-9 place-items-center rounded-xl bg-red-50 text-red-600 hover:bg-red-100"
-                          onClick={() => setTransfers((current) => current.filter((row) => row.id !== transfer.id))}
+                          onClick={() => setDeleteTarget(transfer)}
                           type="button"
                         >
                           <Trash2 className="size-4" />
@@ -1081,6 +1139,16 @@ function ClientBatchTransferWorkflow() {
           </div>
         </section>
       ) : null}
+      <ConfirmDialog
+        confirmLabel="Delete Transfer"
+        description="This removes the transfer row from the visible report."
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={() => deleteTarget ? deleteTransfer(deleteTarget) : undefined}
+        open={Boolean(deleteTarget)}
+        title="Delete transfer row?"
+      >
+        {deleteTarget ? `${deleteTarget.client} · ${deleteTarget.from} to ${deleteTarget.to}` : null}
+      </ConfirmDialog>
     </AdminPlatformShell>
   );
 }

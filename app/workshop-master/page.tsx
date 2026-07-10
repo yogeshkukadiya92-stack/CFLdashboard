@@ -1,6 +1,7 @@
 "use client";
 
 import { AdminPlatformShell } from "@/components/admin-platform-shell";
+import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
 import { AlertCircle, ArrowDown, ArrowUp, Bold, Check, CheckSquare, ChevronDown, Circle, Copy, Download, Edit3, ExternalLink, Eye, Heading, Image, Italic, Link2, List, ListOrdered, Mail, Palette, Plus, QrCode, RefreshCw, Save, Search, Smartphone, Trash2, Type, Underline, UsersRound, X } from "lucide-react";
 import { hydrateLiveState, readLocalArray, readLocalObject, saveLiveState } from "@/lib/live-state";
 import { sanitizeRichTextHtml } from "@/lib/rich-text";
@@ -122,6 +123,7 @@ export default function WorkshopMasterPage() {
   const [showParticipants, setShowParticipants] = useState(false);
   const [registrations, setRegistrations] = useState<RegistrationEntry[]>([]);
   const [linkWorkshop, setLinkWorkshop] = useState<WorkshopRecord | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<WorkshopRecord | null>(null);
 
   useEffect(() => {
     function loadLocal() {
@@ -242,6 +244,7 @@ export default function WorkshopMasterPage() {
     saveRecords(records.filter((record) => record.id !== id));
     deleteBuilderForm(id);
     if (selectedWorkshopId === id) setSelectedWorkshopId(null);
+    setDeleteTarget(null);
     setMessage("Workshop deleted.");
   }
 
@@ -667,7 +670,7 @@ export default function WorkshopMasterPage() {
                         <button className="grid size-9 place-items-center rounded-xl bg-indigo-600 text-white hover:bg-indigo-700" onClick={() => editRecord(record)} title="Edit" type="button">
                           <Edit3 className="size-4" />
                         </button>
-                        <button className="grid size-9 place-items-center rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-100" onClick={() => deleteRecord(record.id)} title="Delete" type="button">
+                        <button className="grid size-9 place-items-center rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-100" onClick={() => setDeleteTarget(record)} title="Delete" type="button">
                           <Trash2 className="size-4" />
                         </button>
                       </div>
@@ -777,6 +780,16 @@ export default function WorkshopMasterPage() {
       ) : null}
 
       {linkWorkshop ? <RegistrationLinkModal workshop={linkWorkshop} onClose={() => setLinkWorkshop(null)} /> : null}
+      <ConfirmDialog
+        confirmLabel="Delete Workshop"
+        description="This removes the workshop master and its linked registration form."
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={() => deleteTarget ? deleteRecord(deleteTarget.id) : undefined}
+        open={Boolean(deleteTarget)}
+        title="Delete workshop?"
+      >
+        {deleteTarget ? `${deleteTarget.name} · ${deleteTarget.facilitator}` : null}
+      </ConfirmDialog>
     </AdminPlatformShell>
   );
 }
