@@ -47,7 +47,8 @@ function compressImage(file: File, maxWidth: number): Promise<string> {
         const ctx = canvas.getContext("2d");
         if (!ctx) { reject(new Error("Canvas not supported")); return; }
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        resolve(canvas.toDataURL("image/jpeg", IMAGE_QUALITY));
+        const outputType = file.type === "image/jpeg" || file.type === "image/jpg" ? "image/jpeg" : "image/png";
+        resolve(outputType === "image/jpeg" ? canvas.toDataURL(outputType, IMAGE_QUALITY) : canvas.toDataURL(outputType));
       };
       img.onerror = reject;
       img.src = reader.result as string;

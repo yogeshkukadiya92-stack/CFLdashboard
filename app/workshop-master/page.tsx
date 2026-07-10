@@ -817,7 +817,8 @@ function compressImage(file: File, maxWidth: number): Promise<string> {
           return;
         }
         context.drawImage(img, 0, 0, canvas.width, canvas.height);
-        resolve(canvas.toDataURL("image/jpeg", IMAGE_QUALITY));
+        const outputType = file.type === "image/jpeg" || file.type === "image/jpg" ? "image/jpeg" : "image/png";
+        resolve(outputType === "image/jpeg" ? canvas.toDataURL(outputType, IMAGE_QUALITY) : canvas.toDataURL(outputType));
       };
       img.onerror = reject;
       img.src = reader.result as string;
