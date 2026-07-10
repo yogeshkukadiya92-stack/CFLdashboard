@@ -272,6 +272,10 @@ textarea:focus-visible {
 .dark main [class~="bg-slate-100"] {
   background-color: rgba(148, 163, 184, 0.08) !important;
 }
+.dark main [class~="bg-gray-50"],
+.dark main [class~="bg-gray-100"] {
+  background-color: rgba(148, 163, 184, 0.08) !important;
+}
 .dark main thead {
   background: rgba(148, 163, 184, 0.06) !important;
 }
@@ -299,6 +303,10 @@ textarea:focus-visible {
 .dark main [class~="bg-emerald-50"] {
   background-color: rgba(16, 185, 129, 0.14) !important;
 }
+.dark main [class~="bg-emerald-500"],
+.dark main [class~="bg-emerald-600"] {
+  background-color: #047857 !important;
+}
 .dark main [class~="bg-indigo-50"] {
   background-color: rgba(99, 102, 241, 0.16) !important;
 }
@@ -322,6 +330,18 @@ textarea:focus-visible {
 }
 .dark main [class~="text-slate-500"],
 .dark main [class~="text-slate-400"] {
+  color: #8b97a9 !important;
+}
+.dark main [class~="text-gray-900"],
+.dark main [class~="text-gray-800"] {
+  color: #e9eef5 !important;
+}
+.dark main [class~="text-gray-700"],
+.dark main [class~="text-gray-600"] {
+  color: #c2ccdb !important;
+}
+.dark main [class~="text-gray-500"],
+.dark main [class~="text-gray-400"] {
   color: #8b97a9 !important;
 }
 .dark main td {
@@ -354,6 +374,10 @@ textarea:focus-visible {
 .dark main [class~="border-slate-300"] {
   border-color: rgba(148, 163, 184, 0.16) !important;
 }
+.dark main [class~="border-gray-200"],
+.dark main [class~="border-gray-300"] {
+  border-color: rgba(148, 163, 184, 0.16) !important;
+}
 .dark main [class~="border-emerald-100"] {
   border-color: rgba(16, 185, 129, 0.28) !important;
 }
@@ -371,6 +395,13 @@ textarea:focus-visible {
 /* Theme toggle + logout chrome in the header */
 .dark main header [class~="bg-white"] {
   background-color: #1e293b !important;
+}
+
+/* Sidebar active states should still read as selected, not blend into the shell. */
+.dark main aside [class~="bg-white"][class~="text-slate-950"] {
+  background-color: rgba(233, 238, 245, 0.94) !important;
+  color: #07111f !important;
+  box-shadow: 0 12px 28px -22px rgba(233, 238, 245, 0.75);
 }
 
 .scrollbar-thin {

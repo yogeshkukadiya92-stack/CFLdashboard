@@ -51,6 +51,14 @@ export function writeLiveStateToLocalStorage(patch: LiveStatePatch) {
   });
 }
 
+function hasLocalArrayData(key: string) {
+  return readLocalArray<unknown>(key).length > 0;
+}
+
+function hasLocalObjectData(key: string) {
+  return Object.keys(readLocalObject<Record<string, unknown>>(key)).length > 0;
+}
+
 export async function fetchLiveState(): Promise<LiveState | null> {
   try {
     const response = await fetch("/api/state", { cache: "no-store" });
@@ -66,13 +74,33 @@ export async function hydrateLiveState(): Promise<LiveState | null> {
   if (!state?.dbEnabled) return state;
 
   const localPatch: LiveStatePatch = {};
+  const repairPatch: LiveStatePatch = {};
   (Object.keys(LIVE_STATE_STORAGE_KEYS) as Array<keyof typeof LIVE_STATE_STORAGE_KEYS>).forEach((key) => {
+    const storageKey = LIVE_STATE_STORAGE_KEYS[key];
     const value = state[key];
-    if (Array.isArray(value) || (key === "registrationLinks" && value && typeof value === "object")) {
-      Object.assign(localPatch, { [key]: value });
+    if (Array.isArray(value)) {
+      if (value.length > 0 || !hasLocalArrayData(storageKey)) {
+        Object.assign(localPatch, { [key]: value });
+      } else {
+        Object.assign(repairPatch, { [key]: readLocalArray(storageKey) });
+      }
+      return;
+    }
+    if (key === "registrationLinks" && value && typeof value === "object") {
+      const remoteHasData = Object.keys(value).length > 0;
+      if (remoteHasData || !hasLocalObjectData(storageKey)) {
+        Object.assign(localPatch, { [key]: value });
+      } else {
+        Object.assign(repairPatch, { [key]: readLocalObject(storageKey) });
+      }
     }
   });
   writeLiveStateToLocalStorage(localPatch);
+
+  if (Object.keys(repairPatch).length > 0) {
+    void saveLiveState(repairPatch);
+  }
+
   return state;
 }
 
@@ -81,7 +109,9 @@ export async function saveLiveState(patch: LiveStatePatch) {
   try {
     const response = await fetch("/api/state", {
       body: JSON.stringify(patch),
+      credentials: "same-origin",
       headers: { "Content-Type": "application/json" },
+      keepalive: true,
       method: "POST"
     });
     return response.ok;
@@ -96,11 +126,35 @@ export async function hydratePublicRegistrationState(): Promise<LiveState | null
     if (!response.ok) return null;
     const state = (await response.json()) as LiveState;
     if (!state.dbEnabled) return state;
-    writeLiveStateToLocalStorage({
-      forms: Array.isArray(state.forms) ? state.forms : undefined,
-      registrationLinks: state.registrationLinks && typeof state.registrationLinks === "object" ? state.registrationLinks : undefined,
-      workshops: Array.isArray(state.workshops) ? state.workshops : undefined
-    });
+
+    const patch: LiveStatePatch = {};
+    const repairPatch: LiveStatePatch = {};
+    if (Array.isArray(state.forms)) {
+      if (state.forms.length > 0 || !hasLocalArrayData(LIVE_STATE_STORAGE_KEYS.forms)) {
+        patch.forms = state.forms;
+      } else {
+        repairPatch.forms = readLocalArray(LIVE_STATE_STORAGE_KEYS.forms);
+      }
+    }
+    if (Array.isArray(state.workshops)) {
+      if (state.workshops.length > 0 || !hasLocalArrayData(LIVE_STATE_STORAGE_KEYS.workshops)) {
+        patch.workshops = state.workshops;
+      } else {
+        repairPatch.workshops = readLocalArray(LIVE_STATE_STORAGE_KEYS.workshops);
+      }
+    }
+    if (state.registrationLinks && typeof state.registrationLinks === "object") {
+      if (Object.keys(state.registrationLinks).length > 0 || !hasLocalObjectData(LIVE_STATE_STORAGE_KEYS.registrationLinks)) {
+        patch.registrationLinks = state.registrationLinks;
+      } else {
+        repairPatch.registrationLinks = readLocalObject(LIVE_STATE_STORAGE_KEYS.registrationLinks);
+      }
+    }
+    writeLiveStateToLocalStorage(patch);
+    if (Object.keys(repairPatch).length > 0) {
+      void saveLiveState(repairPatch);
+    }
+
     return state;
   } catch {
     return null;
@@ -112,7 +166,9 @@ export async function savePublicRegistration(registration: unknown, registration
   try {
     const response = await fetch("/api/public-registration-state", {
       body: JSON.stringify({ registration }),
+      credentials: "same-origin",
       headers: { "Content-Type": "application/json" },
+      keepalive: true,
       method: "POST"
     });
     return response.ok;
