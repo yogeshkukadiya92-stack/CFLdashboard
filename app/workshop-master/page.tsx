@@ -1,11 +1,12 @@
 "use client";
 
 import { AdminPlatformShell } from "@/components/admin-platform-shell";
-import { AlertCircle, ArrowDown, ArrowUp, Check, CheckSquare, ChevronDown, Circle, Copy, Download, Edit3, ExternalLink, Eye, Heading, Link2, Mail, Plus, QrCode, RefreshCw, Save, Search, Smartphone, Trash2, Type, UsersRound, X } from "lucide-react";
+import { AlertCircle, ArrowDown, ArrowUp, Bold, Check, CheckSquare, ChevronDown, Circle, Copy, Download, Edit3, ExternalLink, Eye, Heading, Image, Italic, Link2, List, ListOrdered, Mail, Palette, Plus, QrCode, RefreshCw, Save, Search, Smartphone, Trash2, Type, Underline, UsersRound, X } from "lucide-react";
 import { hydrateLiveState, readLocalArray, readLocalObject, saveLiveState } from "@/lib/live-state";
+import { sanitizeRichTextHtml } from "@/lib/rich-text";
 import type { BuilderField, BuilderFieldType, BuilderForm, BuilderTheme, RegistrationEntry } from "@/lib/types";
 import { generateId } from "@/lib/utils";
-import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
+import { type ClipboardEvent, type FormEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
 type WorkshopRecord = {
   batch?: string;
@@ -48,6 +49,8 @@ const FORMS_STORAGE_KEY = "cfl_forms_v1";
 const REGISTRATION_LINK_CONFIG_STORAGE_KEY = "cfl_registration_link_configs_v1";
 const WORKSHOP_TYPES_STORAGE_KEY = "cfl_workshop_types_v1";
 const FACILITATORS_STORAGE_KEY = "cfl_facilitators_v1";
+const IMAGE_QUALITY = 0.7;
+const MAX_LOGO_WIDTH = 240;
 const defaultWorkshopTypes = ["1-2-1 Coaching", "Workshop", "Online Event", "Offline Event", "Hybrid Program"];
 const defaultFacilitators = ["Dr Luv Patel", "Amit Verma", "Neha Kapoor", "Arjun Sharma"];
 const productGroups = ["Health", "Spiritual", "Leadership", "Sales", "Fitness", "Business Growth"];
@@ -73,6 +76,7 @@ const fieldTypeMeta: Record<BuilderFieldType, { label: string; hasOptions: boole
   heading: { label: "Section Heading", hasOptions: false }
 };
 const addableTypes: BuilderFieldType[] = ["short_text", "paragraph", "email", "mobile", "number", "date", "dropdown", "radio", "checkbox", "heading"];
+const richTextColors = ["#0f172a", "#059669", "#4f46e5", "#dc2626", "#ea580c", "#7c3aed"];
 
 function defaultBuilderFields(): BuilderField[] {
   return [
@@ -107,6 +111,7 @@ export default function WorkshopMasterPage() {
   const [facilitators, setFacilitators] = useState<string[]>(defaultFacilitators);
   const [formTitle, setFormTitle] = useState("Workshop Registration");
   const [formDescription, setFormDescription] = useState("Please fill in your details to confirm your seat.");
+  const [formLogoUrl, setFormLogoUrl] = useState("");
   const [formFields, setFormFields] = useState<BuilderField[]>(defaultBuilderFields);
   const [formHighlights, setFormHighlights] = useState<string[]>([]);
   const [whatsappGroupUrl, setWhatsappGroupUrl] = useState("");
@@ -266,6 +271,7 @@ export default function WorkshopMasterPage() {
   function resetBuilderForm() {
     setFormTitle("Workshop Registration");
     setFormDescription("Please fill in your details to confirm your seat.");
+    setFormLogoUrl("");
     setFormFields(defaultBuilderFields());
     setFormHighlights([]);
     setWhatsappGroupUrl("");
@@ -279,8 +285,8 @@ export default function WorkshopMasterPage() {
       workshopSlug: workshopSlug(record.name) || record.id,
       batch: record.batch || "Main Batch",
       title: formTitle.trim() || `${record.name} Registration`,
-      description: formDescription,
-      theme: defaultTheme,
+      description: sanitizeRichTextHtml(formDescription),
+      theme: { ...defaultTheme, logoUrl: formLogoUrl || undefined },
       paid: record.isPaid,
       fee: Number(record.feesWithTax || 0),
       partPayment: Boolean(record.isPartPaymentAllow),
@@ -309,12 +315,14 @@ export default function WorkshopMasterPage() {
       if (!savedForm) {
         setFormTitle(`${record.name} Registration`);
         setFormDescription("Please fill in your details to confirm your seat.");
+        setFormLogoUrl("");
         setFormFields(defaultBuilderFields());
         setFormHighlights([]);
         return;
       }
       setFormTitle(savedForm.title || `${record.name} Registration`);
       setFormDescription(savedForm.description || "");
+      setFormLogoUrl(savedForm.theme?.logoUrl ?? "");
       setFormFields(savedForm.fields?.length ? savedForm.fields : defaultBuilderFields());
       setFormHighlights(savedForm.highlights ?? []);
       setWhatsappGroupUrl(savedForm.whatsappGroupUrl ?? "");
@@ -518,10 +526,11 @@ export default function WorkshopMasterPage() {
               <span className="mb-2 block text-sm font-bold text-slate-600">Form Title</span>
               <input className={inputClass} onChange={(event) => setFormTitle(event.target.value)} placeholder="Workshop Registration" value={formTitle} />
             </label>
-            <label className="block">
+            <FormLogoUploader value={formLogoUrl} onChange={setFormLogoUrl} />
+            <div className="block md:col-span-2">
               <span className="mb-2 block text-sm font-bold text-slate-600">Form Description</span>
-              <input className={inputClass} onChange={(event) => setFormDescription(event.target.value)} placeholder="Short instruction for clients" value={formDescription} />
-            </label>
+              <RichTextEditor onChange={setFormDescription} value={formDescription} />
+            </div>
             <label className="block md:col-span-2">
               <span className="mb-2 block text-sm font-bold text-slate-600">WhatsApp Group Invite Link</span>
               <input className={inputClass} onChange={(event) => setWhatsappGroupUrl(event.target.value)} placeholder="https://chat.whatsapp.com/xxxxxxxx" value={whatsappGroupUrl} />
@@ -790,6 +799,150 @@ function readMasterNames(key: string, defaults: string[]) {
   } catch {
     return defaults;
   }
+}
+
+function compressImage(file: File, maxWidth: number): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new window.Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        const scale = img.width > maxWidth ? maxWidth / img.width : 1;
+        canvas.width = img.width * scale;
+        canvas.height = img.height * scale;
+        const context = canvas.getContext("2d");
+        if (!context) {
+          reject(new Error("Canvas not supported"));
+          return;
+        }
+        context.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL("image/jpeg", IMAGE_QUALITY));
+      };
+      img.onerror = reject;
+      img.src = reader.result as string;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function RichTextEditor({ onChange, value }: { onChange: (value: string) => void; value: string }) {
+  const editorRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    const safeValue = sanitizeRichTextHtml(value);
+    if (editor.innerHTML !== safeValue) {
+      editor.innerHTML = safeValue;
+    }
+  }, [value]);
+
+  function syncValue() {
+    onChange(sanitizeRichTextHtml(editorRef.current?.innerHTML ?? ""));
+  }
+
+  function runCommand(command: "bold" | "italic" | "underline" | "insertUnorderedList" | "insertOrderedList" | "foreColor", payload?: string) {
+    editorRef.current?.focus();
+    document.execCommand(command, false, payload);
+    syncValue();
+  }
+
+  function pastePlainText(event: ClipboardEvent<HTMLDivElement>) {
+    event.preventDefault();
+    const text = event.clipboardData.getData("text/plain");
+    document.execCommand("insertText", false, text);
+    syncValue();
+  }
+
+  return (
+    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+      <div className="flex flex-wrap items-center gap-1 border-b border-slate-100 bg-slate-50 px-2 py-2">
+        <button className="grid size-9 place-items-center rounded-lg text-slate-700 hover:bg-white" onClick={() => runCommand("bold")} title="Bold" type="button">
+          <Bold className="size-4" />
+        </button>
+        <button className="grid size-9 place-items-center rounded-lg text-slate-700 hover:bg-white" onClick={() => runCommand("italic")} title="Italic" type="button">
+          <Italic className="size-4" />
+        </button>
+        <button className="grid size-9 place-items-center rounded-lg text-slate-700 hover:bg-white" onClick={() => runCommand("underline")} title="Underline" type="button">
+          <Underline className="size-4" />
+        </button>
+        <button className="grid size-9 place-items-center rounded-lg text-slate-700 hover:bg-white" onClick={() => runCommand("insertUnorderedList")} title="Bullet list" type="button">
+          <List className="size-4" />
+        </button>
+        <button className="grid size-9 place-items-center rounded-lg text-slate-700 hover:bg-white" onClick={() => runCommand("insertOrderedList")} title="Numbered list" type="button">
+          <ListOrdered className="size-4" />
+        </button>
+        <span className="mx-1 h-6 w-px bg-slate-200" />
+        <Palette className="ml-1 size-4 text-slate-400" />
+        {richTextColors.map((color) => (
+          <button
+            aria-label={`Text color ${color}`}
+            className="size-7 rounded-full border-2 border-white shadow-sm ring-1 ring-slate-200"
+            key={color}
+            onClick={() => runCommand("foreColor", color)}
+            style={{ backgroundColor: color }}
+            type="button"
+          />
+        ))}
+      </div>
+      <div
+        className="rich-text-editor min-h-28 px-3.5 py-3 text-sm font-semibold leading-6 text-slate-800 outline-none focus:ring-4 focus:ring-emerald-100"
+        contentEditable
+        onBlur={syncValue}
+        onInput={syncValue}
+        onPaste={pastePlainText}
+        ref={editorRef}
+        role="textbox"
+        suppressContentEditableWarning
+      />
+      <p className="border-t border-slate-100 px-3.5 py-2 text-xs font-semibold text-slate-400">Enter creates a new line. Use toolbar for bold, italic, underline, lists and text color.</p>
+    </div>
+  );
+}
+
+function FormLogoUploader({ onChange, value }: { onChange: (value: string) => void; value: string }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  async function handleFile(file: File | undefined) {
+    if (!file || !file.type.startsWith("image/")) return;
+    try {
+      onChange(await compressImage(file, MAX_LOGO_WIDTH));
+    } catch {
+      // Keep the existing logo if the browser cannot process the selected image.
+    }
+  }
+
+  return (
+    <div>
+      <span className="mb-2 block text-sm font-bold text-slate-600">Form Logo</span>
+      <div className="flex min-h-[74px] items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-3">
+        {value ? (
+          <img alt="Form logo preview" className="size-14 rounded-xl object-cover ring-1 ring-slate-200" src={value} />
+        ) : (
+          <span className="grid size-14 shrink-0 place-items-center rounded-xl bg-slate-100 text-slate-400">
+            <Image className="size-5" />
+          </span>
+        )}
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-black text-slate-700">{value ? "Logo selected" : "No logo selected"}</p>
+          <p className="text-xs font-semibold text-slate-400">Shown at the top of the public registration form.</p>
+        </div>
+        <div className="flex shrink-0 gap-2">
+          <button className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50" onClick={() => inputRef.current?.click()} type="button">
+            Change
+          </button>
+          {value ? (
+            <button className="rounded-lg bg-rose-50 px-3 py-2 text-xs font-bold text-rose-600 hover:bg-rose-100" onClick={() => onChange("")} type="button">
+              Remove
+            </button>
+          ) : null}
+        </div>
+      </div>
+      <input accept="image/*" className="hidden" onChange={(event) => handleFile(event.target.files?.[0])} ref={inputRef} type="file" />
+    </div>
+  );
 }
 
 function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord; onClose: () => void }) {

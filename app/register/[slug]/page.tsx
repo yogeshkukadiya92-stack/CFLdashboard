@@ -2,6 +2,7 @@
 
 import { workshops as seedWorkshops } from "@/lib/data";
 import { hydratePublicRegistrationState, readLocalArray, readLocalObject, savePublicRegistration } from "@/lib/live-state";
+import { sanitizeRichTextHtml } from "@/lib/rich-text";
 import type { BuilderField, BuilderForm, BuilderTheme, PaymentTier, RegistrationEntry } from "@/lib/types";
 import { decodeJsonParam, formatCurrency } from "@/lib/utils";
 import { AlertTriangle, Check, CheckCircle2, ShieldCheck } from "lucide-react";
@@ -470,7 +471,12 @@ export default function RegistrationPage() {
           >
             {model.title}
           </h1>
-          {model.description ? <p className="mt-3 leading-relaxed text-slate-500">{model.description}</p> : null}
+          {model.description ? (
+            <div
+              className="rich-text-content mt-3 leading-relaxed text-slate-500"
+              dangerouslySetInnerHTML={{ __html: sanitizeRichTextHtml(model.description) }}
+            />
+          ) : null}
           {metaLine.length ? <p className="mt-3 text-sm font-semibold text-slate-400">{metaLine.join("  •  ")}</p> : null}
           <p
             className="mt-5 inline-flex rounded-xl px-4 py-2.5 text-sm font-black text-white"

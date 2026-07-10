@@ -2,6 +2,7 @@
 
 import { AdminPlatformShell } from "@/components/admin-platform-shell";
 import { hydrateLiveState, readLocalArray, saveLiveState } from "@/lib/live-state";
+import { sanitizeRichTextHtml } from "@/lib/rich-text";
 import type { BuilderField, BuilderFieldType, BuilderForm, PaymentTier } from "@/lib/types";
 import { encodeJsonParam, generateId } from "@/lib/utils";
 import {
@@ -770,7 +771,12 @@ function FormPreview({ form }: { form: BuilderForm }) {
         <h2 className="tracking-tight" style={{ fontWeight: theme.titleBold ? 800 : 600, fontStyle: theme.titleItalic ? "italic" : "normal", fontSize: theme.fontSize + 14, lineHeight: 1.2 }}>
           {form.title || "Untitled form"}
         </h2>
-        {form.description ? <p className="mt-2.5 leading-relaxed text-slate-500">{form.description}</p> : null}
+        {form.description ? (
+          <div
+            className="rich-text-content mt-2.5 leading-relaxed text-slate-500"
+            dangerouslySetInnerHTML={{ __html: sanitizeRichTextHtml(form.description) }}
+          />
+        ) : null}
         {form.paid && (!form.tiers || form.tiers.length === 0) ? (
           <span
             className="mt-4 inline-flex rounded-xl px-4 py-2 text-sm font-black text-white"

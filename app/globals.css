@@ -196,6 +196,31 @@ main table {
   border-spacing: 0;
 }
 
+.rich-text-editor:empty::before {
+  color: #94a3b8;
+  content: "Write description. Press Enter for new line.";
+}
+
+.rich-text-editor p,
+.rich-text-editor div,
+.rich-text-content p,
+.rich-text-content div {
+  margin: 0.35rem 0;
+}
+
+.rich-text-editor ul,
+.rich-text-editor ol,
+.rich-text-content ul,
+.rich-text-content ol {
+  margin: 0.5rem 0;
+  padding-left: 1.25rem;
+}
+
+.rich-text-editor li,
+.rich-text-content li {
+  margin: 0.2rem 0;
+}
+
 main thead {
   background: #f8fafc !important;
 }
