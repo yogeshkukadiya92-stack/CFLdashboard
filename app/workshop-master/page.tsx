@@ -220,8 +220,11 @@ export default function WorkshopMasterPage() {
     setTransferLeadToCrm(Boolean(record.transferLeadToCrm));
     setEditingId(record.id);
     loadBuilderForm(record);
+    setShowData(false);
+    setSelectedWorkshopId(null);
+    setShowParticipants(false);
     setMessage("Editing selected workshop.");
-    window.scrollTo({ behavior: "smooth", top: 0 });
+    window.requestAnimationFrame(() => window.scrollTo({ behavior: "smooth", top: 0 }));
   }
 
   function openWorkshop(record: WorkshopRecord) {
