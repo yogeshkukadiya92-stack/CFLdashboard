@@ -20,6 +20,7 @@ import {
   TicketCheck,
   UserPlus,
   UsersRound,
+  X,
   type LucideIcon
 } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
@@ -155,6 +156,7 @@ export function AdminPlatformShell({
   const pathname = usePathname();
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -173,6 +175,20 @@ export function AdminPlatformShell({
   useEffect(() => {
     setActiveIndex(0);
   }, [searchQuery]);
+
+  useEffect(() => {
+    setSidebarOpen(false);
+    setMobileSearchOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!sidebarOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [sidebarOpen]);
 
   // Global Ctrl/Cmd+K shortcut to focus the command palette.
   useEffect(() => {
@@ -244,6 +260,7 @@ export function AdminPlatformShell({
         <div className="mx-auto flex max-w-[1540px] items-center justify-between gap-2 px-3 py-3 sm:gap-3 sm:px-4 lg:px-6">
           <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
             <button
+              aria-expanded={sidebarOpen}
               aria-label="Toggle sidebar"
               className="grid size-10 shrink-0 place-items-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700"
               onClick={() => setSidebarOpen((open) => !open)}
@@ -310,6 +327,15 @@ export function AdminPlatformShell({
             <div className="hidden size-10 place-items-center rounded-lg bg-slate-950 text-sm font-black text-white shadow-lg shadow-slate-950/20 min-[380px]:grid">
               AU
             </div>
+            <button
+              aria-expanded={mobileSearchOpen}
+              aria-label="Search pages and workflows"
+              className="grid size-10 place-items-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700 md:hidden"
+              onClick={() => setMobileSearchOpen((open) => !open)}
+              type="button"
+            >
+              {mobileSearchOpen ? <X className="size-4" /> : <Search className="size-4" />}
+            </button>
             <ThemeToggle />
             <button
               aria-label="Logout"
@@ -321,17 +347,74 @@ export function AdminPlatformShell({
             </button>
           </div>
         </div>
+        {mobileSearchOpen ? (
+          <div className="border-t border-slate-200/80 px-3 py-3 md:hidden">
+            <div className="relative mx-auto max-w-[1540px]" ref={searchBoxRef}>
+              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
+              <input
+                aria-label="Search pages, reports and workflows"
+                autoFocus
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-3 text-sm font-semibold outline-none placeholder:text-slate-400"
+                onChange={(event) => setSearchQuery(event.target.value)}
+                onFocus={() => setSearchFocused(true)}
+                onKeyDown={onSearchKeyDown}
+                placeholder="Search pages, reports, workflows..."
+                value={searchQuery}
+              />
+              {searchQuery.trim() ? (
+                <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-50 max-h-[55vh] overflow-y-auto rounded-xl border border-slate-200 bg-white p-2 shadow-2xl">
+                  {searchMatches.length ? searchMatches.map((item, index) => {
+                    const Icon = item.icon;
+                    return (
+                      <button
+                        className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-bold ${index === activeIndex ? "bg-emerald-50 text-emerald-800" : "text-slate-700 hover:bg-slate-50"}`}
+                        key={`${item.href}-${item.label}-mobile`}
+                        onClick={() => goToMatch(item.href)}
+                        type="button"
+                      >
+                        <span className="grid size-8 place-items-center rounded-lg bg-slate-100 text-slate-600"><Icon className="size-4" /></span>
+                        {item.label}
+                      </button>
+                    );
+                  }) : <p className="px-3 py-4 text-sm font-semibold text-slate-500">No matching page found.</p>}
+                </div>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
       </header>
 
-      <div className="mx-auto grid min-w-0 max-w-[1540px] gap-4 px-4 py-4 lg:grid-cols-[286px_minmax(0,1fr)] lg:px-6">
-        <aside className={`${sidebarOpen ? "block" : "hidden"} min-w-0 rounded-2xl border border-slate-900/10 bg-slate-950 p-3 shadow-panel lg:block`}>
+      {sidebarOpen ? (
+        <button
+          aria-label="Dismiss sidebar backdrop"
+          className="fixed inset-0 z-40 bg-slate-950/45 backdrop-blur-[2px] lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+          type="button"
+        />
+      ) : null}
+
+      <div className="mx-auto grid min-w-0 max-w-[1540px] gap-4 px-3 py-4 sm:px-4 lg:grid-cols-[286px_minmax(0,1fr)] lg:px-6 lg:py-5">
+        <aside
+          className={`${sidebarOpen ? "left-3 translate-x-0" : "left-0 -translate-x-full"} fixed bottom-3 top-3 z-50 w-[min(286px,calc(100vw-24px))] overflow-y-auto rounded-2xl border border-white/10 bg-slate-950 p-3 shadow-2xl transition-transform duration-200 lg:sticky lg:top-[84px] lg:z-20 lg:block lg:h-[calc(100vh-104px)] lg:w-auto lg:translate-x-0 lg:shadow-panel`}
+          data-open={sidebarOpen}
+        >
+          <div className="mb-2 flex items-center justify-end lg:hidden">
+            <button
+              aria-label="Close sidebar"
+              className="grid size-9 place-items-center rounded-lg bg-white/10 text-slate-200 hover:bg-white/15 hover:text-white"
+              onClick={() => setSidebarOpen(false)}
+              type="button"
+            >
+              <X className="size-4" />
+            </button>
+          </div>
           <div className="rounded-xl border border-white/10 bg-white/[0.06] p-4 text-white">
             <p className="text-[11px] font-black uppercase tracking-[0.18em] text-emerald-300">Unified Platform</p>
             <p className="mt-1 text-xl font-black">CFL Admin</p>
             <p className="mt-1 text-xs font-semibold text-slate-300">Live business workspace.</p>
           </div>
 
-          <nav className="mt-3 space-y-1.5">
+          <nav aria-label="Primary navigation" className="mt-3 space-y-1.5">
             {quickItems.map((item) => {
               const Icon = item.icon;
               const active = pathname === item.href;
@@ -463,13 +546,13 @@ export function AdminPlatformShell({
           </nav>
         </aside>
 
-        <section className="min-w-0 space-y-4">
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-soft md:p-6">
+        <section className="min-w-0 space-y-4 lg:space-y-5">
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-soft md:p-6 lg:px-7">
             <div className="flex flex-wrap items-end justify-between gap-4">
               <div>
                 <p className="text-[11px] font-black uppercase tracking-[0.18em] text-emerald-700">Admin Platform</p>
-                <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-950 md:text-3xl">{title}</h2>
-                {description ? <p className="mt-1 max-w-3xl text-sm text-slate-500">{description}</p> : null}
+                <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-950 md:text-[30px]">{title}</h2>
+                {description ? <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">{description}</p> : null}
               </div>
               <div className="flex shrink-0 items-center gap-2">
                 <a aria-label="Import / Export" className="grid size-10 place-items-center rounded-lg bg-slate-950 text-white shadow-lg shadow-slate-950/15 hover:bg-slate-800" href="/manage-client" title="Import / Export">
