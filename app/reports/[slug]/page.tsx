@@ -926,6 +926,10 @@ export default function ReportPage() {
   const [workshops, setWorkshops] = useState<Workshop[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [salesPeople, setSalesPeople] = useState<SalesPerson[]>([]);
+  const [serverRows, setServerRows] = useState<ReportRow[] | null>(null);
+  const [serverTotalRows, setServerTotalRows] = useState(0);
+  const [serverWorkshopOptions, setServerWorkshopOptions] = useState<string[]>([]);
+  const [serverLoading, setServerLoading] = useState(false);
 
   const [workshop, setWorkshop] = useState("All Workshops");
   const [fromDate, setFromDate] = useState("");
@@ -953,16 +957,70 @@ export default function ReportPage() {
     setCurrentPage(1);
   }, [workshop, fromDate, toDate, query, pageSize]);
 
-  const workshopOptions = Array.from(new Set(registrations.map((e) => e.workshopTitle).filter(Boolean)));
+  const usesServerReport = slug === "client-milestone";
 
-  const report = useMemo(
+  useEffect(() => {
+    if (!usesServerReport) {
+      setServerRows(null);
+      setServerTotalRows(0);
+      return;
+    }
+
+    const controller = new AbortController();
+    async function loadServerReport() {
+      setServerLoading(true);
+      const params = new URLSearchParams({
+        page: String(currentPage),
+        pageSize: String(pageSize),
+        query,
+        workshop,
+        fromDate,
+        toDate
+      });
+      try {
+        const response = await fetch(`/api/reports/client-milestone?${params.toString()}`, {
+          cache: "no-store",
+          signal: controller.signal
+        });
+        const data = await response.json();
+        if (!response.ok || data?.dbEnabled === false) {
+          setServerRows(null);
+          setServerTotalRows(0);
+          return;
+        }
+        setServerRows(Array.isArray(data.rows) ? data.rows : []);
+        setServerTotalRows(Number(data.total || 0));
+        setServerWorkshopOptions(Array.isArray(data.workshopOptions) ? data.workshopOptions : []);
+      } catch (error) {
+        if (!controller.signal.aborted) {
+          setServerRows(null);
+          setServerTotalRows(0);
+        }
+      } finally {
+        if (!controller.signal.aborted) setServerLoading(false);
+      }
+    }
+
+    void loadServerReport();
+    return () => controller.abort();
+  }, [currentPage, fromDate, pageSize, query, slug, toDate, usesServerReport, workshop]);
+
+  const workshopOptions = usesServerReport
+    ? serverWorkshopOptions
+    : Array.from(new Set(registrations.map((e) => e.workshopTitle).filter(Boolean)));
+
+  const localReport = useMemo(
     () => buildReport(slug, registrations, workshops, clients, salesPeople, workshop, fromDate, toDate, query),
     [slug, registrations, workshops, clients, salesPeople, workshop, fromDate, toDate, query]
   );
+  const report = useMemo(
+    () => (usesServerReport && serverRows ? { ...localReport, rows: serverRows } : localReport),
+    [localReport, serverRows, usesServerReport]
+  );
 
-  const totalRows = report.rows.length;
+  const totalRows = usesServerReport && serverRows ? serverTotalRows : report.rows.length;
   const totalPages = Math.max(1, Math.ceil(totalRows / pageSize));
-  const paginatedRows = report.placeholder ? [] : report.rows.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const paginatedRows = report.placeholder ? [] : usesServerReport && serverRows ? report.rows : report.rows.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   function exportRows() {
     if (report.csvHeaders.length === 0) return;
@@ -1039,7 +1097,7 @@ export default function ReportPage() {
             )}
             <button
               className="mt-auto rounded-xl bg-indigo-600 px-4 py-3 text-sm font-black text-white hover:bg-indigo-700"
-              onClick={() => setMessage(`Found ${report.rows.length} rows.`)}
+              onClick={() => setMessage(`Found ${totalRows} rows.`)}
               type="button"
             >
               Search
@@ -1109,7 +1167,13 @@ export default function ReportPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {paginatedRows.length ? (
+                  {serverLoading ? (
+                    <tr>
+                      <td className="px-4 py-12 text-center text-slate-500" colSpan={report.columns.length || 1}>
+                        Loading report data...
+                      </td>
+                    </tr>
+                  ) : paginatedRows.length ? (
                     paginatedRows.map((row, index) => (
                       <tr className="hover:bg-emerald-50/40" key={index}>
                         {report.columns.map((col) => (
