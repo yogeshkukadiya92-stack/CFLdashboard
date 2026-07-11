@@ -1238,7 +1238,7 @@ function FieldEditor({
 }) {
   const meta = fieldTypeMeta[field.type];
   const Icon = field.type === "email" ? Mail : field.type === "mobile" ? Smartphone : field.type === "heading" ? Heading : field.type === "checkbox" ? CheckSquare : field.type === "radio" ? Circle : Type;
-  const lockedRole = Boolean(field.role);
+  const lockedRole = field.role === "name" || field.role === "mobile";
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-3">
