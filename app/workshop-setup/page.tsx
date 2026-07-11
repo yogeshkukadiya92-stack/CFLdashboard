@@ -17,7 +17,7 @@ type MasterKind = "workshopType" | "facilitator";
 const WORKSHOP_TYPES_STORAGE_KEY = "cfl_workshop_types_v1";
 const FACILITATORS_STORAGE_KEY = "cfl_facilitators_v1";
 const defaultWorkshopTypes = ["1-2-1 Coaching", "Workshop", "Online Event", "Offline Event", "Hybrid Program"];
-const defaultFacilitators = ["Dr Luv Patel", "Amit Verma", "Neha Kapoor", "Arjun Sharma"];
+const defaultFacilitators = ["Dr Luv Patel"];
 const inputClass = "w-full rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-sm outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100";
 
 function recordsFromNames(names: string[]) {

@@ -17,7 +17,7 @@ import {
   UsersRound,
   X
 } from "lucide-react";
-import { type ChangeEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { type ChangeEvent, type ReactNode, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 
 type ClientStatus = "Active" | "Inactive" | "Suspect";
 
@@ -89,7 +89,9 @@ function normalizeStatus(value: string): ClientStatus {
 }
 
 function normalizeMobile(value: string) {
-  return value.replace(/[^\d+]/g, "").trim();
+  let digits = value.replace(/\D/g, "");
+  if (digits.length > 10 && digits.startsWith("91")) digits = digits.slice(-10);
+  return digits;
 }
 
 function toClient(row: Record<string, unknown>, index: number): ClientRow {
@@ -124,15 +126,72 @@ export default function ManageClientPage() {
   const [message, setMessage] = useState("");
   const [editing, setEditing] = useState<ClientRow | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ClientRow | null>(null);
+  const [remoteMode, setRemoteMode] = useState<boolean | null>(null);
+  const [remoteLoading, setRemoteLoading] = useState(false);
+  const [remoteCounts, setRemoteCounts] = useState({ Active: 0, Inactive: 0, Suspect: 0 });
+  const [remoteTotal, setRemoteTotal] = useState(0);
+  const [remoteCursor, setRemoteCursor] = useState<string | null>(null);
+  const [remoteNextCursor, setRemoteNextCursor] = useState<string | null>(null);
+  const [remoteCursorHistory, setRemoteCursorHistory] = useState<Array<string | null>>([]);
+  const [remoteReload, setRemoteReload] = useState(0);
+  const deferredSearchTerm = useDeferredValue(searchTerm);
 
   useEffect(() => {
     function loadLocal() {
       setClients(readLocalArray<ClientRow>(STORAGE_KEY));
     }
 
-    loadLocal();
-    hydrateLiveState().then(loadLocal);
+    const controller = new AbortController();
+    fetch("/api/crm/clients?limit=10", { cache: "no-store", signal: controller.signal })
+      .then((response) => response.json())
+      .then((data) => {
+        if (data.dbEnabled) {
+          setRemoteMode(true);
+          return;
+        }
+        setRemoteMode(false);
+        loadLocal();
+        void hydrateLiveState().then(loadLocal);
+      })
+      .catch(() => {
+        if (controller.signal.aborted) return;
+        setRemoteMode(false);
+        loadLocal();
+        void hydrateLiveState().then(loadLocal);
+      });
+    return () => controller.abort();
   }, []);
+
+  useEffect(() => {
+    if (remoteMode !== true) return;
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      setRemoteLoading(true);
+      const params = new URLSearchParams({ limit: String(pageSize) });
+      if (remoteCursor) params.set("cursor", remoteCursor);
+      if (deferredSearchTerm.trim()) params.set("query", deferredSearchTerm.trim());
+      if (statusFilter !== "All") params.set("status", statusFilter);
+      try {
+        const response = await fetch(`/api/crm/clients?${params}`, { cache: "no-store", signal: controller.signal });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Failed to load clients.");
+        setClients(data.clients ?? []);
+        setRemoteCounts(data.counts ?? { Active: 0, Inactive: 0, Suspect: 0 });
+        setRemoteTotal(Number(data.total ?? 0));
+        setRemoteNextCursor(data.nextCursor ?? null);
+      } catch (error) {
+        if ((error as Error).name !== "AbortError") {
+          setMessage(error instanceof Error ? error.message : "Failed to load clients.");
+        }
+      } finally {
+        if (!controller.signal.aborted) setRemoteLoading(false);
+      }
+    }, 220);
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [deferredSearchTerm, pageSize, remoteCursor, remoteMode, remoteReload, statusFilter]);
 
   function save(next: ClientRow[]) {
     setClients(next);
@@ -140,6 +199,7 @@ export default function ManageClientPage() {
   }
 
   const filteredClients = useMemo(() => {
+    if (remoteMode === true) return clients;
     const normalized = searchTerm.trim().toLowerCase();
     return clients
       .filter((client) => statusFilter === "All" || client.status === statusFilter)
@@ -153,23 +213,41 @@ export default function ManageClientPage() {
         const compare = aValue.localeCompare(bValue, undefined, { numeric: true });
         return sortDirection === "asc" ? compare : -compare;
       });
-  }, [clients, searchTerm, sortDirection, sortKey, statusFilter]);
+  }, [clients, remoteMode, searchTerm, sortDirection, sortKey, statusFilter]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredClients.length / pageSize));
-  const safePage = Math.min(page, totalPages);
+  const resultCount = remoteMode === true ? remoteTotal : filteredClients.length;
+  const totalPages = Math.max(1, Math.ceil(resultCount / pageSize));
+  const safePage = remoteMode === true ? remoteCursorHistory.length + 1 : Math.min(page, totalPages);
   const startIndex = (safePage - 1) * pageSize;
-  const pageRows = filteredClients.slice(startIndex, startIndex + pageSize);
-  const activeCount = clients.filter((client) => client.status === "Active").length;
-  const inactiveCount = clients.filter((client) => client.status === "Inactive").length;
-  const suspectCount = clients.filter((client) => client.status === "Suspect").length;
+  const pageRows = remoteMode === true ? clients : filteredClients.slice(startIndex, startIndex + pageSize);
+  const activeCount = remoteMode === true ? remoteCounts.Active : clients.filter((client) => client.status === "Active").length;
+  const inactiveCount = remoteMode === true ? remoteCounts.Inactive : clients.filter((client) => client.status === "Inactive").length;
+  const suspectCount = remoteMode === true ? remoteCounts.Suspect : clients.filter((client) => client.status === "Suspect").length;
 
   function changeSort(key: SortKey) {
+    if (remoteMode === true) {
+      setMessage("Database client list is sorted by newest Client ID for stable pagination.");
+      return;
+    }
     if (sortKey === key) {
       setSortDirection((direction) => (direction === "asc" ? "desc" : "asc"));
       return;
     }
     setSortKey(key);
     setSortDirection("asc");
+  }
+
+  function nextRemotePage() {
+    if (!remoteNextCursor) return;
+    setRemoteCursorHistory((current) => [...current, remoteCursor]);
+    setRemoteCursor(remoteNextCursor);
+  }
+
+  function previousRemotePage() {
+    if (!remoteCursorHistory.length) return;
+    const previous = remoteCursorHistory[remoteCursorHistory.length - 1] ?? null;
+    setRemoteCursorHistory((current) => current.slice(0, -1));
+    setRemoteCursor(previous);
   }
 
   async function importSheet(event: ChangeEvent<HTMLInputElement>) {
@@ -182,6 +260,32 @@ export default function ManageClientPage() {
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
     const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "" });
     const imported = rows.map(toClient).filter((client) => client.mobile || client.email || client.name !== "Unnamed Client");
+
+    if (remoteMode === true) {
+      setRemoteLoading(true);
+      try {
+        for (let index = 0; index < imported.length; index += 10) {
+          const group = imported.slice(index, index + 10);
+          const responses = await Promise.all(group.map((client) => fetch("/api/crm/clients", {
+            body: JSON.stringify(client),
+            headers: { "Content-Type": "application/json" },
+            method: "POST"
+          })));
+          const failed = responses.find((response) => !response.ok && response.status !== 409);
+          if (failed) throw new Error("Some client rows could not be imported.");
+        }
+        setRemoteCursor(null);
+        setRemoteCursorHistory([]);
+        setRemoteReload((value) => value + 1);
+        setMessage(`${imported.length} client rows processed in the database.`);
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : "Client import failed.");
+      } finally {
+        setRemoteLoading(false);
+        if (inputRef.current) inputRef.current.value = "";
+      }
+      return;
+    }
 
     const byMobile = new Map<string, ClientRow>();
     clients.forEach((client) => byMobile.set(client.mobile || `id-${client.id}`, client));
@@ -265,16 +369,47 @@ export default function ManageClientPage() {
     }
   }
 
-  function deleteClient(id: number) {
+  async function deleteClient(id: number) {
+    if (remoteMode === true) {
+      const response = await fetch(`/api/crm/clients?id=${id}`, { method: "DELETE" });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setMessage(data.error || "Failed to archive client.");
+        return;
+      }
+      setDeleteTarget(null);
+      setRemoteReload((value) => value + 1);
+      setMessage("Client archived. Registration history is preserved.");
+      return;
+    }
     save(clients.filter((client) => client.id !== id));
     setDeleteTarget(null);
     setMessage("Client deleted.");
   }
 
-  function saveEdit() {
+  async function saveEdit() {
     if (!editing) return;
     if (!editing.name.trim() || !editing.mobile.trim()) {
       setMessage("Client name and mobile are required.");
+      return;
+    }
+    if (remoteMode === true) {
+      const exists = clients.some((client) => client.id === editing.id);
+      const response = await fetch("/api/crm/clients", {
+        body: JSON.stringify(editing),
+        headers: { "Content-Type": "application/json" },
+        method: exists ? "PATCH" : "POST"
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setMessage(data.error || "Failed to save client.");
+        return;
+      }
+      setEditing(null);
+      setRemoteCursor(null);
+      setRemoteCursorHistory([]);
+      setRemoteReload((value) => value + 1);
+      setMessage("Client saved in the database.");
       return;
     }
     const exists = clients.some((client) => client.id === editing.id);
@@ -314,6 +449,8 @@ export default function ManageClientPage() {
                   className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-medium outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100"
                   onChange={(event) => {
                     setPage(1);
+                    setRemoteCursor(null);
+                    setRemoteCursorHistory([]);
                     setStatusFilter(event.target.value as "All" | ClientStatus);
                   }}
                   value={statusFilter}
@@ -331,6 +468,8 @@ export default function ManageClientPage() {
                   className="w-full rounded-xl border border-slate-200 bg-white py-3 pl-10 pr-3 text-sm outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100"
                   onChange={(event) => {
                     setPage(1);
+                    setRemoteCursor(null);
+                    setRemoteCursorHistory([]);
                     setSearchTerm(event.target.value);
                   }}
                   placeholder="Name, mobile, email, city..."
@@ -341,7 +480,7 @@ export default function ManageClientPage() {
 
             <div className="flex flex-wrap items-end gap-2">
               <input accept=".xlsx,.xls,.csv" className="hidden" onChange={importSheet} ref={inputRef} type="file" />
-              <button className="inline-flex items-center gap-2 rounded-xl bg-slate-950 px-4 py-3 text-sm font-bold text-white hover:bg-slate-800" onClick={() => inputRef.current?.click()} type="button">
+              <button className="inline-flex items-center gap-2 rounded-xl bg-slate-950 px-4 py-3 text-sm font-bold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60" disabled={remoteLoading} onClick={() => inputRef.current?.click()} type="button">
                 <Upload className="size-4" />
                 Import Excel/CSV
               </button>
@@ -369,6 +508,8 @@ export default function ManageClientPage() {
               className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-900 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100"
               onChange={(event) => {
                 setPage(1);
+                setRemoteCursor(null);
+                setRemoteCursorHistory([]);
                 setPageSize(Number(event.target.value));
               }}
               value={pageSize}
@@ -401,6 +542,9 @@ export default function ManageClientPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
+              {remoteLoading && !pageRows.length ? (
+                <tr><td className="px-4 py-12 text-center font-semibold text-slate-500" colSpan={12}>Loading clients...</td></tr>
+              ) : null}
               {pageRows.length ? pageRows.map((client) => (
                 <tr className="transition hover:bg-indigo-50/40" key={client.id}>
                   <td className="px-4 py-4">
@@ -425,33 +569,41 @@ export default function ManageClientPage() {
                   <td className="px-4 py-4 text-slate-700">{client.state}</td>
                   <td className="px-4 py-4 text-slate-700">{client.city}</td>
                 </tr>
-              )) : (
+              )) : !remoteLoading ? (
                 <tr>
                   <td className="px-4 py-12 text-center text-slate-500" colSpan={12}>
                     No client records yet. Import your Excel/CSV sheet to start.
                   </td>
                 </tr>
-              )}
+              ) : null}
             </tbody>
           </table>
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 p-4 text-sm text-slate-600 md:p-6">
-          <p>Showing {filteredClients.length ? startIndex + 1 : 0} to {Math.min(startIndex + pageSize, filteredClients.length)} of {filteredClients.length} entries</p>
-          <div className="flex items-center gap-1">
-            <PageButton disabled={safePage === 1} onClick={() => setPage((current) => Math.max(1, current - 1))}><ChevronLeft className="size-4" />Previous</PageButton>
-            {Array.from({ length: totalPages }, (_, index) => index + 1).slice(0, 8).map((pageNumber) => (
-              <PageButton active={safePage === pageNumber} key={pageNumber} onClick={() => setPage(pageNumber)}>{pageNumber}</PageButton>
-            ))}
-            <PageButton disabled={safePage === totalPages} onClick={() => setPage((current) => Math.min(totalPages, current + 1))}>Next<ChevronRight className="size-4" /></PageButton>
-          </div>
+          <p>Showing {pageRows.length ? startIndex + 1 : 0} to {Math.min(startIndex + pageRows.length, resultCount)} of {resultCount.toLocaleString("en-IN")} entries</p>
+          {remoteMode === true ? (
+            <div className="flex items-center gap-1">
+              <PageButton disabled={!remoteCursorHistory.length || remoteLoading} onClick={previousRemotePage}><ChevronLeft className="size-4" />Previous</PageButton>
+              <span className="grid min-h-10 min-w-10 place-items-center rounded-lg bg-indigo-600 px-3 text-sm font-bold text-white">{safePage}</span>
+              <PageButton disabled={!remoteNextCursor || remoteLoading} onClick={nextRemotePage}>Next<ChevronRight className="size-4" /></PageButton>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1">
+              <PageButton disabled={safePage === 1} onClick={() => setPage((current) => Math.max(1, current - 1))}><ChevronLeft className="size-4" />Previous</PageButton>
+              {Array.from({ length: totalPages }, (_, index) => index + 1).slice(0, 8).map((pageNumber) => (
+                <PageButton active={safePage === pageNumber} key={pageNumber} onClick={() => setPage(pageNumber)}>{pageNumber}</PageButton>
+              ))}
+              <PageButton disabled={safePage === totalPages} onClick={() => setPage((current) => Math.min(totalPages, current + 1))}>Next<ChevronRight className="size-4" /></PageButton>
+            </div>
+          )}
         </div>
       </section>
 
       {editing ? <ClientEditor client={editing} onChange={setEditing} onClose={() => setEditing(null)} onSave={saveEdit} /> : null}
       <ConfirmDialog
         confirmLabel="Delete Client"
-        description="This removes the client from the CRM list and synced app state."
+        description={remoteMode === true ? "This archives the client while preserving registration history." : "This removes the client from the CRM list and synced app state."}
         onCancel={() => setDeleteTarget(null)}
         onConfirm={() => deleteTarget ? deleteClient(deleteTarget.id) : undefined}
         open={Boolean(deleteTarget)}

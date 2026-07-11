@@ -2,7 +2,7 @@
 
 import { AdminPlatformShell } from "@/components/admin-platform-shell";
 import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
-import { AlertCircle, ArrowDown, ArrowUp, Bold, Check, CheckSquare, ChevronDown, Circle, Copy, Download, Edit3, ExternalLink, Eye, Heading, Image, Italic, Link2, List, ListOrdered, Mail, Palette, Plus, QrCode, RefreshCw, Save, Search, Smartphone, Trash2, Type, Underline, UsersRound, X } from "lucide-react";
+import { AlertCircle, Archive, ArrowDown, ArrowUp, Bold, Check, CheckSquare, ChevronDown, Circle, Copy, Download, Edit3, ExternalLink, Eye, Heading, Image, Italic, Link2, List, ListOrdered, Mail, Palette, Plus, QrCode, RefreshCw, Save, Search, Smartphone, Trash2, Type, Underline, UsersRound, X } from "lucide-react";
 import { hydrateLiveState, readLocalArray, readLocalObject, saveLiveState } from "@/lib/live-state";
 import { sanitizeRichTextHtml } from "@/lib/rich-text";
 import type { BuilderField, BuilderFieldType, BuilderForm, BuilderTheme, RegistrationEntry } from "@/lib/types";
@@ -10,6 +10,7 @@ import { generateId } from "@/lib/utils";
 import { type ClipboardEvent, type FormEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
 type WorkshopRecord = {
+  archived?: boolean;
   batch?: string;
   discountCodeEod?: string;
   discountDescription?: string;
@@ -27,6 +28,9 @@ type WorkshopRecord = {
   facilitator: string;
   productGroup: string;
   isPaid: boolean;
+  legacyBatchCount?: number;
+  legacySource?: boolean;
+  paymentUnknown?: boolean;
   transferLeadToCrm?: boolean;
 };
 type DiscountType = "percent" | "flat";
@@ -53,7 +57,7 @@ const FACILITATORS_STORAGE_KEY = "cfl_facilitators_v1";
 const IMAGE_QUALITY = 0.7;
 const MAX_LOGO_WIDTH = 240;
 const defaultWorkshopTypes = ["1-2-1 Coaching", "Workshop", "Online Event", "Offline Event", "Hybrid Program"];
-const defaultFacilitators = ["Dr Luv Patel", "Amit Verma", "Neha Kapoor", "Arjun Sharma"];
+const defaultFacilitators = ["Dr Luv Patel"];
 const productGroups = ["Health", "Spiritual", "Leadership", "Sales", "Fitness", "Business Growth"];
 const inputClass = "w-full rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-sm outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100";
 const defaultTheme: BuilderTheme = {
@@ -126,6 +130,7 @@ export default function WorkshopMasterPage() {
   const [whatsappGroupUrl, setWhatsappGroupUrl] = useState("");
   const [message, setMessage] = useState("");
   const [search, setSearch] = useState("");
+  const [recordScope, setRecordScope] = useState<"all" | "active" | "historical">("active");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedWorkshopId, setSelectedWorkshopId] = useState<string | null>(null);
   const [showParticipants, setShowParticipants] = useState(false);
@@ -148,14 +153,20 @@ export default function WorkshopMasterPage() {
   const progress = useMemo(() => Math.round(([name, type, facilitator, group].filter(Boolean).length / 4) * 100), [facilitator, group, name, type]);
   const filteredRecords = useMemo(() => {
     const value = search.trim().toLowerCase();
-    if (!value) return records;
-    return records.filter((record) =>
+    return records.filter((record) => {
+      if (recordScope === "active" && record.archived) return false;
+      if (recordScope === "historical" && !record.archived) return false;
+      if (!value) return true;
+      return (
       [record.name, record.type, record.facilitator, record.productGroup, record.isPaid ? "paid" : "free"].some((item) =>
         item.toLowerCase().includes(value)
       )
-    );
-  }, [records, search]);
+      );
+    });
+  }, [recordScope, records, search]);
   const paidCount = records.filter((record) => record.isPaid).length;
+  const freeCount = records.filter((record) => !record.isPaid && !record.paymentUnknown).length;
+  const historicalCount = records.filter((record) => record.archived).length;
   const selectedWorkshop = records.find((record) => record.id === selectedWorkshopId) ?? null;
   const selectedParticipants = useMemo(() => {
     if (!selectedWorkshop) return [];
@@ -628,10 +639,11 @@ export default function WorkshopMasterPage() {
               <p className="mt-1 text-sm text-slate-500">All saved workshops/products appear here. Search, edit, delete or export them.</p>
             </div>
             <div className="flex flex-wrap items-start justify-end gap-2">
-              <div className="grid grid-cols-3 gap-2 text-center">
+              <div className="grid grid-cols-4 gap-2 text-center">
                 <MiniStat label="Total" value={records.length} />
                 <MiniStat label="Paid" value={paidCount} />
-                <MiniStat label="Free" value={records.length - paidCount} />
+                <MiniStat label="Free" value={freeCount} />
+                <MiniStat label="Historical" value={historicalCount} />
               </div>
               <button
                 className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-bold text-white hover:bg-indigo-700"
@@ -647,15 +659,29 @@ export default function WorkshopMasterPage() {
           </div>
 
           <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
-            <label className="relative block w-full max-w-md">
-              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
-              <input
-                className="w-full rounded-xl border border-slate-200 py-3 pl-10 pr-3 text-sm outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100"
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search workshop, type, facilitator..."
-                value={search}
-              />
-            </label>
+            <div className="flex w-full flex-col gap-3 lg:max-w-3xl lg:flex-row">
+              <div className="flex rounded-xl border border-slate-200 p-1">
+                {(["active", "historical", "all"] as const).map((scope) => (
+                  <button
+                    className={`rounded-lg px-3 py-2 text-sm font-bold capitalize ${recordScope === scope ? "bg-slate-950 text-white" : "text-slate-600 hover:bg-slate-50"}`}
+                    key={scope}
+                    onClick={() => setRecordScope(scope)}
+                    type="button"
+                  >
+                    {scope}
+                  </button>
+                ))}
+              </div>
+              <label className="relative block min-w-0 flex-1">
+                <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
+                <input
+                  className="w-full rounded-xl border border-slate-200 py-3 pl-10 pr-3 text-sm outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100"
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Search workshop, type, facilitator..."
+                  value={search}
+                />
+              </label>
+            </div>
             <button className="inline-flex items-center gap-2 rounded-xl bg-slate-950 px-4 py-3 text-sm font-bold text-white hover:bg-slate-800" onClick={exportCsv} type="button">
               <Download className="size-4" />
               Export CSV
@@ -672,35 +698,29 @@ export default function WorkshopMasterPage() {
                   <tr className="hover:bg-indigo-50/40" key={record.id}>
                     <td className="px-4 py-4">
                       <div className="flex gap-2">
-                        <button aria-label="Edit registration link" className="grid size-9 place-items-center rounded-xl bg-emerald-600 text-white hover:bg-emerald-700" onClick={() => setLinkWorkshop(record)} title="Edit registration link" type="button">
-                          <Link2 className="size-4" />
-                        </button>
-                        <button className="grid size-9 place-items-center rounded-xl bg-indigo-600 text-white hover:bg-indigo-700" onClick={() => editRecord(record)} title="Edit" type="button">
-                          <Edit3 className="size-4" />
-                        </button>
-                        <button className="grid size-9 place-items-center rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-100" onClick={() => setDeleteTarget(record)} title="Delete" type="button">
-                          <Trash2 className="size-4" />
-                        </button>
+                        {record.archived ? (
+                          <a aria-label={`View ${record.name} historical data`} className="grid size-9 place-items-center rounded-xl bg-amber-500 text-white hover:bg-amber-600" href="/historical-data" title="View historical data"><Archive className="size-4" /></a>
+                        ) : (
+                          <>
+                            <button aria-label="Edit registration link" className="grid size-9 place-items-center rounded-xl bg-emerald-600 text-white hover:bg-emerald-700" onClick={() => setLinkWorkshop(record)} title="Edit registration link" type="button"><Link2 className="size-4" /></button>
+                            <button className="grid size-9 place-items-center rounded-xl bg-indigo-600 text-white hover:bg-indigo-700" onClick={() => editRecord(record)} title="Edit" type="button"><Edit3 className="size-4" /></button>
+                            <button className="grid size-9 place-items-center rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-100" onClick={() => setDeleteTarget(record)} title="Delete" type="button"><Trash2 className="size-4" /></button>
+                          </>
+                        )}
                       </div>
                     </td>
                     <td className="px-4 py-4">
-                      <button
-                        className="text-left font-black text-indigo-700 underline-offset-4 hover:underline"
-                        onClick={() => openWorkshop(record)}
-                        type="button"
-                      >
-                        {record.name}
-                      </button>
+                      {record.archived ? <a className="text-left font-black text-amber-700 underline-offset-4 hover:underline" href="/historical-data">{record.name}</a> : <button className="text-left font-black text-indigo-700 underline-offset-4 hover:underline" onClick={() => openWorkshop(record)} type="button">{record.name}</button>}
                     </td>
                     <td className="px-4 py-4">{record.type}</td>
                     <td className="px-4 py-4">{record.facilitator}</td>
                     <td className="px-4 py-4">{record.productGroup}</td>
                     <td className="px-4 py-4">
-                      <span className={`rounded-full px-3 py-1 text-xs font-black ${record.isPaid ? "bg-slate-950 text-white" : "bg-emerald-50 text-emerald-700"}`}>
-                        {record.isPaid ? "Paid" : "Free"}
+                      <span className={`rounded-full px-3 py-1 text-xs font-black ${record.paymentUnknown ? "bg-amber-50 text-amber-700" : record.isPaid ? "bg-slate-950 text-white" : "bg-emerald-50 text-emerald-700"}`}>
+                        {record.paymentUnknown ? "Unknown" : record.isPaid ? "Paid" : "Free"}
                       </span>
                     </td>
-                    <td className="px-4 py-4">{record.batch || "Main Batch"}</td>
+                    <td className="px-4 py-4">{record.legacyBatchCount ? `${record.legacyBatchCount} batches` : record.batch || "Main Batch"}</td>
                   </tr>
                 )) : <tr><td className="px-4 py-8 text-center text-slate-500" colSpan={7}>No workshop records yet.</td></tr>}
               </tbody>

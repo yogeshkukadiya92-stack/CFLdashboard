@@ -15,7 +15,7 @@ const FORMS_STORAGE_KEY = "cfl_forms_v1";
 const REGISTRATION_LINK_CONFIG_STORAGE_KEY = "cfl_registration_link_configs_v1";
 const CLIENTS_STORAGE_KEY = "cfl_clients_v1";
 
-type WorkshopMasterRecord = { id: string; name: string; facilitator?: string; isPaid?: boolean };
+type WorkshopMasterRecord = { archived?: boolean; id: string; name: string; facilitator?: string; isPaid?: boolean };
 type ClientRecord = { city?: string; email?: string; id: number | string; mobile?: string; name?: string };
 type RegistrationLinkConfig = {
   batch?: string;
@@ -215,7 +215,7 @@ export default function RegistrationPage() {
       if (!resolved && !linkBlocked) {
         try {
           const records = readLocalArray<WorkshopMasterRecord>(WORKSHOP_MASTER_STORAGE_KEY);
-          const match = records.find((record) => slugify(record.name) === slug || record.id === slug || record.id === widParam);
+          const match = records.find((record) => !record.archived && (slugify(record.name) === slug || record.id === slug || record.id === widParam));
           if (match) {
             const forms = readLocalArray<BuilderForm>(FORMS_STORAGE_KEY);
             const savedForm = forms.find((item) => item.workshopId === match.id || item.workshopSlug === slugify(match.name));
@@ -396,6 +396,7 @@ export default function RegistrationPage() {
       mobile: mobile ? `+91 ${mobile}` : "",
       email,
       city,
+      facilitator: model.facilitator,
       paymentMode,
       amountPaid,
       amountDue,

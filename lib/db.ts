@@ -30,7 +30,7 @@ const emptyAppState: AppState = {
   workshops: []
 };
 
-function getPool() {
+export function getDbPool() {
   if (!process.env.DATABASE_URL) {
     return null;
   }
@@ -45,7 +45,7 @@ export async function isDbEnabled() {
 }
 
 export async function ensurePersistenceTable() {
-  const client = getPool();
+  const client = getDbPool();
   if (!client) return false;
   await client.query(`
     CREATE TABLE IF NOT EXISTS app_state (
@@ -110,7 +110,7 @@ export async function ensurePersistenceTable() {
 }
 
 export async function getAppState() {
-  const client = getPool();
+  const client = getDbPool();
   if (!client) return null;
   await ensurePersistenceTable();
   const result = await client.query(`
@@ -135,7 +135,7 @@ export async function getAppState() {
 }
 
 export async function saveAppState(input: Partial<AppState>) {
-  const client = getPool();
+  const client = getDbPool();
   if (!client) return false;
   await ensurePersistenceTable();
   const current = { ...emptyAppState, ...(await getAppState()) };

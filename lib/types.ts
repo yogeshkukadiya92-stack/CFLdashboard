@@ -153,6 +153,7 @@ export interface RegistrationEntry {
   mobile: string;
   email: string;
   city: string;
+  facilitator?: string;
   paymentMode: "Full" | "Part";
   amountPaid: number;
   amountDue: number;

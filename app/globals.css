@@ -444,6 +444,11 @@ textarea:focus-visible {
   border-radius: 999px;
 }
 
+.historical-row {
+  content-visibility: auto;
+  contain-intrinsic-size: 0 56px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

@@ -1426,6 +1426,7 @@ function RefundWorkflow() {
 }
 
 function ImportWorkshopDataWorkflow() {
+  const [file, setFile] = useState<File | null>(null);
   const [fileName, setFileName] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -1444,19 +1445,76 @@ function ImportWorkshopDataWorkflow() {
     URL.revokeObjectURL(url);
   }
 
-  function upload() {
+  async function upload() {
     setSuccess("");
-    if (!fileName) {
+    if (!file) {
       setError("Please choose a CSV or Excel file before upload.");
       return;
     }
 
     setError("");
     setUploading(true);
-    window.setTimeout(() => {
+    try {
+      const XLSX = await import("xlsx");
+      const workbook = XLSX.read(await file.arrayBuffer(), { type: "array" });
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "" });
+      if (!rows.length) throw new Error("The selected file has no data rows.");
+
+      const payloads = rows.map((row, rowIndex) => {
+        const value = (aliases: string[]) => {
+          const entry = Object.entries(row).find(([key]) => aliases.includes(key.toLowerCase().replace(/[^a-z0-9]/g, "")));
+          return String(entry?.[1] ?? "").trim();
+        };
+        const workshop = value(["workshopname", "workshop"]);
+        const fullName = value(["clientname", "membername", "name"]);
+        const mobileDigits = value(["mobile", "mobileno", "phone"]).replace(/\D/g, "").slice(-10);
+        if (!workshop || !fullName || mobileDigits.length < 10) return null;
+        const paymentStatus = value(["paymentstatus", "status"]).toLowerCase();
+        const amount = Math.max(0, Number(value(["amount", "paidamount"])) || 0);
+        const paid = !paymentStatus.includes("fail") && !paymentStatus.includes("pending") && !paymentStatus.includes("due");
+        const workshopKey = workshop.normalize("NFKC").toLocaleLowerCase("en-IN").replace(/\s+/g, "-").slice(0, 150);
+        return {
+          amountDue: paid ? 0 : amount,
+          amountPaid: paid ? amount : 0,
+          batch: value(["batch", "batchname"]) || "Main Batch",
+          city: value(["city", "cityname"]),
+          createdAt: new Date().toISOString(),
+          email: value(["email", "emailid"]),
+          facilitator: value(["facilitator", "facilitatorname", "fname"]) || "CFL Facilitator",
+          fullName,
+          id: `bulk-${workshopKey}-${mobileDigits}-${rowIndex + 2}`,
+          mobile: mobileDigits,
+          paymentMode: "Full",
+          status: paid ? "Paid" : "Due",
+          workshopId: `bulk-${workshopKey}`,
+          workshopTitle: workshop
+        };
+      });
+      const invalidRows = payloads.filter((payload) => !payload).length;
+      if (invalidRows) throw new Error(`${invalidRows} row(s) are missing workshop, client name, or valid mobile.`);
+
+      const validPayloads = payloads.filter((payload): payload is NonNullable<typeof payload> => Boolean(payload));
+      let imported = 0;
+      for (let index = 0; index < validPayloads.length; index += 10) {
+        const group = validPayloads.slice(index, index + 10);
+        const responses = await Promise.all(group.map((payload) => fetch("/api/crm/registrations", {
+          body: JSON.stringify(payload),
+          headers: { "Content-Type": "application/json" },
+          method: "POST"
+        })));
+        const failedRows = responses.filter((response) => !response.ok).length;
+        if (failedRows) throw new Error(`${failedRows} registration row(s) could not be saved.`);
+        imported += group.length;
+      }
+      setSuccess(`${imported} workshop registration rows imported successfully.`);
+      setFile(null);
+      setFileName("");
+    } catch (uploadError) {
+      setError(uploadError instanceof Error ? uploadError.message : "Workshop import failed.");
+    } finally {
       setUploading(false);
-      setSuccess(`${fileName} uploaded successfully. Data is ready for review.`);
-    }, 700);
+    }
   }
 
   return (
@@ -1488,7 +1546,9 @@ function ImportWorkshopDataWorkflow() {
               accept=".csv,.xlsx,.xls"
               className="block w-full rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-sm file:mr-4 file:rounded-lg file:border-0 file:bg-indigo-50 file:px-4 file:py-2 file:text-sm file:font-bold file:text-indigo-700 hover:file:bg-indigo-100"
               onChange={(event) => {
-                setFileName(event.target.files?.[0]?.name ?? "");
+                const nextFile = event.target.files?.[0] ?? null;
+                setFile(nextFile);
+                setFileName(nextFile?.name ?? "");
                 setError("");
                 setSuccess("");
               }}
@@ -1505,7 +1565,7 @@ function ImportWorkshopDataWorkflow() {
 
           <button
             className="mt-5 inline-flex items-center gap-2 rounded-xl bg-[#4B4B4B] px-6 py-3 text-sm font-black text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70"
-            disabled={uploading}
+            disabled={uploading || !file}
             onClick={upload}
             type="button"
           >
@@ -1769,6 +1829,11 @@ function ManualClientRegistrationWorkflow() {
       : [payload, ...current];
 
     void saveLiveState({ registrations: next });
+    void fetch("/api/crm/registrations", {
+      body: JSON.stringify(payload),
+      headers: { "Content-Type": "application/json" },
+      method: "POST"
+    });
     setSuccess(`${payload.fullName} registered in ${selectedWorkshop.name}. The registration will also appear in Workshop Master view data.`);
     setWorkshop("");
     setBatch("");

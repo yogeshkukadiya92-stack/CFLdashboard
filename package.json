@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "import:members": "node scripts/import-member-details.mjs",
     "preview": "node scripts/start-preview.mjs",
     "start": "next start",
     "typecheck": "tsc --noEmit"
