@@ -124,6 +124,7 @@ async function countRows(pythonBinary, inputPath) {
 
 async function* streamRawRows(pythonBinary, inputPath) {
   const child = spawn(pythonBinary, [extractorPath, inputPath], { stdio: ["ignore", "pipe", "pipe"] });
+  const exitCodePromise = new Promise((resolve) => child.once("close", resolve));
   let errors = "";
   child.stderr.setEncoding("utf8");
   child.stderr.on("data", (chunk) => { errors += chunk; });
@@ -131,7 +132,7 @@ async function* streamRawRows(pythonBinary, inputPath) {
   for await (const line of lines) {
     if (line.trim()) yield JSON.parse(line);
   }
-  const exitCode = await new Promise((resolve) => child.on("close", resolve));
+  const exitCode = await exitCodePromise;
   if (exitCode !== 0) throw new Error(errors || "Workbook extraction failed.");
 }
 

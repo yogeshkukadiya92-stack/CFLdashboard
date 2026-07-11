@@ -675,6 +675,14 @@ function mergeNameKey(value: string) {
   return normalized === "luv patel" || normalized === "dr luv patel" ? "dr luv patel" : normalized;
 }
 
+function workshopNameKey(value: string) {
+  return value
+    .normalize("NFKC")
+    .toLocaleLowerCase("en-IN")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
 function objectName(value: unknown) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return "";
   const name = (value as { name?: unknown }).name;
@@ -764,10 +772,10 @@ async function syncLegacyMastersToAppState() {
   const workshopMap = new Map<string, Record<string, unknown>>();
   currentWorkshops.forEach((entry) => {
     const name = objectName(entry);
-    if (name) workshopMap.set(mergeNameKey(name), entry as Record<string, unknown>);
+    if (name) workshopMap.set(workshopNameKey(name), entry as Record<string, unknown>);
   });
   workshopResult.rows.forEach((entry) => {
-    const key = mergeNameKey(entry.name);
+    const key = workshopNameKey(entry.name);
     const existing = workshopMap.get(key);
     if (existing) {
       workshopMap.set(key, {
