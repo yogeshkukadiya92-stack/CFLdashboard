@@ -62,9 +62,17 @@ function simpleFields(): BuilderField[] {
   return [
     { id: "name", type: "short_text", label: "Full Name", placeholder: "Your full name", required: true, role: "name" },
     { id: "mobile", type: "mobile", label: "Mobile Number", placeholder: "10-digit mobile", required: true, role: "mobile" },
-    { id: "email", type: "email", label: "Email", placeholder: "you@example.com", required: true, role: "email" },
-    { id: "city", type: "short_text", label: "City", placeholder: "Your city", role: "city" }
+    { id: "email", type: "email", label: "Email", placeholder: "you@example.com", required: false, role: "email" },
+    { id: "city", type: "short_text", label: "City", placeholder: "Your city", required: false, role: "city" }
   ];
+}
+
+function normalizeCoreFieldRequirements(fields: BuilderField[]) {
+  return fields.map((field) => {
+    if (field.role === "name" || field.role === "mobile") return { ...field, required: true };
+    if (field.role === "email" || field.role === "city") return { ...field, required: false };
+    return field;
+  });
 }
 
 function slugify(value: string) {
@@ -91,7 +99,7 @@ function modelFromBuilderForm(form: BuilderForm, overrides?: Partial<Pick<FormMo
     highlights: form.highlights && form.highlights.length > 0 ? form.highlights : undefined,
     whatsappGroupUrl: form.whatsappGroupUrl,
     theme: { ...defaultTheme, ...form.theme },
-    fields: form.fields?.length ? form.fields : simpleFields()
+    fields: form.fields?.length ? normalizeCoreFieldRequirements(form.fields) : simpleFields()
   };
 }
 

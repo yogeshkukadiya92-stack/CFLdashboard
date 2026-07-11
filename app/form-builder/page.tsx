@@ -112,8 +112,8 @@ function defaultFields(): BuilderField[] {
   return [
     { id: generateId(), type: "short_text", label: "Full Name", placeholder: "Your full name", required: true, role: "name" },
     { id: generateId(), type: "mobile", label: "Mobile Number", placeholder: "10-digit mobile", required: true, role: "mobile" },
-    { id: generateId(), type: "email", label: "Email", placeholder: "you@example.com", required: true, role: "email" },
-    { id: generateId(), type: "short_text", label: "City", placeholder: "Your city", role: "city" }
+    { id: generateId(), type: "email", label: "Email", placeholder: "you@example.com", required: false, role: "email" },
+    { id: generateId(), type: "short_text", label: "City", placeholder: "Your city", required: false, role: "city" }
   ];
 }
 

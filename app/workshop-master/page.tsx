@@ -83,9 +83,17 @@ function defaultBuilderFields(): BuilderField[] {
   return [
     { id: generateId(), type: "short_text", label: "Full Name", placeholder: "Your full name", required: true, role: "name" },
     { id: generateId(), type: "mobile", label: "Mobile Number", placeholder: "10-digit mobile", required: true, role: "mobile" },
-    { id: generateId(), type: "email", label: "Email", placeholder: "you@example.com", required: true, role: "email" },
-    { id: generateId(), type: "short_text", label: "City", placeholder: "Your city", role: "city" }
+    { id: generateId(), type: "email", label: "Email", placeholder: "you@example.com", required: false, role: "email" },
+    { id: generateId(), type: "short_text", label: "City", placeholder: "Your city", required: false, role: "city" }
   ];
+}
+
+function normalizeCoreFieldRequirements(fields: BuilderField[]) {
+  return fields.map((field) => {
+    if (field.role === "name" || field.role === "mobile") return { ...field, required: true };
+    if (field.role === "email" || field.role === "city") return { ...field, required: false };
+    return field;
+  });
 }
 
 export default function WorkshopMasterPage() {
@@ -295,7 +303,7 @@ export default function WorkshopMasterPage() {
       partPayment: Boolean(record.isPartPaymentAllow),
       highlights: formHighlights.map((item) => item.trim()).filter(Boolean),
       whatsappGroupUrl: whatsappGroupUrl.trim() || undefined,
-      fields: formFields,
+      fields: normalizeCoreFieldRequirements(formFields),
       updatedAt: new Date().toISOString()
     };
   }
@@ -326,7 +334,7 @@ export default function WorkshopMasterPage() {
       setFormTitle(savedForm.title || `${record.name} Registration`);
       setFormDescription(savedForm.description || "");
       setFormLogoUrl(savedForm.theme?.logoUrl ?? "");
-      setFormFields(savedForm.fields?.length ? savedForm.fields : defaultBuilderFields());
+      setFormFields(savedForm.fields?.length ? normalizeCoreFieldRequirements(savedForm.fields) : defaultBuilderFields());
       setFormHighlights(savedForm.highlights ?? []);
       setWhatsappGroupUrl(savedForm.whatsappGroupUrl ?? "");
     } catch {
