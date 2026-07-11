@@ -843,10 +843,12 @@ function compressImage(file: File, maxWidth: number): Promise<string> {
 
 function RichTextEditor({ onChange, value }: { onChange: (value: string) => void; value: string }) {
   const editorRef = useRef<HTMLDivElement>(null);
+  const isEditingRef = useRef(false);
 
   useEffect(() => {
     const editor = editorRef.current;
     if (!editor) return;
+    if (isEditingRef.current && document.activeElement === editor) return;
     const safeValue = sanitizeRichTextHtml(value);
     if (editor.innerHTML !== safeValue) {
       editor.innerHTML = safeValue;
@@ -904,7 +906,13 @@ function RichTextEditor({ onChange, value }: { onChange: (value: string) => void
       <div
         className="rich-text-editor min-h-28 px-3.5 py-3 text-sm font-semibold leading-6 text-slate-800 outline-none focus:ring-4 focus:ring-emerald-100"
         contentEditable
-        onBlur={syncValue}
+        onBlur={() => {
+          isEditingRef.current = false;
+          syncValue();
+        }}
+        onFocus={() => {
+          isEditingRef.current = true;
+        }}
         onInput={syncValue}
         onPaste={pastePlainText}
         ref={editorRef}
