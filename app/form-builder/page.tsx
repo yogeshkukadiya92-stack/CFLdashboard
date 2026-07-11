@@ -120,6 +120,8 @@ function defaultFields(): BuilderField[] {
 export default function FormBuilderPage() {
   const [workshops, setWorkshops] = useState<WorkshopMasterRecord[]>([]);
   const [workshopId, setWorkshopId] = useState("");
+  const [workshopSearch, setWorkshopSearch] = useState("");
+  const [workshopPickerOpen, setWorkshopPickerOpen] = useState(false);
   const [batch, setBatch] = useState("Main Batch");
   const [title, setTitle] = useState("Workshop Registration");
   const [description, setDescription] = useState("Please fill in your details to confirm your seat.");
@@ -151,6 +153,12 @@ export default function FormBuilderPage() {
   }, []);
 
   const workshop = workshops.find((item) => item.id === workshopId) ?? null;
+  const selectedWorkshopName = workshop?.name ?? "";
+  const filteredWorkshops = useMemo(() => {
+    const query = workshopSearch.trim().toLowerCase();
+    if (!query) return workshops;
+    return workshops.filter((item) => item.name.toLowerCase().includes(query));
+  }, [workshopSearch, workshops]);
 
   const form = useMemo<BuilderForm>(() => {
     const name = workshop?.name ?? "";
@@ -263,17 +271,42 @@ export default function FormBuilderPage() {
               <label className="block">
                 <span className="mb-2 block text-sm font-bold text-slate-600">Workshop</span>
                 <span className="relative block">
-                  <select
-                    className="w-full appearance-none rounded-xl border border-slate-300 bg-white px-3.5 py-3 pr-10 text-sm font-semibold outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
-                    onChange={(event) => setWorkshopId(event.target.value)}
-                    value={workshopId}
-                  >
-                    <option value="">{workshops.length ? "Select workshop" : "No workshop added yet"}</option>
-                    {workshops.map((item) => (
-                      <option key={item.id} value={item.id}>{item.name}</option>
-                    ))}
-                  </select>
+                  <input
+                    className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-3 pr-10 text-sm font-semibold outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
+                    onBlur={() => window.setTimeout(() => setWorkshopPickerOpen(false), 150)}
+                    onChange={(event) => {
+                      setWorkshopSearch(event.target.value);
+                      setWorkshopPickerOpen(true);
+                    }}
+                    onFocus={() => {
+                      setWorkshopSearch("");
+                      setWorkshopPickerOpen(true);
+                    }}
+                    placeholder={workshops.length ? "Search workshop..." : "No workshop added yet"}
+                    value={workshopPickerOpen ? workshopSearch : selectedWorkshopName}
+                  />
                   <ChevronDown className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
+                  {workshopPickerOpen ? (
+                    <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-30 max-h-72 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1 shadow-xl">
+                      {filteredWorkshops.length ? filteredWorkshops.map((item) => (
+                        <button
+                          className={`block w-full rounded-lg px-3 py-2 text-left text-sm font-semibold transition hover:bg-emerald-50 hover:text-emerald-700 ${item.id === workshopId ? "bg-emerald-600 text-white hover:bg-emerald-600 hover:text-white" : "text-slate-700"}`}
+                          key={item.id}
+                          onMouseDown={(event) => {
+                            event.preventDefault();
+                            setWorkshopId(item.id);
+                            setWorkshopSearch("");
+                            setWorkshopPickerOpen(false);
+                          }}
+                          type="button"
+                        >
+                          {item.name}
+                        </button>
+                      )) : (
+                        <div className="px-3 py-2 text-sm font-semibold text-slate-500">No matching workshop found.</div>
+                      )}
+                    </div>
+                  ) : null}
                 </span>
               </label>
               <label className="block">
