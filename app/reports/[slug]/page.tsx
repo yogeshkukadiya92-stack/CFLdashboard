@@ -957,7 +957,22 @@ export default function ReportPage() {
     setCurrentPage(1);
   }, [workshop, fromDate, toDate, query, pageSize]);
 
-  const usesServerReport = slug === "client-milestone";
+  const usesServerReport = [
+    "daily-report",
+    "workshop-url-status",
+    "yearly-public-session",
+    "yearly-workshop",
+    "facilitators-performance",
+    "workshop-summary",
+    "batch-wise-workshop-summary",
+    "client-milestone",
+    "failed-payment",
+    "part-payment",
+    "workshop-wise-member",
+    "member-attend-more-workshop",
+    "member-details",
+    "member-details-part-payment"
+  ].includes(slug);
 
   useEffect(() => {
     if (!usesServerReport) {
@@ -978,7 +993,7 @@ export default function ReportPage() {
         toDate
       });
       try {
-        const response = await fetch(`/api/reports/client-milestone?${params.toString()}`, {
+        const response = await fetch(`/api/reports/${slug}?${params.toString()}`, {
           cache: "no-store",
           signal: controller.signal
         });
