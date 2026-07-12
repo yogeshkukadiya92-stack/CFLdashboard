@@ -39,6 +39,8 @@ type SortKey = keyof ClientRow;
 type SortDirection = "asc" | "desc";
 
 const STORAGE_KEY = "cfl_clients_v1";
+const MAX_IMPORT_FILE_BYTES = 8 * 1024 * 1024;
+const MAX_IMPORT_ROWS = 50_000;
 
 const emptyClient: ClientRow = {
   city: "",
@@ -253,12 +255,22 @@ export default function ManageClientPage() {
   async function importSheet(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
+    if (file.size > MAX_IMPORT_FILE_BYTES) {
+      setMessage("Import file is too large. Please upload a file under 8 MB.");
+      if (inputRef.current) inputRef.current.value = "";
+      return;
+    }
 
     const XLSX = await import("xlsx");
     const buffer = await file.arrayBuffer();
     const workbook = XLSX.read(buffer, { type: "array" });
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
     const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "" });
+    if (rows.length > MAX_IMPORT_ROWS) {
+      setMessage(`Import file has too many rows. Please keep client imports under ${MAX_IMPORT_ROWS.toLocaleString("en-IN")} rows.`);
+      if (inputRef.current) inputRef.current.value = "";
+      return;
+    }
     const imported = rows.map(toClient).filter((client) => client.mobile || client.email || client.name !== "Unnamed Client");
 
     if (remoteMode === true) {

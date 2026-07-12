@@ -9,7 +9,7 @@ export async function POST() {
     name: AUTH_COOKIE_NAME,
     path: "/",
     sameSite: "lax",
-    secure: false,
+    secure: process.env.NODE_ENV === "production",
     value: ""
   });
   return response;

@@ -13,11 +13,21 @@ export async function POST(request: Request) {
 
   const body = await request.json().catch(() => ({}));
   const amount = Number(body?.amount);
-  const currency = String(body?.currency || "INR");
-  const receipt = String(body?.receipt || `receipt_${Date.now()}`);
+  const currency = String(body?.currency || "INR").trim().toUpperCase();
+  const receipt = String(body?.receipt || `receipt_${Date.now()}`).trim().slice(0, 40);
+  const notes = body?.notes && typeof body.notes === "object" && !Array.isArray(body.notes)
+    ? Object.fromEntries(
+        Object.entries(body.notes as Record<string, unknown>)
+          .slice(0, 20)
+          .map(([key, value]) => [key.slice(0, 40), String(value ?? "").slice(0, 250)])
+      )
+    : {};
 
-  if (!Number.isFinite(amount) || amount < 1) {
+  if (!Number.isFinite(amount) || amount < 1 || amount > 10_000_000) {
     return NextResponse.json({ error: "Valid amount is required." }, { status: 400 });
+  }
+  if (!/^[A-Z]{3}$/.test(currency) || !receipt) {
+    return NextResponse.json({ error: "Valid currency and receipt are required." }, { status: 400 });
   }
 
   try {
@@ -25,7 +35,7 @@ export async function POST(request: Request) {
       body: JSON.stringify({
         amount: Math.round(amount * 100),
         currency,
-        notes: body?.notes || {},
+        notes,
         receipt
       }),
       headers: {

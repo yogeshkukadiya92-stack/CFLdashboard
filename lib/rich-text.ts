@@ -1,5 +1,5 @@
 const allowedTags = new Set(["br", "p", "div", "span", "strong", "b", "em", "i", "u", "ul", "ol", "li"]);
-const colorPattern = /^(#[0-9a-f]{3,8}|rgba?\([\d\s,.%]+\)|[a-z]+)$/i;
+const colorPattern = /^(#[0-9a-f]{3}|#[0-9a-f]{6}|rgb\(\s*(25[0-5]|2[0-4]\d|1?\d?\d)\s*,\s*(25[0-5]|2[0-4]\d|1?\d?\d)\s*,\s*(25[0-5]|2[0-4]\d|1?\d?\d)\s*\)|rgba\(\s*(25[0-5]|2[0-4]\d|1?\d?\d)\s*,\s*(25[0-5]|2[0-4]\d|1?\d?\d)\s*,\s*(25[0-5]|2[0-4]\d|1?\d?\d)\s*,\s*(0|1|0?\.\d+)\s*\)|[a-z]+)$/i;
 
 function escapeHtml(value: string) {
   return value

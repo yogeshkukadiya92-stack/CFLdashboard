@@ -1,11 +1,33 @@
 export const AUTH_COOKIE_NAME = "cfl_admin_session";
-export const ADMIN_EMAIL = (process.env.ADMIN_EMAIL ?? "coachforlife107@gmail.com").trim();
-export const ADMIN_PASSWORD = (process.env.ADMIN_PASSWORD ?? "CFL12345").trim();
 
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 7;
+const DEV_ADMIN_EMAIL = "coachforlife107@gmail.com";
+const DEV_ADMIN_PASSWORD = "CFL12345";
+const DEV_AUTH_SECRET = "cfl-local-master-login-secret-change-before-production";
+
+function isProduction() {
+  return process.env.NODE_ENV === "production";
+}
+
+function requiredEnv(name: "ADMIN_EMAIL" | "ADMIN_PASSWORD" | "AUTH_SECRET", fallback: string) {
+  const value = process.env[name]?.trim();
+  if (value) return value;
+  if (isProduction()) {
+    throw new Error(`${name} must be configured in production.`);
+  }
+  return fallback;
+}
+
+export function getAdminEmail() {
+  return requiredEnv("ADMIN_EMAIL", DEV_ADMIN_EMAIL);
+}
+
+export function getAdminPassword() {
+  return requiredEnv("ADMIN_PASSWORD", DEV_ADMIN_PASSWORD);
+}
 
 function authSecret() {
-  return (process.env.AUTH_SECRET ?? "cfl-local-master-login-secret-change-before-production").trim();
+  return requiredEnv("AUTH_SECRET", DEV_AUTH_SECRET);
 }
 
 function base64UrlEncode(value: string | Uint8Array) {
@@ -64,7 +86,7 @@ export async function verifyAuthToken(token?: string) {
 
   try {
     const data = JSON.parse(base64UrlDecode(payload)) as { email?: string; exp?: number };
-    return data.email === ADMIN_EMAIL && typeof data.exp === "number" && data.exp > Date.now();
+    return data.email === getAdminEmail() && typeof data.exp === "number" && data.exp > Date.now();
   } catch {
     return false;
   }

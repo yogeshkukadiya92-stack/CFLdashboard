@@ -30,6 +30,8 @@ const inputClass =
 const WORKSHOP_MASTER_STORAGE_KEY = "cfl_workshop_master_records_v1";
 const REGISTRATION_STORAGE_KEY = "cfl_registrations_v1";
 const CLIENTS_STORAGE_KEY = "cfl_clients_v1";
+const MAX_WORKSHOP_IMPORT_FILE_BYTES = 8 * 1024 * 1024;
+const MAX_WORKSHOP_IMPORT_ROWS = 50_000;
 
 type WorkshopMasterRecord = {
   id: string;
@@ -1451,6 +1453,10 @@ function ImportWorkshopDataWorkflow() {
       setError("Please choose a CSV or Excel file before upload.");
       return;
     }
+    if (file.size > MAX_WORKSHOP_IMPORT_FILE_BYTES) {
+      setError("Import file is too large. Please upload a file under 8 MB.");
+      return;
+    }
 
     setError("");
     setUploading(true);
@@ -1460,6 +1466,9 @@ function ImportWorkshopDataWorkflow() {
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
       const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "" });
       if (!rows.length) throw new Error("The selected file has no data rows.");
+      if (rows.length > MAX_WORKSHOP_IMPORT_ROWS) {
+        throw new Error(`Import file has too many rows. Please keep workshop imports under ${MAX_WORKSHOP_IMPORT_ROWS.toLocaleString("en-IN")} rows.`);
+      }
 
       const payloads = rows.map((row, rowIndex) => {
         const value = (aliases: string[]) => {

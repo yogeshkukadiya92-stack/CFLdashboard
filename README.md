@@ -37,6 +37,8 @@ AUTH_SECRET=replace_with_a_long_random_secret
 NEXT_PUBLIC_APP_URL=https://your-domain.example
 ```
 
+`ADMIN_EMAIL`, `ADMIN_PASSWORD`, and `AUTH_SECRET` are required in production. The local development defaults are intentionally disabled for deployed builds.
+
 ## Historical Member Import
 
 The importer streams the oversized worksheet instead of loading all rows into browser memory. It is resumable and idempotent by file hash, source row, and normalized row hash.
