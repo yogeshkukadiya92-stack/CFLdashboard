@@ -2,6 +2,7 @@
 
 import { AdminPlatformShell } from "@/components/admin-platform-shell";
 import { hydrateLiveState, readLocalArray, saveLiveState } from "@/lib/live-state";
+import { buildRegistrationUrl, normalizeBaseUrl } from "@/lib/registration-url";
 import { sanitizeRichTextHtml } from "@/lib/rich-text";
 import type { BuilderField, BuilderFieldType, BuilderForm, PaymentTier } from "@/lib/types";
 import { encodeJsonParam, generateId } from "@/lib/utils";
@@ -140,6 +141,7 @@ export default function FormBuilderPage() {
   const [align, setAlign] = useState<"left" | "center">("left");
   const [bannerUrl, setBannerUrl] = useState("");
   const [logoUrl, setLogoUrl] = useState("");
+  const [customBaseUrl, setCustomBaseUrl] = useState("");
   const [copied, setCopied] = useState(false);
   const [saved, setSaved] = useState("");
 
@@ -150,6 +152,13 @@ export default function FormBuilderPage() {
 
     loadLocal();
     hydrateLiveState().then(loadLocal);
+    fetch("/api/integrations/settings", { cache: "no-store" })
+      .then((response) => response.ok ? response.json() : null)
+      .then((data) => {
+        const appUrl = normalizeBaseUrl(String(data?.settings?.appUrl ?? ""));
+        if (appUrl) setCustomBaseUrl(appUrl);
+      })
+      .catch(() => {});
   }, []);
 
   const workshop = workshops.find((item) => item.id === workshopId) ?? null;
@@ -184,8 +193,12 @@ export default function FormBuilderPage() {
 
   const link = useMemo(() => {
     if (typeof window === "undefined" || !workshopId) return "";
-    return `${window.location.origin}/register/${form.workshopSlug}?f=${encodeJsonParam(form)}`;
-  }, [form, workshopId]);
+    return buildRegistrationUrl({
+      baseUrl: customBaseUrl,
+      query: `f=${encodeJsonParam(form)}`,
+      slug: form.workshopSlug
+    });
+  }, [customBaseUrl, form, workshopId]);
 
   function updateField(id: string, patch: Partial<BuilderField>) {
     setFields((current) => current.map((field) => (field.id === id ? { ...field, ...patch } : field)));
@@ -596,6 +609,16 @@ export default function FormBuilderPage() {
             {saved ? <p className="mt-3 rounded-xl bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700">{saved}</p> : null}
             {link ? (
               <div className="mt-4">
+                <label className="mb-3 block">
+                  <span className="mb-2 block text-sm font-bold text-slate-600">Custom Domain</span>
+                  <input
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-sm font-semibold outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
+                    onChange={(event) => setCustomBaseUrl(event.target.value)}
+                    placeholder="https://dashboard.cflb.in"
+                    value={customBaseUrl}
+                  />
+                  <span className="mt-1 block text-xs font-semibold text-slate-400">Leave blank to use the current dashboard domain.</span>
+                </label>
                 <span className="mb-2 block text-sm font-bold text-slate-600">Shareable Link</span>
                 <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50 p-2">
                   <p className="mb-2 break-all px-2 text-xs font-semibold text-slate-500 line-clamp-2">{link}</p>

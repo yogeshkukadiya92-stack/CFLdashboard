@@ -4,6 +4,7 @@ import { AdminPlatformShell } from "@/components/admin-platform-shell";
 import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
 import { AlertCircle, Archive, ArrowDown, ArrowUp, Bold, Check, CheckSquare, ChevronDown, Circle, Copy, Download, Edit3, ExternalLink, Eye, Heading, Image, Italic, Link2, List, ListOrdered, Mail, Palette, Plus, QrCode, RefreshCw, Save, Search, Smartphone, Trash2, Type, Underline, UsersRound, X } from "lucide-react";
 import { hydrateLiveState, readLocalArray, readLocalObject, saveLiveState } from "@/lib/live-state";
+import { buildRegistrationUrl, normalizeBaseUrl } from "@/lib/registration-url";
 import { sanitizeRichTextHtml } from "@/lib/rich-text";
 import type { BuilderField, BuilderFieldType, BuilderForm, BuilderTheme, RegistrationEntry } from "@/lib/types";
 import { generateId } from "@/lib/utils";
@@ -36,6 +37,7 @@ type WorkshopRecord = {
 type DiscountType = "percent" | "flat";
 type RegistrationLinkConfig = {
   batch?: string;
+  customBaseUrl?: string;
   facilitator?: string;
   fee?: number;
   id?: string;
@@ -1003,6 +1005,7 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
   const [venue, setVenue] = useState("");
   const [published, setPublished] = useState(true);
   const [publishUntil, setPublishUntil] = useState("");
+  const [customBaseUrl, setCustomBaseUrl] = useState("");
   const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "failed">("idle");
   const [saveStatus, setSaveStatus] = useState<"idle" | "saved">("idle");
   const [linkSettingsLoaded, setLinkSettingsLoaded] = useState(false);
@@ -1010,8 +1013,8 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
 
   const link = useMemo(() => {
     if (typeof window === "undefined") return "";
-    return `${window.location.origin}/register/${shortSlug}`;
-  }, [shortSlug]);
+    return buildRegistrationUrl({ baseUrl: customBaseUrl, slug: shortSlug });
+  }, [customBaseUrl, shortSlug]);
   const qrUrl = link ? `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=12&data=${encodeURIComponent(link)}` : "";
   const linkExpired = publishUntil ? new Date(publishUntil).getTime() <= Date.now() : false;
   const linkStatus = !published ? "Unpublished" : linkExpired ? "Expired" : "Published";
@@ -1030,6 +1033,7 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
         setVenue(existing.venue === "TBA" ? "" : existing.venue || "");
         setPublished(existing.published !== false);
         setPublishUntil(existing.publishUntil || "");
+        setCustomBaseUrl(existing.customBaseUrl || "");
       }
     } catch {
       // Use defaults if saved link settings are not readable.
@@ -1040,11 +1044,23 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+    fetch("/api/integrations/settings", { cache: "no-store" })
+      .then((response) => response.ok ? response.json() : null)
+      .then((data) => {
+        const appUrl = normalizeBaseUrl(String(data?.settings?.appUrl ?? ""));
+        if (appUrl) setCustomBaseUrl((current) => current || appUrl);
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
     if (!linkSettingsLoaded) return;
     try {
       const configs = readLocalObject<Record<string, RegistrationLinkConfig>>(REGISTRATION_LINK_CONFIG_STORAGE_KEY);
       configs[shortSlug] = {
         batch: batch.trim() || "Main Batch",
+        customBaseUrl: normalizeBaseUrl(customBaseUrl) || undefined,
         facilitator: workshop.facilitator || "CFL Facilitator",
         fee: paid ? Number(fee) || 0 : 0,
         id: workshop.id,
@@ -1063,7 +1079,7 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
     } catch {
       // The link still opens from Workshop Master fallback if storage is unavailable.
     }
-  }, [batch, fee, linkSettingsLoaded, paid, partPayment, publishUntil, published, shortSlug, venue, workshop]);
+  }, [batch, customBaseUrl, fee, linkSettingsLoaded, paid, partPayment, publishUntil, published, shortSlug, venue, workshop]);
 
   async function copyLink() {
     let copied = false;
@@ -1181,6 +1197,11 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
 
           <div className="grid gap-4 lg:grid-cols-[1fr_240px]">
             <div>
+            <label className="mb-3 block">
+              <span className="mb-2 block text-sm font-bold text-slate-600">Custom Domain</span>
+              <input className={inputClass} onChange={(event) => setCustomBaseUrl(event.target.value)} placeholder="https://dashboard.cflb.in" value={customBaseUrl} />
+              <span className="mt-1 block text-xs font-semibold text-slate-400">Leave blank to use the current dashboard domain.</span>
+            </label>
             <span className="mb-2 block text-sm font-bold text-slate-600">Shareable Link</span>
             <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-2">
               <span className="min-w-0 flex-1 truncate px-2 text-sm font-semibold text-slate-700">{link}</span>
