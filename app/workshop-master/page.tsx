@@ -1044,17 +1044,6 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    fetch("/api/integrations/settings", { cache: "no-store" })
-      .then((response) => response.ok ? response.json() : null)
-      .then((data) => {
-        const appUrl = normalizeBaseUrl(String(data?.settings?.appUrl ?? ""));
-        if (appUrl) setCustomBaseUrl((current) => current || appUrl);
-      })
-      .catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
     if (!linkSettingsLoaded) return;
     try {
       const configs = readLocalObject<Record<string, RegistrationLinkConfig>>(REGISTRATION_LINK_CONFIG_STORAGE_KEY);
@@ -1200,7 +1189,7 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
             <label className="mb-3 block">
               <span className="mb-2 block text-sm font-bold text-slate-600">Custom Domain</span>
               <input className={inputClass} onChange={(event) => setCustomBaseUrl(event.target.value)} placeholder="https://dashboard.cflb.in" value={customBaseUrl} />
-              <span className="mt-1 block text-xs font-semibold text-slate-400">Leave blank to use the current dashboard domain.</span>
+              <span className="mt-1 block text-xs font-semibold text-slate-400">Use the domain connected to this dashboard app, such as https://dashboard.cflb.in. Leave blank to use the current dashboard domain.</span>
             </label>
             <span className="mb-2 block text-sm font-bold text-slate-600">Shareable Link</span>
             <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-2">
