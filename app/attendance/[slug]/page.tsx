@@ -3,7 +3,7 @@
 import { readLocalArray, writeLiveStateToLocalStorage } from "@/lib/live-state";
 import type { AttendanceEntry, AttendanceSession, BuilderField } from "@/lib/types";
 import { generateId } from "@/lib/utils";
-import { AlertTriangle, Check, CheckCircle2, ClipboardCheck, ShieldCheck } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ClipboardCheck, Loader2, ShieldCheck } from "lucide-react";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
@@ -30,6 +30,7 @@ export default function AttendanceFormPage() {
   const [session, setSession] = useState<AttendanceSession | null>(null);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [message, setMessage] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
 
   useEffect(() => {
@@ -87,11 +88,14 @@ export default function AttendanceFormPage() {
   }
 
   async function submitAttendance() {
+    if (submitting) return;
     if (!session) return;
     if (missingRequired) {
       setMessage("Please fill all required fields with a valid 10-digit mobile number.");
       return;
     }
+    setSubmitting(true);
+    setMessage("");
 
     const nameId = roleField("name")?.id;
     const emailId = roleField("email")?.id;
@@ -124,17 +128,22 @@ export default function AttendanceFormPage() {
         ...current.filter((item) => item.id !== entry.id)
       ];
       writeLiveStateToLocalStorage({ attendanceEntries: next });
-      await fetch("/api/attendance-state", {
+      const response = await fetch("/api/attendance-state", {
         body: JSON.stringify({ entry }),
         headers: { "Content-Type": "application/json" },
         method: "POST"
       });
+      if (!response.ok) {
+        setMessage("Attendance is saved on this device, but server sync failed. Please try again if the admin report does not update.");
+      }
     } catch {
-      // Local save already attempted; keep the user flow successful.
+      setMessage("Attendance is saved on this device, but server sync failed. Please try again if the admin report does not update.");
+    } finally {
+      setSubmitting(false);
     }
 
     setSuccess(true);
-    setMessage("Attendance marked successfully.");
+    setMessage((current) => current || "Attendance marked successfully.");
     setAnswers({});
   }
 
@@ -193,12 +202,13 @@ export default function AttendanceFormPage() {
               {message ? <p className="mt-5 rounded-xl bg-rose-50 px-4 py-3 text-sm font-black text-rose-700">{message}</p> : null}
 
               <button
-                className="mt-6 inline-flex min-h-[52px] w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-5 py-3.5 text-sm font-black uppercase tracking-wide text-white shadow-[0_12px_28px_-15px_rgba(5,150,105,0.7)] hover:bg-emerald-700"
+                className="mt-6 inline-flex min-h-[52px] w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-5 py-3.5 text-sm font-black uppercase tracking-wide text-white shadow-[0_12px_28px_-15px_rgba(5,150,105,0.7)] hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-70"
+                disabled={submitting}
                 onClick={submitAttendance}
                 type="button"
               >
-                <ShieldCheck className="size-4" />
-                Mark Attendance
+                {submitting ? <Loader2 className="size-4 animate-spin" /> : <ShieldCheck className="size-4" />}
+                {submitting ? "Saving Attendance" : "Mark Attendance"}
               </button>
               <p className="mt-3 flex items-center justify-center gap-2 text-center text-xs font-semibold text-slate-400">
                 <ClipboardCheck className="size-3.5" />

@@ -4,7 +4,7 @@ import { AdminPlatformShell } from "@/components/admin-platform-shell";
 import { hydrateLiveState, readLocalArray, saveLiveState } from "@/lib/live-state";
 import type { AttendanceEntry, AttendanceSession, BuilderField, BuilderFieldType } from "@/lib/types";
 import { generateId } from "@/lib/utils";
-import { ArrowDown, ArrowUp, CalendarDays, CheckSquare, Circle, Copy, ExternalLink, Heading, Mail, Plus, Search, Smartphone, Trash2, Type, UsersRound } from "lucide-react";
+import { ArrowDown, ArrowUp, CalendarDays, CheckSquare, Circle, Copy, Download, ExternalLink, Heading, Mail, Plus, RefreshCw, Search, Smartphone, Trash2, Type, UsersRound } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 const WORKSHOP_MASTER_STORAGE_KEY = "cfl_workshop_master_records_v1";
@@ -67,6 +67,7 @@ export default function WorkshopAttendancePage() {
   const [selectedWorkshopId, setSelectedWorkshopId] = useState("");
   const [selectedSessionId, setSelectedSessionId] = useState("");
   const [copied, setCopied] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   function loadLocal() {
     const loadedWorkshops = readLocalArray<WorkshopRecord>(WORKSHOP_MASTER_STORAGE_KEY).filter((item) => !item.archived);
@@ -197,6 +198,40 @@ export default function WorkshopAttendancePage() {
     }
   }
 
+  async function refreshAttendance() {
+    setRefreshing(true);
+    await hydrateLiveState();
+    loadLocal();
+    setRefreshing(false);
+  }
+
+  function exportAttendanceCsv() {
+    if (!selectedSession) return;
+    const extraLabels = Array.from(
+      new Set(selectedEntries.flatMap((entry) => Object.keys(entry.answers ?? {})))
+    );
+    const headers = ["Session", "Workshop", "Name", "Mobile", "Email", "City", "Submitted At", ...extraLabels];
+    const rows = selectedEntries.map((entry) => [
+      selectedSession.title,
+      entry.workshopName,
+      entry.attendeeName,
+      entry.mobile,
+      entry.email ?? "",
+      entry.city ?? "",
+      entry.submittedAt ? new Date(entry.submittedAt).toLocaleString("en-IN") : "",
+      ...extraLabels.map((label) => entry.answers?.[label] ?? "")
+    ]);
+    const escapeCell = (value: string) => `"${String(value).replace(/"/g, '""')}"`;
+    const csv = [headers, ...rows].map((row) => row.map(escapeCell).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `attendance-${selectedSession.slug}.csv`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <AdminPlatformShell activeLabel="Workshop Attendance" description="Create session-wise attendance forms and track who attended every workshop session." title="Workshop Attendance">
       <section className="grid gap-4 xl:grid-cols-[320px_1fr]">
@@ -249,10 +284,16 @@ export default function WorkshopAttendancePage() {
                 <h2 className="mt-1 text-2xl font-black text-slate-950">{selectedWorkshop?.name || "Select workshop"}</h2>
                 <p className="mt-1 text-sm font-semibold text-slate-500">Add sessions, build attendance forms, share links, and view attendance data.</p>
               </div>
-              <button className="inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-black text-white hover:bg-emerald-700" onClick={() => createSession()} type="button">
-                <Plus className="size-4" />
-                Add Session
-              </button>
+              <div className="flex flex-wrap gap-2">
+                <button className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-700 hover:bg-slate-50" disabled={refreshing} onClick={refreshAttendance} type="button">
+                  <RefreshCw className={`size-4 ${refreshing ? "animate-spin" : ""}`} />
+                  Refresh
+                </button>
+                <button className="inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-black text-white hover:bg-emerald-700" onClick={() => createSession()} type="button">
+                  <Plus className="size-4" />
+                  Add Session
+                </button>
+              </div>
             </div>
 
             {workshopSessions.length > 0 ? (
@@ -360,7 +401,7 @@ export default function WorkshopAttendancePage() {
                   <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-700">Share Attendance</p>
                   <h3 className="mt-1 text-xl font-black text-slate-950">Public form link</h3>
                   <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-2">
-                    <p className="break-all px-2 py-1 text-xs font-bold text-slate-500">{link}</p>
+                    <input aria-label="Public attendance form link" className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-xs font-bold text-slate-600 outline-none focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100" onFocus={(event) => event.target.select()} readOnly value={link} />
                     <div className="mt-2 grid grid-cols-2 gap-2">
                       <button className="inline-flex min-h-[42px] items-center justify-center gap-2 rounded-lg bg-slate-950 px-3 py-2 text-sm font-bold text-white" onClick={copyLink} type="button">
                         <Copy className="size-4" />
@@ -380,14 +421,21 @@ export default function WorkshopAttendancePage() {
                       <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-700">Attendance Data</p>
                       <h3 className="mt-1 text-xl font-black text-slate-950">{selectedEntries.length} attendees</h3>
                     </div>
-                    <UsersRound className="size-7 text-slate-300" />
+                    <div className="flex items-center gap-2">
+                      <button className="grid size-9 place-items-center rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40" disabled={selectedEntries.length === 0} onClick={exportAttendanceCsv} title="Export attendance CSV" type="button">
+                        <Download className="size-4" />
+                      </button>
+                      <UsersRound className="size-7 text-slate-300" />
+                    </div>
                   </div>
-                  <div className="mt-4 max-h-[360px] overflow-y-auto rounded-xl border border-slate-100">
-                    <table className="w-full text-left text-sm">
+                  <div className="mt-4 max-h-[360px] overflow-auto rounded-xl border border-slate-100">
+                    <table className="w-full min-w-[560px] text-left text-sm">
                       <thead className="sticky top-0 bg-slate-50 text-xs uppercase tracking-[0.12em] text-slate-400">
                         <tr>
                           <th className="px-3 py-3">Name</th>
                           <th className="px-3 py-3">Mobile</th>
+                          <th className="px-3 py-3">City</th>
+                          <th className="px-3 py-3">Time</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
@@ -395,10 +443,12 @@ export default function WorkshopAttendancePage() {
                           <tr key={entry.id}>
                             <td className="px-3 py-3 font-bold text-slate-800">{entry.attendeeName}</td>
                             <td className="px-3 py-3 font-semibold text-slate-500">{entry.mobile}</td>
+                            <td className="px-3 py-3 font-semibold text-slate-500">{entry.city || "-"}</td>
+                            <td className="px-3 py-3 font-semibold text-slate-500">{entry.submittedAt ? new Date(entry.submittedAt).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : "-"}</td>
                           </tr>
                         ))}
                         {selectedEntries.length === 0 ? (
-                          <tr><td className="px-3 py-8 text-center text-sm font-bold text-slate-400" colSpan={2}>No attendance yet.</td></tr>
+                          <tr><td className="px-3 py-8 text-center text-sm font-bold text-slate-400" colSpan={4}>No attendance yet. Share the public form link or refresh after participants submit.</td></tr>
                         ) : null}
                       </tbody>
                     </table>
