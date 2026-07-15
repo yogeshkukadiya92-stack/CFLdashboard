@@ -221,3 +221,36 @@ export interface BuilderForm {
   fields: BuilderField[];
   updatedAt: string;
 }
+
+export interface AttendanceSession {
+  id: string;
+  workshopId: string;
+  workshopName: string;
+  workshopSlug: string;
+  slug: string;
+  title: string;
+  description: string;
+  sessionDate: string;
+  startTime?: string;
+  endTime?: string;
+  facilitator?: string;
+  venue?: string;
+  published: boolean;
+  fields: BuilderField[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AttendanceEntry {
+  id: string;
+  sessionId: string;
+  sessionSlug: string;
+  workshopId: string;
+  workshopName: string;
+  attendeeName: string;
+  mobile: string;
+  email?: string;
+  city?: string;
+  answers?: Record<string, string>;
+  submittedAt: string;
+}

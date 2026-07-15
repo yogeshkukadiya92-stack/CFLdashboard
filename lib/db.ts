@@ -3,6 +3,8 @@ import { Pool } from "pg";
 let pool: Pool | null = null;
 
 type AppState = {
+  attendanceEntries: unknown[];
+  attendanceSessions: unknown[];
   clients: unknown[];
   facilitators: unknown[];
   forms: unknown[];
@@ -17,6 +19,8 @@ type AppState = {
 };
 
 const emptyAppState: AppState = {
+  attendanceEntries: [],
+  attendanceSessions: [],
   clients: [],
   facilitators: [],
   forms: [],
@@ -51,6 +55,8 @@ export async function ensurePersistenceTable() {
     CREATE TABLE IF NOT EXISTS app_state (
       id INTEGER PRIMARY KEY,
       clients JSONB NOT NULL DEFAULT '[]'::jsonb,
+      attendance_sessions JSONB NOT NULL DEFAULT '[]'::jsonb,
+      attendance_entries JSONB NOT NULL DEFAULT '[]'::jsonb,
       leads JSONB NOT NULL DEFAULT '[]'::jsonb,
       workshops JSONB NOT NULL DEFAULT '[]'::jsonb,
       registrations JSONB NOT NULL DEFAULT '[]'::jsonb,
@@ -65,6 +71,8 @@ export async function ensurePersistenceTable() {
     );
   `);
   await client.query(`ALTER TABLE app_state ADD COLUMN IF NOT EXISTS clients JSONB NOT NULL DEFAULT '[]'::jsonb;`);
+  await client.query(`ALTER TABLE app_state ADD COLUMN IF NOT EXISTS attendance_sessions JSONB NOT NULL DEFAULT '[]'::jsonb;`);
+  await client.query(`ALTER TABLE app_state ADD COLUMN IF NOT EXISTS attendance_entries JSONB NOT NULL DEFAULT '[]'::jsonb;`);
   await client.query(`ALTER TABLE app_state ADD COLUMN IF NOT EXISTS leads JSONB NOT NULL DEFAULT '[]'::jsonb;`);
   await client.query(`ALTER TABLE app_state ADD COLUMN IF NOT EXISTS workshops JSONB NOT NULL DEFAULT '[]'::jsonb;`);
   await client.query(`ALTER TABLE app_state ADD COLUMN IF NOT EXISTS registrations JSONB NOT NULL DEFAULT '[]'::jsonb;`);
@@ -79,6 +87,8 @@ export async function ensurePersistenceTable() {
     INSERT INTO app_state (
       id,
       clients,
+      attendance_sessions,
+      attendance_entries,
       leads,
       workshops,
       registrations,
@@ -92,6 +102,8 @@ export async function ensurePersistenceTable() {
     )
     VALUES (
       1,
+      '[]'::jsonb,
+      '[]'::jsonb,
       '[]'::jsonb,
       '[]'::jsonb,
       '[]'::jsonb,
@@ -116,6 +128,8 @@ export async function getAppState() {
   const result = await client.query(`
     SELECT
       clients,
+      attendance_sessions AS "attendanceSessions",
+      attendance_entries AS "attendanceEntries",
       leads,
       workshops,
       registrations,
@@ -144,21 +158,25 @@ export async function saveAppState(input: Partial<AppState>) {
       UPDATE app_state
       SET
         clients = $1::jsonb,
-        leads = $2::jsonb,
-        workshops = $3::jsonb,
-        registrations = $4::jsonb,
-        schedules = $5::jsonb,
-        forms = $6::jsonb,
-        registration_links = $7::jsonb,
-        sales_people = $8::jsonb,
-        workshop_types = $9::jsonb,
-        facilitators = $10::jsonb,
-        integrations = $11::jsonb,
+        attendance_sessions = $2::jsonb,
+        attendance_entries = $3::jsonb,
+        leads = $4::jsonb,
+        workshops = $5::jsonb,
+        registrations = $6::jsonb,
+        schedules = $7::jsonb,
+        forms = $8::jsonb,
+        registration_links = $9::jsonb,
+        sales_people = $10::jsonb,
+        workshop_types = $11::jsonb,
+        facilitators = $12::jsonb,
+        integrations = $13::jsonb,
         updated_at = NOW()
       WHERE id = 1
     `,
     [
       JSON.stringify(input.clients ?? current.clients),
+      JSON.stringify(input.attendanceSessions ?? current.attendanceSessions),
+      JSON.stringify(input.attendanceEntries ?? current.attendanceEntries),
       JSON.stringify(input.leads ?? current.leads),
       JSON.stringify(input.workshops ?? current.workshops),
       JSON.stringify(input.registrations ?? current.registrations),

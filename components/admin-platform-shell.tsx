@@ -62,7 +62,8 @@ const navGroups: NavGroup[] = [
       { href: "/workshop-master", icon: Layers3, label: "Workshop Master" },
       { href: "/workshop-setup", icon: Tags, label: "Workshop Setup" },
       { href: "/process/import-data-workshop-wise", icon: Import, label: "Import Workshop Data" },
-      { href: "/form-builder", icon: FileText, label: "Form Builder" }
+      { href: "/form-builder", icon: FileText, label: "Form Builder" },
+      { href: "/workshop-attendance", icon: ClipboardCheck, label: "Workshop Attendance" }
     ]
   },
   {

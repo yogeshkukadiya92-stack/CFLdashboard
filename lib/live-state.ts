@@ -1,6 +1,8 @@
 "use client";
 
 export const LIVE_STATE_STORAGE_KEYS = {
+  attendanceEntries: "cfl_attendance_entries_v1",
+  attendanceSessions: "cfl_attendance_sessions_v1",
   clients: "cfl_clients_v1",
   facilitators: "cfl_facilitators_v1",
   forms: "cfl_forms_v1",

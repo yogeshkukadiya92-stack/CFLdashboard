@@ -1006,6 +1006,7 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
   const [published, setPublished] = useState(true);
   const [publishUntil, setPublishUntil] = useState("");
   const [customBaseUrl, setCustomBaseUrl] = useState("");
+  const [registrationDomains, setRegistrationDomains] = useState<string[]>([]);
   const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "failed">("idle");
   const [saveStatus, setSaveStatus] = useState<"idle" | "saved">("idle");
   const [linkSettingsLoaded, setLinkSettingsLoaded] = useState(false);
@@ -1019,6 +1020,9 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
   const linkExpired = publishUntil ? new Date(publishUntil).getTime() <= Date.now() : false;
   const linkStatus = !published ? "Unpublished" : linkExpired ? "Expired" : "Published";
   const linkStatusClass = published && !linkExpired ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700";
+  const selectedDomainOption = customBaseUrl
+    ? registrationDomains.includes(normalizeBaseUrl(customBaseUrl)) ? normalizeBaseUrl(customBaseUrl) : "__custom"
+    : "";
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -1041,6 +1045,20 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
       setLinkSettingsLoaded(true);
     }
   }, [shortSlug, workshop.id]);
+
+  useEffect(() => {
+    async function loadRegistrationDomains() {
+      try {
+        const response = await fetch("/api/integrations/settings", { cache: "no-store" });
+        const data = await response.json();
+        const domains = Array.isArray(data?.settings?.registrationDomains) ? data.settings.registrationDomains : [];
+        setRegistrationDomains(domains.map((domain: string) => normalizeBaseUrl(domain)).filter(Boolean));
+      } catch {
+        setRegistrationDomains([]);
+      }
+    }
+    void loadRegistrationDomains();
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -1186,11 +1204,30 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
 
           <div className="grid gap-4 lg:grid-cols-[1fr_240px]">
             <div>
-            <label className="mb-3 block">
-              <span className="mb-2 block text-sm font-bold text-slate-600">Custom Domain</span>
-              <input className={inputClass} onChange={(event) => setCustomBaseUrl(event.target.value)} placeholder="https://dashboard.cflb.in" value={customBaseUrl} />
-              <span className="mt-1 block text-xs font-semibold text-slate-400">Use the domain connected to this dashboard app, such as https://dashboard.cflb.in. Leave blank to use the current dashboard domain.</span>
-            </label>
+            <div className="mb-3 grid gap-3">
+              <label className="block">
+                <span className="mb-2 block text-sm font-bold text-slate-600">Registration Domain</span>
+                <select
+                  className={inputClass}
+                  onChange={(event) => {
+                    if (event.target.value === "__custom") return;
+                    setCustomBaseUrl(event.target.value);
+                  }}
+                  value={selectedDomainOption}
+                >
+                  <option value="">Current dashboard domain</option>
+                  {registrationDomains.map((domain) => (
+                    <option key={domain} value={domain}>{domain}</option>
+                  ))}
+                  {customBaseUrl && selectedDomainOption === "__custom" ? <option value="__custom">Custom domain</option> : null}
+                </select>
+                <span className="mt-1 block text-xs font-semibold text-slate-400">Add reusable subdomains in Settings. Leave current dashboard domain if no custom subdomain is connected.</span>
+              </label>
+              <label className="block">
+                <span className="mb-2 block text-sm font-bold text-slate-600">Custom Domain</span>
+                <input className={inputClass} onChange={(event) => setCustomBaseUrl(event.target.value)} placeholder="https://register.cflb.in" value={customBaseUrl} />
+              </label>
+            </div>
             <span className="mb-2 block text-sm font-bold text-slate-600">Shareable Link</span>
             <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-2">
               <span className="min-w-0 flex-1 truncate px-2 text-sm font-semibold text-slate-700">{link}</span>

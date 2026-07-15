@@ -5,6 +5,7 @@ import { getAppState, isDbEnabled, saveAppState } from "@/lib/db";
 export type IntegrationSettings = {
   appUrl: string;
   emailFrom: string;
+  registrationDomains: string[];
   razorpayEnabled: boolean;
   razorpayKeyId: string;
   razorpayKeySecret: string;
@@ -18,6 +19,7 @@ export type IntegrationSettings = {
 export const defaultIntegrationSettings: IntegrationSettings = {
   appUrl: "",
   emailFrom: "",
+  registrationDomains: [],
   razorpayEnabled: false,
   razorpayKeyId: "",
   razorpayKeySecret: "",
@@ -31,9 +33,18 @@ export const defaultIntegrationSettings: IntegrationSettings = {
 const fallbackPath = path.join(process.cwd(), ".data", "integration-settings.json");
 
 function normalizeSettings(input: Partial<IntegrationSettings> | null | undefined): IntegrationSettings {
+  const registrationDomains = Array.from(
+    new Set(
+      (Array.isArray(input?.registrationDomains) ? input.registrationDomains : [])
+        .map((domain) => (typeof domain === "string" ? domain.trim().replace(/\/+$/, "") : ""))
+        .filter(Boolean)
+    )
+  );
+
   return {
     ...defaultIntegrationSettings,
     ...(input ?? {}),
+    registrationDomains,
     razorpayEnabled: Boolean(input?.razorpayEnabled)
   };
 }

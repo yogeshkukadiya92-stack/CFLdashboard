@@ -1,12 +1,13 @@
 "use client";
 
 import { AdminPlatformShell } from "@/components/admin-platform-shell";
-import { CheckCircle2, Copy, CreditCard, Eye, EyeOff, Mail, MessageCircle, Plug, Save, ShieldCheck, Smartphone, Webhook, type LucideIcon } from "lucide-react";
+import { CheckCircle2, Copy, CreditCard, Eye, EyeOff, Globe2, Mail, MessageCircle, Plug, Plus, Save, ShieldCheck, Smartphone, Trash2, Webhook, type LucideIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 
 type IntegrationSettings = {
   appUrl: string;
   emailFrom: string;
+  registrationDomains: string[];
   razorpayEnabled: boolean;
   razorpayKeyId: string;
   razorpayKeySecret: string;
@@ -20,6 +21,7 @@ type IntegrationSettings = {
 const defaultSettings: IntegrationSettings = {
   appUrl: "",
   emailFrom: "",
+  registrationDomains: [],
   razorpayEnabled: false,
   razorpayKeyId: "",
   razorpayKeySecret: "",
@@ -73,6 +75,24 @@ export default function SettingsPage() {
 
   function update(key: keyof IntegrationSettings, value: string | boolean) {
     setSettings((current) => ({ ...current, [key]: value }));
+  }
+
+  function updateRegistrationDomain(index: number, value: string) {
+    setSettings((current) => ({
+      ...current,
+      registrationDomains: current.registrationDomains.map((domain, domainIndex) => (domainIndex === index ? value : domain))
+    }));
+  }
+
+  function addRegistrationDomain() {
+    setSettings((current) => ({ ...current, registrationDomains: [...current.registrationDomains, ""] }));
+  }
+
+  function removeRegistrationDomain(index: number) {
+    setSettings((current) => ({
+      ...current,
+      registrationDomains: current.registrationDomains.filter((_, domainIndex) => domainIndex !== index)
+    }));
   }
 
   async function copyText(value: string) {
@@ -151,6 +171,40 @@ export default function SettingsPage() {
               <Field icon={MessageCircle} label="WhatsApp Provider" onChange={(value) => update("whatsappProvider", value)} placeholder="AiSensy / Interakt / WATI" value={settings.whatsappProvider} />
               <Field icon={Smartphone} label="SMS Provider" onChange={(value) => update("smsProvider", value)} placeholder="Msg91 / Twilio / Fast2SMS" value={settings.smsProvider} />
             </div>
+          </div>
+
+          <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-700">Registration Links</p>
+                <h2 className="mt-1 flex items-center gap-2 text-2xl font-black text-slate-950"><Globe2 className="size-5 text-emerald-700" /> Custom subdomains</h2>
+                <p className="mt-1 text-sm text-slate-500">Save only domains connected to this app, such as https://register.cflb.in.</p>
+              </div>
+              <button className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-bold text-emerald-700 hover:bg-emerald-100" onClick={addRegistrationDomain} type="button">
+                <Plus className="size-4" />
+                Add Subdomain
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-3">
+              {settings.registrationDomains.length === 0 ? (
+                <p className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-500">No registration subdomain saved yet.</p>
+              ) : null}
+              {settings.registrationDomains.map((domain, index) => (
+                <div className="flex gap-2" key={index}>
+                  <input
+                    className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-sm font-semibold outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
+                    onChange={(event) => updateRegistrationDomain(index, event.target.value)}
+                    placeholder="https://register.cflb.in"
+                    value={domain}
+                  />
+                  <button className="grid size-11 shrink-0 place-items-center rounded-xl border border-rose-100 bg-rose-50 text-rose-600 hover:bg-rose-100" onClick={() => removeRegistrationDomain(index)} type="button">
+                    <Trash2 className="size-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+            <p className="mt-3 text-xs font-semibold text-slate-400">DNS and Coolify must point each subdomain to this dashboard app before links can open.</p>
           </div>
         </div>
 

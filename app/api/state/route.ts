@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { getAppState, isDbEnabled, saveAppState } from "@/lib/db";
 
 const arrayFields = [
+  "attendanceEntries",
+  "attendanceSessions",
   "clients",
   "facilitators",
   "forms",

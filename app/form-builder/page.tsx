@@ -2,7 +2,7 @@
 
 import { AdminPlatformShell } from "@/components/admin-platform-shell";
 import { hydrateLiveState, readLocalArray, saveLiveState } from "@/lib/live-state";
-import { buildRegistrationUrl } from "@/lib/registration-url";
+import { buildRegistrationUrl, normalizeBaseUrl } from "@/lib/registration-url";
 import { sanitizeRichTextHtml } from "@/lib/rich-text";
 import type { BuilderField, BuilderFieldType, BuilderForm, PaymentTier } from "@/lib/types";
 import { encodeJsonParam, generateId } from "@/lib/utils";
@@ -142,6 +142,7 @@ export default function FormBuilderPage() {
   const [bannerUrl, setBannerUrl] = useState("");
   const [logoUrl, setLogoUrl] = useState("");
   const [customBaseUrl, setCustomBaseUrl] = useState("");
+  const [registrationDomains, setRegistrationDomains] = useState<string[]>([]);
   const [copied, setCopied] = useState(false);
   const [saved, setSaved] = useState("");
 
@@ -152,6 +153,20 @@ export default function FormBuilderPage() {
 
     loadLocal();
     hydrateLiveState().then(loadLocal);
+  }, []);
+
+  useEffect(() => {
+    async function loadRegistrationDomains() {
+      try {
+        const response = await fetch("/api/integrations/settings", { cache: "no-store" });
+        const data = await response.json();
+        const domains = Array.isArray(data?.settings?.registrationDomains) ? data.settings.registrationDomains : [];
+        setRegistrationDomains(domains.map((domain: string) => normalizeBaseUrl(domain)).filter(Boolean));
+      } catch {
+        setRegistrationDomains([]);
+      }
+    }
+    void loadRegistrationDomains();
   }, []);
 
   const workshop = workshops.find((item) => item.id === workshopId) ?? null;
@@ -192,6 +207,9 @@ export default function FormBuilderPage() {
       slug: form.workshopSlug
     });
   }, [customBaseUrl, form, workshopId]);
+  const selectedDomainOption = customBaseUrl
+    ? registrationDomains.includes(normalizeBaseUrl(customBaseUrl)) ? normalizeBaseUrl(customBaseUrl) : "__custom"
+    : "";
 
   function updateField(id: string, patch: Partial<BuilderField>) {
     setFields((current) => current.map((field) => (field.id === id ? { ...field, ...patch } : field)));
@@ -603,14 +621,29 @@ export default function FormBuilderPage() {
             {link ? (
               <div className="mt-4">
                 <label className="mb-3 block">
+                  <span className="mb-2 block text-sm font-bold text-slate-600">Registration Domain</span>
+                  <select
+                    className="mb-3 w-full rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-sm font-semibold outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
+                    onChange={(event) => {
+                      if (event.target.value === "__custom") return;
+                      setCustomBaseUrl(event.target.value);
+                    }}
+                    value={selectedDomainOption}
+                  >
+                    <option value="">Current dashboard domain</option>
+                    {registrationDomains.map((domain) => (
+                      <option key={domain} value={domain}>{domain}</option>
+                    ))}
+                    {customBaseUrl && selectedDomainOption === "__custom" ? <option value="__custom">Custom domain</option> : null}
+                  </select>
                   <span className="mb-2 block text-sm font-bold text-slate-600">Custom Domain</span>
                   <input
                     className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-sm font-semibold outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
                     onChange={(event) => setCustomBaseUrl(event.target.value)}
-                    placeholder="https://dashboard.cflb.in"
+                    placeholder="https://register.cflb.in"
                     value={customBaseUrl}
                   />
-                  <span className="mt-1 block text-xs font-semibold text-slate-400">Use the domain connected to this dashboard app, such as https://dashboard.cflb.in. Leave blank to use the current dashboard domain.</span>
+                  <span className="mt-1 block text-xs font-semibold text-slate-400">Add reusable subdomains in Settings. Leave blank to use the current dashboard domain.</span>
                 </label>
                 <span className="mb-2 block text-sm font-bold text-slate-600">Shareable Link</span>
                 <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50 p-2">
