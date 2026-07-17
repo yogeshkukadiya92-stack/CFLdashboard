@@ -137,6 +137,7 @@ export default function RegistrationPage() {
   const [otpSending, setOtpSending] = useState(false);
   const [otpVerifying, setOtpVerifying] = useState(false);
   const [otpVerifiedMobile, setOtpVerifiedMobile] = useState("");
+  const [otpModalOpen, setOtpModalOpen] = useState(false);
   const [success, setSuccess] = useState(false);
   const [redirectCountdown, setRedirectCountdown] = useState(5);
 
@@ -353,6 +354,7 @@ export default function RegistrationPage() {
   useEffect(() => {
     setOtpCode("");
     setOtpMessage("");
+    setOtpModalOpen(false);
     setOtpVerifiedMobile((current) => (current === mobileDigits ? current : ""));
   }, [mobileDigits]);
 
@@ -414,10 +416,10 @@ export default function RegistrationPage() {
   }
 
   async function verifyOtp() {
-    if (!model?.otpRequired) return;
+    if (!model?.otpRequired) return false;
     if (mobileDigits.length !== 10 || otpCode.trim().length !== 6) {
       setOtpMessage("Enter the 6-digit OTP.");
-      return;
+      return false;
     }
     setOtpVerifying(true);
     setOtpMessage("");
@@ -430,25 +432,47 @@ export default function RegistrationPage() {
       const data = await response.json();
       if (!response.ok || !data?.ok) {
         setOtpMessage(data?.error || "Incorrect OTP.");
-        return;
+        return false;
       }
       setOtpVerifiedMobile(mobileDigits);
       setOtpMessage("Mobile number verified.");
+      return true;
     } catch {
       setOtpMessage("Could not verify OTP. Please try again.");
+      return false;
     } finally {
       setOtpVerifying(false);
     }
   }
 
-  function submitRegistration() {
+  async function handlePrimarySubmit() {
     if (!model) return;
     if (missingRequired) {
       setMessage("Please fill all required fields (and a valid 10-digit mobile).");
       return;
     }
     if (model.otpRequired && !otpVerified) {
-      setMessage("Please verify mobile number with WhatsApp OTP before registration.");
+      setMessage("");
+      setOtpCode("");
+      setOtpMessage("");
+      setOtpModalOpen(true);
+      await sendOtp();
+      return;
+    }
+    submitRegistration(model.otpRequired ? "verified" : "not_required");
+  }
+
+  async function confirmOtpAndSubmit() {
+    const verified = await verifyOtp();
+    if (!verified) return;
+    setOtpModalOpen(false);
+    submitRegistration("verified");
+  }
+
+  function submitRegistration(whatsappVerificationStatus: RegistrationEntry["whatsappVerificationStatus"] = "not_required") {
+    if (!model) return;
+    if (missingRequired) {
+      setMessage("Please fill all required fields (and a valid 10-digit mobile).");
       return;
     }
 
@@ -480,6 +504,7 @@ export default function RegistrationPage() {
       amountPaid,
       amountDue,
       status: amountDue > 0 ? "Due" : "Paid",
+      whatsappVerificationStatus,
       createdAt: new Date().toISOString().slice(0, 10),
       batch: model.batch,
       answers: Object.keys(extra).length ? extra : undefined
@@ -501,6 +526,7 @@ export default function RegistrationPage() {
     setAnswers({});
     setOtpCode("");
     setOtpMessage("");
+    setOtpModalOpen(false);
     setOtpVerifiedMobile("");
     setPartAmount("");
   }
@@ -645,52 +671,6 @@ export default function RegistrationPage() {
                 ))}
               </div>
 
-              {model.otpRequired ? (
-                <div className="mt-5 rounded-2xl border border-emerald-100 bg-emerald-50/60 p-4">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-black text-slate-800">WhatsApp OTP Verification</p>
-                      <p className="mt-1 text-xs font-semibold text-slate-500">OTP will be sent on WhatsApp to the participant mobile number.</p>
-                    </div>
-                    {otpVerified ? (
-                      <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-3 py-1 text-xs font-black text-white">
-                        <CheckCircle2 className="size-3.5" />
-                        Verified
-                      </span>
-                    ) : null}
-                  </div>
-                  <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto_auto]">
-                    <input
-                      className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-sm font-semibold outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
-                      inputMode="numeric"
-                      maxLength={6}
-                      onChange={(event) => setOtpCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
-                      placeholder="Enter 6-digit OTP"
-                      value={otpCode}
-                    />
-                    <button
-                      className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-white px-4 py-2.5 text-sm font-black text-emerald-700 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
-                      disabled={otpSending || otpVerified}
-                      onClick={sendOtp}
-                      type="button"
-                    >
-                      {otpSending ? <Loader2 className="size-4 animate-spin" /> : null}
-                      Send WhatsApp OTP
-                    </button>
-                    <button
-                      className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-black text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
-                      disabled={otpVerifying || otpVerified}
-                      onClick={verifyOtp}
-                      type="button"
-                    >
-                      {otpVerifying ? <Loader2 className="size-4 animate-spin" /> : null}
-                      Verify
-                    </button>
-                  </div>
-                  {otpMessage ? <p className={`mt-3 text-sm font-bold ${otpVerified ? "text-emerald-700" : "text-slate-600"}`}>{otpMessage}</p> : null}
-                </div>
-              ) : null}
-
               {model.paid && hasTiers ? (
                 <div className="mt-5 rounded-2xl border border-slate-100 bg-slate-50/50 p-5">
                   <p className="text-sm font-black text-slate-700">Choose your plan</p>
@@ -755,7 +735,7 @@ export default function RegistrationPage() {
 
               <button
                 className="mt-6 inline-flex min-h-[52px] w-full items-center justify-center gap-2 rounded-2xl px-5 py-3.5 text-base sm:text-sm font-black tracking-wide text-white uppercase transition-transform hover:scale-[1.01] active:scale-[0.99]"
-                onClick={submitRegistration}
+                onClick={handlePrimarySubmit}
                 style={{ backgroundColor: theme.accent, boxShadow: `0 6px 20px -4px ${theme.accent}55, 0 2px 4px -1px ${theme.accent}33` }}
                 type="button"
               >
@@ -767,6 +747,56 @@ export default function RegistrationPage() {
           )}
         </div>
       </section>
+
+      {otpModalOpen && model?.otpRequired ? (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/60 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-3xl bg-white p-5 shadow-2xl">
+            <div className="flex items-start gap-3">
+              <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-emerald-50 text-emerald-700">
+                <ShieldCheck className="size-5" />
+              </span>
+              <div>
+                <h2 className="text-xl font-black text-slate-950">WhatsApp OTP Verification</h2>
+                <p className="mt-1 text-sm font-semibold text-slate-500">
+                  OTP sent on WhatsApp to +91 {mobileDigits}. Enter OTP to complete registration.
+                </p>
+              </div>
+            </div>
+
+            <input
+              autoFocus
+              className="mt-5 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3.5 text-lg font-black tracking-[0.2em] text-slate-900 outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
+              disabled={otpSending || otpVerifying}
+              inputMode="numeric"
+              maxLength={6}
+              onChange={(event) => setOtpCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+              placeholder="000000"
+              value={otpCode}
+            />
+            {otpMessage ? <p className="mt-3 text-sm font-bold text-slate-600">{otpMessage}</p> : null}
+
+            <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <button
+                className="rounded-xl border border-slate-200 px-4 py-3 text-sm font-black text-slate-600 hover:bg-slate-50"
+                disabled={otpVerifying}
+                onClick={() => setOtpModalOpen(false)}
+                type="button"
+              >
+                Cancel
+              </button>
+              <button
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-3 text-sm font-black text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={otpSending || otpVerifying || otpCode.length !== 6}
+                onClick={confirmOtpAndSubmit}
+                type="button"
+              >
+                {otpSending || otpVerifying ? <Loader2 className="size-4 animate-spin" /> : null}
+                {otpSending ? "Sending OTP..." : "Complete Registration"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }

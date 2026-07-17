@@ -64,6 +64,11 @@ export async function POST(request: Request) {
       mobile: `+91 ${mobileDigits}`,
       paymentMode: input.paymentMode === "Part" ? "Part" : "Full",
       status: amountDue > 0 ? "Due" : "Paid",
+      whatsappVerificationStatus: input.whatsappVerificationStatus === "verified"
+        ? "verified"
+        : input.whatsappVerificationStatus === "not_verified"
+          ? "not_verified"
+          : "not_required",
       workshopId: String(input.workshopId ?? workshopTitle).trim().slice(0, 300),
       workshopSlug: String(input.workshopSlug ?? "").trim().slice(0, 300),
       workshopTitle

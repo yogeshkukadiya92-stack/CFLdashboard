@@ -859,7 +859,7 @@ export default function WorkshopMasterPage() {
                   <table className="min-w-[860px] w-full text-left text-sm">
                     <thead className="bg-slate-50 text-xs uppercase text-slate-500">
                       <tr>
-                        {["User", "Mobile", "Email", "City", "Payment", "Paid", "Due", "Reg. Date"].map((head) => (
+                        {["User", "Mobile", "Email", "City", "WhatsApp", "Payment", "Paid", "Due", "Reg. Date"].map((head) => (
                           <th className="px-4 py-3" key={head}>{head}</th>
                         ))}
                       </tr>
@@ -871,6 +871,7 @@ export default function WorkshopMasterPage() {
                           <td className="px-4 py-4">{entry.mobile}</td>
                           <td className="px-4 py-4">{entry.email}</td>
                           <td className="px-4 py-4">{entry.city}</td>
+                          <td className="px-4 py-4"><WhatsAppVerificationBadge status={entry.whatsappVerificationStatus} /></td>
                           <td className="px-4 py-4">
                             <span className={`rounded-full px-3 py-1 text-xs font-black ${entry.status === "Paid" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
                               {entry.status}
@@ -882,7 +883,7 @@ export default function WorkshopMasterPage() {
                         </tr>
                       )) : (
                         <tr>
-                          <td className="px-4 py-8 text-center text-slate-500" colSpan={8}>
+                          <td className="px-4 py-8 text-center text-slate-500" colSpan={9}>
                             No users registered in this workshop yet.
                           </td>
                         </tr>
@@ -1614,6 +1615,16 @@ function MiniStat({ label, value }: { label: string; value: number }) {
       <p className="text-xs font-bold text-slate-500">{label}</p>
     </div>
   );
+}
+
+function WhatsAppVerificationBadge({ status }: { status?: RegistrationEntry["whatsappVerificationStatus"] }) {
+  if (status === "verified") {
+    return <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700">Verified</span>;
+  }
+  if (status === "not_verified") {
+    return <span className="rounded-full bg-rose-50 px-3 py-1 text-xs font-black text-rose-700">Not Verified</span>;
+  }
+  return <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-500">Not Required</span>;
 }
 
 function SelectBox({ label, onChange, options, value }: { label: string; onChange: (value: string) => void; options: string[]; value: string }) {

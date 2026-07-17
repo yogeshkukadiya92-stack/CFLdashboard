@@ -158,6 +158,7 @@ export interface RegistrationEntry {
   amountPaid: number;
   amountDue: number;
   status: "Paid" | "Due";
+  whatsappVerificationStatus?: "verified" | "not_verified" | "not_required";
   createdAt: string;
   batch?: string;
   answers?: Record<string, string>;
