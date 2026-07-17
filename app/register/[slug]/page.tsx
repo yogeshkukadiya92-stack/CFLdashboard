@@ -317,7 +317,7 @@ export default function RegistrationPage() {
   const mobileFieldId = roleField("mobile")?.id;
   const mobileValue = mobileFieldId ? answers[mobileFieldId] ?? "" : "";
   const mobileDigits = cleanMobile(mobileValue);
-  const otpVerified = Boolean(model?.otpRequired) && otpVerifiedMobile === mobileDigits;
+  const otpVerified = Boolean(model?.otpRequired) && mobileDigits.length === 10 && otpVerifiedMobile === mobileDigits;
 
   // Auto-fill from a saved client when the mobile matches.
   useEffect(() => {
