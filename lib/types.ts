@@ -182,6 +182,7 @@ export interface BuilderField {
   placeholder?: string;
   required?: boolean;
   options?: string[];
+  allowOther?: boolean;
   /** Maps a field to a core registration column so reports keep working. */
   role?: "name" | "mobile" | "email" | "city";
 }

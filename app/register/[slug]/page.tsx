@@ -798,16 +798,29 @@ function RenderField({
   if (field.type === "paragraph") {
     control = <textarea className={inputClass} onChange={(event) => onChange(event.target.value)} placeholder={field.placeholder} rows={3} value={value} />;
   } else if (field.type === "dropdown") {
+    const isOther = value.startsWith("Other: ");
     control = (
-      <select className={inputClass} onChange={(event) => onChange(event.target.value)} value={value}>
-        <option value="">Select…</option>
-        {(field.options ?? []).map((option) => <option key={option} value={option}>{option}</option>)}
-      </select>
+      <div className="space-y-2">
+        <select className={inputClass} onChange={(event) => onChange(event.target.value)} value={isOther ? "__other" : value}>
+          <option value="">Select…</option>
+          {(field.options ?? []).map((option) => <option key={option} value={option}>{option}</option>)}
+          {field.allowOther ? <option value="__other">Other</option> : null}
+        </select>
+        {field.allowOther && isOther ? (
+          <input
+            className={inputClass}
+            onChange={(event) => onChange(`Other: ${event.target.value}`)}
+            placeholder="Please specify"
+            value={value.replace(/^Other: /, "")}
+          />
+        ) : null}
+      </div>
     );
   } else if (field.type === "radio" || field.type === "checkbox") {
     const selected = value.split(" | ").filter(Boolean);
+    const otherValue = selected.find((item) => item.startsWith("Other: ")) ?? "";
     control = (
-      <div className="space-y-1.5">
+      <div className="space-y-2">
         {(field.options ?? []).map((option) => (
           <label className="flex min-h-[44px] items-center gap-3 text-sm font-semibold text-slate-700" key={option}>
             <input
@@ -821,6 +834,37 @@ function RenderField({
             {option}
           </label>
         ))}
+        {field.allowOther ? (
+          <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+            <label className="flex min-h-[40px] items-center gap-3 text-sm font-semibold text-slate-700">
+              <input
+                checked={field.type === "radio" ? value.startsWith("Other: ") : Boolean(otherValue)}
+                className="size-5"
+                name={field.id}
+                onChange={() => (field.type === "radio" ? onChange("Other: ") : onToggle(otherValue || "Other: "))}
+                style={{ accentColor: accent }}
+                type={field.type === "radio" ? "radio" : "checkbox"}
+              />
+              Other
+            </label>
+            {(field.type === "radio" ? value.startsWith("Other: ") : Boolean(otherValue)) ? (
+              <input
+                className={`${inputClass} mt-2 bg-white`}
+                onChange={(event) => {
+                  const nextOther = `Other: ${event.target.value}`;
+                  if (field.type === "radio") {
+                    onChange(nextOther);
+                    return;
+                  }
+                  const withoutOther = selected.filter((item) => !item.startsWith("Other: "));
+                  onChange([...withoutOther, nextOther].filter(Boolean).join(" | "));
+                }}
+                placeholder="Please specify"
+                value={(field.type === "radio" ? value : otherValue).replace(/^Other: /, "")}
+              />
+            ) : null}
+          </div>
+        ) : null}
       </div>
     );
   } else {

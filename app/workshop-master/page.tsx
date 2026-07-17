@@ -1316,6 +1316,14 @@ function FieldEditor({
   const meta = fieldTypeMeta[field.type];
   const Icon = field.type === "email" ? Mail : field.type === "mobile" ? Smartphone : field.type === "heading" ? Heading : field.type === "checkbox" ? CheckSquare : field.type === "radio" ? Circle : Type;
   const lockedRole = field.role === "name" || field.role === "mobile";
+  const options = field.options?.length ? field.options : ["Option 1", "Option 2"];
+  const updateOption = (optionIndex: number, value: string) => {
+    onChange({ options: options.map((option, currentIndex) => currentIndex === optionIndex ? value : option).filter((option) => option.trim()) });
+  };
+  const removeOption = (optionIndex: number) => {
+    const next = options.filter((_, currentIndex) => currentIndex !== optionIndex);
+    onChange({ options: next.length ? next : ["Option 1"] });
+  };
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-3">
@@ -1344,14 +1352,36 @@ function FieldEditor({
       ) : null}
 
       {meta.hasOptions ? (
-        <div className="mt-2 sm:pl-11">
-          <textarea
-            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
-            onChange={(event) => onChange({ options: event.target.value.split("\n").map((line) => line.trim()).filter(Boolean) })}
-            placeholder="One option per line"
-            rows={3}
-            value={(field.options ?? []).join("\n")}
-          />
+        <div className="mt-3 space-y-2 sm:pl-11">
+          <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-400">Options</p>
+          {options.map((option, optionIndex) => (
+            <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-2" key={`${field.id}-option-${optionIndex}`}>
+              <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-white text-xs font-black text-slate-500">{optionIndex + 1}</span>
+              <input
+                className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm font-bold outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
+                onChange={(event) => updateOption(optionIndex, event.target.value)}
+                placeholder={`Option ${optionIndex + 1}`}
+                value={option}
+              />
+              <button className="grid size-9 shrink-0 place-items-center rounded-lg text-rose-500 hover:bg-rose-50" onClick={() => removeOption(optionIndex)} type="button">
+                <Trash2 className="size-4" />
+              </button>
+            </div>
+          ))}
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <button
+              className="inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border border-dashed border-slate-300 bg-white px-3 py-2 text-xs font-black text-slate-600 hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700"
+              onClick={() => onChange({ options: [...options, `Option ${options.length + 1}`] })}
+              type="button"
+            >
+              <Plus className="size-3.5" />
+              Add Option
+            </button>
+            <label className="inline-flex min-h-[38px] items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-600">
+              <input checked={Boolean(field.allowOther)} className="size-4 accent-emerald-600" onChange={(event) => onChange({ allowOther: event.target.checked })} type="checkbox" />
+              Add Other text option
+            </label>
+          </div>
         </div>
       ) : null}
 
