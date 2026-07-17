@@ -129,6 +129,7 @@ export default function FormBuilderPage() {
   const [paid, setPaid] = useState(false);
   const [fee, setFee] = useState("");
   const [partPayment, setPartPayment] = useState(false);
+  const [otpRequired, setOtpRequired] = useState(false);
   const [tiers, setTiers] = useState<PaymentTier[]>([]);
   const [highlights, setHighlights] = useState<string[]>([]);
   const [whatsappGroupUrl, setWhatsappGroupUrl] = useState("");
@@ -191,13 +192,14 @@ export default function FormBuilderPage() {
       paid,
       fee: Number(fee) || 0,
       partPayment,
+      otpRequired,
       tiers: tiers.length > 0 ? tiers : undefined,
       highlights: highlights.filter(Boolean).length > 0 ? highlights.filter(Boolean) : undefined,
       whatsappGroupUrl: whatsappGroupUrl.trim() || undefined,
       fields,
       updatedAt: new Date().toISOString()
     };
-  }, [accent, align, bannerUrl, batch, description, fee, fields, fontFamily, fontSize, highlights, logoUrl, paid, partPayment, tiers, title, titleBold, titleItalic, whatsappGroupUrl, workshop, workshopId]);
+  }, [accent, align, bannerUrl, batch, description, fee, fields, fontFamily, fontSize, highlights, logoUrl, otpRequired, paid, partPayment, tiers, title, titleBold, titleItalic, whatsappGroupUrl, workshop, workshopId]);
 
   const link = useMemo(() => {
     if (typeof window === "undefined" || !workshopId) return "";
@@ -374,6 +376,13 @@ export default function FormBuilderPage() {
                   value={whatsappGroupUrl}
                 />
                 <span className="mt-1 block text-xs font-semibold text-slate-400">After registration, the thank-you page can redirect to this group link after 5 seconds.</span>
+              </label>
+              <label className="flex min-h-[58px] items-center justify-between gap-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                <span>
+                  <span className="block text-sm font-black text-slate-700">WhatsApp OTP Verification</span>
+                  <span className="mt-0.5 block text-xs font-semibold text-slate-400">Send OTP on WhatsApp before registration is submitted.</span>
+                </span>
+                <input checked={otpRequired} className="size-5 shrink-0 accent-emerald-600" onChange={(event) => setOtpRequired(event.target.checked)} type="checkbox" />
               </label>
 
               <div className="grid gap-4 sm:grid-cols-2">
@@ -925,6 +934,16 @@ function FormPreview({ form }: { form: BuilderForm }) {
         {form.fields.map((field) => (
           <PreviewField field={field} key={field.id} accent={theme.accent} />
         ))}
+        {form.otpRequired ? (
+          <div className="rounded-2xl border border-emerald-100 bg-emerald-50/70 p-4">
+            <span className="mb-2 block text-sm font-black text-slate-700">WhatsApp OTP Verification</span>
+            <span className="mb-3 block text-xs font-semibold text-slate-500">OTP will be sent on WhatsApp to the participant mobile number.</span>
+            <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+              <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none" placeholder="Enter 6-digit OTP" />
+              <button className="rounded-xl bg-emerald-600 px-4 py-3 text-sm font-black text-white" type="button">Verify</button>
+            </div>
+          </div>
+        ) : null}
         <button
           className="w-full min-h-[52px] rounded-2xl px-5 py-3.5 text-sm font-black tracking-wide text-white uppercase transition-transform hover:scale-[1.01] active:scale-[0.99]"
           style={{ backgroundColor: theme.accent, boxShadow: `0 6px 20px -4px ${theme.accent}55, 0 2px 4px -1px ${theme.accent}33` }}

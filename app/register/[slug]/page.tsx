@@ -5,7 +5,7 @@ import { hydratePublicRegistrationState, readLocalArray, readLocalObject, savePu
 import { sanitizeRichTextHtml } from "@/lib/rich-text";
 import type { BuilderField, BuilderForm, BuilderTheme, PaymentTier, RegistrationEntry } from "@/lib/types";
 import { decodeJsonParam, formatCurrency } from "@/lib/utils";
-import { AlertTriangle, Check, CheckCircle2, ShieldCheck } from "lucide-react";
+import { AlertTriangle, Check, CheckCircle2, Loader2, ShieldCheck } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 
@@ -42,6 +42,7 @@ type FormModel = {
   paid: boolean;
   fee: number;
   partPayment: boolean;
+  otpRequired?: boolean;
   tiers?: PaymentTier[];
   highlights?: string[];
   whatsappGroupUrl?: string;
@@ -95,6 +96,7 @@ function modelFromBuilderForm(form: BuilderForm, overrides?: Partial<Pick<FormMo
     paid: overrides?.paid ?? Boolean(form.paid),
     fee: overrides?.fee ?? form.fee ?? 0,
     partPayment: overrides?.partPayment ?? Boolean(form.partPayment),
+    otpRequired: Boolean(form.otpRequired),
     tiers: form.tiers && form.tiers.length > 0 ? form.tiers : undefined,
     highlights: form.highlights && form.highlights.length > 0 ? form.highlights : undefined,
     whatsappGroupUrl: form.whatsappGroupUrl,
@@ -127,6 +129,11 @@ export default function RegistrationPage() {
   const [partAmount, setPartAmount] = useState("");
   const [selectedTierId, setSelectedTierId] = useState("");
   const [message, setMessage] = useState("");
+  const [otpCode, setOtpCode] = useState("");
+  const [otpMessage, setOtpMessage] = useState("");
+  const [otpSending, setOtpSending] = useState(false);
+  const [otpVerifying, setOtpVerifying] = useState(false);
+  const [otpVerifiedMobile, setOtpVerifiedMobile] = useState("");
   const [success, setSuccess] = useState(false);
   const [redirectCountdown, setRedirectCountdown] = useState(5);
 
@@ -306,6 +313,8 @@ export default function RegistrationPage() {
   const roleField = (role: NonNullable<BuilderField["role"]>) => model?.fields.find((field) => field.role === role) ?? null;
   const mobileFieldId = roleField("mobile")?.id;
   const mobileValue = mobileFieldId ? answers[mobileFieldId] ?? "" : "";
+  const mobileDigits = cleanMobile(mobileValue);
+  const otpVerified = Boolean(model?.otpRequired) && otpVerifiedMobile === mobileDigits;
 
   // Auto-fill from a saved client when the mobile matches.
   useEffect(() => {
@@ -335,6 +344,12 @@ export default function RegistrationPage() {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clients, mobileValue, model]);
+
+  useEffect(() => {
+    setOtpCode("");
+    setOtpMessage("");
+    setOtpVerifiedMobile((current) => (current === mobileDigits ? current : ""));
+  }, [mobileDigits]);
 
   const tierList = model?.tiers ?? [];
   const hasTiers = tierList.length > 0;
@@ -366,10 +381,69 @@ export default function RegistrationPage() {
     });
   }
 
+  async function sendOtp() {
+    if (!model?.otpRequired) return;
+    if (mobileDigits.length !== 10 || !/^[6-9]/.test(mobileDigits)) {
+      setOtpMessage("Enter a valid 10-digit mobile number first.");
+      return;
+    }
+    setOtpSending(true);
+    setOtpMessage("");
+    try {
+      const response = await fetch("/api/otp/send", {
+        body: JSON.stringify({ mobile: mobileDigits }),
+        headers: { "Content-Type": "application/json" },
+        method: "POST"
+      });
+      const data = await response.json();
+      if (!response.ok || !data?.ok) {
+        setOtpMessage(data?.error || "Could not send OTP. Please try again.");
+        return;
+      }
+      setOtpMessage(data.setupOtp ? `Setup mode WhatsApp OTP: ${data.setupOtp}` : "OTP sent on WhatsApp to participant mobile.");
+    } catch {
+      setOtpMessage("Could not send OTP. Please try again.");
+    } finally {
+      setOtpSending(false);
+    }
+  }
+
+  async function verifyOtp() {
+    if (!model?.otpRequired) return;
+    if (mobileDigits.length !== 10 || otpCode.trim().length !== 6) {
+      setOtpMessage("Enter the 6-digit OTP.");
+      return;
+    }
+    setOtpVerifying(true);
+    setOtpMessage("");
+    try {
+      const response = await fetch("/api/otp/verify", {
+        body: JSON.stringify({ mobile: mobileDigits, otp: otpCode }),
+        headers: { "Content-Type": "application/json" },
+        method: "POST"
+      });
+      const data = await response.json();
+      if (!response.ok || !data?.ok) {
+        setOtpMessage(data?.error || "Incorrect OTP.");
+        return;
+      }
+      setOtpVerifiedMobile(mobileDigits);
+      setOtpMessage("Mobile number verified.");
+    } catch {
+      setOtpMessage("Could not verify OTP. Please try again.");
+    } finally {
+      setOtpVerifying(false);
+    }
+  }
+
   function submitRegistration() {
     if (!model) return;
     if (missingRequired) {
       setMessage("Please fill all required fields (and a valid 10-digit mobile).");
+      return;
+    }
+    if (model.otpRequired && !otpVerified) {
+      setMessage("Please verify mobile number with WhatsApp OTP before registration.");
       return;
     }
 
@@ -420,6 +494,9 @@ export default function RegistrationPage() {
     setRedirectCountdown(5);
     setMessage("Registration confirmed. See you at the workshop!");
     setAnswers({});
+    setOtpCode("");
+    setOtpMessage("");
+    setOtpVerifiedMobile("");
     setPartAmount("");
   }
 
@@ -561,6 +638,52 @@ export default function RegistrationPage() {
                   />
                 ))}
               </div>
+
+              {model.otpRequired ? (
+                <div className="mt-5 rounded-2xl border border-emerald-100 bg-emerald-50/60 p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-black text-slate-800">WhatsApp OTP Verification</p>
+                      <p className="mt-1 text-xs font-semibold text-slate-500">OTP will be sent on WhatsApp to the participant mobile number.</p>
+                    </div>
+                    {otpVerified ? (
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-3 py-1 text-xs font-black text-white">
+                        <CheckCircle2 className="size-3.5" />
+                        Verified
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto_auto]">
+                    <input
+                      className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-sm font-semibold outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
+                      inputMode="numeric"
+                      maxLength={6}
+                      onChange={(event) => setOtpCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+                      placeholder="Enter 6-digit OTP"
+                      value={otpCode}
+                    />
+                    <button
+                      className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-white px-4 py-2.5 text-sm font-black text-emerald-700 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
+                      disabled={otpSending || otpVerified}
+                      onClick={sendOtp}
+                      type="button"
+                    >
+                      {otpSending ? <Loader2 className="size-4 animate-spin" /> : null}
+                      Send WhatsApp OTP
+                    </button>
+                    <button
+                      className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-black text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+                      disabled={otpVerifying || otpVerified}
+                      onClick={verifyOtp}
+                      type="button"
+                    >
+                      {otpVerifying ? <Loader2 className="size-4 animate-spin" /> : null}
+                      Verify
+                    </button>
+                  </div>
+                  {otpMessage ? <p className={`mt-3 text-sm font-bold ${otpVerified ? "text-emerald-700" : "text-slate-600"}`}>{otpMessage}</p> : null}
+                </div>
+              ) : null}
 
               {model.paid && hasTiers ? (
                 <div className="mt-5 rounded-2xl border border-slate-100 bg-slate-50/50 p-5">

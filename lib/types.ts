@@ -215,6 +215,7 @@ export interface BuilderForm {
   paid: boolean;
   fee: number;
   partPayment: boolean;
+  otpRequired?: boolean;
   tiers?: PaymentTier[];
   highlights?: string[];
   whatsappGroupUrl?: string;

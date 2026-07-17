@@ -129,6 +129,7 @@ export default function WorkshopMasterPage() {
   const [formLogoUrl, setFormLogoUrl] = useState("");
   const [formFields, setFormFields] = useState<BuilderField[]>(defaultBuilderFields);
   const [formHighlights, setFormHighlights] = useState<string[]>([]);
+  const [formOtpRequired, setFormOtpRequired] = useState(false);
   const [whatsappGroupUrl, setWhatsappGroupUrl] = useState("");
   const [message, setMessage] = useState("");
   const [search, setSearch] = useState("");
@@ -298,6 +299,7 @@ export default function WorkshopMasterPage() {
     setFormLogoUrl("");
     setFormFields(defaultBuilderFields());
     setFormHighlights([]);
+    setFormOtpRequired(false);
     setWhatsappGroupUrl("");
   }
 
@@ -314,6 +316,7 @@ export default function WorkshopMasterPage() {
       paid: record.isPaid,
       fee: Number(record.feesWithTax || 0),
       partPayment: Boolean(record.isPartPaymentAllow),
+      otpRequired: formOtpRequired,
       highlights: formHighlights.map((item) => item.trim()).filter(Boolean),
       whatsappGroupUrl: whatsappGroupUrl.trim() || undefined,
       fields: normalizeCoreFieldRequirements(formFields),
@@ -342,6 +345,7 @@ export default function WorkshopMasterPage() {
         setFormLogoUrl("");
         setFormFields(defaultBuilderFields());
         setFormHighlights([]);
+        setFormOtpRequired(false);
         return;
       }
       setFormTitle(savedForm.title || `${record.name} Registration`);
@@ -349,6 +353,7 @@ export default function WorkshopMasterPage() {
       setFormLogoUrl(savedForm.theme?.logoUrl ?? "");
       setFormFields(savedForm.fields?.length ? normalizeCoreFieldRequirements(savedForm.fields) : defaultBuilderFields());
       setFormHighlights(savedForm.highlights ?? []);
+      setFormOtpRequired(Boolean(savedForm.otpRequired));
       setWhatsappGroupUrl(savedForm.whatsappGroupUrl ?? "");
     } catch {
       resetBuilderForm();
@@ -559,6 +564,13 @@ export default function WorkshopMasterPage() {
               <span className="mb-2 block text-sm font-bold text-slate-600">WhatsApp Group Invite Link</span>
               <input className={inputClass} onChange={(event) => setWhatsappGroupUrl(event.target.value)} placeholder="https://chat.whatsapp.com/xxxxxxxx" value={whatsappGroupUrl} />
               <span className="mt-1 block text-xs font-semibold text-slate-400">After registration, the thank-you page can redirect to this group link after 5 seconds.</span>
+            </label>
+            <label className="flex min-h-[58px] items-center justify-between gap-4 rounded-xl border border-emerald-100 bg-white px-4 py-3 md:col-span-2">
+              <span>
+                <span className="block text-sm font-black text-slate-700">WhatsApp OTP Verification</span>
+                <span className="mt-0.5 block text-xs font-semibold text-slate-400">Turn on when participants must verify a WhatsApp OTP before submitting this registration form.</span>
+              </span>
+              <input checked={formOtpRequired} className="size-5 shrink-0 accent-emerald-600" onChange={(event) => setFormOtpRequired(event.target.checked)} type="checkbox" />
             </label>
           </div>
 
