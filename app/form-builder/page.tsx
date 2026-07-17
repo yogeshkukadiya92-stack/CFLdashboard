@@ -32,6 +32,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 const WORKSHOP_MASTER_STORAGE_KEY = "cfl_workshop_master_records_v1";
 const FORMS_STORAGE_KEY = "cfl_forms_v1";
+const BRAND_LOGO_SRC = "/brand/coach-for-life-logo.jpeg";
 const MAX_IMAGE_WIDTH = 800;
 const IMAGE_QUALITY = 0.7;
 
@@ -876,6 +877,7 @@ function IconBtn({ children, disabled, onClick, title, tone }: { children: React
 
 function FormPreview({ form }: { form: BuilderForm }) {
   const { theme } = form;
+  const displayLogoUrl = theme.logoUrl || BRAND_LOGO_SRC;
   return (
     <div
       className="overflow-hidden rounded-3xl bg-white"
@@ -894,11 +896,11 @@ function FormPreview({ form }: { form: BuilderForm }) {
         <div className="h-2 rounded-t-3xl" style={{ background: `linear-gradient(90deg, ${theme.accent}, ${theme.accent}99)` }} />
       )}
       <div className="relative p-5 sm:p-7" style={{ textAlign: theme.align }}>
-        {theme.logoUrl ? (
+        {displayLogoUrl ? (
           <img
-            alt="Logo"
-            className={`mb-4 size-[72px] rounded-2xl object-cover ${theme.align === "center" ? "mx-auto" : ""}`}
-            src={theme.logoUrl}
+            alt="Coach For Life"
+            className={`mb-4 h-[72px] w-auto max-w-[240px] rounded-2xl bg-white object-contain p-2 ${theme.align === "center" ? "mx-auto" : ""}`}
+            src={displayLogoUrl}
             style={{ boxShadow: "0 4px 20px -4px rgba(0,0,0,0.15), 0 0 0 3px white, 0 0 0 4px rgba(0,0,0,0.06)" }}
           />
         ) : null}

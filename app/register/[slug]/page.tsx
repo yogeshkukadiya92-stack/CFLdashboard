@@ -14,6 +14,7 @@ const WORKSHOP_MASTER_STORAGE_KEY = "cfl_workshop_master_records_v1";
 const FORMS_STORAGE_KEY = "cfl_forms_v1";
 const REGISTRATION_LINK_CONFIG_STORAGE_KEY = "cfl_registration_link_configs_v1";
 const CLIENTS_STORAGE_KEY = "cfl_clients_v1";
+const BRAND_LOGO_SRC = "/brand/coach-for-life-logo.jpeg";
 
 type WorkshopMasterRecord = { archived?: boolean; id: string; name: string; facilitator?: string; isPaid?: boolean };
 type ClientRecord = { city?: string; email?: string; id: number | string; mobile?: string; name?: string };
@@ -556,6 +557,7 @@ export default function RegistrationPage() {
   }
 
   const theme = model.theme;
+  const displayLogoUrl = theme.logoUrl || BRAND_LOGO_SRC;
   const metaLine = [model.batch && `Batch: ${model.batch}`, model.facilitator && `Facilitator: ${model.facilitator}`, model.venue && `Venue: ${model.venue}`].filter(Boolean);
 
   return (
@@ -573,11 +575,11 @@ export default function RegistrationPage() {
           <div className="h-2.5 rounded-t-3xl" style={{ background: `linear-gradient(90deg, ${theme.accent}, ${theme.accent}88)` }} />
         )}
         <div className="relative p-6 md:p-8" style={{ textAlign: theme.align }}>
-          {theme.logoUrl ? (
+          {displayLogoUrl ? (
             <img
-              alt=""
-              className={`mb-4 size-20 rounded-2xl object-cover ${theme.align === "center" ? "mx-auto" : ""}`}
-              src={theme.logoUrl}
+              alt="Coach For Life"
+              className={`mb-4 h-20 w-auto max-w-[280px] rounded-2xl bg-white object-contain p-2 ${theme.align === "center" ? "mx-auto" : ""}`}
+              src={displayLogoUrl}
               style={{ boxShadow: "0 4px 24px -6px rgba(0,0,0,0.15), 0 0 0 3px white, 0 0 0 4px rgba(0,0,0,0.06)" }}
             />
           ) : null}

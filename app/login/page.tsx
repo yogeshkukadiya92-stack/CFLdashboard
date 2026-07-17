@@ -1,7 +1,9 @@
 "use client";
 
-import { LockKeyhole, LogIn, ShieldCheck } from "lucide-react";
+import { LockKeyhole, LogIn } from "lucide-react";
 import { type FormEvent, useEffect, useState } from "react";
+
+const BRAND_LOGO_SRC = "/brand/coach-for-life-logo.jpeg";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("coachforlife107@gmail.com");
@@ -55,11 +57,9 @@ export default function LoginPage() {
       <section className="grid w-full max-w-5xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-panel lg:grid-cols-[0.95fr_1.05fr]">
         <div className="bg-slate-950 p-8 text-white md:p-10">
           <div className="flex items-center gap-3">
-            <span className="grid size-11 place-items-center rounded-xl bg-emerald-500 text-white">
-              <ShieldCheck className="size-5" />
-            </span>
+            <img alt="Coach For Life" className="h-14 w-auto max-w-[240px] rounded-xl bg-white p-2 object-contain shadow-sm" src={BRAND_LOGO_SRC} />
             <div>
-              <p className="text-[11px] font-black uppercase tracking-[0.18em] text-emerald-300">CFL Admin</p>
+              <p className="text-[11px] font-black uppercase tracking-[0.18em] text-emerald-300">Admin Portal</p>
               <h1 className="text-2xl font-black">Master Login</h1>
             </div>
           </div>

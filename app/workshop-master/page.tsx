@@ -59,6 +59,7 @@ const WORKSHOP_TYPES_STORAGE_KEY = "cfl_workshop_types_v1";
 const FACILITATORS_STORAGE_KEY = "cfl_facilitators_v1";
 const IMAGE_QUALITY = 0.7;
 const MAX_LOGO_WIDTH = 240;
+const BRAND_LOGO_SRC = "/brand/coach-for-life-logo.jpeg";
 const defaultWorkshopTypes = ["1-2-1 Coaching", "Workshop", "Online Event", "Offline Event", "Hybrid Program"];
 const defaultFacilitators = ["Dr Luv Patel"];
 const productGroups = ["Health", "Spiritual", "Leadership", "Sales", "Fitness", "Business Growth"];
@@ -977,6 +978,7 @@ function WorkshopFormLivePreview({
   title: string;
 }) {
   const visibleHighlights = highlights.map((item) => item.trim()).filter(Boolean);
+  const displayLogoUrl = logoUrl || BRAND_LOGO_SRC;
   return (
     <aside className="xl:sticky xl:top-24 xl:self-start">
       <div className="mb-3 flex items-center justify-between">
@@ -986,11 +988,11 @@ function WorkshopFormLivePreview({
       <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_16px_40px_-24px_rgba(15,23,42,0.55)]">
         <div className="h-2 bg-gradient-to-r from-emerald-600 to-emerald-400" />
         <div className="max-h-[calc(100vh-10rem)] overflow-y-auto p-5">
-          {logoUrl ? (
+          {displayLogoUrl ? (
             <img
-              alt="Form logo preview"
-              className="mb-4 size-16 rounded-2xl border border-slate-100 object-cover shadow-sm"
-              src={logoUrl}
+              alt="Coach For Life"
+              className="mb-4 h-16 w-auto max-w-[220px] rounded-2xl border border-slate-100 bg-white object-contain p-2 shadow-sm"
+              src={displayLogoUrl}
             />
           ) : null}
           <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-700">CFL Workshop Registration</p>

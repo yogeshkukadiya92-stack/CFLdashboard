@@ -27,6 +27,8 @@ import { usePathname, useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { ThemeToggle } from "@/components/theme-toggle";
 
+const BRAND_LOGO_SRC = "/brand/coach-for-life-logo.jpeg";
+
 type NavItem = {
   href: string;
   icon: LucideIcon;
@@ -270,7 +272,11 @@ export function AdminPlatformShell({
               <Menu className="size-5" />
             </button>
             <div className="min-w-0">
-              <p className="text-[11px] font-black uppercase tracking-[0.18em] text-emerald-700">CFL Admin</p>
+              <img
+                alt="Coach For Life"
+                className="h-8 w-auto max-w-[190px] rounded-md bg-white object-contain"
+                src={BRAND_LOGO_SRC}
+              />
               <h1 className="truncate text-lg font-black text-slate-950">{activeLabel}</h1>
             </div>
           </div>
@@ -411,7 +417,9 @@ export function AdminPlatformShell({
           </div>
           <div className="rounded-xl border border-white/10 bg-white/[0.06] p-4 text-white">
             <p className="text-[11px] font-black uppercase tracking-[0.18em] text-emerald-300">Unified Platform</p>
-            <p className="mt-1 text-xl font-black">CFL Admin</p>
+            <div className="mt-3 rounded-xl bg-white p-2 shadow-sm">
+              <img alt="Coach For Life" className="h-12 w-full object-contain" src={BRAND_LOGO_SRC} />
+            </div>
             <p className="mt-1 text-xs font-semibold text-slate-300">Live business workspace.</p>
           </div>
 
