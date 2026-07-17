@@ -113,7 +113,6 @@ export async function saveLiveState(patch: LiveStatePatch) {
       body: JSON.stringify(patch),
       credentials: "same-origin",
       headers: { "Content-Type": "application/json" },
-      keepalive: true,
       method: "POST"
     });
     return response.ok;

@@ -181,9 +181,9 @@ export default function WorkshopMasterPage() {
     );
   }, [registrations, selectedWorkshop]);
 
-  function saveRecords(next: WorkshopRecord[]) {
+  async function saveRecords(next: WorkshopRecord[]) {
     setRecords(next);
-    void saveLiveState({ workshops: next });
+    return saveLiveState({ workshops: next });
   }
 
   function clearForm(clearMessage = true) {
@@ -209,7 +209,7 @@ export default function WorkshopMasterPage() {
     setEditingId(null);
   }
 
-  function submit(event: FormEvent<HTMLFormElement>) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!name || !type || !facilitator || !group) {
       setMessage("Please fill Workshop Name, Type, Facilitator and Product Group.");
@@ -217,14 +217,15 @@ export default function WorkshopMasterPage() {
     }
     if (editingId) {
       const updatedRecord = buildWorkshopRecord(editingId);
-      saveRecords(records.map((record) => record.id === editingId ? updatedRecord : record));
-      saveBuilderForm(updatedRecord);
-      setMessage("Workshop updated successfully.");
+      const nextRecords = records.map((record) => record.id === editingId ? updatedRecord : record);
+      const [recordsSaved, formSaved] = await Promise.all([saveRecords(nextRecords), saveBuilderForm(updatedRecord)]);
+      setMessage(recordsSaved && formSaved ? "Workshop updated successfully. Changes are saved." : "Workshop updated locally, but server sync failed. Please try Update again.");
+      setShowData(false);
+      return;
     } else {
       const newRecord = buildWorkshopRecord(generateId());
-      saveRecords([newRecord, ...records]);
-      saveBuilderForm(newRecord);
-      setMessage("Workshop saved successfully.");
+      const [recordsSaved, formSaved] = await Promise.all([saveRecords([newRecord, ...records]), saveBuilderForm(newRecord)]);
+      setMessage(recordsSaved && formSaved ? "Workshop saved successfully." : "Workshop saved locally, but server sync failed. Please try Save again.");
     }
     clearForm(false);
     setShowData(true);
@@ -325,14 +326,15 @@ export default function WorkshopMasterPage() {
     };
   }
 
-  function saveBuilderForm(record: WorkshopRecord) {
+  async function saveBuilderForm(record: WorkshopRecord) {
     try {
       const forms = readLocalArray<BuilderForm>(FORMS_STORAGE_KEY);
       const form = buildRegistrationForm(record);
       const next = [form, ...forms.filter((item) => item.id !== form.id && item.workshopId !== record.id)];
-      void saveLiveState({ forms: next });
+      return saveLiveState({ forms: next });
     } catch {
       // Workshop save should still work if local form storage is unavailable.
+      return false;
     }
   }
 
