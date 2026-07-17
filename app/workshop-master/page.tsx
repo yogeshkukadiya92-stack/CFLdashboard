@@ -2,11 +2,11 @@
 
 import { AdminPlatformShell } from "@/components/admin-platform-shell";
 import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
-import { AlertCircle, Archive, ArrowDown, ArrowUp, Bold, Check, CheckSquare, ChevronDown, Circle, Copy, Download, Edit3, ExternalLink, Eye, Files, Heading, Image, Italic, Link2, List, ListOrdered, Mail, Palette, Plus, QrCode, RefreshCw, Save, Search, Smartphone, Trash2, Type, Underline, UsersRound, X } from "lucide-react";
+import { AlertCircle, Archive, ArrowDown, ArrowUp, BarChart3, Bold, Check, CheckSquare, ChevronDown, Circle, Copy, Download, Edit3, ExternalLink, Eye, Files, Heading, Image, Italic, LayoutList, Link2, List, ListOrdered, Mail, Monitor, Palette, Plus, QrCode, RefreshCw, Route, Save, Search, Smartphone, Sparkles, Trash2, Type, Underline, UsersRound, X } from "lucide-react";
 import { hydrateLiveState, readLocalArray, readLocalObject, saveLiveState } from "@/lib/live-state";
 import { buildRegistrationUrl, normalizeBaseUrl } from "@/lib/registration-url";
 import { sanitizeRichTextHtml } from "@/lib/rich-text";
-import type { BuilderField, BuilderFieldType, BuilderForm, BuilderTheme, RegistrationEntry } from "@/lib/types";
+import type { BuilderField, BuilderFieldType, BuilderForm, BuilderFormMode, BuilderTheme, FormAnalyticsRecord, RegistrationEntry } from "@/lib/types";
 import { generateId } from "@/lib/utils";
 import { type ClipboardEvent, type FormEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
@@ -70,8 +70,22 @@ const defaultTheme: BuilderTheme = {
   accent: "#059669",
   titleBold: true,
   titleItalic: false,
-  align: "left"
+  align: "left",
+  backgroundColor: "#f1f5f9",
+  surfaceColor: "#ffffff",
+  fieldRadius: "rounded"
 };
+const themePresets: Array<{ accent: string; backgroundColor: string; label: string; surfaceColor: string }> = [
+  { accent: "#059669", backgroundColor: "#f1f5f9", label: "CFL Green", surfaceColor: "#ffffff" },
+  { accent: "#2563eb", backgroundColor: "#eff6ff", label: "Ocean", surfaceColor: "#ffffff" },
+  { accent: "#0f172a", backgroundColor: "#e2e8f0", label: "Executive", surfaceColor: "#ffffff" },
+  { accent: "#e11d48", backgroundColor: "#fff1f2", label: "Celebration", surfaceColor: "#ffffff" }
+];
+const formFonts = [
+  { label: "Modern", value: "Inter, ui-sans-serif, system-ui, sans-serif" },
+  { label: "Friendly", value: "Nunito, Inter, ui-sans-serif, system-ui, sans-serif" },
+  { label: "Editorial", value: "Georgia, Cambria, serif" }
+];
 const fieldTypeMeta: Record<BuilderFieldType, { label: string; hasOptions: boolean }> = {
   short_text: { label: "Short Text", hasOptions: false },
   paragraph: { label: "Paragraph", hasOptions: false },
@@ -130,6 +144,8 @@ export default function WorkshopMasterPage() {
   const [formTagline, setFormTagline] = useState("");
   const [formDescription, setFormDescription] = useState("Please fill in your details to confirm your seat.");
   const [formLogoUrl, setFormLogoUrl] = useState("");
+  const [formMode, setFormMode] = useState<BuilderFormMode>("classic");
+  const [formTheme, setFormTheme] = useState<BuilderTheme>(defaultTheme);
   const [formFields, setFormFields] = useState<BuilderField[]>(defaultBuilderFields);
   const [formHighlights, setFormHighlights] = useState<string[]>([]);
   const [formOtpRequired, setFormOtpRequired] = useState(false);
@@ -141,6 +157,7 @@ export default function WorkshopMasterPage() {
   const [selectedWorkshopId, setSelectedWorkshopId] = useState<string | null>(null);
   const [showParticipants, setShowParticipants] = useState(false);
   const [registrations, setRegistrations] = useState<RegistrationEntry[]>([]);
+  const [formAnalytics, setFormAnalytics] = useState<FormAnalyticsRecord[]>([]);
   const [linkWorkshop, setLinkWorkshop] = useState<WorkshopRecord | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<WorkshopRecord | null>(null);
 
@@ -150,6 +167,7 @@ export default function WorkshopMasterPage() {
       setWorkshopTypes(readMasterNames(WORKSHOP_TYPES_STORAGE_KEY, defaultWorkshopTypes));
       setFacilitators(readMasterNames(FACILITATORS_STORAGE_KEY, defaultFacilitators));
       setRegistrations(readLocalArray<RegistrationEntry>(REGISTRATION_STORAGE_KEY));
+      setFormAnalytics(readLocalArray<FormAnalyticsRecord>("cfl_form_analytics_v1"));
     }
 
     loadLocal();
@@ -174,6 +192,9 @@ export default function WorkshopMasterPage() {
   const freeCount = records.filter((record) => !record.isPaid && !record.paymentUnknown).length;
   const historicalCount = records.filter((record) => record.archived).length;
   const selectedWorkshop = records.find((record) => record.id === selectedWorkshopId) ?? null;
+  const editingAnalytics = editingId
+    ? formAnalytics.find((item) => item.workshopId === editingId || item.formId === `form-${editingId}-main`) ?? null
+    : null;
   const selectedParticipants = useMemo(() => {
     if (!selectedWorkshop) return [];
     const selectedName = selectedWorkshop.name.trim().toLowerCase();
@@ -338,6 +359,8 @@ export default function WorkshopMasterPage() {
     setFormTagline("");
     setFormDescription("Please fill in your details to confirm your seat.");
     setFormLogoUrl("");
+    setFormMode("classic");
+    setFormTheme(defaultTheme);
     setFormFields(defaultBuilderFields());
     setFormHighlights([]);
     setFormOtpRequired(false);
@@ -354,7 +377,8 @@ export default function WorkshopMasterPage() {
       title: formTitle.trim() || `${record.name} Registration`,
       tagline: formTagline.trim() || undefined,
       description: sanitizeRichTextHtml(formDescription),
-      theme: { ...defaultTheme, logoUrl: formLogoUrl || undefined },
+      mode: formMode,
+      theme: { ...defaultTheme, ...formTheme, logoUrl: formLogoUrl || undefined },
       paid: record.isPaid,
       fee: Number(record.feesWithTax || 0),
       partPayment: Boolean(record.isPartPaymentAllow),
@@ -387,15 +411,20 @@ export default function WorkshopMasterPage() {
         setFormTagline("");
         setFormDescription("Please fill in your details to confirm your seat.");
         setFormLogoUrl("");
+        setFormMode("classic");
+        setFormTheme(defaultTheme);
         setFormFields(defaultBuilderFields());
         setFormHighlights([]);
         setFormOtpRequired(false);
+        setWhatsappGroupUrl("");
         return;
       }
       setFormTitle(savedForm.title || `${record.name} Registration`);
       setFormTagline(savedForm.tagline ?? "");
       setFormDescription(savedForm.description || "");
       setFormLogoUrl(savedForm.theme?.logoUrl ?? "");
+      setFormMode(savedForm.mode ?? "classic");
+      setFormTheme({ ...defaultTheme, ...savedForm.theme, logoUrl: undefined });
       setFormFields(savedForm.fields?.length ? normalizeCoreFieldRequirements(savedForm.fields) : defaultBuilderFields());
       setFormHighlights(savedForm.highlights ?? []);
       setFormOtpRequired(Boolean(savedForm.otpRequired));
@@ -619,6 +648,14 @@ export default function WorkshopMasterPage() {
               />
               <span className="mt-1 block text-xs font-semibold text-slate-400">Shown below the title on the public registration form.</span>
             </label>
+            <div className="md:col-span-2">
+              <FormExperienceControls
+                mode={formMode}
+                onModeChange={setFormMode}
+                onThemeChange={(patch) => setFormTheme((current) => ({ ...current, ...patch }))}
+                theme={formTheme}
+              />
+            </div>
             <div className="block md:col-span-2">
               <span className="mb-2 block text-sm font-bold text-slate-600">Form Description</span>
               <RichTextEditor onChange={setFormDescription} value={formDescription} />
@@ -637,10 +674,15 @@ export default function WorkshopMasterPage() {
             </label>
           </div>
 
+          {editingAnalytics ? (
+            <FormAnalyticsSummary analytics={editingAnalytics} fields={formFields} />
+          ) : null}
+
           <div className="mt-5 space-y-3">
             {formFields.map((field, index) => (
               <FieldEditor
                 field={field}
+                fields={formFields}
                 index={index}
                 key={field.id}
                 onChange={(patch) => updateFormField(field.id, patch)}
@@ -699,7 +741,9 @@ export default function WorkshopMasterPage() {
               fields={formFields}
               highlights={formHighlights}
               logoUrl={formLogoUrl}
+              mode={formMode}
               paid={isPaid}
+              theme={formTheme}
               title={formTitle || `${name || "Workshop"} Registration`}
               tagline={formTagline}
             />
@@ -960,87 +1004,198 @@ function compressImage(file: File, maxWidth: number): Promise<string> {
   });
 }
 
+function buildFormPages(fields: BuilderField[], mode: BuilderFormMode) {
+  if (mode === "classic") return [{ fields, title: "" }];
+  if (mode === "guided") {
+    let sectionTitle = "";
+    return fields.flatMap((field) => {
+      if (field.type === "heading") {
+        sectionTitle = field.label;
+        return [];
+      }
+      return [{ fields: [field], title: sectionTitle }];
+    });
+  }
+
+  const pages: Array<{ fields: BuilderField[]; title: string }> = [];
+  let current = { fields: [] as BuilderField[], title: "Your details" };
+  fields.forEach((field) => {
+    if (field.type === "heading") {
+      if (current.fields.length) pages.push(current);
+      current = { fields: [], title: field.label || `Step ${pages.length + 1}` };
+      return;
+    }
+    current.fields.push(field);
+  });
+  if (current.fields.length) pages.push(current);
+  return pages.length ? pages : [{ fields: [], title: "Your details" }];
+}
+
+function FormExperienceControls({
+  mode,
+  onModeChange,
+  onThemeChange,
+  theme
+}: {
+  mode: BuilderFormMode;
+  onModeChange: (mode: BuilderFormMode) => void;
+  onThemeChange: (patch: Partial<BuilderTheme>) => void;
+  theme: BuilderTheme;
+}) {
+  const modes: Array<{ icon: typeof LayoutList; label: string; value: BuilderFormMode }> = [
+    { icon: LayoutList, label: "Classic", value: "classic" },
+    { icon: Route, label: "Multi-step", value: "steps" },
+    { icon: Sparkles, label: "Guided", value: "guided" }
+  ];
+
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+      <div className="flex items-center gap-2"><Palette className="size-4 text-emerald-700" /><p className="text-sm font-black text-slate-800">Experience & Theme</p></div>
+      <div className="mt-4">
+        <span className="mb-2 block text-xs font-black uppercase tracking-[0.14em] text-slate-400">Form experience</span>
+        <div className="grid grid-cols-3 gap-2">
+          {modes.map((item) => {
+            const Icon = item.icon;
+            return <button className={`flex min-h-[52px] items-center justify-center gap-2 rounded-xl border px-3 text-xs font-black transition ${mode === item.value ? "border-emerald-400 bg-emerald-50 text-emerald-800" : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"}`} key={item.value} onClick={() => onModeChange(item.value)} type="button"><Icon className="size-4" />{item.label}</button>;
+          })}
+        </div>
+        {mode === "steps" ? <p className="mt-2 text-xs font-semibold text-slate-500">Section Heading fields create separate steps.</p> : null}
+        {mode === "guided" ? <p className="mt-2 text-xs font-semibold text-slate-500">Customers see one question at a time with keyboard-friendly navigation.</p> : null}
+      </div>
+
+      <div className="mt-4 grid gap-4 sm:grid-cols-2">
+        <div>
+          <span className="mb-2 block text-xs font-black uppercase tracking-[0.14em] text-slate-400">Theme presets</span>
+          <div className="grid grid-cols-2 gap-2">
+            {themePresets.map((preset) => <button className="flex min-h-[40px] items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-left text-xs font-bold text-slate-700 hover:border-emerald-300" key={preset.label} onClick={() => onThemeChange(preset)} type="button"><span className="size-4 shrink-0 rounded-full border border-white shadow ring-1 ring-slate-200" style={{ backgroundColor: preset.accent }} />{preset.label}</button>)}
+          </div>
+        </div>
+        <label>
+          <span className="mb-2 block text-xs font-black uppercase tracking-[0.14em] text-slate-400">Font style</span>
+          <select className={inputClass} onChange={(event) => onThemeChange({ fontFamily: event.target.value })} value={theme.fontFamily}>{formFonts.map((font) => <option key={font.label} value={font.value}>{font.label}</option>)}</select>
+        </label>
+        <label>
+          <span className="mb-2 block text-xs font-black uppercase tracking-[0.14em] text-slate-400">Accent color</span>
+          <span className="flex min-h-[48px] items-center gap-3 rounded-xl border border-slate-200 bg-white px-3"><input className="size-7 cursor-pointer border-0 bg-transparent p-0" onChange={(event) => onThemeChange({ accent: event.target.value })} type="color" value={theme.accent} /><span className="text-xs font-black uppercase text-slate-600">{theme.accent}</span></span>
+        </label>
+        <label>
+          <span className="mb-2 block text-xs font-black uppercase tracking-[0.14em] text-slate-400">Page background</span>
+          <span className="flex min-h-[48px] items-center gap-3 rounded-xl border border-slate-200 bg-white px-3"><input className="size-7 cursor-pointer border-0 bg-transparent p-0" onChange={(event) => onThemeChange({ backgroundColor: event.target.value })} type="color" value={theme.backgroundColor || "#f1f5f9"} /><span className="text-xs font-black uppercase text-slate-600">{theme.backgroundColor}</span></span>
+        </label>
+        <label>
+          <span className="mb-2 block text-xs font-black uppercase tracking-[0.14em] text-slate-400">Field corners</span>
+          <select className={inputClass} onChange={(event) => onThemeChange({ fieldRadius: event.target.value as BuilderTheme["fieldRadius"] })} value={theme.fieldRadius || "rounded"}><option value="soft">Soft</option><option value="rounded">Rounded</option><option value="square">Compact</option></select>
+        </label>
+        <div>
+          <span className="mb-2 block text-xs font-black uppercase tracking-[0.14em] text-slate-400">Content alignment</span>
+          <div className="grid grid-cols-2 rounded-xl border border-slate-200 bg-white p-1"><button className={`rounded-lg px-3 py-2.5 text-xs font-black ${theme.align === "left" ? "bg-slate-950 text-white" : "text-slate-500"}`} onClick={() => onThemeChange({ align: "left" })} type="button">Left</button><button className={`rounded-lg px-3 py-2.5 text-xs font-black ${theme.align === "center" ? "bg-slate-950 text-white" : "text-slate-500"}`} onClick={() => onThemeChange({ align: "center" })} type="button">Center</button></div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FormAnalyticsSummary({ analytics, fields }: { analytics: FormAnalyticsRecord; fields: BuilderField[] }) {
+  const conversion = analytics.starts ? Math.round((analytics.completions / analytics.starts) * 100) : 0;
+  const topDropOff = Object.entries(analytics.dropOffByField ?? {}).sort((a, b) => b[1] - a[1])[0];
+  const dropOffLabel = topDropOff ? fields.find((field) => field.id === topDropOff[0])?.label || "Unknown field" : "No drop-off yet";
+  return (
+    <div className="mt-5 rounded-2xl border border-indigo-100 bg-indigo-50/60 p-4">
+      <div className="flex items-center gap-2"><BarChart3 className="size-4 text-indigo-700" /><p className="text-sm font-black text-slate-800">Form performance</p></div>
+      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {[{ label: "Views", value: analytics.views }, { label: "Started", value: analytics.starts }, { label: "Completed", value: analytics.completions }, { label: "Conversion", value: `${conversion}%` }].map((metric) => <div className="rounded-xl border border-indigo-100 bg-white px-3 py-3" key={metric.label}><p className="text-lg font-black text-indigo-800">{metric.value}</p><p className="text-[11px] font-bold text-slate-500">{metric.label}</p></div>)}
+      </div>
+      <p className="mt-3 text-xs font-bold text-slate-600">Top drop-off: <span className="text-slate-950">{dropOffLabel}{topDropOff ? ` (${topDropOff[1]})` : ""}</span></p>
+    </div>
+  );
+}
+
 function WorkshopFormLivePreview({
   description,
   fields,
   highlights,
   logoUrl,
+  mode,
   paid,
   tagline,
+  theme,
   title
 }: {
   description: string;
   fields: BuilderField[];
   highlights: string[];
   logoUrl: string;
+  mode: BuilderFormMode;
   paid: boolean;
   tagline: string;
+  theme: BuilderTheme;
   title: string;
 }) {
+  const [device, setDevice] = useState<"desktop" | "mobile">("mobile");
+  const [previewPage, setPreviewPage] = useState(0);
   const visibleHighlights = highlights.map((item) => item.trim()).filter(Boolean);
   const displayLogoUrl = logoUrl || BRAND_LOGO_SRC;
+  const pages = useMemo(() => buildFormPages(fields, mode), [fields, mode]);
+  const activePage = pages[Math.min(previewPage, Math.max(0, pages.length - 1))] ?? { fields, title: "" };
+  const accent = theme.accent || defaultTheme.accent;
+  const radiusClass = theme.fieldRadius === "square" ? "rounded-md" : theme.fieldRadius === "soft" ? "rounded-lg" : "rounded-xl";
+
+  useEffect(() => {
+    setPreviewPage((current) => Math.min(current, Math.max(0, pages.length - 1)));
+  }, [pages.length]);
+
   return (
     <aside className="xl:sticky xl:top-24 xl:self-start">
-      <div className="mb-3 flex items-center justify-between">
+      <div className="mb-3 flex items-center justify-between gap-2">
         <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-700">Live Preview</p>
-        <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-slate-500">Public form</span>
+        <div className="inline-flex rounded-lg border border-slate-200 bg-white p-1">
+          <button aria-label="Desktop preview" className={`grid size-8 place-items-center rounded-md ${device === "desktop" ? "bg-slate-950 text-white" : "text-slate-500"}`} onClick={() => setDevice("desktop")} type="button"><Monitor className="size-4" /></button>
+          <button aria-label="Mobile preview" className={`grid size-8 place-items-center rounded-md ${device === "mobile" ? "bg-slate-950 text-white" : "text-slate-500"}`} onClick={() => setDevice("mobile")} type="button"><Smartphone className="size-4" /></button>
+        </div>
       </div>
-      <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_16px_40px_-24px_rgba(15,23,42,0.55)]">
-        <div className="h-2 bg-gradient-to-r from-emerald-600 to-emerald-400" />
-        <div className="max-h-[calc(100vh-10rem)] overflow-y-auto p-5">
-          {displayLogoUrl ? (
-            <img
-              alt="Coach For Life"
-              className="mb-4 h-20 w-auto max-w-[280px] object-contain"
-              src={displayLogoUrl}
-            />
-          ) : null}
-          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-700">CFL Workshop Registration</p>
-          <h4 className="mt-2 text-2xl font-black leading-tight text-slate-950">{title || "Workshop Registration"}</h4>
-          {tagline.trim() ? <p className="mt-2 text-sm font-bold text-slate-600">{tagline.trim()}</p> : null}
-          {description ? (
-            <div
-              className="rich-text-content mt-3 text-sm leading-relaxed text-slate-500"
-              dangerouslySetInnerHTML={{ __html: sanitizeRichTextHtml(description) }}
-            />
-          ) : null}
-          <span className="mt-4 inline-flex rounded-xl bg-emerald-600 px-4 py-2 text-sm font-black text-white shadow-sm">
-            {paid ? "Paid Registration" : "Free Registration"}
-          </span>
+      <div className="rounded-3xl border border-slate-200 p-3 shadow-[0_16px_40px_-24px_rgba(15,23,42,0.55)]" style={{ backgroundColor: theme.backgroundColor || defaultTheme.backgroundColor }}>
+        <div className={`mx-auto overflow-hidden border border-slate-200 shadow-sm transition-all ${device === "mobile" ? "max-w-[320px] rounded-[28px]" : "w-full rounded-2xl"}`} style={{ backgroundColor: theme.surfaceColor || "#ffffff", fontFamily: theme.fontFamily }}>
+          <div className="h-2" style={{ backgroundColor: accent }} />
+          <div className="max-h-[calc(100vh-12rem)] overflow-y-auto p-5">
+            {displayLogoUrl ? <img alt="Coach For Life" className="mb-4 h-16 w-auto max-w-full object-contain" src={displayLogoUrl} /> : null}
+            <p className="text-[10px] font-black uppercase tracking-[0.2em]" style={{ color: accent }}>CFL Workshop Registration</p>
+            <h4 className="mt-2 text-2xl font-black leading-tight text-slate-950">{title || "Workshop Registration"}</h4>
+            {tagline.trim() ? <p className="mt-2 text-sm font-bold text-slate-600">{tagline.trim()}</p> : null}
+            {description ? <div className="rich-text-content mt-3 text-sm leading-relaxed text-slate-500" dangerouslySetInnerHTML={{ __html: sanitizeRichTextHtml(description) }} /> : null}
+            <span className={`mt-4 inline-flex px-4 py-2 text-sm font-black text-white shadow-sm ${radiusClass}`} style={{ backgroundColor: accent }}>{paid ? "Paid Registration" : "Free Registration"}</span>
 
-          <div className="mt-5 space-y-3">
-            {fields.map((field) => (
-              <PreviewField field={field} key={field.id} />
-            ))}
-          </div>
+            {mode !== "classic" && pages.length > 1 ? (
+              <div className="mt-5">
+                <div className="mb-2 flex items-center justify-between text-[11px] font-black text-slate-500"><span>{mode === "guided" ? "Question" : "Step"} {previewPage + 1} of {pages.length}</span><span>{Math.round(((previewPage + 1) / pages.length) * 100)}%</span></div>
+                <div className="h-1.5 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full transition-all" style={{ backgroundColor: accent, width: `${((previewPage + 1) / pages.length) * 100}%` }} /></div>
+              </div>
+            ) : null}
 
-          {visibleHighlights.length ? (
-            <div className="mt-5 rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
-              <p className="mb-3 text-sm font-black text-slate-800">What&apos;s included</p>
-              <ul className="space-y-2">
-                {visibleHighlights.map((item) => (
-                  <li className="flex items-start gap-2 text-sm font-semibold text-slate-700" key={item}>
-                    <span className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-full bg-emerald-600 text-white">
-                      <Check className="size-3" />
-                    </span>
-                    {item}
-                  </li>
-                ))}
-              </ul>
+            {activePage.title ? <h5 className="mt-5 text-lg font-black text-slate-900">{activePage.title}</h5> : null}
+            <div className="mt-5 space-y-3">
+              {activePage.fields.map((field) => <PreviewField field={field} key={field.id} radiusClass={radiusClass} />)}
             </div>
-          ) : null}
 
-          <button className="mt-5 flex w-full items-center justify-center rounded-xl bg-emerald-600 px-4 py-3 text-sm font-black uppercase text-white shadow-sm" type="button">
-            Confirm Registration
-          </button>
-          <p className="mt-3 text-center text-xs font-semibold text-slate-400">Your details are saved securely for this workshop only.</p>
+            {mode === "classic" && visibleHighlights.length ? (
+              <div className="mt-5 border p-4" style={{ borderColor: `${accent}22`, backgroundColor: `${accent}0d`, borderRadius: theme.fieldRadius === "square" ? 6 : 14 }}>
+                <p className="mb-3 text-sm font-black text-slate-800">What&apos;s included</p>
+                <ul className="space-y-2">{visibleHighlights.map((item) => <li className="flex items-start gap-2 text-sm font-semibold text-slate-700" key={item}><span className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-full text-white" style={{ backgroundColor: accent }}><Check className="size-3" /></span>{item}</li>)}</ul>
+              </div>
+            ) : null}
+
+            <div className="mt-5 flex gap-2">
+              {mode !== "classic" && previewPage > 0 ? <button className={`border border-slate-200 px-4 py-3 text-sm font-black text-slate-600 ${radiusClass}`} onClick={() => setPreviewPage((value) => Math.max(0, value - 1))} type="button">Back</button> : null}
+              <button className={`flex flex-1 items-center justify-center px-4 py-3 text-sm font-black uppercase text-white shadow-sm ${radiusClass}`} onClick={() => setPreviewPage((value) => Math.min(pages.length - 1, value + 1))} style={{ backgroundColor: accent }} type="button">{mode !== "classic" && previewPage < pages.length - 1 ? "Continue" : "Confirm Registration"}</button>
+            </div>
+            <p className="mt-3 text-center text-xs font-semibold text-slate-400">Progress saves automatically.</p>
+          </div>
         </div>
       </div>
     </aside>
   );
 }
 
-function PreviewField({ field }: { field: BuilderField }) {
+function PreviewField({ field, radiusClass = "rounded-xl" }: { field: BuilderField; radiusClass?: string }) {
   if (field.type === "heading") {
     return <h5 className="border-t border-slate-100 pt-3 text-base font-black text-slate-900">{field.label || "Section heading"}</h5>;
   }
@@ -1057,14 +1212,14 @@ function PreviewField({ field }: { field: BuilderField }) {
       {isChoice ? (
         <div className="space-y-2">
           {(options.length ? options : ["Option 1", "Option 2"]).map((option) => (
-            <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-semibold text-slate-600" key={option}>
+            <div className={`flex items-center gap-2 border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-semibold text-slate-600 ${radiusClass}`} key={option}>
               <span className={`grid size-4 shrink-0 place-items-center border border-slate-300 bg-white ${field.type === "checkbox" ? "rounded" : "rounded-full"}`} />
               {option}
             </div>
           ))}
           {field.allowOther ? (
             <input
-              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-400"
+              className={`w-full border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-400 ${radiusClass}`}
               disabled
               placeholder="Other"
             />
@@ -1072,7 +1227,7 @@ function PreviewField({ field }: { field: BuilderField }) {
         </div>
       ) : (
         <input
-          className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-400"
+          className={`w-full border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-400 ${radiusClass}`}
           disabled
           placeholder={field.placeholder || fieldTypeMeta[field.type].label}
         />
@@ -1491,6 +1646,7 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
 
 function FieldEditor({
   field,
+  fields,
   index,
   onChange,
   onDuplicate,
@@ -1500,6 +1656,7 @@ function FieldEditor({
   total
 }: {
   field: BuilderField;
+  fields: BuilderField[];
   index: number;
   onChange: (patch: Partial<BuilderField>) => void;
   onDuplicate: () => void;
@@ -1512,6 +1669,8 @@ function FieldEditor({
   const Icon = field.type === "email" ? Mail : field.type === "mobile" ? Smartphone : field.type === "heading" ? Heading : field.type === "checkbox" ? CheckSquare : field.type === "radio" ? Circle : Type;
   const lockedRole = field.role === "name" || field.role === "mobile";
   const options = field.options?.length ? field.options : ["Option 1", "Option 2"];
+  const sourceFields = fields.slice(0, index).filter((item) => item.type !== "heading");
+  const visibilitySource = sourceFields.find((item) => item.id === field.visibility?.fieldId);
   const updateOption = (optionIndex: number, value: string) => {
     onChange({ options: options.map((option, currentIndex) => currentIndex === optionIndex ? value : option).filter((option) => option.trim()) });
   };
@@ -1577,6 +1736,32 @@ function FieldEditor({
               Add Other text option
             </label>
           </div>
+        </div>
+      ) : null}
+
+      {field.type !== "heading" ? (
+        <div className="mt-3 sm:pl-11">
+          {field.visibility ? (
+            <div className="rounded-xl border border-indigo-100 bg-indigo-50/60 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 text-xs font-black text-indigo-800"><Route className="size-3.5" />Display logic</div>
+                <button aria-label="Remove display logic" className="grid size-8 place-items-center rounded-lg text-rose-500 hover:bg-rose-50" onClick={() => onChange({ visibility: undefined })} type="button"><X className="size-4" /></button>
+              </div>
+              <div className="mt-2 grid gap-2 sm:grid-cols-3">
+                <select className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 outline-none" onChange={(event) => onChange({ visibility: { ...field.visibility!, fieldId: event.target.value } })} value={field.visibility.fieldId}>
+                  {sourceFields.map((item) => <option key={item.id} value={item.id}>{item.label || "Untitled field"}</option>)}
+                </select>
+                <select className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 outline-none" onChange={(event) => onChange({ visibility: { ...field.visibility!, operator: event.target.value as NonNullable<BuilderField["visibility"]>["operator"] } })} value={field.visibility.operator}>
+                  <option value="equals">Equals</option><option value="not_equals">Does not equal</option><option value="contains">Contains</option><option value="answered">Is answered</option><option value="not_answered">Is not answered</option>
+                </select>
+                {field.visibility.operator === "answered" || field.visibility.operator === "not_answered" ? <div className="grid place-items-center rounded-lg border border-dashed border-indigo-200 px-3 py-2 text-xs font-bold text-indigo-500">No value needed</div> : visibilitySource?.options?.length ? (
+                  <select className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 outline-none" onChange={(event) => onChange({ visibility: { ...field.visibility!, value: event.target.value } })} value={field.visibility.value ?? ""}><option value="">Select value</option>{visibilitySource.options.map((option) => <option key={option} value={option}>{option}</option>)}</select>
+                ) : <input className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 outline-none" onChange={(event) => onChange({ visibility: { ...field.visibility!, value: event.target.value } })} placeholder="Match value" value={field.visibility.value ?? ""} />}
+              </div>
+            </div>
+          ) : (
+            <button className="inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border border-dashed border-indigo-200 bg-white px-3 py-2 text-xs font-black text-indigo-600 hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-40" disabled={!sourceFields.length} onClick={() => sourceFields[0] && onChange({ visibility: { fieldId: sourceFields[0].id, operator: "equals", value: "" } })} type="button"><Route className="size-3.5" />Add display logic</button>
+          )}
         </div>
       ) : null}
 

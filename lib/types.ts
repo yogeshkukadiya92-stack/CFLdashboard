@@ -176,6 +176,16 @@ export type BuilderFieldType =
   | "checkbox"
   | "heading";
 
+export type BuilderFormMode = "classic" | "steps" | "guided";
+
+export type BuilderVisibilityOperator = "equals" | "not_equals" | "contains" | "answered" | "not_answered";
+
+export interface BuilderFieldVisibility {
+  fieldId: string;
+  operator: BuilderVisibilityOperator;
+  value?: string;
+}
+
 export interface BuilderField {
   id: string;
   type: BuilderFieldType;
@@ -184,6 +194,7 @@ export interface BuilderField {
   required?: boolean;
   options?: string[];
   allowOther?: boolean;
+  visibility?: BuilderFieldVisibility;
   /** Maps a field to a core registration column so reports keep working. */
   role?: "name" | "mobile" | "email" | "city";
 }
@@ -195,8 +206,22 @@ export interface BuilderTheme {
   titleBold: boolean;
   titleItalic: boolean;
   align: "left" | "center";
+  backgroundColor?: string;
+  surfaceColor?: string;
+  fieldRadius?: "soft" | "rounded" | "square";
   bannerUrl?: string;
   logoUrl?: string;
+}
+
+export interface FormAnalyticsRecord {
+  completions: number;
+  dropOffByField: Record<string, number>;
+  formId: string;
+  starts: number;
+  updatedAt: string;
+  views: number;
+  workshopId: string;
+  workshopSlug: string;
 }
 
 export interface PaymentTier {
@@ -214,6 +239,7 @@ export interface BuilderForm {
   title: string;
   tagline?: string;
   description: string;
+  mode?: BuilderFormMode;
   theme: BuilderTheme;
   paid: boolean;
   fee: number;

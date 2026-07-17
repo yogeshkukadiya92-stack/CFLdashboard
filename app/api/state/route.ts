@@ -6,6 +6,7 @@ const arrayFields = [
   "attendanceSessions",
   "clients",
   "facilitators",
+  "formAnalytics",
   "forms",
   "leads",
   "registrations",

@@ -5,6 +5,7 @@ export const LIVE_STATE_STORAGE_KEYS = {
   attendanceSessions: "cfl_attendance_sessions_v1",
   clients: "cfl_clients_v1",
   facilitators: "cfl_facilitators_v1",
+  formAnalytics: "cfl_form_analytics_v1",
   forms: "cfl_forms_v1",
   leads: "cfl_leads_v1",
   registrationLinks: "cfl_registration_link_configs_v1",

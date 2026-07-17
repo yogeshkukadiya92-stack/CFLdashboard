@@ -1,12 +1,12 @@
 "use client";
 
 import { workshops as seedWorkshops } from "@/lib/data";
-import { hydratePublicRegistrationState, readLocalArray, readLocalObject, savePublicRegistration } from "@/lib/live-state";
+import { hydratePublicRegistrationState, readLocalArray, readLocalObject, savePublicRegistration, writeLiveStateToLocalStorage } from "@/lib/live-state";
 import { sanitizeRichTextHtml } from "@/lib/rich-text";
-import type { BuilderField, BuilderForm, BuilderTheme, PaymentTier, RegistrationEntry } from "@/lib/types";
+import type { BuilderField, BuilderForm, BuilderFormMode, BuilderTheme, FormAnalyticsRecord, PaymentTier, RegistrationEntry } from "@/lib/types";
 import { decodeJsonParam, formatCurrency } from "@/lib/utils";
-import { AlertTriangle, Check, CheckCircle2, Loader2, ShieldCheck } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { AlertTriangle, ArrowLeft, ArrowRight, Check, CheckCircle2, Loader2, ShieldCheck } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 
 const REGISTRATION_STORAGE_KEY = "cfl_registrations_v1";
@@ -14,6 +14,7 @@ const WORKSHOP_MASTER_STORAGE_KEY = "cfl_workshop_master_records_v1";
 const FORMS_STORAGE_KEY = "cfl_forms_v1";
 const REGISTRATION_LINK_CONFIG_STORAGE_KEY = "cfl_registration_link_configs_v1";
 const CLIENTS_STORAGE_KEY = "cfl_clients_v1";
+const FORM_ANALYTICS_STORAGE_KEY = "cfl_form_analytics_v1";
 const BRAND_LOGO_SRC = "/brand/coach-for-life-logo-horizontal.png";
 
 type WorkshopMasterRecord = { archived?: boolean; id: string; name: string; facilitator?: string; isPaid?: boolean };
@@ -34,11 +35,13 @@ type RegistrationLinkConfig = {
 };
 
 type FormModel = {
+  formId: string;
   id: string;
   slug: string;
   title: string;
   tagline?: string;
   description: string;
+  mode: BuilderFormMode;
   facilitator: string;
   venue: string;
   batch: string;
@@ -59,7 +62,10 @@ const defaultTheme: BuilderTheme = {
   accent: "#059669",
   titleBold: true,
   titleItalic: false,
-  align: "left"
+  align: "left",
+  backgroundColor: "#f1f5f9",
+  surfaceColor: "#ffffff",
+  fieldRadius: "rounded"
 };
 
 function simpleFields(): BuilderField[] {
@@ -87,13 +93,65 @@ function cleanMobile(value: string) {
   return value.replace(/\D/g, "");
 }
 
+function isFieldVisible(field: BuilderField, answers: Record<string, string>) {
+  const rule = field.visibility;
+  if (!rule?.fieldId) return true;
+  const sourceValue = (answers[rule.fieldId] ?? "").trim();
+  const expected = (rule.value ?? "").trim();
+  if (rule.operator === "answered") return Boolean(sourceValue);
+  if (rule.operator === "not_answered") return !sourceValue;
+  if (rule.operator === "not_equals") return sourceValue !== expected;
+  if (rule.operator === "contains") return sourceValue.toLowerCase().includes(expected.toLowerCase());
+  return sourceValue === expected;
+}
+
+function buildPublicPages(fields: BuilderField[], mode: BuilderFormMode) {
+  if (mode === "classic") return [{ fields, title: "" }];
+  if (mode === "guided") {
+    let sectionTitle = "";
+    return fields.flatMap((field) => {
+      if (field.type === "heading") {
+        sectionTitle = field.label;
+        return [];
+      }
+      return [{ fields: [field], title: sectionTitle }];
+    });
+  }
+  const pages: Array<{ fields: BuilderField[]; title: string }> = [];
+  let current = { fields: [] as BuilderField[], title: "Your details" };
+  fields.forEach((field) => {
+    if (field.type === "heading") {
+      if (current.fields.length) pages.push(current);
+      current = { fields: [], title: field.label || `Step ${pages.length + 1}` };
+      return;
+    }
+    current.fields.push(field);
+  });
+  if (current.fields.length) pages.push(current);
+  return pages.length ? pages : [{ fields: [], title: "Your details" }];
+}
+
+function hasValidAnswer(field: BuilderField, answers: Record<string, string>) {
+  if (field.type === "heading" || !field.required || !isFieldVisible(field, answers)) return true;
+  const value = (answers[field.id] ?? "").trim();
+  if (!value) return false;
+  if (field.role === "mobile") {
+    const digits = cleanMobile(value);
+    return digits.length === 10 && /^[6-9]/.test(digits);
+  }
+  if (field.type === "email") return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+  return true;
+}
+
 function modelFromBuilderForm(form: BuilderForm, overrides?: Partial<Pick<FormModel, "batch" | "facilitator" | "fee" | "paid" | "partPayment" | "venue">>): FormModel {
   return {
+    formId: form.id,
     id: form.workshopId || form.id,
     slug: form.workshopSlug || slugify(form.workshopName) || form.id,
     title: form.title || form.workshopName || "Workshop Registration",
     tagline: form.tagline || "",
     description: form.description || "",
+    mode: form.mode ?? "classic",
     facilitator: overrides?.facilitator || "",
     venue: overrides?.venue || "",
     batch: overrides?.batch || form.batch || "Main Batch",
@@ -141,6 +199,13 @@ export default function RegistrationPage() {
   const [otpModalOpen, setOtpModalOpen] = useState(false);
   const [success, setSuccess] = useState(false);
   const [redirectCountdown, setRedirectCountdown] = useState(5);
+  const [currentPage, setCurrentPage] = useState(0);
+  const [draftRestored, setDraftRestored] = useState(false);
+  const analyticsViewRef = useRef("");
+  const analyticsStartedRef = useRef(false);
+  const analyticsCompletedRef = useRef(false);
+  const draftLoadedRef = useRef("");
+  const lastFieldIdRef = useRef("");
 
   // Resolve the form: a builder form (?f=) wins; then a self-contained simple
   // link (?title=); then saved master records; then the static seed.
@@ -166,10 +231,12 @@ export default function RegistrationPage() {
 
       if (!resolved && titleParam) {
         resolved = {
+          formId: `form-${widParam || slug}-main`,
           id: widParam || slug,
           slug,
           title: titleParam,
           description: "",
+          mode: "classic",
           facilitator: facilitatorParam || "CFL Facilitator",
           venue: venueParam || "TBA",
           batch: batchParam || "Main Batch",
@@ -205,10 +272,12 @@ export default function RegistrationPage() {
               resolved = { ...resolved, otpRequired: Boolean(savedForm.otpRequired || config.otpRequired) };
             } else {
               resolved = {
+                formId: `form-${config.id || slug}-main`,
                 id: config.id || slug,
                 slug: config.slug || slug,
                 title: config.title,
                 description: "",
+                mode: "classic",
                 facilitator: config.facilitator || "CFL Facilitator",
                 venue: config.venue || "TBA",
                 batch: config.batch || "Main Batch",
@@ -244,10 +313,12 @@ export default function RegistrationPage() {
               });
             } else {
               resolved = {
+                formId: `form-${match.id}-main`,
                 id: match.id,
                 slug: slugify(match.name) || match.id,
                 title: match.name,
                 description: "",
+                mode: "classic",
                 facilitator: match.facilitator || "CFL Facilitator",
                 venue: venueParam || "TBA",
                 batch: batchParam || "Main Batch",
@@ -268,10 +339,12 @@ export default function RegistrationPage() {
         const seed = seedWorkshops.find((item) => item.slug === slug);
         if (seed) {
           resolved = {
+            formId: `form-${seed.id}-main`,
             id: seed.id,
             slug: seed.slug,
             title: seed.title,
             description: "",
+            mode: "classic",
             facilitator: seed.trainer,
             venue: seed.city,
             batch: batchParam || "Main Batch",
@@ -366,22 +439,104 @@ export default function RegistrationPage() {
   const amountPaid = paymentMode === "Full" ? fullAmount : Math.max(0, Math.min(Number(partAmount || 0), fullAmount));
   const amountDue = Math.max(0, fullAmount - amountPaid);
 
+  const visibleFields = useMemo(() => model?.fields.filter((field) => isFieldVisible(field, answers)) ?? [], [answers, model]);
+  const pages = useMemo(() => buildPublicPages(visibleFields, model?.mode ?? "classic"), [model?.mode, visibleFields]);
+  const activePageIndex = Math.min(currentPage, Math.max(0, pages.length - 1));
+  const activePage = pages[activePageIndex] ?? { fields: visibleFields, title: "" };
+  const isLastPage = activePageIndex >= pages.length - 1;
+  const currentPageInvalid = activePage.fields.some((field) => !hasValidAnswer(field, answers));
+
+  function trackAnalytics(event: "view" | "start" | "complete" | "drop_off", fieldId = "") {
+    if (!model) return;
+    const current = readLocalArray<FormAnalyticsRecord>(FORM_ANALYTICS_STORAGE_KEY);
+    const existing = current.find((item) => item.formId === model.formId);
+    const record: FormAnalyticsRecord = existing
+      ? { ...existing, dropOffByField: { ...(existing.dropOffByField ?? {}) } }
+      : { completions: 0, dropOffByField: {}, formId: model.formId, starts: 0, updatedAt: new Date().toISOString(), views: 0, workshopId: model.id, workshopSlug: model.slug };
+    if (event === "view") record.views += 1;
+    if (event === "start") record.starts += 1;
+    if (event === "complete") record.completions += 1;
+    if (event === "drop_off" && fieldId) record.dropOffByField[fieldId] = (record.dropOffByField[fieldId] ?? 0) + 1;
+    record.updatedAt = new Date().toISOString();
+    writeLiveStateToLocalStorage({ formAnalytics: [record, ...current.filter((item) => item.formId !== model.formId)] });
+    void fetch("/api/form-analytics", {
+      body: JSON.stringify({ event, fieldId, formId: model.formId, workshopId: model.id, workshopSlug: model.slug }),
+      headers: { "Content-Type": "application/json" },
+      keepalive: true,
+      method: "POST"
+    }).catch(() => undefined);
+  }
+
+  useEffect(() => {
+    if (!model || analyticsViewRef.current === model.formId) return;
+    analyticsViewRef.current = model.formId;
+    analyticsStartedRef.current = false;
+    analyticsCompletedRef.current = false;
+    trackAnalytics("view");
+    // One view per resolved public form load.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [model?.formId]);
+
+  useEffect(() => {
+    if (!model || draftLoadedRef.current === model.formId) return;
+    draftLoadedRef.current = model.formId;
+    try {
+      const raw = window.localStorage.getItem(`cfl_registration_draft_${model.formId}`);
+      if (!raw) return;
+      const draft = JSON.parse(raw) as { answers?: Record<string, string>; currentPage?: number; partAmount?: string; paymentMode?: "Full" | "Part"; selectedTierId?: string };
+      if (draft.answers && Object.keys(draft.answers).length) {
+        setAnswers(draft.answers);
+        setCurrentPage(Math.max(0, Number(draft.currentPage || 0)));
+        setPartAmount(draft.partAmount ?? "");
+        setPaymentMode(draft.paymentMode === "Part" ? "Part" : "Full");
+        setSelectedTierId(draft.selectedTierId ?? "");
+        setDraftRestored(true);
+        analyticsStartedRef.current = true;
+      }
+    } catch {
+      window.localStorage.removeItem(`cfl_registration_draft_${model.formId}`);
+    }
+  }, [model]);
+
+  useEffect(() => {
+    if (!model || success || !Object.keys(answers).length) return;
+    window.localStorage.setItem(
+      `cfl_registration_draft_${model.formId}`,
+      JSON.stringify({ answers, currentPage: activePageIndex, partAmount, paymentMode, selectedTierId })
+    );
+  }, [activePageIndex, answers, model, partAmount, paymentMode, selectedTierId, success]);
+
+  useEffect(() => {
+    if (!model) return;
+    const onPageHide = () => {
+      if (!analyticsStartedRef.current || analyticsCompletedRef.current || !lastFieldIdRef.current) return;
+      const body = JSON.stringify({ event: "drop_off", fieldId: lastFieldIdRef.current, formId: model.formId, workshopId: model.id, workshopSlug: model.slug });
+      navigator.sendBeacon?.("/api/form-analytics", new Blob([body], { type: "application/json" }));
+    };
+    window.addEventListener("pagehide", onPageHide);
+    return () => window.removeEventListener("pagehide", onPageHide);
+  }, [model]);
+
   const missingRequired = useMemo(() => {
     if (!model) return true;
-    return model.fields.some((field) => {
-      if (field.type === "heading" || !field.required) return false;
-      const value = (answers[field.id] ?? "").trim();
-      if (!value) return true;
-      if (field.role === "mobile") return cleanMobile(value).length < 10;
-      return false;
-    });
+    return model.fields.some((field) => !hasValidAnswer(field, answers));
   }, [answers, model]);
 
   function setAnswer(id: string, value: string) {
+    lastFieldIdRef.current = id;
+    if (!analyticsStartedRef.current) {
+      analyticsStartedRef.current = true;
+      trackAnalytics("start");
+    }
     setAnswers((prev) => ({ ...prev, [id]: value }));
   }
 
   function toggleCheckbox(id: string, option: string) {
+    lastFieldIdRef.current = id;
+    if (!analyticsStartedRef.current) {
+      analyticsStartedRef.current = true;
+      trackAnalytics("start");
+    }
     setAnswers((prev) => {
       const selected = (prev[id] ?? "").split(" | ").filter(Boolean);
       const next = selected.includes(option) ? selected.filter((item) => item !== option) : [...selected, option];
@@ -463,6 +618,32 @@ export default function RegistrationPage() {
     submitRegistration(model.otpRequired ? "verified" : "not_required");
   }
 
+  function persistDraftAtPage(pageIndex: number) {
+    if (!model || success || !Object.keys(answers).length) return;
+    window.localStorage.setItem(
+      `cfl_registration_draft_${model.formId}`,
+      JSON.stringify({ answers, currentPage: pageIndex, partAmount, paymentMode, selectedTierId })
+    );
+  }
+
+  function goToNextPage() {
+    if (currentPageInvalid) {
+      setMessage("Please complete the required field before continuing.");
+      return;
+    }
+    setMessage("");
+    const nextPage = Math.min(pages.length - 1, activePageIndex + 1);
+    setCurrentPage(nextPage);
+    persistDraftAtPage(nextPage);
+    window.requestAnimationFrame(() => window.scrollTo({ behavior: "smooth", top: 0 }));
+  }
+
+  function goToPreviousPage() {
+    const previousPage = Math.max(0, activePageIndex - 1);
+    setCurrentPage(previousPage);
+    persistDraftAtPage(previousPage);
+  }
+
   async function confirmOtpAndSubmit() {
     const verified = await verifyOtp();
     if (!verified) return;
@@ -485,7 +666,7 @@ export default function RegistrationPage() {
     const extra: Record<string, string> = {};
     if (activeTier) extra["Registration Type"] = activeTier.label;
     model.fields.forEach((field) => {
-      if (field.type === "heading" || field.role) return;
+      if (field.type === "heading" || field.role || !isFieldVisible(field, answers)) return;
       const value = (answers[field.id] ?? "").trim();
       if (value) extra[field.label] = value;
     });
@@ -522,6 +703,9 @@ export default function RegistrationPage() {
     }
 
     setSuccess(true);
+    analyticsCompletedRef.current = true;
+    trackAnalytics("complete");
+    window.localStorage.removeItem(`cfl_registration_draft_${model.formId}`);
     setRedirectCountdown(5);
     setMessage("Registration confirmed. See you at the workshop!");
     setAnswers({});
@@ -559,12 +743,13 @@ export default function RegistrationPage() {
   const theme = model.theme;
   const displayLogoUrl = theme.logoUrl || BRAND_LOGO_SRC;
   const metaLine = [model.batch && `Batch: ${model.batch}`, model.facilitator && `Facilitator: ${model.facilitator}`, model.venue && `Venue: ${model.venue}`].filter(Boolean);
+  const fieldRadiusClass = theme.fieldRadius === "square" ? "rounded-md" : theme.fieldRadius === "soft" ? "rounded-lg" : "rounded-xl";
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-slate-50 via-slate-100 to-slate-200 px-4 py-8 text-slate-950 md:py-12" style={{ fontFamily: theme.fontFamily, fontSize: theme.fontSize }}>
+    <main className="min-h-screen px-4 py-8 text-slate-950 md:py-12" style={{ backgroundColor: theme.backgroundColor || defaultTheme.backgroundColor, fontFamily: theme.fontFamily, fontSize: theme.fontSize }}>
       <section
-        className="mx-auto max-w-3xl overflow-hidden rounded-3xl bg-white"
-        style={{ boxShadow: `0 2px 0 0 ${theme.accent}22, 0 8px 30px -6px rgba(0,0,0,0.12), 0 25px 60px -15px rgba(0,0,0,0.08), 0 0 0 1px rgba(0,0,0,0.04)` }}
+        className="mx-auto max-w-3xl overflow-hidden rounded-3xl"
+        style={{ backgroundColor: theme.surfaceColor || "#ffffff", boxShadow: `0 2px 0 0 ${theme.accent}22, 0 8px 30px -6px rgba(0,0,0,0.12), 0 25px 60px -15px rgba(0,0,0,0.08), 0 0 0 1px rgba(0,0,0,0.04)` }}
       >
         {theme.bannerUrl ? (
           <div className="relative">
@@ -634,6 +819,23 @@ export default function RegistrationPage() {
             </div>
           ) : (
             <>
+              {model.mode !== "classic" && pages.length > 1 ? (
+                <div className="mb-6">
+                  <div className="mb-2 flex items-center justify-between text-xs font-black text-slate-500">
+                    <span>{model.mode === "guided" ? "Question" : "Step"} {activePageIndex + 1} of {pages.length}</span>
+                    <span>{Math.round(((activePageIndex + 1) / pages.length) * 100)}%</span>
+                  </div>
+                  <div className="h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full transition-all duration-300" style={{ backgroundColor: theme.accent, width: `${((activePageIndex + 1) / pages.length) * 100}%` }} /></div>
+                </div>
+              ) : null}
+
+              {draftRestored ? (
+                <div className="mb-5 flex items-start gap-3 rounded-xl bg-blue-50 px-4 py-3 text-sm font-bold text-blue-700">
+                  <CheckCircle2 className="mt-0.5 size-5 shrink-0" />
+                  <span>Your saved progress has been restored.</span>
+                </div>
+              ) : null}
+
               {matchedClient ? (
                 <div className="mb-6 flex items-start gap-3 rounded-xl bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700">
                   <CheckCircle2 className="mt-0.5 size-5 shrink-0" />
@@ -641,20 +843,22 @@ export default function RegistrationPage() {
                 </div>
               ) : null}
 
-              <div className="grid gap-4 md:grid-cols-2">
-                {model.fields.map((field) => (
+              {activePage.title ? <h2 className="mb-4 text-xl font-black text-slate-950">{activePage.title}</h2> : null}
+              <div className={`grid gap-4 ${model.mode === "guided" ? "grid-cols-1" : "md:grid-cols-2"}`}>
+                {activePage.fields.map((field) => (
                   <RenderField
                     accent={theme.accent}
                     field={field}
                     key={field.id}
                     onChange={(value) => setAnswer(field.id, value)}
                     onToggle={(option) => toggleCheckbox(field.id, option)}
+                    radiusClass={fieldRadiusClass}
                     value={answers[field.id] ?? ""}
                   />
                 ))}
               </div>
 
-              {model.paid && hasTiers ? (
+              {isLastPage && model.paid && hasTiers ? (
                 <div className="mt-5 rounded-2xl border border-slate-100 bg-slate-50/50 p-5">
                   <p className="text-sm font-black text-slate-700">Choose your plan</p>
                   <div className="mt-3 space-y-2.5">
@@ -683,7 +887,7 @@ export default function RegistrationPage() {
                 </div>
               ) : null}
 
-              {model.paid ? (
+              {isLastPage && model.paid ? (
                 <div className="mt-5 rounded-xl border border-slate-200 p-4">
                   <p className="text-sm font-black text-slate-700">Payment Option</p>
                   <div className="mt-3 flex flex-wrap gap-4 text-sm font-semibold">
@@ -716,16 +920,21 @@ export default function RegistrationPage() {
 
               {message ? <p className="mt-5 rounded-xl bg-rose-50 px-4 py-3 text-sm font-black text-rose-700">{message}</p> : null}
 
-              <button
-                className="mt-6 inline-flex min-h-[52px] w-full items-center justify-center gap-2 rounded-2xl px-5 py-3.5 text-base sm:text-sm font-black tracking-wide text-white uppercase transition-transform hover:scale-[1.01] active:scale-[0.99]"
-                onClick={handlePrimarySubmit}
-                style={{ backgroundColor: theme.accent, boxShadow: `0 6px 20px -4px ${theme.accent}55, 0 2px 4px -1px ${theme.accent}33` }}
-                type="button"
-              >
-                <ShieldCheck className="size-4" />
-                {model.paid ? "Register & Pay" : "Confirm Registration"}
-              </button>
-              <p className="mt-3 text-center text-xs font-semibold text-slate-400">Your details are saved securely for this workshop only.</p>
+              <div className="mt-6 flex gap-3">
+                {model.mode !== "classic" && activePageIndex > 0 ? (
+                  <button className={`inline-flex min-h-[52px] items-center justify-center gap-2 border border-slate-200 px-4 text-sm font-black text-slate-600 hover:bg-slate-50 ${fieldRadiusClass}`} onClick={goToPreviousPage} type="button"><ArrowLeft className="size-4" />Back</button>
+                ) : null}
+                <button
+                  className={`inline-flex min-h-[52px] flex-1 items-center justify-center gap-2 px-5 py-3.5 text-base font-black uppercase tracking-wide text-white transition-transform hover:scale-[1.01] active:scale-[0.99] sm:text-sm ${fieldRadiusClass}`}
+                  onClick={isLastPage ? handlePrimarySubmit : goToNextPage}
+                  style={{ backgroundColor: theme.accent, boxShadow: `0 6px 20px -4px ${theme.accent}55, 0 2px 4px -1px ${theme.accent}33` }}
+                  type="button"
+                >
+                  {isLastPage ? <ShieldCheck className="size-4" /> : null}
+                  {isLastPage ? (model.paid ? "Register & Pay" : "Confirm Registration") : <>Continue<ArrowRight className="size-4" /></>}
+                </button>
+              </div>
+              <p className="mt-3 text-center text-xs font-semibold text-slate-400">Your progress saves automatically on this device.</p>
             </>
           )}
         </div>
@@ -818,12 +1027,14 @@ function RenderField({
   field,
   onChange,
   onToggle,
+  radiusClass,
   value
 }: {
   accent: string;
   field: BuilderField;
   onChange: (value: string) => void;
   onToggle: (option: string) => void;
+  radiusClass: string;
   value: string;
 }) {
   if (field.type === "heading") {
@@ -836,7 +1047,7 @@ function RenderField({
       {field.required ? <span style={{ color: accent }}> *</span> : null}
     </span>
   );
-  const inputClass = "w-full rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-3 text-base sm:text-sm font-semibold outline-none transition-all focus:border-slate-300 focus:bg-white focus:ring-4 focus:ring-slate-100";
+  const inputClass = `w-full border border-slate-200 bg-slate-50/50 px-4 py-3 text-base sm:text-sm font-semibold outline-none transition-all focus:border-slate-300 focus:bg-white focus:ring-4 focus:ring-slate-100 ${radiusClass}`;
   const wide = field.type === "paragraph" || field.type === "radio" || field.type === "checkbox";
 
   let control: React.ReactNode;
@@ -846,7 +1057,7 @@ function RenderField({
     const isOther = value.startsWith("Other: ");
     control = (
       <div className="space-y-2">
-        <select className={inputClass} onChange={(event) => onChange(event.target.value)} value={isOther ? "__other" : value}>
+        <select className={inputClass} onChange={(event) => onChange(event.target.value === "__other" ? "Other: " : event.target.value)} value={isOther ? "__other" : value}>
           <option value="">Select…</option>
           {(field.options ?? []).map((option) => <option key={option} value={option}>{option}</option>)}
           {field.allowOther ? <option value="__other">Other</option> : null}
