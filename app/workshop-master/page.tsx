@@ -991,7 +991,7 @@ function WorkshopFormLivePreview({
           {displayLogoUrl ? (
             <img
               alt="Coach For Life"
-              className="mb-4 h-16 w-auto max-w-[220px] rounded-2xl border border-slate-100 bg-white object-contain p-2 shadow-sm"
+              className="mb-4 h-20 w-auto max-w-[280px] object-contain"
               src={displayLogoUrl}
             />
           ) : null}

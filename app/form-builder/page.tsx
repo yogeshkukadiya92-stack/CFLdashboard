@@ -899,9 +899,8 @@ function FormPreview({ form }: { form: BuilderForm }) {
         {displayLogoUrl ? (
           <img
             alt="Coach For Life"
-            className={`mb-4 h-[72px] w-auto max-w-[240px] rounded-2xl bg-white object-contain p-2 ${theme.align === "center" ? "mx-auto" : ""}`}
+            className={`mb-5 h-24 w-auto max-w-[340px] object-contain ${theme.align === "center" ? "mx-auto" : ""}`}
             src={displayLogoUrl}
-            style={{ boxShadow: "0 4px 20px -4px rgba(0,0,0,0.15), 0 0 0 3px white, 0 0 0 4px rgba(0,0,0,0.06)" }}
           />
         ) : null}
         <h2 className="tracking-tight" style={{ fontWeight: theme.titleBold ? 800 : 600, fontStyle: theme.titleItalic ? "italic" : "normal", fontSize: theme.fontSize + 14, lineHeight: 1.2 }}>

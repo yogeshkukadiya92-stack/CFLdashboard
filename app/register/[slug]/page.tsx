@@ -578,9 +578,8 @@ export default function RegistrationPage() {
           {displayLogoUrl ? (
             <img
               alt="Coach For Life"
-              className={`mb-4 h-20 w-auto max-w-[280px] rounded-2xl bg-white object-contain p-2 ${theme.align === "center" ? "mx-auto" : ""}`}
+              className={`mb-5 h-24 w-auto max-w-[360px] object-contain sm:h-28 ${theme.align === "center" ? "mx-auto" : ""}`}
               src={displayLogoUrl}
-              style={{ boxShadow: "0 4px 24px -6px rgba(0,0,0,0.15), 0 0 0 3px white, 0 0 0 4px rgba(0,0,0,0.06)" }}
             />
           ) : null}
           <p className="text-[11px] font-black uppercase tracking-[0.2em]" style={{ color: theme.accent }}>CFL Workshop Registration</p>
