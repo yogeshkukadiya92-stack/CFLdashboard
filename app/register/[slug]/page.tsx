@@ -14,7 +14,7 @@ const WORKSHOP_MASTER_STORAGE_KEY = "cfl_workshop_master_records_v1";
 const FORMS_STORAGE_KEY = "cfl_forms_v1";
 const REGISTRATION_LINK_CONFIG_STORAGE_KEY = "cfl_registration_link_configs_v1";
 const CLIENTS_STORAGE_KEY = "cfl_clients_v1";
-const BRAND_LOGO_SRC = "/brand/coach-for-life-logo.jpeg";
+const BRAND_LOGO_SRC = "/brand/coach-for-life-logo-horizontal.png";
 
 type WorkshopMasterRecord = { archived?: boolean; id: string; name: string; facilitator?: string; isPaid?: boolean };
 type ClientRecord = { city?: string; email?: string; id: number | string; mobile?: string; name?: string };

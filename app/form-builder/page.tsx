@@ -32,7 +32,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 const WORKSHOP_MASTER_STORAGE_KEY = "cfl_workshop_master_records_v1";
 const FORMS_STORAGE_KEY = "cfl_forms_v1";
-const BRAND_LOGO_SRC = "/brand/coach-for-life-logo.jpeg";
+const BRAND_LOGO_SRC = "/brand/coach-for-life-logo-horizontal.png";
 const MAX_IMAGE_WIDTH = 800;
 const IMAGE_QUALITY = 0.7;
 

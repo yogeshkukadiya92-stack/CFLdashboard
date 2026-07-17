@@ -3,7 +3,7 @@
 import { LockKeyhole, LogIn } from "lucide-react";
 import { type FormEvent, useEffect, useState } from "react";
 
-const BRAND_LOGO_SRC = "/brand/coach-for-life-logo.jpeg";
+const BRAND_LOGO_SRC = "/brand/coach-for-life-logo-stacked.png";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("coachforlife107@gmail.com");
@@ -57,7 +57,7 @@ export default function LoginPage() {
       <section className="grid w-full max-w-5xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-panel lg:grid-cols-[0.95fr_1.05fr]">
         <div className="bg-slate-950 p-8 text-white md:p-10">
           <div className="flex items-center gap-3">
-            <img alt="Coach For Life" className="h-14 w-auto max-w-[240px] rounded-xl bg-white p-2 object-contain shadow-sm" src={BRAND_LOGO_SRC} />
+            <img alt="Coach For Life" className="h-20 w-auto max-w-[180px] object-contain" src={BRAND_LOGO_SRC} />
             <div>
               <p className="text-[11px] font-black uppercase tracking-[0.18em] text-emerald-300">Admin Portal</p>
               <h1 className="text-2xl font-black">Master Login</h1>
