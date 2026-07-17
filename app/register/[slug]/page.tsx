@@ -22,6 +22,7 @@ type RegistrationLinkConfig = {
   facilitator?: string;
   fee?: number;
   id?: string;
+  otpRequired?: boolean;
   paid?: boolean;
   partPayment?: boolean;
   publishUntil?: string;
@@ -197,6 +198,7 @@ export default function RegistrationPage() {
                 partPayment: Boolean(config.partPayment),
                 venue: config.venue || "TBA"
               });
+              resolved = { ...resolved, otpRequired: Boolean(savedForm.otpRequired || config.otpRequired) };
             } else {
               resolved = {
                 id: config.id || slug,
@@ -209,6 +211,7 @@ export default function RegistrationPage() {
                 paid: Boolean(config.paid) && fee > 0,
                 fee,
                 partPayment: Boolean(config.partPayment),
+                otpRequired: Boolean(config.otpRequired),
                 theme: defaultTheme,
                 fields: simpleFields()
               };

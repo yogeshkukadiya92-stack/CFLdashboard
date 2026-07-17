@@ -41,6 +41,7 @@ type RegistrationLinkConfig = {
   facilitator?: string;
   fee?: number;
   id?: string;
+  otpRequired?: boolean;
   paid?: boolean;
   partPayment?: boolean;
   publishUntil?: string;
@@ -1018,6 +1019,7 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
   const [published, setPublished] = useState(true);
   const [publishUntil, setPublishUntil] = useState("");
   const [customBaseUrl, setCustomBaseUrl] = useState("");
+  const [otpRequired, setOtpRequired] = useState(false);
   const [registrationDomains, setRegistrationDomains] = useState<string[]>([]);
   const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "failed">("idle");
   const [saveStatus, setSaveStatus] = useState<"idle" | "saved">("idle");
@@ -1050,6 +1052,11 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
         setPublished(existing.published !== false);
         setPublishUntil(existing.publishUntil || "");
         setCustomBaseUrl(existing.customBaseUrl || "");
+        setOtpRequired(Boolean(existing.otpRequired));
+      } else {
+        const forms = readLocalArray<BuilderForm>(FORMS_STORAGE_KEY);
+        const savedForm = forms.find((item) => item.workshopId === workshop.id || item.workshopSlug === workshopSlug(workshop.name));
+        setOtpRequired(Boolean(savedForm?.otpRequired));
       }
     } catch {
       // Use defaults if saved link settings are not readable.
@@ -1083,6 +1090,7 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
         facilitator: workshop.facilitator || "CFL Facilitator",
         fee: paid ? Number(fee) || 0 : 0,
         id: workshop.id,
+        otpRequired,
         paid,
         partPayment,
         publishUntil: publishUntil || undefined,
@@ -1098,7 +1106,7 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
     } catch {
       // The link still opens from Workshop Master fallback if storage is unavailable.
     }
-  }, [batch, customBaseUrl, fee, linkSettingsLoaded, paid, partPayment, publishUntil, published, shortSlug, venue, workshop]);
+  }, [batch, customBaseUrl, fee, linkSettingsLoaded, otpRequired, paid, partPayment, publishUntil, published, shortSlug, venue, workshop]);
 
   async function copyLink() {
     let copied = false;
@@ -1213,6 +1221,14 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
               </div>
             ) : null}
           </div>
+
+          <label className="flex min-h-[58px] items-center justify-between gap-4 rounded-2xl border border-emerald-100 bg-emerald-50/60 px-4 py-3">
+            <span>
+              <span className="block text-sm font-black text-slate-800">WhatsApp OTP Required</span>
+              <span className="mt-0.5 block text-xs font-semibold text-slate-500">Participants must verify WhatsApp OTP before this registration link can submit.</span>
+            </span>
+            <input checked={otpRequired} className="size-5 shrink-0 accent-emerald-600" onChange={(event) => setOtpRequired(event.target.checked)} type="checkbox" />
+          </label>
 
           <div className="grid gap-4 lg:grid-cols-[1fr_240px]">
             <div>
