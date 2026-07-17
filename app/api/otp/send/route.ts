@@ -26,22 +26,30 @@ async function sendWhatsAppOtp(mobile: string, code: string) {
     const recipient = `91${mobile}`;
     const originWebsite = process.env.WHATSAPP_OTP_ORIGIN_WEBSITE || "https://coachforlife.in/";
     const senderNumber = process.env.WHATSAPP_OTP_NUMBER || "916353531533";
+    const language = process.env.WHATSAPP_OTP_LANGUAGE || "en";
     const response = await fetch(directApiUrl, {
       body: JSON.stringify({
-        authtoken: directAuthToken,
         authToken: directAuthToken,
+        data: [code],
+        language,
+        name: "Participant",
+        originWebsite,
+        sendto: recipient,
+        templateName: directTemplate,
+        ...(process.env.WHATSAPP_OTP_BUTTON_VALUE ? { buttonValue: process.env.WHATSAPP_OTP_BUTTON_VALUE } : {}),
+        ...(process.env.WHATSAPP_OTP_HEADER_DATA ? { headerdata: process.env.WHATSAPP_OTP_HEADER_DATA } : {}),
+        ...(process.env.WHATSAPP_OTP_TAGS ? { tags: process.env.WHATSAPP_OTP_TAGS } : {}),
+        // Backward-compatible aliases for providers or webhooks using different field names.
         bodyValues: [code],
         code,
         from: senderNumber,
         mobile: recipient,
         mobileNumber: recipient,
-        originWebsite,
         otp: code,
         parameters: [code],
         phone: recipient,
         sender: senderNumber,
         templateId: directTemplate,
-        templateName: directTemplate,
         to: recipient,
         ttlSeconds: OTP_TTL_MS / 1000,
         variables: [code],
@@ -54,7 +62,15 @@ async function sendWhatsAppOtp(mobile: string, code: string) {
       },
       method: "POST"
     });
-    return { configured: true, sent: response.ok };
+    let sent = response.ok;
+    try {
+      const result = await response.clone().json();
+      if (typeof result?.IsSuccess === "boolean") sent = result.IsSuccess;
+      if (typeof result?.Status === "number") sent = sent && result.Status >= 200 && result.Status < 300;
+    } catch {
+      // Some providers return plain text for successful sends.
+    }
+    return { configured: true, sent };
   }
 
   const webhookUrl = process.env.WHATSAPP_OTP_WEBHOOK_URL;
