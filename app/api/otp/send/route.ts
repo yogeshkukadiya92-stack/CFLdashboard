@@ -19,6 +19,44 @@ function createOtp() {
 }
 
 async function sendWhatsAppOtp(mobile: string, code: string) {
+  const directApiUrl = process.env.WHATSAPP_OTP_API_URL;
+  const directAuthToken = process.env.WHATSAPP_OTP_AUTH_TOKEN;
+  const directTemplate = process.env.WHATSAPP_OTP_TEMPLATE_NAME || process.env.WHATSAPP_OTP_TEMPLATE_ID;
+  if (directApiUrl && directAuthToken && directTemplate) {
+    const recipient = `91${mobile}`;
+    const originWebsite = process.env.WHATSAPP_OTP_ORIGIN_WEBSITE || "https://coachforlife.in/";
+    const senderNumber = process.env.WHATSAPP_OTP_NUMBER || "916353531533";
+    const response = await fetch(directApiUrl, {
+      body: JSON.stringify({
+        authtoken: directAuthToken,
+        authToken: directAuthToken,
+        bodyValues: [code],
+        code,
+        from: senderNumber,
+        mobile: recipient,
+        mobileNumber: recipient,
+        originWebsite,
+        otp: code,
+        parameters: [code],
+        phone: recipient,
+        sender: senderNumber,
+        templateId: directTemplate,
+        templateName: directTemplate,
+        to: recipient,
+        ttlSeconds: OTP_TTL_MS / 1000,
+        variables: [code],
+        whatsappNumber: senderNumber
+      }),
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${directAuthToken}`,
+        authtoken: directAuthToken
+      },
+      method: "POST"
+    });
+    return { configured: true, sent: response.ok };
+  }
+
   const webhookUrl = process.env.WHATSAPP_OTP_WEBHOOK_URL;
   const webhookToken = process.env.WHATSAPP_OTP_WEBHOOK_TOKEN;
   if (webhookUrl) {
