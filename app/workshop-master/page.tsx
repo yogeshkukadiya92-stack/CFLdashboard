@@ -126,6 +126,7 @@ export default function WorkshopMasterPage() {
   const [workshopTypes, setWorkshopTypes] = useState<string[]>(defaultWorkshopTypes);
   const [facilitators, setFacilitators] = useState<string[]>(defaultFacilitators);
   const [formTitle, setFormTitle] = useState("Workshop Registration");
+  const [formTagline, setFormTagline] = useState("");
   const [formDescription, setFormDescription] = useState("Please fill in your details to confirm your seat.");
   const [formLogoUrl, setFormLogoUrl] = useState("");
   const [formFields, setFormFields] = useState<BuilderField[]>(defaultBuilderFields);
@@ -333,6 +334,7 @@ export default function WorkshopMasterPage() {
 
   function resetBuilderForm() {
     setFormTitle("Workshop Registration");
+    setFormTagline("");
     setFormDescription("Please fill in your details to confirm your seat.");
     setFormLogoUrl("");
     setFormFields(defaultBuilderFields());
@@ -349,6 +351,7 @@ export default function WorkshopMasterPage() {
       workshopSlug: workshopSlug(record.name) || record.id,
       batch: record.batch || "Main Batch",
       title: formTitle.trim() || `${record.name} Registration`,
+      tagline: formTagline.trim() || undefined,
       description: sanitizeRichTextHtml(formDescription),
       theme: { ...defaultTheme, logoUrl: formLogoUrl || undefined },
       paid: record.isPaid,
@@ -380,6 +383,7 @@ export default function WorkshopMasterPage() {
       const savedForm = forms.find((item) => item.workshopId === record.id || item.workshopSlug === workshopSlug(record.name));
       if (!savedForm) {
         setFormTitle(`${record.name} Registration`);
+        setFormTagline("");
         setFormDescription("Please fill in your details to confirm your seat.");
         setFormLogoUrl("");
         setFormFields(defaultBuilderFields());
@@ -388,6 +392,7 @@ export default function WorkshopMasterPage() {
         return;
       }
       setFormTitle(savedForm.title || `${record.name} Registration`);
+      setFormTagline(savedForm.tagline ?? "");
       setFormDescription(savedForm.description || "");
       setFormLogoUrl(savedForm.theme?.logoUrl ?? "");
       setFormFields(savedForm.fields?.length ? normalizeCoreFieldRequirements(savedForm.fields) : defaultBuilderFields());
@@ -601,6 +606,16 @@ export default function WorkshopMasterPage() {
               <input className={inputClass} onChange={(event) => setFormTitle(event.target.value)} placeholder="Workshop Registration" value={formTitle} />
             </label>
             <FormLogoUploader value={formLogoUrl} onChange={setFormLogoUrl} />
+            <label className="block md:col-span-2">
+              <span className="mb-2 block text-sm font-bold text-slate-600">Form Tagline</span>
+              <input
+                className={inputClass}
+                onChange={(event) => setFormTagline(event.target.value)}
+                placeholder="Short subtitle shown below the form title"
+                value={formTagline}
+              />
+              <span className="mt-1 block text-xs font-semibold text-slate-400">Shown below the title on the public registration form.</span>
+            </label>
             <div className="block md:col-span-2">
               <span className="mb-2 block text-sm font-bold text-slate-600">Form Description</span>
               <RichTextEditor onChange={setFormDescription} value={formDescription} />

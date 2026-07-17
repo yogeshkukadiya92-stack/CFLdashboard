@@ -125,6 +125,7 @@ export default function FormBuilderPage() {
   const [workshopPickerOpen, setWorkshopPickerOpen] = useState(false);
   const [batch, setBatch] = useState("Main Batch");
   const [title, setTitle] = useState("Workshop Registration");
+  const [tagline, setTagline] = useState("");
   const [description, setDescription] = useState("Please fill in your details to confirm your seat.");
   const [paid, setPaid] = useState(false);
   const [fee, setFee] = useState("");
@@ -187,6 +188,7 @@ export default function FormBuilderPage() {
       workshopSlug: slugify(name) || workshopId || "workshop",
       batch,
       title,
+      tagline: tagline.trim() || undefined,
       description,
       theme: { fontFamily, fontSize, accent, titleBold, titleItalic, align, bannerUrl: bannerUrl || undefined, logoUrl: logoUrl || undefined },
       paid,
@@ -199,7 +201,7 @@ export default function FormBuilderPage() {
       fields,
       updatedAt: new Date().toISOString()
     };
-  }, [accent, align, bannerUrl, batch, description, fee, fields, fontFamily, fontSize, highlights, logoUrl, otpRequired, paid, partPayment, tiers, title, titleBold, titleItalic, whatsappGroupUrl, workshop, workshopId]);
+  }, [accent, align, bannerUrl, batch, description, fee, fields, fontFamily, fontSize, highlights, logoUrl, otpRequired, paid, partPayment, tagline, tiers, title, titleBold, titleItalic, whatsappGroupUrl, workshop, workshopId]);
 
   const link = useMemo(() => {
     if (typeof window === "undefined" || !workshopId) return "";
@@ -357,6 +359,16 @@ export default function FormBuilderPage() {
                   onChange={(event) => setTitle(event.target.value)}
                   value={title}
                 />
+              </label>
+              <label className="block">
+                <span className="mb-2 block text-sm font-bold text-slate-600">Form Tagline</span>
+                <input
+                  className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-3 text-sm font-semibold outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
+                  onChange={(event) => setTagline(event.target.value)}
+                  placeholder="Short subtitle below the title"
+                  value={tagline}
+                />
+                <span className="mt-1 block text-xs font-semibold text-slate-400">Shown below the title on the public registration form.</span>
               </label>
               <label className="block">
                 <span className="mb-2 block text-sm font-bold text-slate-600">Description</span>
@@ -893,6 +905,7 @@ function FormPreview({ form }: { form: BuilderForm }) {
         <h2 className="tracking-tight" style={{ fontWeight: theme.titleBold ? 800 : 600, fontStyle: theme.titleItalic ? "italic" : "normal", fontSize: theme.fontSize + 14, lineHeight: 1.2 }}>
           {form.title || "Untitled form"}
         </h2>
+        {form.tagline ? <p className="mt-2 text-base font-bold text-slate-600">{form.tagline}</p> : null}
         {form.description ? (
           <div
             className="rich-text-content mt-2.5 leading-relaxed text-slate-500"

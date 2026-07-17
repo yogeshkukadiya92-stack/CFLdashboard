@@ -211,6 +211,7 @@ export interface BuilderForm {
   workshopSlug: string;
   batch: string;
   title: string;
+  tagline?: string;
   description: string;
   theme: BuilderTheme;
   paid: boolean;

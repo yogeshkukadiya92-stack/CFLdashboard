@@ -36,6 +36,7 @@ type FormModel = {
   id: string;
   slug: string;
   title: string;
+  tagline?: string;
   description: string;
   facilitator: string;
   venue: string;
@@ -90,6 +91,7 @@ function modelFromBuilderForm(form: BuilderForm, overrides?: Partial<Pick<FormMo
     id: form.workshopId || form.id,
     slug: form.workshopSlug || slugify(form.workshopName) || form.id,
     title: form.title || form.workshopName || "Workshop Registration",
+    tagline: form.tagline || "",
     description: form.description || "",
     facilitator: overrides?.facilitator || "",
     venue: overrides?.venue || "",
@@ -560,6 +562,7 @@ export default function RegistrationPage() {
           >
             {model.title}
           </h1>
+          {model.tagline ? <p className="mt-2 text-base font-bold text-slate-600">{model.tagline}</p> : null}
           {model.description ? (
             <div
               className="rich-text-content mt-3 leading-relaxed text-slate-500"
