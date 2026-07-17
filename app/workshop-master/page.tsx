@@ -600,7 +600,9 @@ export default function WorkshopMasterPage() {
             <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-emerald-700">{formFields.length} fields</span>
           </div>
 
-          <div className="mt-5 grid gap-4 md:grid-cols-2">
+          <div className="mt-5 grid gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">
+            <div className="min-w-0">
+          <div className="grid gap-4 md:grid-cols-2">
             <label className="block">
               <span className="mb-2 block text-sm font-bold text-slate-600">Form Title</span>
               <input className={inputClass} onChange={(event) => setFormTitle(event.target.value)} placeholder="Workshop Registration" value={formTitle} />
@@ -688,6 +690,18 @@ export default function WorkshopMasterPage() {
                 Add Item
               </button>
             </div>
+          </div>
+            </div>
+
+            <WorkshopFormLivePreview
+              description={formDescription}
+              fields={formFields}
+              highlights={formHighlights}
+              logoUrl={formLogoUrl}
+              paid={isPaid}
+              title={formTitle || `${name || "Workshop"} Registration`}
+              tagline={formTagline}
+            />
           </div>
         </div>
 
@@ -942,6 +956,126 @@ function compressImage(file: File, maxWidth: number): Promise<string> {
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });
+}
+
+function WorkshopFormLivePreview({
+  description,
+  fields,
+  highlights,
+  logoUrl,
+  paid,
+  tagline,
+  title
+}: {
+  description: string;
+  fields: BuilderField[];
+  highlights: string[];
+  logoUrl: string;
+  paid: boolean;
+  tagline: string;
+  title: string;
+}) {
+  const visibleHighlights = highlights.map((item) => item.trim()).filter(Boolean);
+  return (
+    <aside className="xl:sticky xl:top-24 xl:self-start">
+      <div className="mb-3 flex items-center justify-between">
+        <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-700">Live Preview</p>
+        <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-slate-500">Public form</span>
+      </div>
+      <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_16px_40px_-24px_rgba(15,23,42,0.55)]">
+        <div className="h-2 bg-gradient-to-r from-emerald-600 to-emerald-400" />
+        <div className="max-h-[calc(100vh-10rem)] overflow-y-auto p-5">
+          {logoUrl ? (
+            <img
+              alt="Form logo preview"
+              className="mb-4 size-16 rounded-2xl border border-slate-100 object-cover shadow-sm"
+              src={logoUrl}
+            />
+          ) : null}
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-700">CFL Workshop Registration</p>
+          <h4 className="mt-2 text-2xl font-black leading-tight text-slate-950">{title || "Workshop Registration"}</h4>
+          {tagline.trim() ? <p className="mt-2 text-sm font-bold text-slate-600">{tagline.trim()}</p> : null}
+          {description ? (
+            <div
+              className="rich-text-content mt-3 text-sm leading-relaxed text-slate-500"
+              dangerouslySetInnerHTML={{ __html: sanitizeRichTextHtml(description) }}
+            />
+          ) : null}
+          <span className="mt-4 inline-flex rounded-xl bg-emerald-600 px-4 py-2 text-sm font-black text-white shadow-sm">
+            {paid ? "Paid Registration" : "Free Registration"}
+          </span>
+
+          <div className="mt-5 space-y-3">
+            {fields.map((field) => (
+              <PreviewField field={field} key={field.id} />
+            ))}
+          </div>
+
+          {visibleHighlights.length ? (
+            <div className="mt-5 rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
+              <p className="mb-3 text-sm font-black text-slate-800">What&apos;s included</p>
+              <ul className="space-y-2">
+                {visibleHighlights.map((item) => (
+                  <li className="flex items-start gap-2 text-sm font-semibold text-slate-700" key={item}>
+                    <span className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-full bg-emerald-600 text-white">
+                      <Check className="size-3" />
+                    </span>
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
+          <button className="mt-5 flex w-full items-center justify-center rounded-xl bg-emerald-600 px-4 py-3 text-sm font-black uppercase text-white shadow-sm" type="button">
+            Confirm Registration
+          </button>
+          <p className="mt-3 text-center text-xs font-semibold text-slate-400">Your details are saved securely for this workshop only.</p>
+        </div>
+      </div>
+    </aside>
+  );
+}
+
+function PreviewField({ field }: { field: BuilderField }) {
+  if (field.type === "heading") {
+    return <h5 className="border-t border-slate-100 pt-3 text-base font-black text-slate-900">{field.label || "Section heading"}</h5>;
+  }
+
+  const options = field.options?.filter(Boolean) ?? [];
+  const isChoice = field.type === "dropdown" || field.type === "radio" || field.type === "checkbox";
+
+  return (
+    <div>
+      <label className="mb-1.5 block text-sm font-black text-slate-700">
+        {field.label || fieldTypeMeta[field.type].label}
+        {field.required ? <span className="text-emerald-600"> *</span> : null}
+      </label>
+      {isChoice ? (
+        <div className="space-y-2">
+          {(options.length ? options : ["Option 1", "Option 2"]).map((option) => (
+            <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-semibold text-slate-600" key={option}>
+              <span className={`grid size-4 shrink-0 place-items-center border border-slate-300 bg-white ${field.type === "checkbox" ? "rounded" : "rounded-full"}`} />
+              {option}
+            </div>
+          ))}
+          {field.allowOther ? (
+            <input
+              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-400"
+              disabled
+              placeholder="Other"
+            />
+          ) : null}
+        </div>
+      ) : (
+        <input
+          className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-400"
+          disabled
+          placeholder={field.placeholder || fieldTypeMeta[field.type].label}
+        />
+      )}
+    </div>
+  );
 }
 
 function RichTextEditor({ onChange, value }: { onChange: (value: string) => void; value: string }) {
