@@ -628,26 +628,8 @@ export default function RegistrationPage() {
 
         <div className="p-6 md:p-8">
           {success ? (
-            <div className="rounded-2xl bg-emerald-50 px-4 py-5 text-sm font-bold text-emerald-700">
-              <div className="flex items-start gap-3">
-                <CheckCircle2 className="mt-0.5 size-5 shrink-0" />
-                <div>
-                  <p>{message}</p>
-                  {model.whatsappGroupUrl ? (
-                    <p className="mt-2 text-emerald-800">WhatsApp group opens in {redirectCountdown} seconds.</p>
-                  ) : null}
-                </div>
-              </div>
-              {model.whatsappGroupUrl ? (
-                <a
-                  className="mt-4 inline-flex rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-black text-white shadow-sm hover:bg-emerald-700"
-                  href={model.whatsappGroupUrl}
-                  rel="noreferrer"
-                  target="_blank"
-                >
-                  Join WhatsApp Group Now
-                </a>
-              ) : null}
+            <div className="rounded-2xl bg-emerald-50 px-4 py-5 text-center text-sm font-bold text-emerald-700">
+              Registration completed successfully.
             </div>
           ) : (
             <>
@@ -794,6 +776,35 @@ export default function RegistrationPage() {
                 {otpSending ? "Sending OTP..." : "Complete Registration"}
               </button>
             </div>
+          </div>
+        </div>
+      ) : null}
+
+      {success ? (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/60 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-3xl bg-white p-6 text-center shadow-2xl">
+            <span className="mx-auto grid size-16 place-items-center rounded-full bg-emerald-50 text-emerald-700">
+              <CheckCircle2 className="size-9" />
+            </span>
+            <h2 className="mt-5 text-2xl font-black text-slate-950">Registration Confirmed</h2>
+            <p className="mt-2 text-sm font-bold leading-6 text-slate-500">
+              {message || "Your registration has been saved successfully."}
+            </p>
+            {model.whatsappGroupUrl ? (
+              <p className="mt-3 rounded-2xl bg-emerald-50 px-4 py-3 text-sm font-black text-emerald-700">
+                WhatsApp group opens in {redirectCountdown} seconds.
+              </p>
+            ) : null}
+            {model.whatsappGroupUrl ? (
+              <a
+                className="mt-5 inline-flex min-h-[48px] w-full items-center justify-center rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-black text-white shadow-sm hover:bg-emerald-700"
+                href={model.whatsappGroupUrl}
+                rel="noreferrer"
+                target="_blank"
+              >
+                Join WhatsApp Group Now
+              </a>
+            ) : null}
           </div>
         </div>
       ) : null}
