@@ -2,7 +2,7 @@
 
 import { AdminPlatformShell } from "@/components/admin-platform-shell";
 import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
-import { AlertCircle, Archive, ArrowDown, ArrowUp, Bold, Check, CheckSquare, ChevronDown, Circle, Copy, Download, Edit3, ExternalLink, Eye, Heading, Image, Italic, Link2, List, ListOrdered, Mail, Palette, Plus, QrCode, RefreshCw, Save, Search, Smartphone, Trash2, Type, Underline, UsersRound, X } from "lucide-react";
+import { AlertCircle, Archive, ArrowDown, ArrowUp, Bold, Check, CheckSquare, ChevronDown, Circle, Copy, Download, Edit3, ExternalLink, Eye, Files, Heading, Image, Italic, Link2, List, ListOrdered, Mail, Palette, Plus, QrCode, RefreshCw, Save, Search, Smartphone, Trash2, Type, Underline, UsersRound, X } from "lucide-react";
 import { hydrateLiveState, readLocalArray, readLocalObject, saveLiveState } from "@/lib/live-state";
 import { buildRegistrationUrl, normalizeBaseUrl } from "@/lib/registration-url";
 import { sanitizeRichTextHtml } from "@/lib/rich-text";
@@ -258,6 +258,42 @@ export default function WorkshopMasterPage() {
     window.requestAnimationFrame(() => window.scrollTo({ behavior: "smooth", top: 0 }));
   }
 
+  function startDraftFromRecord(record: WorkshopRecord, mode: "full" | "form-only" = "full") {
+    if (mode === "full") {
+      setName(`${record.name} Copy`);
+      setType(record.type);
+      setFacilitator(record.facilitator);
+      setGroup(record.productGroup);
+      setIsPaid(record.isPaid);
+      setBatch(record.batch ?? "");
+      setFeesWithTax(record.feesWithTax ?? "");
+      setIsPartPaymentAllow(Boolean(record.isPartPaymentAllow));
+      setMinimumPartPayment(record.minimumPartPayment ?? "");
+      setDiscountCodeEod(record.discountCodeEod ?? "");
+      setDiscountType(record.discountType ?? "percent");
+      setDiscountValue(record.discountValue ?? "");
+      setDiscountDescription(record.discountDescription ?? "");
+      setOrderQtyTitle(record.orderQtyTitle ?? "");
+      setMinOrderQty(record.minOrderQty ?? "");
+      setMaxOrderQty(record.maxOrderQty ?? "");
+      setTransferLeadToCrm(Boolean(record.transferLeadToCrm));
+    }
+    loadBuilderForm(record);
+    setEditingId(null);
+    setShowData(false);
+    setSelectedWorkshopId(null);
+    setShowParticipants(false);
+    setMessage(mode === "full" ? "Duplicated as a new draft. Change the name and click Save." : "Copied this registration form into a new draft. Fill workshop details and click Save.");
+    window.requestAnimationFrame(() => window.scrollTo({ behavior: "smooth", top: 0 }));
+  }
+
+  function duplicateCurrentFormDraft() {
+    setName(name ? `${name} Copy` : "");
+    setEditingId(null);
+    setMessage("Current form duplicated as a new draft. Update workshop details and click Save.");
+    window.requestAnimationFrame(() => window.scrollTo({ behavior: "smooth", top: 0 }));
+  }
+
   function openWorkshop(record: WorkshopRecord) {
     setRegistrations(readLocalArray<RegistrationEntry>(REGISTRATION_STORAGE_KEY));
     setSelectedWorkshopId(record.id);
@@ -448,10 +484,16 @@ export default function WorkshopMasterPage() {
             <p className="text-sm font-bold text-slate-500">Form completion</p>
             <p className="text-3xl font-black text-slate-950">{progress}%</p>
           </div>
-          <button className="inline-flex items-center gap-2 rounded-xl border border-indigo-300 px-4 py-2.5 text-sm font-bold text-indigo-700 hover:bg-indigo-50" onClick={() => setShowData(true)} type="button">
-            <Eye className="size-4" />
-            View Workshops ({records.length})
-          </button>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <button className="inline-flex items-center gap-2 rounded-xl border border-emerald-300 px-4 py-2.5 text-sm font-bold text-emerald-700 hover:bg-emerald-50" onClick={duplicateCurrentFormDraft} type="button">
+              <Files className="size-4" />
+              Duplicate Form
+            </button>
+            <button className="inline-flex items-center gap-2 rounded-xl border border-indigo-300 px-4 py-2.5 text-sm font-bold text-indigo-700 hover:bg-indigo-50" onClick={() => setShowData(true)} type="button">
+              <Eye className="size-4" />
+              View Workshops ({records.length})
+            </button>
+          </div>
         </div>
 
         {message ? (
@@ -721,6 +763,7 @@ export default function WorkshopMasterPage() {
                           <>
                             <button aria-label="Edit registration link" className="grid size-9 place-items-center rounded-xl bg-emerald-600 text-white hover:bg-emerald-700" onClick={() => setLinkWorkshop(record)} title="Edit registration link" type="button"><Link2 className="size-4" /></button>
                             <button className="grid size-9 place-items-center rounded-xl bg-indigo-600 text-white hover:bg-indigo-700" onClick={() => editRecord(record)} title="Edit" type="button"><Edit3 className="size-4" /></button>
+                            <button className="grid size-9 place-items-center rounded-xl bg-violet-600 text-white hover:bg-violet-700" onClick={() => startDraftFromRecord(record)} title="Duplicate workshop form" type="button"><Files className="size-4" /></button>
                             <button className="grid size-9 place-items-center rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-100" onClick={() => setDeleteTarget(record)} title="Delete" type="button"><Trash2 className="size-4" /></button>
                           </>
                         )}
