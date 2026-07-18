@@ -211,6 +211,8 @@ export interface BuilderTheme {
   fieldRadius?: "soft" | "rounded" | "square";
   bannerUrl?: string;
   logoUrl?: string;
+  logoAlign?: "left" | "center" | "right";
+  logoSize?: number;
 }
 
 export interface FormAnalyticsRecord {

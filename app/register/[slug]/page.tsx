@@ -65,7 +65,9 @@ const defaultTheme: BuilderTheme = {
   align: "left",
   backgroundColor: "#f1f5f9",
   surfaceColor: "#ffffff",
-  fieldRadius: "rounded"
+  fieldRadius: "rounded",
+  logoAlign: "center",
+  logoSize: 140
 };
 
 function simpleFields(): BuilderField[] {
@@ -744,6 +746,9 @@ export default function RegistrationPage() {
   const displayLogoUrl = theme.logoUrl || BRAND_LOGO_SRC;
   const metaLine = [model.batch && `Batch: ${model.batch}`, model.facilitator && `Facilitator: ${model.facilitator}`, model.venue && `Venue: ${model.venue}`].filter(Boolean);
   const fieldRadiusClass = theme.fieldRadius === "square" ? "rounded-md" : theme.fieldRadius === "soft" ? "rounded-lg" : "rounded-xl";
+  const logoAlign = theme.logoAlign || defaultTheme.logoAlign || "center";
+  const logoSize = Math.min(Math.max(theme.logoSize || defaultTheme.logoSize || 140, 72), 240);
+  const logoPositionClass = logoAlign === "center" ? "mx-auto" : logoAlign === "right" ? "ml-auto" : "";
 
   return (
     <main className="min-h-screen px-4 py-8 text-slate-950 md:py-12" style={{ backgroundColor: theme.backgroundColor || defaultTheme.backgroundColor, fontFamily: theme.fontFamily, fontSize: theme.fontSize }}>
@@ -763,8 +768,9 @@ export default function RegistrationPage() {
           {displayLogoUrl ? (
             <img
               alt="Coach For Life"
-              className={`mb-5 h-24 w-auto max-w-[360px] object-contain sm:h-28 ${theme.align === "center" ? "mx-auto" : ""}`}
+              className={`mb-5 h-auto max-w-full object-contain ${logoPositionClass}`}
               src={displayLogoUrl}
+              style={{ width: logoSize }}
             />
           ) : null}
           <p className="text-[11px] font-black uppercase tracking-[0.2em]" style={{ color: theme.accent }}>CFL Workshop Registration</p>

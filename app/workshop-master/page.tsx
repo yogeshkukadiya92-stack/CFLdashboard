@@ -73,7 +73,9 @@ const defaultTheme: BuilderTheme = {
   align: "left",
   backgroundColor: "#f1f5f9",
   surfaceColor: "#ffffff",
-  fieldRadius: "rounded"
+  fieldRadius: "rounded",
+  logoAlign: "center",
+  logoSize: 140
 };
 const themePresets: Array<{ accent: string; backgroundColor: string; label: string; surfaceColor: string }> = [
   { accent: "#059669", backgroundColor: "#f1f5f9", label: "CFL Green", surfaceColor: "#ffffff" },
@@ -1086,6 +1088,37 @@ function FormExperienceControls({
           <span className="mb-2 block text-xs font-black uppercase tracking-[0.14em] text-slate-400">Field corners</span>
           <select className={inputClass} onChange={(event) => onThemeChange({ fieldRadius: event.target.value as BuilderTheme["fieldRadius"] })} value={theme.fieldRadius || "rounded"}><option value="soft">Soft</option><option value="rounded">Rounded</option><option value="square">Compact</option></select>
         </label>
+        <label>
+          <span className="mb-2 block text-xs font-black uppercase tracking-[0.14em] text-slate-400">Logo size</span>
+          <span className="flex min-h-[48px] items-center gap-3 rounded-xl border border-slate-200 bg-white px-3">
+            <input
+              aria-label="Logo size"
+              className="h-2 flex-1 accent-emerald-600"
+              max={240}
+              min={72}
+              onChange={(event) => onThemeChange({ logoSize: Number(event.target.value) })}
+              step={4}
+              type="range"
+              value={theme.logoSize || defaultTheme.logoSize || 140}
+            />
+            <span className="w-12 text-right text-xs font-black text-slate-600">{theme.logoSize || defaultTheme.logoSize || 140}px</span>
+          </span>
+        </label>
+        <div>
+          <span className="mb-2 block text-xs font-black uppercase tracking-[0.14em] text-slate-400">Logo position</span>
+          <div className="grid grid-cols-3 rounded-xl border border-slate-200 bg-white p-1">
+            {(["left", "center", "right"] as const).map((value) => (
+              <button
+                className={`rounded-lg px-3 py-2.5 text-xs font-black capitalize ${(theme.logoAlign || defaultTheme.logoAlign) === value ? "bg-slate-950 text-white" : "text-slate-500"}`}
+                key={value}
+                onClick={() => onThemeChange({ logoAlign: value })}
+                type="button"
+              >
+                {value}
+              </button>
+            ))}
+          </div>
+        </div>
         <div>
           <span className="mb-2 block text-xs font-black uppercase tracking-[0.14em] text-slate-400">Content alignment</span>
           <div className="grid grid-cols-2 rounded-xl border border-slate-200 bg-white p-1"><button className={`rounded-lg px-3 py-2.5 text-xs font-black ${theme.align === "left" ? "bg-slate-950 text-white" : "text-slate-500"}`} onClick={() => onThemeChange({ align: "left" })} type="button">Left</button><button className={`rounded-lg px-3 py-2.5 text-xs font-black ${theme.align === "center" ? "bg-slate-950 text-white" : "text-slate-500"}`} onClick={() => onThemeChange({ align: "center" })} type="button">Center</button></div>
@@ -1139,6 +1172,9 @@ function WorkshopFormLivePreview({
   const activePage = pages[Math.min(previewPage, Math.max(0, pages.length - 1))] ?? { fields, title: "" };
   const accent = theme.accent || defaultTheme.accent;
   const radiusClass = theme.fieldRadius === "square" ? "rounded-md" : theme.fieldRadius === "soft" ? "rounded-lg" : "rounded-xl";
+  const logoAlign = theme.logoAlign || defaultTheme.logoAlign || "center";
+  const logoSize = Math.min(Math.max(theme.logoSize || defaultTheme.logoSize || 140, 72), 240);
+  const logoPositionClass = logoAlign === "center" ? "mx-auto" : logoAlign === "right" ? "ml-auto" : "";
 
   useEffect(() => {
     setPreviewPage((current) => Math.min(current, Math.max(0, pages.length - 1)));
@@ -1157,7 +1193,7 @@ function WorkshopFormLivePreview({
         <div className={`mx-auto overflow-hidden border border-slate-200 shadow-sm transition-all ${device === "mobile" ? "max-w-[320px] rounded-[28px]" : "w-full rounded-2xl"}`} style={{ backgroundColor: theme.surfaceColor || "#ffffff", fontFamily: theme.fontFamily }}>
           <div className="h-2" style={{ backgroundColor: accent }} />
           <div className="max-h-[calc(100vh-12rem)] overflow-y-auto p-5">
-            {displayLogoUrl ? <img alt="Coach For Life" className="mb-4 h-16 w-auto max-w-full object-contain" src={displayLogoUrl} /> : null}
+            {displayLogoUrl ? <img alt="Coach For Life" className={`mb-4 h-auto max-w-full object-contain ${logoPositionClass}`} src={displayLogoUrl} style={{ width: logoSize }} /> : null}
             <p className="text-[10px] font-black uppercase tracking-[0.2em]" style={{ color: accent }}>CFL Workshop Registration</p>
             <h4 className="mt-2 text-2xl font-black leading-tight text-slate-950">{title || "Workshop Registration"}</h4>
             {tagline.trim() ? <p className="mt-2 text-sm font-bold text-slate-600">{tagline.trim()}</p> : null}
