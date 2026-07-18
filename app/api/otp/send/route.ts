@@ -27,34 +27,43 @@ async function sendWhatsAppOtp(mobile: string, code: string) {
     const originWebsite = process.env.WHATSAPP_OTP_ORIGIN_WEBSITE || "https://coachforlife.in/";
     const senderNumber = process.env.WHATSAPP_OTP_NUMBER || "916353531533";
     const language = process.env.WHATSAPP_OTP_LANGUAGE || "en";
+    const payload = {
+      authToken: directAuthToken,
+      data: [code],
+      language,
+      name: "Participant",
+      originWebsite,
+      sendto: recipient,
+      templateName: directTemplate,
+      ...(process.env.WHATSAPP_OTP_BUTTON_VALUE ? { buttonValue: process.env.WHATSAPP_OTP_BUTTON_VALUE } : {}),
+      ...(process.env.WHATSAPP_OTP_HEADER_DATA ? { headerdata: process.env.WHATSAPP_OTP_HEADER_DATA } : {}),
+      ...(process.env.WHATSAPP_OTP_TAGS ? { tags: process.env.WHATSAPP_OTP_TAGS } : {}),
+      // Backward-compatible aliases for providers or webhooks using different field names.
+      BodyDynamicData: [code],
+      ButtonValue: process.env.WHATSAPP_OTP_BUTTON_VALUE,
+      HeaderDynamicData: process.env.WHATSAPP_OTP_HEADER_DATA,
+      Language: language,
+      Name: "Participant",
+      PhoneNumber: recipient,
+      Tags: process.env.WHATSAPP_OTP_TAGS,
+      TemplateName: directTemplate,
+      bodyValues: [code],
+      code,
+      from: senderNumber,
+      mobile: recipient,
+      mobileNumber: recipient,
+      otp: code,
+      parameters: [code],
+      phone: recipient,
+      sender: senderNumber,
+      templateId: directTemplate,
+      to: recipient,
+      ttlSeconds: OTP_TTL_MS / 1000,
+      variables: [code],
+      whatsappNumber: senderNumber
+    };
     const response = await fetch(directApiUrl, {
-      body: JSON.stringify({
-        authToken: directAuthToken,
-        data: [code],
-        language,
-        name: "Participant",
-        originWebsite,
-        sendto: recipient,
-        templateName: directTemplate,
-        ...(process.env.WHATSAPP_OTP_BUTTON_VALUE ? { buttonValue: process.env.WHATSAPP_OTP_BUTTON_VALUE } : {}),
-        ...(process.env.WHATSAPP_OTP_HEADER_DATA ? { headerdata: process.env.WHATSAPP_OTP_HEADER_DATA } : {}),
-        ...(process.env.WHATSAPP_OTP_TAGS ? { tags: process.env.WHATSAPP_OTP_TAGS } : {}),
-        // Backward-compatible aliases for providers or webhooks using different field names.
-        bodyValues: [code],
-        code,
-        from: senderNumber,
-        mobile: recipient,
-        mobileNumber: recipient,
-        otp: code,
-        parameters: [code],
-        phone: recipient,
-        sender: senderNumber,
-        templateId: directTemplate,
-        to: recipient,
-        ttlSeconds: OTP_TTL_MS / 1000,
-        variables: [code],
-        whatsappNumber: senderNumber
-      }),
+      body: JSON.stringify(payload),
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${directAuthToken}`,
@@ -63,14 +72,24 @@ async function sendWhatsAppOtp(mobile: string, code: string) {
       method: "POST"
     });
     let sent = response.ok;
+    let providerMessage = "";
     try {
       const result = await response.clone().json();
       if (typeof result?.IsSuccess === "boolean") sent = result.IsSuccess;
       if (typeof result?.Status === "number") sent = sent && result.Status >= 200 && result.Status < 300;
+      providerMessage = String(result?.Message || result?.message || result?.Error || result?.error || "");
     } catch {
       // Some providers return plain text for successful sends.
+      providerMessage = await response.clone().text().catch(() => "");
     }
-    return { configured: true, sent };
+    if (!sent) {
+      console.error("WhatsApp OTP provider failed", {
+        mobileLast4: mobile.slice(-4),
+        providerMessage,
+        status: response.status
+      });
+    }
+    return { configured: true, sent, providerMessage };
   }
 
   const webhookUrl = process.env.WHATSAPP_OTP_WEBHOOK_URL;
