@@ -906,7 +906,7 @@ export default function WorkshopMasterPage() {
                   <table className="min-w-[860px] w-full text-left text-sm">
                     <thead className="bg-slate-50 text-xs uppercase text-slate-500">
                       <tr>
-                        {["User", "Mobile", "Email", "City", "WhatsApp", "Payment", "Paid", "Due", "Reg. Date"].map((head) => (
+                        {["User", "Mobile", "Email", "City", "WhatsApp", "Payment", "Paid", "Due", "Submitted"].map((head) => (
                           <th className="px-4 py-3" key={head}>{head}</th>
                         ))}
                       </tr>
@@ -926,7 +926,7 @@ export default function WorkshopMasterPage() {
                           </td>
                           <td className="px-4 py-4">INR {entry.amountPaid.toLocaleString("en-IN")}</td>
                           <td className="px-4 py-4">INR {entry.amountDue.toLocaleString("en-IN")}</td>
-                          <td className="px-4 py-4">{entry.createdAt}</td>
+                          <td className="px-4 py-4">{formatSubmittedAt(entry.createdAt)}</td>
                         </tr>
                       )) : (
                         <tr>
@@ -1838,6 +1838,23 @@ function MiniStat({ label, value }: { label: string; value: number }) {
       <p className="text-xs font-bold text-slate-500">{label}</p>
     </div>
   );
+}
+
+function formatSubmittedAt(value?: string) {
+  if (!value) return "-";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+
+  return date.toLocaleString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true
+  });
 }
 
 function WhatsAppVerificationBadge({ status }: { status?: RegistrationEntry["whatsappVerificationStatus"] }) {

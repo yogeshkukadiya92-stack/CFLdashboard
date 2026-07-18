@@ -689,7 +689,7 @@ export default function RegistrationPage() {
       amountDue,
       status: amountDue > 0 ? "Due" : "Paid",
       whatsappVerificationStatus,
-      createdAt: new Date().toISOString().slice(0, 10),
+      createdAt: new Date().toISOString(),
       batch: model.batch,
       answers: Object.keys(extra).length ? extra : undefined
     };
