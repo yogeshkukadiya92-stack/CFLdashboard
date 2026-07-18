@@ -3,9 +3,29 @@ import { LiveDataReset } from "@/components/live-data-reset";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "CFL OS | Business Operating System",
-  description:
-    "AI-powered business operating system for workshops, training institutes, coaches, and education brands."
+  metadataBase: new URL("https://coachforlife.cflb.in"),
+  title: "Coach For Life",
+  description: "Coach For Life",
+  openGraph: {
+    title: "Coach For Life",
+    description: "Coach For Life",
+    siteName: "Coach For Life",
+    images: [
+      {
+        url: "/brand/coach-for-life-logo-horizontal.png",
+        width: 1080,
+        height: 1080,
+        alt: "Coach For Life"
+      }
+    ],
+    type: "website"
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Coach For Life",
+    description: "Coach For Life",
+    images: ["/brand/coach-for-life-logo-horizontal.png"]
+  }
 };
 
 export default function RootLayout({
