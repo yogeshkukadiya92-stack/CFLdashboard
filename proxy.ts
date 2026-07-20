@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 const publicPrefixes = [
   "/login",
   "/register",
+  "/lp",
   "/api/auth",
   "/api/otp",
   "/api/public-registration-state",

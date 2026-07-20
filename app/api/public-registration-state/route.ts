@@ -12,6 +12,7 @@ export async function GET() {
     return NextResponse.json({
       dbEnabled: true,
       forms: state?.forms ?? [],
+      landingPages: state?.landingPages ?? [],
       registrationLinks: state?.registrationLinks ?? {},
       workshops: state?.workshops ?? []
     });
@@ -62,8 +63,10 @@ export async function POST(request: Request) {
       fullName,
       id: String(input.id ?? "").trim().slice(0, 300),
       mobile: `+91 ${mobileDigits}`,
+      landingPageSlug: String(input.landingPageSlug ?? "").trim().slice(0, 300) || undefined,
       paymentMode: input.paymentMode === "Part" ? "Part" : "Full",
       status: amountDue > 0 ? "Due" : "Paid",
+      source: input.source === "landing_page" ? "landing_page" : input.source === "manual" ? "manual" : "registration_link",
       whatsappVerificationStatus: input.whatsappVerificationStatus === "verified"
         ? "verified"
         : input.whatsappVerificationStatus === "not_verified"

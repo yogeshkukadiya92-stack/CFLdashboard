@@ -9,6 +9,7 @@ const arrayFields = [
   "formAnalytics",
   "forms",
   "leads",
+  "landingPages",
   "registrations",
   "salesPeople",
   "schedules",

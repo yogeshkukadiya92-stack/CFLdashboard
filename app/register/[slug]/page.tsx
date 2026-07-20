@@ -674,6 +674,7 @@ export default function RegistrationPage() {
     });
 
     const registrationId = `reg-${model.id}-${mobile || Date.now().toString(36)}`;
+    const source = searchParams.get("source") === "landing-page" ? "landing_page" : "registration_link";
     const payload: RegistrationEntry = {
       id: registrationId,
       workshopId: model.id,
@@ -689,6 +690,8 @@ export default function RegistrationPage() {
       amountDue,
       status: amountDue > 0 ? "Due" : "Paid",
       whatsappVerificationStatus,
+      source,
+      landingPageSlug: source === "landing_page" ? searchParams.get("landing") ?? undefined : undefined,
       createdAt: new Date().toISOString(),
       batch: model.batch,
       answers: Object.keys(extra).length ? extra : undefined

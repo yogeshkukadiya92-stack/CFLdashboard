@@ -8,6 +8,7 @@ export const LIVE_STATE_STORAGE_KEYS = {
   formAnalytics: "cfl_form_analytics_v1",
   forms: "cfl_forms_v1",
   leads: "cfl_leads_v1",
+  landingPages: "cfl_landing_pages_v1",
   registrationLinks: "cfl_registration_link_configs_v1",
   registrations: "cfl_registrations_v1",
   salesPeople: "cfl_sales_people_v1",
@@ -143,6 +144,13 @@ export async function hydratePublicRegistrationState(): Promise<LiveState | null
         patch.workshops = state.workshops;
       } else {
         repairPatch.workshops = readLocalArray(LIVE_STATE_STORAGE_KEYS.workshops);
+      }
+    }
+    if (Array.isArray(state.landingPages)) {
+      if (state.landingPages.length > 0 || !hasLocalArrayData(LIVE_STATE_STORAGE_KEYS.landingPages)) {
+        patch.landingPages = state.landingPages;
+      } else {
+        repairPatch.landingPages = readLocalArray(LIVE_STATE_STORAGE_KEYS.landingPages);
       }
     }
     if (state.registrationLinks && typeof state.registrationLinks === "object") {

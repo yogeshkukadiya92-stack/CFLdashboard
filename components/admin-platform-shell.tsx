@@ -10,6 +10,7 @@ import {
   FileText,
   Import,
   Layers3,
+  LayoutTemplate,
   LogOut,
   Menu,
   Merge,
@@ -65,6 +66,7 @@ const navGroups: NavGroup[] = [
       { href: "/workshop-setup", icon: Tags, label: "Workshop Setup" },
       { href: "/process/import-data-workshop-wise", icon: Import, label: "Import Workshop Data" },
       { href: "/form-builder", icon: FileText, label: "Form Builder" },
+      { href: "/landing-pages", icon: LayoutTemplate, label: "Landing Pages" },
       { href: "/workshop-attendance", icon: ClipboardCheck, label: "Workshop Attendance" }
     ]
   },

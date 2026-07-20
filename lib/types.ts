@@ -159,9 +159,46 @@ export interface RegistrationEntry {
   amountDue: number;
   status: "Paid" | "Due";
   whatsappVerificationStatus?: "verified" | "not_verified" | "not_required";
+  source?: "registration_link" | "landing_page" | "manual";
+  landingPageSlug?: string;
   createdAt: string;
   batch?: string;
   answers?: Record<string, string>;
+}
+
+export type LandingPageTemplate = "wellness" | "event" | "executive";
+
+export interface LandingPageFaq {
+  id: string;
+  question: string;
+  answer: string;
+}
+
+export interface LandingPageRecord {
+  id: string;
+  workshopId: string;
+  workshopName: string;
+  workshopSlug: string;
+  slug: string;
+  headline: string;
+  subheadline: string;
+  description: string;
+  heroImageUrl?: string;
+  logoUrl?: string;
+  ctaLabel: string;
+  highlights: string[];
+  schedule?: string;
+  venue?: string;
+  facilitator?: string;
+  testimonialQuote?: string;
+  testimonialAuthor?: string;
+  faqs: LandingPageFaq[];
+  template: LandingPageTemplate;
+  accentColor: string;
+  backgroundColor: string;
+  published: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export type BuilderFieldType =

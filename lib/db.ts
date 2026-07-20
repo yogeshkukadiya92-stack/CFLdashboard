@@ -10,6 +10,7 @@ type AppState = {
   formAnalytics: unknown[];
   forms: unknown[];
   integrations: Record<string, unknown>;
+  landingPages: unknown[];
   leads: unknown[];
   registrationLinks: Record<string, unknown>;
   registrations: unknown[];
@@ -27,6 +28,7 @@ const emptyAppState: AppState = {
   formAnalytics: [],
   forms: [],
   integrations: {},
+  landingPages: [],
   leads: [],
   registrationLinks: {},
   registrations: [],
@@ -70,6 +72,7 @@ export async function ensurePersistenceTable() {
       workshop_types JSONB NOT NULL DEFAULT '[]'::jsonb,
       facilitators JSONB NOT NULL DEFAULT '[]'::jsonb,
       integrations JSONB NOT NULL DEFAULT '{}'::jsonb,
+      landing_pages JSONB NOT NULL DEFAULT '[]'::jsonb,
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
@@ -87,6 +90,7 @@ export async function ensurePersistenceTable() {
   await client.query(`ALTER TABLE app_state ADD COLUMN IF NOT EXISTS workshop_types JSONB NOT NULL DEFAULT '[]'::jsonb;`);
   await client.query(`ALTER TABLE app_state ADD COLUMN IF NOT EXISTS facilitators JSONB NOT NULL DEFAULT '[]'::jsonb;`);
   await client.query(`ALTER TABLE app_state ADD COLUMN IF NOT EXISTS integrations JSONB NOT NULL DEFAULT '{}'::jsonb;`);
+  await client.query(`ALTER TABLE app_state ADD COLUMN IF NOT EXISTS landing_pages JSONB NOT NULL DEFAULT '[]'::jsonb;`);
   await client.query(`
     INSERT INTO app_state (
       id,
@@ -146,7 +150,8 @@ export async function getAppState() {
       sales_people AS "salesPeople",
       workshop_types AS "workshopTypes",
       facilitators,
-      integrations
+      integrations,
+      landing_pages AS "landingPages"
     FROM app_state
     WHERE id = 1
     LIMIT 1
@@ -178,6 +183,7 @@ export async function saveAppState(input: Partial<AppState>) {
         workshop_types = $12::jsonb,
         facilitators = $13::jsonb,
         integrations = $14::jsonb,
+        landing_pages = $15::jsonb,
         updated_at = NOW()
       WHERE id = 1
     `,
@@ -195,7 +201,8 @@ export async function saveAppState(input: Partial<AppState>) {
       JSON.stringify(input.salesPeople ?? current.salesPeople),
       JSON.stringify(input.workshopTypes ?? current.workshopTypes),
       JSON.stringify(input.facilitators ?? current.facilitators),
-      JSON.stringify(input.integrations ?? current.integrations)
+      JSON.stringify(input.integrations ?? current.integrations),
+      JSON.stringify(input.landingPages ?? current.landingPages)
     ]
   );
   return true;

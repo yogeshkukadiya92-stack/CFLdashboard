@@ -912,10 +912,10 @@ export default function WorkshopMasterPage() {
 
               {showParticipants ? (
                 <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200 bg-white">
-                  <table className="min-w-[860px] w-full text-left text-sm">
+                  <table className="min-w-[1020px] w-full text-left text-sm">
                     <thead className="bg-slate-50 text-xs uppercase text-slate-500">
                       <tr>
-                        {["Action", "User", "Mobile", "Email", "City", "WhatsApp", "Payment", "Paid", "Due", "Submitted"].map((head) => (
+                        {["Action", "User", "Mobile", "Email", "City", "Source", "WhatsApp", "Payment", "Paid", "Due", "Submitted"].map((head) => (
                           <th className="px-4 py-3" key={head}>{head}</th>
                         ))}
                       </tr>
@@ -938,6 +938,7 @@ export default function WorkshopMasterPage() {
 	                          <td className="px-4 py-4">{entry.mobile}</td>
 	                          <td className="px-4 py-4">{entry.email}</td>
                           <td className="px-4 py-4">{entry.city}</td>
+                          <td className="px-4 py-4"><RegistrationSourceBadge source={entry.source} /></td>
                           <td className="px-4 py-4"><WhatsAppVerificationBadge status={entry.whatsappVerificationStatus} /></td>
                           <td className="px-4 py-4">
                             <span className={`rounded-full px-3 py-1 text-xs font-black ${entry.status === "Paid" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
@@ -950,7 +951,7 @@ export default function WorkshopMasterPage() {
                         </tr>
 	                      )) : (
 	                        <tr>
-	                          <td className="px-4 py-8 text-center text-slate-500" colSpan={10}>
+	                          <td className="px-4 py-8 text-center text-slate-500" colSpan={11}>
 	                            No users registered in this workshop yet.
 	                          </td>
 	                        </tr>
@@ -1895,6 +1896,16 @@ function WhatsAppVerificationBadge({ status }: { status?: RegistrationEntry["wha
     return <span className="rounded-full bg-rose-50 px-3 py-1 text-xs font-black text-rose-700">Not Verified</span>;
   }
   return <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-500">Not Required</span>;
+}
+
+function RegistrationSourceBadge({ source }: { source?: RegistrationEntry["source"] }) {
+  if (source === "landing_page") {
+    return <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-black text-sky-700">Landing Page</span>;
+  }
+  if (source === "manual") {
+    return <span className="rounded-full bg-violet-50 px-3 py-1 text-xs font-black text-violet-700">Manual</span>;
+  }
+  return <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-600">Registration Link</span>;
 }
 
 function SelectBox({ label, onChange, options, value }: { label: string; onChange: (value: string) => void; options: string[]; value: string }) {

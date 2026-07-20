@@ -183,6 +183,23 @@ main textarea:focus {
   box-shadow: 0 0 0 4px var(--cfl-focus) !important;
 }
 
+main .cfl-landing-page main {
+  color: inherit !important;
+  background: transparent !important;
+}
+
+main .cfl-landing-page h1,
+main .cfl-landing-page h2,
+main .cfl-landing-page h3,
+main .cfl-landing-page h4 {
+  color: inherit !important;
+}
+
+main .cfl-landing-page section[class*="bg-white"] {
+  border-color: inherit !important;
+  box-shadow: none;
+}
+
 main button {
   font-size: 14px;
   font-weight: 800;
