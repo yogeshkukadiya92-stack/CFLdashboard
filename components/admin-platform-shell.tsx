@@ -15,6 +15,7 @@ import {
   Menu,
   Merge,
   Search,
+  ShieldCheck,
   Settings,
   Tags,
   Target,
@@ -67,7 +68,9 @@ const navGroups: NavGroup[] = [
       { href: "/process/import-data-workshop-wise", icon: Import, label: "Import Workshop Data" },
       { href: "/form-builder", icon: FileText, label: "Form Builder" },
       { href: "/landing-pages", icon: LayoutTemplate, label: "Landing Pages" },
-      { href: "/workshop-attendance", icon: ClipboardCheck, label: "Workshop Attendance" }
+      { href: "/response-access", icon: ShieldCheck, label: "Response Access" },
+      { href: "/workshop-attendance", icon: ClipboardCheck, label: "Workshop Attendance" },
+      { href: "/attendance-team-access", icon: UsersRound, label: "Attendance Team" }
     ]
   },
   {

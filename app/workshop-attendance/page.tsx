@@ -1,10 +1,11 @@
 "use client";
 
 import { AdminPlatformShell } from "@/components/admin-platform-shell";
+import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
 import { hydrateLiveState, readLocalArray, saveLiveState } from "@/lib/live-state";
 import type { AttendanceEntry, AttendanceSession, BuilderField, BuilderFieldType } from "@/lib/types";
 import { generateId } from "@/lib/utils";
-import { ArrowDown, ArrowUp, CalendarDays, CheckSquare, Circle, Copy, Download, ExternalLink, Heading, Mail, Plus, RefreshCw, Search, Smartphone, Trash2, Type, UsersRound } from "lucide-react";
+import { ArrowDown, ArrowUp, CalendarDays, CheckSquare, Circle, Copy, Download, ExternalLink, Eye, Heading, Mail, Plus, QrCode, RefreshCw, Search, Smartphone, Trash2, Type, UsersRound, Video, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 const WORKSHOP_MASTER_STORAGE_KEY = "cfl_workshop_master_records_v1";
@@ -68,6 +69,9 @@ export default function WorkshopAttendancePage() {
   const [selectedSessionId, setSelectedSessionId] = useState("");
   const [copied, setCopied] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [qrDataUrl, setQrDataUrl] = useState("");
+  const [deleteEntryTarget, setDeleteEntryTarget] = useState<AttendanceEntry | null>(null);
+  const [entryDetail, setEntryDetail] = useState<AttendanceEntry | null>(null);
 
   function loadLocal() {
     const loadedWorkshops = readLocalArray<WorkshopRecord>(WORKSHOP_MASTER_STORAGE_KEY).filter((item) => !item.archived);
@@ -97,6 +101,20 @@ export default function WorkshopAttendancePage() {
   const totalAttendees = new Set(entries.map((entry) => `${entry.workshopId}-${entry.mobile}`)).size;
   const link = selectedSession ? attendanceLink(selectedSession.slug) : "";
 
+  useEffect(() => {
+    let cancelled = false;
+    if (!link) {
+      setQrDataUrl("");
+      return;
+    }
+    void import("qrcode").then((module) => module.toDataURL(link, { margin: 1, width: 240 })).then((value) => {
+      if (!cancelled) setQrDataUrl(value);
+    }).catch(() => {
+      if (!cancelled) setQrDataUrl("");
+    });
+    return () => { cancelled = true; };
+  }, [link]);
+
   function persistSessions(next: AttendanceSession[]) {
     setSessions(next);
     void saveLiveState({ attendanceSessions: next });
@@ -116,15 +134,23 @@ export default function WorkshopAttendancePage() {
     const session: AttendanceSession = {
       createdAt: now,
       description: "Please mark your attendance for this workshop session.",
+      allowDuplicate: false,
+      batch: workshop.batch || "",
+      closeMinutesAfter: 120,
       facilitator: workshop.facilitator || "CFL Facilitator",
       fields: defaultAttendanceFields(),
       id,
+      lateAfterMinutes: 15,
+      minimumDurationMinutes: 30,
+      openMinutesBefore: 60,
       published: true,
+      redirectDelaySeconds: 3,
       sessionDate: new Date().toISOString().slice(0, 10),
       slug,
       title: `Session ${number}`,
       updatedAt: now,
       venue: "",
+      successMessage: "Attendance marked successfully. You can now join the live session.",
       workshopId: workshop.id,
       workshopName: workshop.name,
       workshopSlug: slugify(workshop.name) || workshop.id
@@ -148,6 +174,16 @@ export default function WorkshopAttendancePage() {
     persistSessions(nextSessions);
     persistEntries(nextEntries);
     setSelectedSessionId(nextSessions[0]?.id || "");
+  }
+
+  function updateEntry(id: string, patch: Partial<AttendanceEntry>) {
+    persistEntries(entries.map((entry) => entry.id === id ? { ...entry, ...patch } : entry));
+  }
+
+  function deleteEntry() {
+    if (!deleteEntryTarget) return;
+    persistEntries(entries.filter((entry) => entry.id !== deleteEntryTarget.id));
+    setDeleteEntryTarget(null);
   }
 
   function addField(type: BuilderFieldType) {
@@ -320,7 +356,7 @@ export default function WorkshopAttendancePage() {
           </div>
 
           {selectedSession ? (
-            <div className="grid gap-4 xl:grid-cols-[1fr_360px]">
+            <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_440px]">
               <div className="space-y-4">
                 <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
                   <div className="grid gap-4 md:grid-cols-2">
@@ -347,6 +383,29 @@ export default function WorkshopAttendancePage() {
                     <label>
                       <span className="mb-2 block text-sm font-bold text-slate-600">Venue</span>
                       <input className={inputClass} onChange={(event) => updateSession({ venue: event.target.value })} placeholder="Online / City / Address" value={selectedSession.venue || ""} />
+                    </label>
+                    <label>
+                      <span className="mb-2 block text-sm font-bold text-slate-600">Batch</span>
+                      <input className={inputClass} onChange={(event) => updateSession({ batch: event.target.value })} placeholder="Main Batch" value={selectedSession.batch || ""} />
+                    </label>
+                    <label>
+                      <span className="mb-2 block text-sm font-bold text-slate-600">Zoom Meeting Link</span>
+                      <div className="relative"><Video className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-slate-400" /><input className={`${inputClass} pl-10`} onChange={(event) => updateSession({ zoomJoinUrl: event.target.value })} placeholder="https://zoom.us/j/..." type="url" value={selectedSession.zoomJoinUrl || ""} /></div>
+                    </label>
+                    <div className="grid gap-3 md:col-span-2 sm:grid-cols-2 lg:grid-cols-5">
+                      <NumberSetting label="Open before" onChange={(value) => updateSession({ openMinutesBefore: value })} suffix="min" value={selectedSession.openMinutesBefore ?? 60} />
+                      <NumberSetting label="Late after" onChange={(value) => updateSession({ lateAfterMinutes: value })} suffix="min" value={selectedSession.lateAfterMinutes ?? 15} />
+                      <NumberSetting label="Close after" onChange={(value) => updateSession({ closeMinutesAfter: value })} suffix="min" value={selectedSession.closeMinutesAfter ?? 120} />
+                      <NumberSetting label="Zoom redirect" onChange={(value) => updateSession({ redirectDelaySeconds: value })} suffix="sec" value={selectedSession.redirectDelaySeconds ?? 3} />
+                      <NumberSetting label="Min. duration" onChange={(value) => updateSession({ minimumDurationMinutes: value })} suffix="min" value={selectedSession.minimumDurationMinutes ?? 30} />
+                    </div>
+                    <label className="md:col-span-2 flex cursor-pointer items-center justify-between gap-4 border border-slate-200 bg-slate-50 p-4">
+                      <span><span className="block text-sm font-black text-slate-800">Allow repeat check-ins</span><span className="mt-1 block text-xs font-bold text-slate-500">When off, one mobile number creates only one attendance response per session.</span></span>
+                      <input checked={Boolean(selectedSession.allowDuplicate)} className="size-5 accent-emerald-600" onChange={(event) => updateSession({ allowDuplicate: event.target.checked })} type="checkbox" />
+                    </label>
+                    <label className="md:col-span-2">
+                      <span className="mb-2 block text-sm font-bold text-slate-600">Success Message</span>
+                      <input className={inputClass} onChange={(event) => updateSession({ successMessage: event.target.value })} value={selectedSession.successMessage || ""} />
                     </label>
                     <label className="md:col-span-2">
                       <span className="mb-2 block text-sm font-bold text-slate-600">Form Description</span>
@@ -401,6 +460,7 @@ export default function WorkshopAttendancePage() {
                   <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-700">Share Attendance</p>
                   <h3 className="mt-1 text-xl font-black text-slate-950">Public form link</h3>
                   <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-2">
+                    {qrDataUrl ? <div className="mb-3 bg-white p-3 text-center"><img alt="Attendance check-in QR code" className="mx-auto size-44 object-contain" src={qrDataUrl} /><p className="mt-2 inline-flex items-center gap-2 text-xs font-black text-slate-500"><QrCode className="size-4" />Scan to mark attendance</p></div> : null}
                     <input aria-label="Public attendance form link" className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-xs font-bold text-slate-600 outline-none focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100" onFocus={(event) => event.target.select()} readOnly value={link} />
                     <div className="mt-2 grid grid-cols-2 gap-2">
                       <button className="inline-flex min-h-[42px] items-center justify-center gap-2 rounded-lg bg-slate-950 px-3 py-2 text-sm font-bold text-white" onClick={copyLink} type="button">
@@ -429,13 +489,14 @@ export default function WorkshopAttendancePage() {
                     </div>
                   </div>
                   <div className="mt-4 max-h-[360px] overflow-auto rounded-xl border border-slate-100">
-                    <table className="w-full min-w-[560px] text-left text-sm">
+                    <table className="w-full min-w-[760px] text-left text-sm">
                       <thead className="sticky top-0 bg-slate-50 text-xs uppercase tracking-[0.12em] text-slate-400">
                         <tr>
                           <th className="px-3 py-3">Name</th>
                           <th className="px-3 py-3">Mobile</th>
-                          <th className="px-3 py-3">City</th>
-                          <th className="px-3 py-3">Time</th>
+                          <th className="px-3 py-3">Status</th>
+                          <th className="px-3 py-3">Check-in</th>
+                          <th className="px-3 py-3">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
@@ -443,12 +504,13 @@ export default function WorkshopAttendancePage() {
                           <tr key={entry.id}>
                             <td className="px-3 py-3 font-bold text-slate-800">{entry.attendeeName}</td>
                             <td className="px-3 py-3 font-semibold text-slate-500">{entry.mobile}</td>
-                            <td className="px-3 py-3 font-semibold text-slate-500">{entry.city || "-"}</td>
+                            <td className="px-3 py-3"><select aria-label={`Attendance status for ${entry.attendeeName}`} className="border border-slate-200 bg-white px-2 py-1.5 text-xs font-black text-slate-700" onChange={(event) => updateEntry(entry.id, { status: event.target.value as AttendanceEntry["status"] })} value={entry.status || "checked_in"}><option value="checked_in">Checked In</option><option value="late">Late</option><option value="joined_zoom">Joined Zoom</option><option value="completed">Completed</option></select></td>
                             <td className="px-3 py-3 font-semibold text-slate-500">{entry.submittedAt ? new Date(entry.submittedAt).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : "-"}</td>
+                            <td className="px-3 py-3"><div className="flex gap-1.5"><button aria-label={`View ${entry.attendeeName} answers`} className="grid size-8 place-items-center border border-slate-200 text-slate-500 hover:bg-slate-50" onClick={() => setEntryDetail(entry)} type="button"><Eye className="size-3.5" /></button><button aria-label={`Delete ${entry.attendeeName} attendance`} className="grid size-8 place-items-center bg-rose-50 text-rose-600 hover:bg-rose-100" onClick={() => setDeleteEntryTarget(entry)} type="button"><Trash2 className="size-3.5" /></button></div></td>
                           </tr>
                         ))}
                         {selectedEntries.length === 0 ? (
-                          <tr><td className="px-3 py-8 text-center text-sm font-bold text-slate-400" colSpan={4}>No attendance yet. Share the public form link or refresh after participants submit.</td></tr>
+                          <tr><td className="px-3 py-8 text-center text-sm font-bold text-slate-400" colSpan={5}>No attendance yet. Share the public form link or refresh after participants submit.</td></tr>
                         ) : null}
                       </tbody>
                     </table>
@@ -464,9 +526,22 @@ export default function WorkshopAttendancePage() {
           ) : null}
         </div>
       </section>
+      <ConfirmDialog confirmLabel="Delete Response" description="This attendance response will be removed permanently." onCancel={() => setDeleteEntryTarget(null)} onConfirm={deleteEntry} open={Boolean(deleteEntryTarget)} title="Delete attendance response?">{deleteEntryTarget?.attendeeName}</ConfirmDialog>
+      {entryDetail ? <EntryDetailDialog entry={entryDetail} onClose={() => setEntryDetail(null)} /> : null}
     </AdminPlatformShell>
   );
 }
+
+function NumberSetting({ label, onChange, suffix, value }: { label: string; onChange: (value: number) => void; suffix: string; value: number }) {
+  return <label><span className="mb-2 block text-xs font-black text-slate-500">{label}</span><div className="flex border border-slate-200 bg-white"><input className="min-w-0 flex-1 px-3 py-2.5 text-sm font-bold outline-none" min={0} onChange={(event) => onChange(Math.max(0, Number(event.target.value) || 0))} type="number" value={value} /><span className="grid place-items-center border-l border-slate-200 px-2 text-[10px] font-black uppercase text-slate-400">{suffix}</span></div></label>;
+}
+
+function EntryDetailDialog({ entry, onClose }: { entry: AttendanceEntry; onClose: () => void }) {
+  const answers = Object.entries(entry.answers ?? {});
+  return <div aria-modal="true" className="fixed inset-0 z-50 grid place-items-end bg-slate-950/55 sm:place-items-center sm:p-4" role="dialog"><section className="max-h-[90vh] w-full overflow-hidden bg-white shadow-2xl sm:max-w-xl"><header className="flex items-start justify-between gap-4 border-b border-slate-200 p-5"><div><h2 className="text-xl font-black">{entry.attendeeName}</h2><p className="mt-1 text-xs font-bold text-slate-500">{entry.mobile} · {entry.workshopName}</p></div><button aria-label="Close response details" className="grid size-9 place-items-center border border-slate-200 text-slate-500" onClick={onClose} type="button"><X className="size-4" /></button></header><div className="max-h-[70vh] overflow-y-auto p-5"><dl className="grid grid-cols-2 gap-4 border-b border-slate-200 pb-5"><Detail label="Email" value={entry.email || "-"} /><Detail label="City" value={entry.city || "-"} /><Detail label="Batch" value={entry.batch || "-"} /><Detail label="Submitted" value={new Date(entry.submittedAt).toLocaleString("en-IN")} /></dl>{answers.length ? <dl className="mt-2 divide-y divide-slate-200">{answers.map(([label, answer]) => <div className="py-4" key={label}><dt className="text-xs font-black uppercase text-slate-500">{label}</dt><dd className="mt-2 whitespace-pre-wrap text-sm font-semibold text-slate-900">{answer}</dd></div>)}</dl> : <p className="py-10 text-center text-sm font-bold text-slate-500">No custom answers.</p>}</div></section></div>;
+}
+
+function Detail({ label, value }: { label: string; value: string }) { return <div><dt className="text-xs font-black uppercase text-slate-400">{label}</dt><dd className="mt-1 break-words text-sm font-bold text-slate-800">{value}</dd></div>; }
 
 function Metric({ label, value }: { label: string; value: number }) {
   return (

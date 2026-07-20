@@ -25,7 +25,13 @@ export async function GET() {
   }
   try {
     const state = await getAppState();
-    return NextResponse.json({ dbEnabled: true, ...state });
+    if (!state) return NextResponse.json({ dbEnabled: true });
+    const {
+      attendanceTeamUsers: _privateAttendanceTeamUsers,
+      responseAccessGrants: _privateResponseAccessGrants,
+      ...publicState
+    } = state;
+    return NextResponse.json({ dbEnabled: true, ...publicState });
   } catch (error) {
     return NextResponse.json({ dbEnabled: true, error: "Failed to read DB state" }, { status: 500 });
   }

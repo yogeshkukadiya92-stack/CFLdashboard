@@ -166,6 +166,33 @@ export interface RegistrationEntry {
   answers?: Record<string, string>;
 }
 
+export interface ResponseAccessPermissions {
+  exportCsv: boolean;
+  revealContact: boolean;
+  viewAnswers: boolean;
+}
+
+export interface ResponseAccessGrant {
+  id: string;
+  token: string;
+  recipientName: string;
+  recipientContact?: string;
+  workshopIds: string[];
+  workshopNames: string[];
+  permissions: ResponseAccessPermissions;
+  active: boolean;
+  expiresAt?: string;
+  pinHash: string;
+  createdAt: string;
+  updatedAt: string;
+  lastAccessedAt?: string;
+  accessCount: number;
+}
+
+export type ResponseAccessGrantSummary = Omit<ResponseAccessGrant, "pinHash"> & {
+  hasAccessCode: boolean;
+};
+
 export type LandingPageTemplate = "wellness" | "event" | "executive";
 
 export interface LandingPageFaq {
@@ -302,8 +329,17 @@ export interface AttendanceSession {
   sessionDate: string;
   startTime?: string;
   endTime?: string;
+  batch?: string;
   facilitator?: string;
   venue?: string;
+  zoomJoinUrl?: string;
+  openMinutesBefore?: number;
+  lateAfterMinutes?: number;
+  closeMinutesAfter?: number;
+  redirectDelaySeconds?: number;
+  allowDuplicate?: boolean;
+  successMessage?: string;
+  minimumDurationMinutes?: number;
   published: boolean;
   fields: BuilderField[];
   createdAt: string;
@@ -322,4 +358,38 @@ export interface AttendanceEntry {
   city?: string;
   answers?: Record<string, string>;
   submittedAt: string;
+  status?: "checked_in" | "late" | "joined_zoom" | "completed";
+  checkInAt?: string;
+  joinedZoomAt?: string;
+  leftZoomAt?: string;
+  durationMinutes?: number;
+  batch?: string;
+  source?: "attendance_form" | "manual" | "zoom_webhook";
 }
+
+export interface AttendanceTeamPermissions {
+  revealContact: boolean;
+  exportCsv: boolean;
+  viewAnswers: boolean;
+  editAttendance: boolean;
+  deleteResponses: boolean;
+}
+
+export interface AttendanceTeamUser {
+  id: string;
+  name: string;
+  email: string;
+  passwordHash: string;
+  sessionIds: string[];
+  permissions: AttendanceTeamPermissions;
+  active: boolean;
+  expiresAt?: string;
+  createdAt: string;
+  updatedAt: string;
+  lastLoginAt?: string;
+  loginCount: number;
+}
+
+export type AttendanceTeamUserSummary = Omit<AttendanceTeamUser, "passwordHash"> & {
+  hasPassword: boolean;
+};

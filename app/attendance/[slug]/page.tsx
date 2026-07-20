@@ -3,7 +3,7 @@
 import { readLocalArray, writeLiveStateToLocalStorage } from "@/lib/live-state";
 import type { AttendanceEntry, AttendanceSession, BuilderField } from "@/lib/types";
 import { generateId } from "@/lib/utils";
-import { AlertTriangle, CheckCircle2, ClipboardCheck, Loader2, ShieldCheck } from "lucide-react";
+import { AlertTriangle, ArrowRight, CheckCircle2, ClipboardCheck, Clock3, Loader2, ShieldCheck, Video } from "lucide-react";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
@@ -32,22 +32,27 @@ export default function AttendanceFormPage() {
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [joinUrl, setJoinUrl] = useState("");
+  const [countdown, setCountdown] = useState(0);
+  const [autoRedirect, setAutoRedirect] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
     async function loadSession() {
       let sessions = readLocalArray<AttendanceSession>(ATTENDANCE_SESSIONS_STORAGE_KEY);
       try {
-        const response = await fetch("/api/attendance-state", { cache: "no-store" });
+        const response = await fetch(`/api/attendance-state?slug=${encodeURIComponent(slug)}`, { cache: "no-store" });
         if (response.ok) {
           const data = await response.json();
-          if (Array.isArray(data?.attendanceSessions)) {
-            sessions = data.attendanceSessions;
+          if (data?.attendanceSession) {
+            sessions = [data.attendanceSession];
             window.localStorage.setItem(ATTENDANCE_SESSIONS_STORAGE_KEY, JSON.stringify(sessions));
           }
+        } else {
+          sessions = [];
         }
       } catch {
-        // Use local snapshot when offline.
+        // Use the last published local snapshot only while genuinely offline.
       }
       if (cancelled) return;
       const match = sessions.find((item) => item.slug === slug && item.published !== false) ?? null;
@@ -59,6 +64,16 @@ export default function AttendanceFormPage() {
       cancelled = true;
     };
   }, [slug]);
+
+  useEffect(() => {
+    if (!joinUrl || !autoRedirect) return;
+    if (countdown <= 0) {
+      window.location.assign(joinUrl);
+      return;
+    }
+    const timer = window.setTimeout(() => setCountdown((value) => Math.max(0, value - 1)), 1000);
+    return () => window.clearTimeout(timer);
+  }, [autoRedirect, countdown, joinUrl]);
 
   const roleField = (role: NonNullable<BuilderField["role"]>) => session?.fields.find((field) => field.role === role) ?? null;
   const mobileFieldId = roleField("mobile")?.id;
@@ -122,29 +137,27 @@ export default function AttendanceFormPage() {
     };
 
     try {
-      const current = readLocalArray<AttendanceEntry>(ATTENDANCE_ENTRIES_STORAGE_KEY);
-      const next = [
-        entry,
-        ...current.filter((item) => item.id !== entry.id)
-      ];
-      writeLiveStateToLocalStorage({ attendanceEntries: next });
       const response = await fetch("/api/attendance-state", {
         body: JSON.stringify({ entry }),
         headers: { "Content-Type": "application/json" },
         method: "POST"
       });
-      if (!response.ok) {
-        setMessage("Attendance is saved on this device, but server sync failed. Please try again if the admin report does not update.");
-      }
-    } catch {
-      setMessage("Attendance is saved on this device, but server sync failed. Please try again if the admin report does not update.");
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || "Could not save attendance.");
+      const savedEntry = data.entry as AttendanceEntry;
+      const current = readLocalArray<AttendanceEntry>(ATTENDANCE_ENTRIES_STORAGE_KEY);
+      writeLiveStateToLocalStorage({ attendanceEntries: [savedEntry, ...current.filter((item) => item.id !== savedEntry.id)] });
+      setSuccess(true);
+      setJoinUrl(String(data.joinUrl || ""));
+      setCountdown(Number(data.redirectDelaySeconds) || 0);
+      setAutoRedirect(true);
+      setMessage(String(data.successMessage || (data.duplicate ? "Attendance was already marked. You can join the session." : "Attendance marked successfully.")));
+      setAnswers({});
+    } catch (reason) {
+      setMessage(reason instanceof Error ? reason.message : "Could not save attendance. Please try again.");
     } finally {
       setSubmitting(false);
     }
-
-    setSuccess(true);
-    setMessage((current) => current || "Attendance marked successfully.");
-    setAnswers({});
   }
 
   if (!ready) {
@@ -178,14 +191,7 @@ export default function AttendanceFormPage() {
         </div>
 
         <div className="border-t border-slate-100 p-6 md:p-8">
-          {success ? (
-            <div className="rounded-2xl bg-emerald-50 px-4 py-5 text-sm font-bold text-emerald-700">
-              <div className="flex items-start gap-3">
-                <CheckCircle2 className="mt-0.5 size-5 shrink-0" />
-                <p>{message}</p>
-              </div>
-            </div>
-          ) : (
+          {success ? <div className="min-h-24" /> : (
             <>
               <div className="grid gap-4 md:grid-cols-2">
                 {session.fields.map((field) => (
@@ -218,6 +224,25 @@ export default function AttendanceFormPage() {
           )}
         </div>
       </section>
+      {success ? (
+        <div aria-modal="true" className="fixed inset-0 z-50 grid place-items-center bg-slate-950/60 p-4 backdrop-blur-sm" role="dialog">
+          <section className="w-full max-w-md overflow-hidden border border-slate-200 bg-white shadow-2xl">
+            <div className="h-1.5 bg-emerald-600" />
+            <div className="p-6 text-center sm:p-8">
+              <span className="mx-auto grid size-16 place-items-center rounded-full bg-emerald-50 text-emerald-600"><CheckCircle2 className="size-8" /></span>
+              <h2 className="mt-5 text-2xl font-black text-slate-950">Attendance Confirmed</h2>
+              <p className="mt-3 text-sm font-semibold leading-6 text-slate-600">{message}</p>
+              {joinUrl ? (
+                <>
+                  {autoRedirect ? <p className="mt-5 inline-flex items-center gap-2 bg-slate-50 px-3 py-2 text-xs font-black text-slate-600"><Clock3 className="size-4 text-emerald-600" />Opening Zoom in {countdown} second{countdown === 1 ? "" : "s"}</p> : null}
+                  <a className="mt-5 inline-flex min-h-12 w-full items-center justify-center gap-2 bg-emerald-600 px-5 py-3 text-sm font-black text-white hover:bg-emerald-700" href={joinUrl}><Video className="size-5" />Join Zoom Session<ArrowRight className="size-4" /></a>
+                  {autoRedirect ? <button className="mt-3 text-xs font-black text-slate-500 hover:text-slate-800" onClick={() => setAutoRedirect(false)} type="button">Stay on this page</button> : null}
+                </>
+              ) : <p className="mt-5 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-700">Attendance is saved. The Zoom link has not been configured for this session.</p>}
+            </div>
+          </section>
+        </div>
+      ) : null}
     </main>
   );
 }
