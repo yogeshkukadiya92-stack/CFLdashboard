@@ -162,6 +162,7 @@ export default function WorkshopMasterPage() {
   const [formAnalytics, setFormAnalytics] = useState<FormAnalyticsRecord[]>([]);
   const [linkWorkshop, setLinkWorkshop] = useState<WorkshopRecord | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<WorkshopRecord | null>(null);
+  const [deleteResponseTarget, setDeleteResponseTarget] = useState<RegistrationEntry | null>(null);
 
   useEffect(() => {
     function loadLocal() {
@@ -331,6 +332,14 @@ export default function WorkshopMasterPage() {
     if (selectedWorkshopId === id) setSelectedWorkshopId(null);
     setDeleteTarget(null);
     setMessage("Workshop deleted.");
+  }
+
+  async function deleteRegistrationResponse(id: string) {
+    const next = registrations.filter((entry) => entry.id !== id);
+    setRegistrations(next);
+    setDeleteResponseTarget(null);
+    setMessage("Registration response deleted.");
+    await saveLiveState({ registrations: next });
   }
 
   function buildWorkshopRecord(id: string): WorkshopRecord {
@@ -906,17 +915,28 @@ export default function WorkshopMasterPage() {
                   <table className="min-w-[860px] w-full text-left text-sm">
                     <thead className="bg-slate-50 text-xs uppercase text-slate-500">
                       <tr>
-                        {["User", "Mobile", "Email", "City", "WhatsApp", "Payment", "Paid", "Due", "Submitted"].map((head) => (
+                        {["Action", "User", "Mobile", "Email", "City", "WhatsApp", "Payment", "Paid", "Due", "Submitted"].map((head) => (
                           <th className="px-4 py-3" key={head}>{head}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {selectedParticipants.length ? selectedParticipants.map((entry) => (
-                        <tr className="hover:bg-indigo-50/40" key={entry.id}>
-                          <td className="px-4 py-4 font-black text-slate-950">{entry.fullName}</td>
-                          <td className="px-4 py-4">{entry.mobile}</td>
-                          <td className="px-4 py-4">{entry.email}</td>
+	                      {selectedParticipants.length ? selectedParticipants.map((entry) => (
+	                        <tr className="hover:bg-indigo-50/40" key={entry.id}>
+                          <td className="px-4 py-4">
+                            <button
+                              aria-label={`Delete response from ${entry.fullName}`}
+                              className="grid size-9 place-items-center rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-100"
+                              onClick={() => setDeleteResponseTarget(entry)}
+                              title="Delete response"
+                              type="button"
+                            >
+                              <Trash2 className="size-4" />
+                            </button>
+                          </td>
+	                          <td className="px-4 py-4 font-black text-slate-950">{entry.fullName}</td>
+	                          <td className="px-4 py-4">{entry.mobile}</td>
+	                          <td className="px-4 py-4">{entry.email}</td>
                           <td className="px-4 py-4">{entry.city}</td>
                           <td className="px-4 py-4"><WhatsAppVerificationBadge status={entry.whatsappVerificationStatus} /></td>
                           <td className="px-4 py-4">
@@ -928,12 +948,12 @@ export default function WorkshopMasterPage() {
                           <td className="px-4 py-4">INR {entry.amountDue.toLocaleString("en-IN")}</td>
                           <td className="px-4 py-4">{formatSubmittedAt(entry.createdAt)}</td>
                         </tr>
-                      )) : (
-                        <tr>
-                          <td className="px-4 py-8 text-center text-slate-500" colSpan={9}>
-                            No users registered in this workshop yet.
-                          </td>
-                        </tr>
+	                      )) : (
+	                        <tr>
+	                          <td className="px-4 py-8 text-center text-slate-500" colSpan={10}>
+	                            No users registered in this workshop yet.
+	                          </td>
+	                        </tr>
                       )}
                     </tbody>
                   </table>
@@ -954,6 +974,16 @@ export default function WorkshopMasterPage() {
         title="Delete workshop?"
       >
         {deleteTarget ? `${deleteTarget.name} · ${deleteTarget.facilitator}` : null}
+      </ConfirmDialog>
+      <ConfirmDialog
+        confirmLabel="Delete Response"
+        description="This removes this participant response from the workshop response list."
+        onCancel={() => setDeleteResponseTarget(null)}
+        onConfirm={() => deleteResponseTarget ? void deleteRegistrationResponse(deleteResponseTarget.id) : undefined}
+        open={Boolean(deleteResponseTarget)}
+        title="Delete response?"
+      >
+        {deleteResponseTarget ? `${deleteResponseTarget.fullName} · ${deleteResponseTarget.mobile}` : null}
       </ConfirmDialog>
     </AdminPlatformShell>
   );
