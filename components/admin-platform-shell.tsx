@@ -78,6 +78,7 @@ const navGroups: NavGroup[] = [
     label: "CRM / Clients",
     items: [
       { href: "/manage-client", icon: UsersRound, label: "Manage Client" },
+      { href: "/lead-management", icon: Target, label: "Lead Management" },
       { href: "/historical-data", icon: Archive, label: "Historical Data" },
       { href: "/sales-person", icon: Target, label: "Sales Person" },
       { href: "/process/manual-client-registration", icon: UserPlus, label: "Manual Registration" },

@@ -211,9 +211,10 @@ export default function DashboardPage() {
             <p className="mt-1 text-sm font-semibold text-slate-500">Fast paths into the workflows used most often by an admin team.</p>
           </div>
         </div>
-        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-6">
           {[
             { href: "/workshop-master", icon: CalendarDays, label: "Create Workshop", helper: "Master and form fields" },
+            { href: "/lead-management", icon: TrendingUp, label: "Manage Leads", helper: "Assign, follow up, export" },
             { href: "/manage-client", icon: UserPlus, label: "Add Client", helper: "Import or create records" },
             { href: "/workshop-scheduling-admin", icon: ClipboardCheck, label: "Schedule Event", helper: "Pricing, batch, CRM" },
             { href: "/process/manual-client-registration", icon: UsersRound, label: "Register Client", helper: "Offline enrollment" },
