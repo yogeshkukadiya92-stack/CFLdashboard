@@ -91,6 +91,15 @@ type SalesPerson = {
   commissions?: { id: string; workshop: string; leadPercent: number; directPercent: number }[];
 };
 
+type LeadRecord = {
+  assignedTo?: string;
+  followUps?: Array<{ completed?: boolean; dueAt?: string }>;
+  name?: string;
+  revenuePotential?: number;
+  stage?: string;
+  status?: string;
+};
+
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
 /* ------------------------------------------------------------------ */
@@ -160,6 +169,7 @@ function buildReport(
   workshops: Workshop[],
   _clients: Client[],
   salesPeople: SalesPerson[],
+  leads: LeadRecord[],
   workshopFilter: string,
   fromDate: string,
   toDate: string,
@@ -838,20 +848,42 @@ function buildReport(
     }
 
     /* ============================================================== */
-    /*  19. SALES PERSON LEAD ASSIGN — Placeholder                     */
+    /*  19. SALES PERSON LEAD ASSIGN                                   */
     /* ============================================================== */
     case "sales-person-lead-assign": {
+      const owners = [...salesPeople.map((person) => person.name), "Unassigned"];
+      const rows = owners.map((owner) => {
+        const assigned = leads.filter((lead) => owner === "Unassigned" ? !lead.assignedTo : lead.assignedTo === owner);
+        const stageOf = (lead: LeadRecord) => lead.stage ?? (lead.status === "Registered" ? "Won" : ["Dropped", "No Show"].includes(String(lead.status)) ? "Lost" : lead.status);
+        const open = assigned.filter((lead) => !["Won", "Lost"].includes(String(stageOf(lead)))).length;
+        const won = assigned.filter((lead) => stageOf(lead) === "Won").length;
+        const lost = assigned.filter((lead) => stageOf(lead) === "Lost").length;
+        const overdue = assigned.filter((lead) => (lead.followUps ?? []).some((followUp) => !followUp.completed && followUp.dueAt && new Date(followUp.dueAt).getTime() < Date.now())).length;
+        return {
+          assigned: assigned.length,
+          conversion: assigned.length ? `${Math.round((won / assigned.length) * 100)}%` : "0%",
+          lost,
+          open,
+          overdue,
+          owner,
+          pipelineValue: assigned.filter((lead) => !["Won", "Lost"].includes(String(stageOf(lead)))).reduce((sum, lead) => sum + Number(lead.revenuePotential ?? 0), 0),
+          won
+        };
+      }).filter((row) => row.assigned > 0 || row.owner !== "Unassigned");
       return {
-        columns: [],
-        rows: [],
-        csvHeaders: [],
-        csvRow: () => [],
-        placeholder: (
-          <div className="px-4 py-16 text-center">
-            <p className="text-lg font-bold text-slate-600">Coming Soon</p>
-            <p className="mt-2 text-sm text-slate-400">Lead assignment tracking will be available in a future update.</p>
-          </div>
-        ),
+        columns: [
+          { label: "Sales Person", key: "owner" },
+          { label: "Assigned", key: "assigned", align: "right" },
+          { label: "Open", key: "open", align: "right" },
+          { label: "Won", key: "won", align: "right" },
+          { label: "Lost", key: "lost", align: "right" },
+          { label: "Overdue", key: "overdue", align: "right" },
+          { label: "Conversion", key: "conversion", align: "right" },
+          { label: "Pipeline Value", key: "pipelineValue", align: "right" }
+        ],
+        rows: filterByQuery(rows, ["owner"]),
+        csvHeaders: ["Sales Person", "Assigned", "Open", "Won", "Lost", "Overdue", "Conversion", "Pipeline Value"],
+        csvRow: (row) => [String(row.owner), String(row.assigned), String(row.open), String(row.won), String(row.lost), String(row.overdue), String(row.conversion), String(row.pipelineValue)]
       };
     }
 
@@ -926,6 +958,7 @@ export default function ReportPage() {
   const [workshops, setWorkshops] = useState<Workshop[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [salesPeople, setSalesPeople] = useState<SalesPerson[]>([]);
+  const [leads, setLeads] = useState<LeadRecord[]>([]);
   const [serverRows, setServerRows] = useState<ReportRow[] | null>(null);
   const [serverTotalRows, setServerTotalRows] = useState(0);
   const [serverWorkshopOptions, setServerWorkshopOptions] = useState<string[]>([]);
@@ -946,6 +979,7 @@ export default function ReportPage() {
       setWorkshops(readLocalArray<Workshop>(LIVE_STATE_STORAGE_KEYS.workshops));
       setClients(readLocalArray<Client>(LIVE_STATE_STORAGE_KEYS.clients));
       setSalesPeople(readLocalArray<SalesPerson>(LIVE_STATE_STORAGE_KEYS.salesPeople));
+      setLeads(readLocalArray<LeadRecord>(LIVE_STATE_STORAGE_KEYS.leads));
     }
 
     loadLocal();
@@ -1025,8 +1059,8 @@ export default function ReportPage() {
     : Array.from(new Set(registrations.map((e) => e.workshopTitle).filter(Boolean)));
 
   const localReport = useMemo(
-    () => buildReport(slug, registrations, workshops, clients, salesPeople, workshop, fromDate, toDate, query),
-    [slug, registrations, workshops, clients, salesPeople, workshop, fromDate, toDate, query]
+    () => buildReport(slug, registrations, workshops, clients, salesPeople, leads, workshop, fromDate, toDate, query),
+    [slug, registrations, workshops, clients, salesPeople, leads, workshop, fromDate, toDate, query]
   );
   const report = useMemo(
     () => (usesServerReport && serverRows ? { ...localReport, rows: serverRows } : localReport),

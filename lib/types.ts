@@ -20,6 +20,28 @@ export type LeadStage =
   | "Won"
   | "Lost";
 
+export type LeadPriority = "Hot" | "Warm" | "Cold";
+
+export type LeadActivityType = "created" | "note" | "call" | "whatsapp" | "assignment" | "stage" | "follow_up" | "conversion";
+
+export interface LeadActivity {
+  id: string;
+  type: LeadActivityType;
+  message: string;
+  createdAt: string;
+  createdBy?: string;
+}
+
+export interface LeadFollowUp {
+  id: string;
+  dueAt: string;
+  type: "Call" | "WhatsApp" | "Meeting";
+  note: string;
+  completed: boolean;
+  completedAt?: string;
+  createdAt: string;
+}
+
 export type PaymentStatus = "Paid" | "Due" | "Overdue" | "Failed" | "Refunded";
 
 export type Channel = "WhatsApp" | "Email" | "SMS" | "Call" | "Landing Page";
@@ -48,6 +70,15 @@ export interface Lead {
   createdAt: string;
   nextFollowUp: string;
   bestTime: string;
+  priority?: LeadPriority;
+  interest?: string;
+  lostReason?: string;
+  updatedAt?: string;
+  lastActivityAt?: string;
+  sourceDetails?: string[];
+  activities?: LeadActivity[];
+  followUps?: LeadFollowUp[];
+  convertedClientId?: string;
 }
 
 export interface Workshop {

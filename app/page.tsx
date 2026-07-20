@@ -1,7 +1,7 @@
 "use client";
 
 import { AdminPlatformShell } from "@/components/admin-platform-shell";
-import { CalendarDays, ClipboardCheck, Download, FileSpreadsheet, IndianRupee, Plus, TrendingUp, UserPlus, UsersRound } from "lucide-react";
+import { CalendarDays, ClipboardCheck, Download, FileSpreadsheet, IndianRupee, Plus, Target, TrendingUp, UserPlus, UsersRound } from "lucide-react";
 import { hydrateLiveState, LIVE_STATE_STORAGE_KEYS, readLocalArray } from "@/lib/live-state";
 import { useEffect, useMemo, useState } from "react";
 
@@ -213,8 +213,8 @@ export default function DashboardPage() {
         </div>
         <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-6">
           {[
+            { href: "/lead-management", icon: Target, label: "Manage Leads", helper: "Pipeline and follow-ups" },
             { href: "/workshop-master", icon: CalendarDays, label: "Create Workshop", helper: "Master and form fields" },
-            { href: "/lead-management", icon: TrendingUp, label: "Manage Leads", helper: "Assign, follow up, export" },
             { href: "/manage-client", icon: UserPlus, label: "Add Client", helper: "Import or create records" },
             { href: "/workshop-scheduling-admin", icon: ClipboardCheck, label: "Schedule Event", helper: "Pricing, batch, CRM" },
             { href: "/process/manual-client-registration", icon: UsersRound, label: "Register Client", helper: "Offline enrollment" },

@@ -1,5 +1,6 @@
 import { getAppState, isDbEnabled, saveAppState } from "@/lib/db";
 import { upsertLiveRegistration } from "@/lib/crm-db";
+import { upsertLeadFromRegistration } from "@/lib/lead-utils";
 import { NextResponse } from "next/server";
 
 export async function GET() {
@@ -89,8 +90,23 @@ export async function POST(request: Request) {
         ]
       : [sanitizedRegistration, ...current];
 
+    const workshops = Array.isArray(state?.workshops) ? state.workshops : [];
+    const linkedWorkshop = workshops.find((value: unknown) => {
+      if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+      const workshop = value as { id?: unknown; name?: unknown };
+      return String(workshop.id ?? "") === sanitizedRegistration.workshopId
+        || String(workshop.name ?? "").trim().toLowerCase() === workshopTitle.toLowerCase();
+    }) as { transferLeadToCrm?: unknown } | undefined;
+    const leads = linkedWorkshop?.transferLeadToCrm === true
+      ? upsertLeadFromRegistration(
+          Array.isArray(state?.leads) ? state.leads : [],
+          sanitizedRegistration,
+          Array.isArray(state?.salesPeople) ? state.salesPeople : []
+        )
+      : Array.isArray(state?.leads) ? state.leads : [];
+
     await upsertLiveRegistration(sanitizedRegistration);
-    await saveAppState({ registrations: next.slice(0, 5000) });
+    await saveAppState({ leads, registrations: next.slice(0, 5000) });
     return NextResponse.json({ ok: true, dbEnabled: true });
   } catch {
     return NextResponse.json({ error: "Failed to save registration" }, { status: 500 });
