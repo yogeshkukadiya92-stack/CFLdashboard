@@ -70,6 +70,7 @@ export default function WorkshopAttendancePage() {
   const [copied, setCopied] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState("");
+  const [deleteSessionTarget, setDeleteSessionTarget] = useState<AttendanceSession | null>(null);
   const [deleteEntryTarget, setDeleteEntryTarget] = useState<AttendanceEntry | null>(null);
   const [entryDetail, setEntryDetail] = useState<AttendanceEntry | null>(null);
 
@@ -96,7 +97,7 @@ export default function WorkshopAttendancePage() {
 
   const selectedWorkshop = workshops.find((item) => item.id === selectedWorkshopId) ?? filteredWorkshops[0] ?? null;
   const workshopSessions = sessions.filter((session) => session.workshopId === selectedWorkshop?.id);
-  const selectedSession = sessions.find((session) => session.id === selectedSessionId) ?? workshopSessions[0] ?? null;
+  const selectedSession = workshopSessions.find((session) => session.id === selectedSessionId) ?? workshopSessions[0] ?? null;
   const selectedEntries = entries.filter((entry) => entry.sessionId === selectedSession?.id);
   const totalAttendees = new Set(entries.map((entry) => `${entry.workshopId}-${entry.mobile}`)).size;
   const link = selectedSession ? attendanceLink(selectedSession.slug) : "";
@@ -173,7 +174,8 @@ export default function WorkshopAttendancePage() {
     const nextEntries = entries.filter((entry) => entry.sessionId !== id);
     persistSessions(nextSessions);
     persistEntries(nextEntries);
-    setSelectedSessionId(nextSessions[0]?.id || "");
+    setSelectedSessionId(nextSessions.find((session) => session.workshopId === selectedWorkshop?.id)?.id || "");
+    setDeleteSessionTarget(null);
   }
 
   function updateEntry(id: string, patch: Partial<AttendanceEntry>) {
@@ -270,7 +272,7 @@ export default function WorkshopAttendancePage() {
 
   return (
     <AdminPlatformShell activeLabel="Workshop Attendance" description="Create session-wise attendance forms and track who attended every workshop session." title="Workshop Attendance">
-      <section className="grid gap-4 xl:grid-cols-[320px_1fr]">
+      <section className="min-w-0 space-y-4">
         <aside className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="flex items-center justify-between gap-3">
             <div>
@@ -279,33 +281,42 @@ export default function WorkshopAttendancePage() {
             </div>
             <span className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-black text-slate-600">{workshops.length}</span>
           </div>
-          <label className="mt-4 flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
-            <Search className="size-4 text-slate-400" />
-            <input className="min-w-0 flex-1 bg-transparent text-sm font-semibold outline-none" onChange={(event) => setQuery(event.target.value)} placeholder="Search workshop..." value={query} />
-          </label>
-          <div className="mt-4 max-h-[520px] space-y-2 overflow-y-auto pr-1">
-            {filteredWorkshops.map((workshop) => {
-              const count = sessions.filter((session) => session.workshopId === workshop.id).length;
-              const active = selectedWorkshop?.id === workshop.id;
-              return (
-                <button
-                  className={`w-full rounded-xl border px-3 py-3 text-left transition ${active ? "border-emerald-300 bg-emerald-50 text-emerald-900" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"}`}
-                  key={workshop.id}
-                  onClick={() => {
-                    setSelectedWorkshopId(workshop.id);
-                    setSelectedSessionId(sessions.find((session) => session.workshopId === workshop.id)?.id || "");
-                  }}
-                  type="button"
-                >
-                  <p className="line-clamp-2 text-sm font-black">{workshop.name}</p>
-                  <p className="mt-1 text-xs font-bold text-slate-400">{count} sessions</p>
-                </button>
-              );
-            })}
+          <div className="mt-4 flex min-w-0 flex-col gap-3 lg:flex-row">
+            <label className="flex w-full shrink-0 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 lg:w-80">
+              <Search className="size-4 text-slate-400" />
+              <input className="min-w-0 flex-1 bg-transparent text-sm font-semibold outline-none" onChange={(event) => setQuery(event.target.value)} placeholder="Search workshop..." value={query} />
+            </label>
+            <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto pb-1">
+              {filteredWorkshops.map((workshop) => {
+                const count = sessions.filter((session) => session.workshopId === workshop.id).length;
+                const active = selectedWorkshop?.id === workshop.id;
+                return (
+                  <button
+                    className={`w-[240px] shrink-0 rounded-xl border px-3 py-3 text-left transition ${active ? "border-emerald-300 bg-emerald-50 text-emerald-900" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"}`}
+                    key={workshop.id}
+                    onClick={() => {
+                      setSelectedWorkshopId(workshop.id);
+                      setSelectedSessionId(sessions.find((session) => session.workshopId === workshop.id)?.id || "");
+                    }}
+                    type="button"
+                  >
+                    <p className="line-clamp-2 text-sm font-black">{workshop.name}</p>
+                    <p className="mt-1 text-xs font-bold text-slate-400">{count} sessions</p>
+                  </button>
+                );
+              })}
+              {filteredWorkshops.length === 0 ? (
+                <div className="w-full rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center">
+                  <Search className="mx-auto size-6 text-slate-300" />
+                  <p className="mt-2 text-sm font-black text-slate-600">{workshops.length ? "No workshops found" : "No workshops created yet"}</p>
+                  {workshops.length ? <p className="mt-1 text-xs font-semibold text-slate-400">Try a different search.</p> : <a className="mt-3 inline-flex min-h-9 items-center justify-center rounded-lg bg-slate-950 px-3 text-xs font-black text-white" href="/workshop-master">Create workshop</a>}
+                </div>
+              ) : null}
+            </div>
           </div>
         </aside>
 
-        <div className="space-y-4">
+        <div className="min-w-0 space-y-4">
           <div className="grid gap-4 md:grid-cols-4">
             <Metric label="Workshops" value={workshops.length} />
             <Metric label="Sessions" value={sessions.length} />
@@ -325,7 +336,7 @@ export default function WorkshopAttendancePage() {
                   <RefreshCw className={`size-4 ${refreshing ? "animate-spin" : ""}`} />
                   Refresh
                 </button>
-                <button className="inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-black text-white hover:bg-emerald-700" onClick={() => createSession()} type="button">
+                <button className="inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-black text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500" disabled={!selectedWorkshop} onClick={() => createSession()} type="button">
                   <Plus className="size-4" />
                   Add Session
                 </button>
@@ -356,8 +367,8 @@ export default function WorkshopAttendancePage() {
           </div>
 
           {selectedSession ? (
-            <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_440px]">
-              <div className="space-y-4">
+            <div className="grid min-w-0 gap-4 min-[1720px]:grid-cols-[minmax(0,1fr)_420px]">
+              <div className="min-w-0 space-y-4">
                 <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
                   <div className="grid gap-4 md:grid-cols-2">
                     <label>
@@ -392,7 +403,7 @@ export default function WorkshopAttendancePage() {
                       <span className="mb-2 block text-sm font-bold text-slate-600">Zoom Meeting Link</span>
                       <div className="relative"><Video className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-slate-400" /><input className={`${inputClass} pl-10`} onChange={(event) => updateSession({ zoomJoinUrl: event.target.value })} placeholder="https://zoom.us/j/..." type="url" value={selectedSession.zoomJoinUrl || ""} /></div>
                     </label>
-                    <div className="grid gap-3 md:col-span-2 sm:grid-cols-2 lg:grid-cols-5">
+                    <div className="grid gap-3 md:col-span-2 sm:grid-cols-2 lg:grid-cols-3">
                       <NumberSetting label="Open before" onChange={(value) => updateSession({ openMinutesBefore: value })} suffix="min" value={selectedSession.openMinutesBefore ?? 60} />
                       <NumberSetting label="Late after" onChange={(value) => updateSession({ lateAfterMinutes: value })} suffix="min" value={selectedSession.lateAfterMinutes ?? 15} />
                       <NumberSetting label="Close after" onChange={(value) => updateSession({ closeMinutesAfter: value })} suffix="min" value={selectedSession.closeMinutesAfter ?? 120} />
@@ -455,7 +466,7 @@ export default function WorkshopAttendancePage() {
                 </div>
               </div>
 
-              <aside className="space-y-4">
+              <aside className="min-w-0 space-y-4">
                 <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
                   <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-700">Share Attendance</p>
                   <h3 className="mt-1 text-xl font-black text-slate-950">Public form link</h3>
@@ -488,8 +499,17 @@ export default function WorkshopAttendancePage() {
                       <UsersRound className="size-7 text-slate-300" />
                     </div>
                   </div>
-                  <div className="mt-4 max-h-[360px] overflow-auto rounded-xl border border-slate-100">
-                    <table className="w-full min-w-[760px] text-left text-sm">
+                  {selectedEntries.length === 0 ? (
+                    <div className="mt-4 grid min-h-36 place-items-center rounded-xl border border-dashed border-slate-200 bg-slate-50 px-6 text-center">
+                      <div>
+                        <UsersRound className="mx-auto size-8 text-slate-300" />
+                        <p className="mt-3 text-sm font-black text-slate-700">No attendance recorded yet</p>
+                        <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">Share the public form link or refresh after participants submit.</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="mt-4 max-h-[420px] w-full overflow-auto rounded-xl border border-slate-100">
+                      <table className="w-full min-w-[720px] text-left text-sm">
                       <thead className="sticky top-0 bg-slate-50 text-xs uppercase tracking-[0.12em] text-slate-400">
                         <tr>
                           <th className="px-3 py-3">Name</th>
@@ -509,15 +529,13 @@ export default function WorkshopAttendancePage() {
                             <td className="px-3 py-3"><div className="flex gap-1.5"><button aria-label={`View ${entry.attendeeName} answers`} className="grid size-8 place-items-center border border-slate-200 text-slate-500 hover:bg-slate-50" onClick={() => setEntryDetail(entry)} type="button"><Eye className="size-3.5" /></button><button aria-label={`Delete ${entry.attendeeName} attendance`} className="grid size-8 place-items-center bg-rose-50 text-rose-600 hover:bg-rose-100" onClick={() => setDeleteEntryTarget(entry)} type="button"><Trash2 className="size-3.5" /></button></div></td>
                           </tr>
                         ))}
-                        {selectedEntries.length === 0 ? (
-                          <tr><td className="px-3 py-8 text-center text-sm font-bold text-slate-400" colSpan={5}>No attendance yet. Share the public form link or refresh after participants submit.</td></tr>
-                        ) : null}
                       </tbody>
-                    </table>
-                  </div>
+                      </table>
+                    </div>
+                  )}
                 </div>
 
-                <button className="inline-flex w-full min-h-[44px] items-center justify-center gap-2 rounded-xl border border-rose-100 bg-rose-50 px-4 py-2.5 text-sm font-black text-rose-600 hover:bg-rose-100" onClick={() => deleteSession(selectedSession.id)} type="button">
+                <button className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl border border-rose-100 bg-rose-50 px-4 py-2.5 text-sm font-black text-rose-600 hover:bg-rose-100" onClick={() => setDeleteSessionTarget(selectedSession)} type="button">
                   <Trash2 className="size-4" />
                   Delete Session
                 </button>
@@ -526,6 +544,7 @@ export default function WorkshopAttendancePage() {
           ) : null}
         </div>
       </section>
+      <ConfirmDialog confirmLabel="Delete Session" description="The attendance form and all responses for this session will be removed permanently." onCancel={() => setDeleteSessionTarget(null)} onConfirm={() => deleteSessionTarget && deleteSession(deleteSessionTarget.id)} open={Boolean(deleteSessionTarget)} title="Delete attendance session?">{deleteSessionTarget?.title}</ConfirmDialog>
       <ConfirmDialog confirmLabel="Delete Response" description="This attendance response will be removed permanently." onCancel={() => setDeleteEntryTarget(null)} onConfirm={deleteEntry} open={Boolean(deleteEntryTarget)} title="Delete attendance response?">{deleteEntryTarget?.attendeeName}</ConfirmDialog>
       {entryDetail ? <EntryDetailDialog entry={entryDetail} onClose={() => setEntryDetail(null)} /> : null}
     </AdminPlatformShell>
@@ -571,8 +590,8 @@ function FieldEditor({
   const Icon = meta.icon;
   const locked = field.role === "name" || field.role === "mobile";
   return (
-    <div className="rounded-2xl border border-slate-200 bg-slate-50/50 p-3">
-      <div className="grid gap-3 lg:grid-cols-[34px_1fr_150px_auto] lg:items-start">
+    <div className="min-w-0 rounded-2xl border border-slate-200 bg-slate-50/50 p-3">
+      <div className="grid min-w-0 gap-3 sm:grid-cols-[34px_minmax(0,1fr)] sm:items-start min-[1800px]:grid-cols-[34px_minmax(0,1fr)_150px_auto]">
         <span className="grid size-9 place-items-center rounded-xl bg-white text-slate-500 shadow-sm"><Icon className="size-4" /></span>
         <div className="space-y-2">
           <input className={inputClass} onChange={(event) => onChange({ label: event.target.value })} placeholder="Field label" value={field.label} />
@@ -589,8 +608,8 @@ function FieldEditor({
             />
           ) : null}
         </div>
-        <span className="rounded-lg bg-white px-3 py-2.5 text-center text-xs font-black text-slate-500">{meta.label}</span>
-        <div className="flex flex-wrap items-center gap-2">
+        <span className="rounded-lg bg-white px-3 py-2.5 text-center text-xs font-black text-slate-500 sm:col-start-2 min-[1800px]:col-start-auto">{meta.label}</span>
+        <div className="flex flex-wrap items-center gap-2 sm:col-start-2 min-[1800px]:col-start-auto">
           {field.type !== "heading" ? (
             <label className="inline-flex min-h-[38px] items-center gap-2 rounded-lg bg-white px-3 py-2 text-xs font-black text-slate-600">
               <input checked={Boolean(field.required)} className="size-4 accent-emerald-600" disabled={locked} onChange={(event) => onChange({ required: event.target.checked })} type="checkbox" />
