@@ -2,7 +2,7 @@
 
 import { AdminPlatformShell } from "@/components/admin-platform-shell";
 import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
-import { AlertCircle, Archive, ArrowDown, ArrowUp, BarChart3, Bold, Check, CheckSquare, ChevronDown, Circle, Copy, Download, Edit3, ExternalLink, Eye, Files, Heading, Image, Italic, LayoutList, Link2, List, ListOrdered, Mail, Monitor, Palette, Plus, QrCode, RefreshCw, Route, Save, Search, Smartphone, Sparkles, Trash2, Type, Underline, UsersRound, X } from "lucide-react";
+import { AlertCircle, Archive, ArrowDown, ArrowUp, BarChart3, Bold, Check, CheckSquare, ChevronDown, Circle, Copy, Download, Edit3, ExternalLink, Eye, Files, Heading, Image, Italic, LayoutList, Link2, List, ListOrdered, Mail, MessageCircle, Monitor, Palette, Plus, QrCode, RefreshCw, Route, Save, Search, Smartphone, Sparkles, Trash2, Type, Underline, UsersRound, X } from "lucide-react";
 import { hydrateLiveState, readLocalArray, readLocalObject, saveLiveState } from "@/lib/live-state";
 import { buildRegistrationUrl, normalizeBaseUrl } from "@/lib/registration-url";
 import { sanitizeRichTextHtml } from "@/lib/rich-text";
@@ -206,6 +206,10 @@ export default function WorkshopMasterPage() {
       entry.workshopTitle.trim().toLowerCase() === selectedName
     );
   }, [registrations, selectedWorkshop]);
+  const todayRegistrationCount = useMemo(
+    () => selectedParticipants.filter((entry) => isTodayInIndia(entry.createdAt)).length,
+    [selectedParticipants]
+  );
 
   async function saveRecords(next: WorkshopRecord[]) {
     setRecords(next);
@@ -340,6 +344,20 @@ export default function WorkshopMasterPage() {
     setDeleteResponseTarget(null);
     setMessage("Registration response deleted.");
     await saveLiveState({ registrations: next });
+  }
+
+  function sendResponseSummaryOnWhatsApp() {
+    if (!selectedWorkshop) return;
+
+    const message = [
+      "*Workshop Registration Summary*",
+      "",
+      `Workshop: ${selectedWorkshop.name}`,
+      `Total Registrations: ${selectedParticipants.length}`,
+      `Today's Registrations: ${todayRegistrationCount}`
+    ].join("\n");
+
+    window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, "_blank", "noopener,noreferrer");
   }
 
   function buildWorkshopRecord(id: string): WorkshopRecord {
@@ -883,6 +901,15 @@ export default function WorkshopMasterPage() {
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
+                  <button
+                    className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white hover:bg-emerald-700"
+                    onClick={sendResponseSummaryOnWhatsApp}
+                    title="Send registration summary on WhatsApp"
+                    type="button"
+                  >
+                    <MessageCircle className="size-4" />
+                    Send Summary
+                  </button>
                   <button
                     className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-bold text-white hover:bg-indigo-700"
                     onClick={() => setShowParticipants((value) => !value)}
@@ -1886,6 +1913,22 @@ function formatSubmittedAt(value?: string) {
     minute: "2-digit",
     hour12: true
   });
+}
+
+function isTodayInIndia(value?: string) {
+  if (!value) return false;
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return false;
+
+  const dateFormatter = new Intl.DateTimeFormat("en-CA", {
+    day: "2-digit",
+    month: "2-digit",
+    timeZone: "Asia/Kolkata",
+    year: "numeric"
+  });
+
+  return dateFormatter.format(date) === dateFormatter.format(new Date());
 }
 
 function WhatsAppVerificationBadge({ status }: { status?: RegistrationEntry["whatsappVerificationStatus"] }) {
