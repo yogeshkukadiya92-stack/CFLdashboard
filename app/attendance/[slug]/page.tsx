@@ -264,6 +264,7 @@ function RenderField({
 
   const inputClass = "w-full rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-3 text-base sm:text-sm font-semibold outline-none transition-all focus:border-emerald-300 focus:bg-white focus:ring-4 focus:ring-emerald-100";
   const wide = field.type === "paragraph" || field.type === "radio" || field.type === "checkbox";
+  const options = (field.options ?? []).map((option) => option.trim()).filter(Boolean);
   let control: React.ReactNode;
 
   if (field.type === "paragraph") {
@@ -272,14 +273,14 @@ function RenderField({
     control = (
       <select className={inputClass} onChange={(event) => onChange(event.target.value)} value={value}>
         <option value="">Select...</option>
-        {(field.options ?? []).map((option) => <option key={option} value={option}>{option}</option>)}
+        {options.map((option) => <option key={option} value={option}>{option}</option>)}
       </select>
     );
   } else if (field.type === "radio" || field.type === "checkbox") {
     const selected = value.split(" | ").filter(Boolean);
     control = (
       <div className="space-y-1.5">
-        {(field.options ?? []).map((option) => (
+        {options.map((option) => (
           <label className="flex min-h-[44px] items-center gap-3 text-sm font-semibold text-slate-700" key={option}>
             <input
               checked={field.type === "radio" ? value === option : selected.includes(option)}

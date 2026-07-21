@@ -571,6 +571,78 @@ function Metric({ label, value }: { label: string; value: number }) {
   );
 }
 
+function normalizeOptionLines(value: string) {
+  return value
+    .split(/\r?\n|,/)
+    .map((item) => item.replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+}
+
+function OptionBoxes({ field, onChange }: { field: BuilderField; onChange: (patch: Partial<BuilderField>) => void }) {
+  const options = field.options?.length ? field.options : ["Option 1", "Option 2"];
+
+  function updateOption(optionIndex: number, value: string) {
+    const next = options.map((option, currentIndex) => currentIndex === optionIndex ? value : option);
+    onChange({ options: next.some((option) => option.trim()) ? next : [""] });
+  }
+
+  function pasteOptions(optionIndex: number, value: string) {
+    const pasted = normalizeOptionLines(value);
+    if (pasted.length <= 1) return false;
+    const next = [...options.slice(0, optionIndex), ...pasted, ...options.slice(optionIndex + 1)];
+    onChange({ options: next });
+    return true;
+  }
+
+  function removeOption(optionIndex: number) {
+    const next = options.filter((_, currentIndex) => currentIndex !== optionIndex);
+    onChange({ options: next.length ? next : ["Option 1"] });
+  }
+
+  return (
+    <div className="space-y-2 rounded-2xl border border-slate-200 bg-white p-3">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-[11px] font-black uppercase tracking-[0.16em] text-slate-400">Options</p>
+        <button
+          className="inline-flex min-h-[34px] items-center gap-1.5 rounded-lg border border-dashed border-slate-300 bg-white px-3 py-1.5 text-xs font-black text-slate-600 hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700"
+          onClick={() => onChange({ options: [...options, `Option ${options.length + 1}`] })}
+          type="button"
+        >
+          <Plus className="size-3.5" />
+          Add option
+        </button>
+      </div>
+      <div className="grid gap-2">
+        {options.map((option, optionIndex) => (
+          <div className="grid grid-cols-[34px_minmax(0,1fr)_36px] items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-2" key={`${field.id}-option-${optionIndex}`}>
+            <span className="grid size-8 place-items-center rounded-lg bg-white text-xs font-black text-slate-500">{optionIndex + 1}</span>
+            <input
+              className="min-w-0 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm font-bold outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
+              onChange={(event) => updateOption(optionIndex, event.target.value)}
+              onKeyDown={(event) => event.stopPropagation()}
+              onPaste={(event) => {
+                if (pasteOptions(optionIndex, event.clipboardData.getData("text"))) event.preventDefault();
+              }}
+              placeholder={`Option ${optionIndex + 1}`}
+              value={option}
+            />
+            <button
+              aria-label={`Remove option ${optionIndex + 1}`}
+              className="grid size-9 place-items-center rounded-lg bg-white text-rose-400 hover:bg-rose-50 hover:text-rose-600 disabled:opacity-40"
+              disabled={options.length === 1}
+              onClick={() => removeOption(optionIndex)}
+              type="button"
+            >
+              <Trash2 className="size-4" />
+            </button>
+          </div>
+        ))}
+      </div>
+      <p className="text-xs font-bold leading-5 text-slate-400">Spaces are supported. Paste multiple options with each option on a new line.</p>
+    </div>
+  );
+}
+
 function FieldEditor({
   field,
   index,
@@ -594,19 +666,11 @@ function FieldEditor({
       <div className="grid min-w-0 gap-3 sm:grid-cols-[34px_minmax(0,1fr)] sm:items-start min-[1800px]:grid-cols-[34px_minmax(0,1fr)_150px_auto]">
         <span className="grid size-9 place-items-center rounded-xl bg-white text-slate-500 shadow-sm"><Icon className="size-4" /></span>
         <div className="space-y-2">
-          <input className={inputClass} onChange={(event) => onChange({ label: event.target.value })} placeholder="Field label" value={field.label} />
+          <input className={inputClass} onChange={(event) => onChange({ label: event.target.value })} onKeyDown={(event) => event.stopPropagation()} placeholder="Field label" value={field.label} />
           {field.type !== "heading" ? (
-            <input className={inputClass} onChange={(event) => onChange({ placeholder: event.target.value })} placeholder="Placeholder text" value={field.placeholder ?? ""} />
+            <input className={inputClass} onChange={(event) => onChange({ placeholder: event.target.value })} onKeyDown={(event) => event.stopPropagation()} placeholder="Placeholder text" value={field.placeholder ?? ""} />
           ) : null}
-          {meta.hasOptions ? (
-            <textarea
-              className={inputClass}
-              onChange={(event) => onChange({ options: event.target.value.split("\n").map((item) => item.trim()).filter(Boolean) })}
-              placeholder="One option per line"
-              rows={3}
-              value={(field.options ?? []).join("\n")}
-            />
-          ) : null}
+          {meta.hasOptions ? <OptionBoxes field={field} onChange={onChange} /> : null}
         </div>
         <span className="rounded-lg bg-white px-3 py-2.5 text-center text-xs font-black text-slate-500 sm:col-start-2 min-[1800px]:col-start-auto">{meta.label}</span>
         <div className="flex flex-wrap items-center gap-2 sm:col-start-2 min-[1800px]:col-start-auto">
