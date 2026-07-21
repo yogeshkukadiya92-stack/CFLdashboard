@@ -1,6 +1,7 @@
 "use client";
 
 import { AdminPlatformShell } from "@/components/admin-platform-shell";
+import { IntegrationHubPanel } from "@/components/integration-hub-panel";
 import { CheckCircle2, Copy, CreditCard, Eye, EyeOff, Globe2, Mail, MessageCircle, Plug, Plus, Save, ShieldCheck, Smartphone, Trash2, Webhook, type LucideIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -114,6 +115,7 @@ export default function SettingsPage() {
       title="Plugin Manager"
     >
       <section className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+        <IntegrationHubPanel appUrl={settings.appUrl} />
         <div className="space-y-4">
           <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
             <div className="flex flex-wrap items-start justify-between gap-3">

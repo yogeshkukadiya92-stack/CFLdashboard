@@ -17,6 +17,7 @@ const publicPrefixes = [
   "/api/form-analytics",
   "/api/razorpay/order",
   "/api/webhooks/razorpay",
+  "/api/v1",
   "/_next",
   "/favicon.ico"
 ];

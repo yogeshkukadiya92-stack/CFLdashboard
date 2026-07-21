@@ -1,6 +1,7 @@
 import { deleteCrmClient, listCrmClients, saveCrmClient } from "@/lib/crm-db";
 import { isDbEnabled } from "@/lib/db";
 import { NextResponse } from "next/server";
+import { dispatchCustomerWebhook } from "@/lib/integration-hub";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -47,6 +48,7 @@ export async function POST(request: Request) {
       state: String(body.state ?? ""),
       status: String(body.status ?? "Active")
     });
+    await dispatchCustomerWebhook(client.created ? "customer.created" : "customer.updated", { ...body, id: client.id });
     return NextResponse.json({ client, ok: true });
   } catch (error) {
     const code = isObject(error) ? error.code : null;
@@ -77,6 +79,7 @@ export async function PATCH(request: Request) {
       state: String(body.state ?? ""),
       status: String(body.status ?? "Active")
     });
+    await dispatchCustomerWebhook("customer.updated", { ...body, id: client.id });
     return NextResponse.json({ client, ok: true });
   } catch (error) {
     const code = isObject(error) ? error.code : null;

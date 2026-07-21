@@ -1186,7 +1186,7 @@ export async function saveCrmClient(input: {
       TENANT_ID
     ]);
     if (!result.rowCount) throw new Error("Client not found.");
-    return { id: Number(result.rows[0].id) };
+    return { created: false, id: Number(result.rows[0].id) };
   }
 
   const result = await pool.query(`
@@ -1207,7 +1207,7 @@ export async function saveCrmClient(input: {
       status = EXCLUDED.status,
       deleted_at = NULL,
       updated_at = NOW()
-    RETURNING id
+    RETURNING id, (xmax = 0) AS inserted
   `, [
     TENANT_ID,
     identityKey,
@@ -1224,7 +1224,7 @@ export async function saveCrmClient(input: {
     input.city?.trim() ?? "",
     status
   ]);
-  return { id: Number(result.rows[0].id) };
+  return { created: Boolean(result.rows[0].inserted), id: Number(result.rows[0].id) };
 }
 
 export async function deleteCrmClient(id: string) {
