@@ -3,9 +3,9 @@
 import { AdminPlatformShell } from "@/components/admin-platform-shell";
 import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
 import { hydrateLiveState, readLocalArray, saveLiveState } from "@/lib/live-state";
-import type { AttendanceEntry, AttendanceSession, BuilderField, BuilderFieldType } from "@/lib/types";
+import type { AttendanceEntry, AttendanceSession, BuilderField, BuilderFieldType, BuilderVisibilityOperator } from "@/lib/types";
 import { generateId } from "@/lib/utils";
-import { ArrowDown, ArrowUp, CalendarDays, CheckSquare, Circle, Copy, Download, ExternalLink, Eye, Heading, Mail, Plus, QrCode, RefreshCw, Save, Search, Smartphone, Trash2, Type, UsersRound, Video, X } from "lucide-react";
+import { ArrowDown, ArrowUp, BarChart3, CalendarDays, CheckSquare, Circle, Copy, Download, ExternalLink, Eye, Heading, Laptop, LayoutTemplate, Mail, Palette, Plus, QrCode, RefreshCw, Save, Search, Settings2, Smartphone, Star, Trash2, Type, UsersRound, Video, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 const WORKSHOP_MASTER_STORAGE_KEY = "cfl_workshop_master_records_v1";
@@ -29,13 +29,19 @@ const fieldTypeMeta: Record<BuilderFieldType, { icon: typeof Type; label: string
   mobile: { icon: Smartphone, label: "Mobile", hasOptions: false },
   number: { icon: Type, label: "Number", hasOptions: false },
   date: { icon: CalendarDays, label: "Date", hasOptions: false },
+  time: { icon: CalendarDays, label: "Time", hasOptions: false },
   dropdown: { icon: Circle, label: "Dropdown", hasOptions: true },
   radio: { icon: Circle, label: "Multiple Choice", hasOptions: true },
   checkbox: { icon: CheckSquare, label: "Checkboxes", hasOptions: true },
-  heading: { icon: Heading, label: "Section Heading", hasOptions: false }
+  yes_no: { icon: CheckSquare, label: "Yes / No", hasOptions: false },
+  rating: { icon: Star, label: "Rating", hasOptions: false },
+  consent: { icon: CheckSquare, label: "Consent", hasOptions: false },
+  heading: { icon: Heading, label: "Section Heading", hasOptions: false },
+  divider: { icon: Heading, label: "Divider", hasOptions: false }
 };
 
-const addableTypes: BuilderFieldType[] = ["short_text", "paragraph", "email", "mobile", "number", "date", "dropdown", "radio", "checkbox", "heading"];
+const addableTypes: BuilderFieldType[] = ["short_text", "paragraph", "email", "mobile", "number", "date", "time", "dropdown", "radio", "checkbox", "yes_no", "rating", "consent", "heading", "divider"];
+type BuilderTab = "build" | "logic" | "design" | "share";
 
 function slugify(value: string) {
   return value.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
@@ -75,6 +81,8 @@ export default function WorkshopAttendancePage() {
   const [deleteSessionTarget, setDeleteSessionTarget] = useState<AttendanceSession | null>(null);
   const [deleteEntryTarget, setDeleteEntryTarget] = useState<AttendanceEntry | null>(null);
   const [entryDetail, setEntryDetail] = useState<AttendanceEntry | null>(null);
+  const [builderTab, setBuilderTab] = useState<BuilderTab>("build");
+  const [previewDevice, setPreviewDevice] = useState<"desktop" | "mobile">("mobile");
 
   function loadLocal() {
     const loadedWorkshops = readLocalArray<WorkshopRecord>(WORKSHOP_MASTER_STORAGE_KEY).filter((item) => !item.archived);
@@ -154,6 +162,9 @@ export default function WorkshopAttendancePage() {
       updatedAt: now,
       venue: "",
       successMessage: "Attendance marked successfully. You can now join the live session.",
+      submitButtonText: "Mark Attendance",
+      formMode: "classic",
+      theme: { accent: "#059669", align: "left", fieldRadius: "rounded", fontFamily: "Inter", fontSize: 16, titleBold: true, titleItalic: false, backgroundColor: "#f1f5f9", surfaceColor: "#ffffff" },
       workshopId: workshop.id,
       workshopName: workshop.name,
       workshopSlug: slugify(workshop.name) || workshop.id
@@ -211,7 +222,7 @@ export default function WorkshopAttendancePage() {
           id: generateId(),
           label: meta.label,
           options: meta.hasOptions ? ["Option 1", "Option 2"] : undefined,
-          placeholder: meta.hasOptions || type === "heading" ? undefined : meta.label,
+          placeholder: meta.hasOptions || type === "heading" || type === "divider" ? undefined : meta.label,
           required: false,
           type
         }
@@ -466,12 +477,28 @@ export default function WorkshopAttendancePage() {
                     </label>
                   </div>
 
+                  <nav aria-label="Form builder sections" className="mt-5 grid grid-cols-2 gap-2 rounded-xl bg-slate-100 p-1.5 lg:grid-cols-4">
+                    {([
+                      ["build", LayoutTemplate, "Build"],
+                      ["logic", Settings2, "Logic"],
+                      ["design", Palette, "Design"],
+                      ["share", BarChart3, "Share & Results"]
+                    ] as const).map(([tab, Icon, label]) => (
+                      <button className={`inline-flex min-h-10 items-center justify-center gap-2 rounded-lg px-3 text-xs font-black transition ${builderTab === tab ? "bg-white text-slate-950 shadow-sm" : "text-slate-500 hover:text-slate-800"}`} key={tab} onClick={() => setBuilderTab(tab)} type="button">
+                        <Icon className="size-4" />{label}
+                      </button>
+                    ))}
+                  </nav>
+
+                  {builderTab === "build" || builderTab === "logic" ? <>
                   <div className="mt-4 space-y-3">
                     {selectedSession.fields.map((field, index) => (
                       <FieldEditor
+                        allFields={selectedSession.fields}
                         field={field}
                         index={index}
                         key={field.id}
+                        logicMode={builderTab === "logic"}
                         onChange={(patch) => updateField(field.id, patch)}
                         onMove={moveField}
                         onRemove={() => removeField(field.id)}
@@ -480,7 +507,7 @@ export default function WorkshopAttendancePage() {
                     ))}
                   </div>
 
-                  <div className="mt-5 flex flex-wrap gap-2">
+                  {builderTab === "build" ? <div className="mt-5 flex flex-wrap gap-2">
                     {addableTypes.map((type) => {
                       const meta = fieldTypeMeta[type];
                       const Icon = meta.icon;
@@ -491,11 +518,43 @@ export default function WorkshopAttendancePage() {
                         </button>
                       );
                     })}
-                  </div>
+                  </div> : null}
+                  </> : null}
+
+                  {builderTab === "design" ? (
+                    <div className="mt-5 space-y-5">
+                      <div>
+                        <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-400">Form experience</p>
+                        <div className="mt-2 grid gap-2 sm:grid-cols-3">
+                          {(["classic", "steps", "guided"] as const).map((mode) => <button className={`min-h-12 rounded-xl border px-3 text-sm font-black capitalize ${selectedSession.formMode === mode || (!selectedSession.formMode && mode === "classic") ? "border-emerald-300 bg-emerald-50 text-emerald-800" : "border-slate-200 text-slate-600"}`} key={mode} onClick={() => updateSession({ formMode: mode })} type="button">{mode === "steps" ? "Multi-step" : mode}</button>)}
+                        </div>
+                      </div>
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <label><span className="mb-2 block text-sm font-bold text-slate-600">Accent color</span><div className="flex items-center gap-3 rounded-xl border border-slate-200 p-2"><input className="size-10" onChange={(event) => updateSession({ theme: { ...selectedSession.theme!, accent: event.target.value } })} type="color" value={selectedSession.theme?.accent || "#059669"} /><span className="text-sm font-black text-slate-600">{selectedSession.theme?.accent || "#059669"}</span></div></label>
+                        <label><span className="mb-2 block text-sm font-bold text-slate-600">Page background</span><div className="flex items-center gap-3 rounded-xl border border-slate-200 p-2"><input className="size-10" onChange={(event) => updateSession({ theme: { ...selectedSession.theme!, backgroundColor: event.target.value } })} type="color" value={selectedSession.theme?.backgroundColor || "#f1f5f9"} /><span className="text-sm font-black text-slate-600">{selectedSession.theme?.backgroundColor || "#f1f5f9"}</span></div></label>
+                        <label><span className="mb-2 block text-sm font-bold text-slate-600">Font style</span><select className={inputClass} onChange={(event) => updateSession({ theme: { ...selectedSession.theme!, fontFamily: event.target.value } })} value={selectedSession.theme?.fontFamily || "Inter"}><option>Inter</option><option>Arial</option><option>Georgia</option><option>Trebuchet MS</option></select></label>
+                        <label><span className="mb-2 block text-sm font-bold text-slate-600">Field corners</span><select className={inputClass} onChange={(event) => updateSession({ theme: { ...selectedSession.theme!, fieldRadius: event.target.value as "soft" | "rounded" | "square" } })} value={selectedSession.theme?.fieldRadius || "rounded"}><option value="rounded">Rounded</option><option value="soft">Soft</option><option value="square">Square</option></select></label>
+                      </div>
+                      <label><span className="mb-2 block text-sm font-bold text-slate-600">Submit button text</span><input className={inputClass} onChange={(event) => updateSession({ submitButtonText: event.target.value })} value={selectedSession.submitButtonText || "Mark Attendance"} /></label>
+                    </div>
+                  ) : null}
+
+                  {builderTab === "share" ? (
+                    <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                      <Metric label="Responses" value={selectedEntries.length} />
+                      <Metric label="Completion" value={selectedEntries.length ? 100 : 0} />
+                      <Metric label="Fields" value={selectedSession.fields.length} />
+                      <button className="min-h-12 rounded-xl bg-slate-950 px-4 text-sm font-black text-white sm:col-span-3" onClick={copyLink} type="button"><Copy className="mr-2 inline size-4" />{copied ? "Link copied" : "Copy public form link"}</button>
+                    </div>
+                  ) : null}
                 </div>
               </div>
 
               <aside className="min-w-0 space-y-4">
+                <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                  <div className="flex items-center justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-700">Live Preview</p><h3 className="mt-1 text-xl font-black">Public form</h3></div><div className="flex rounded-lg bg-slate-100 p-1"><button aria-label="Desktop preview" className={`grid size-8 place-items-center rounded-md ${previewDevice === "desktop" ? "bg-white shadow-sm" : "text-slate-400"}`} onClick={() => setPreviewDevice("desktop")} type="button"><Laptop className="size-4" /></button><button aria-label="Mobile preview" className={`grid size-8 place-items-center rounded-md ${previewDevice === "mobile" ? "bg-white shadow-sm" : "text-slate-400"}`} onClick={() => setPreviewDevice("mobile")} type="button"><Smartphone className="size-4" /></button></div></div>
+                  <AttendancePreview device={previewDevice} session={selectedSession} />
+                </div>
                 <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
                   <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-700">Share Attendance</p>
                   <h3 className="mt-1 text-xl font-black text-slate-950">Public form link</h3>
@@ -607,6 +666,21 @@ function normalizeOptionLines(value: string) {
     .filter(Boolean);
 }
 
+function AttendancePreview({ device, session }: { device: "desktop" | "mobile"; session: AttendanceSession }) {
+  const accent = session.theme?.accent || "#059669";
+  const radius = session.theme?.fieldRadius === "square" ? "rounded-none" : session.theme?.fieldRadius === "soft" ? "rounded-lg" : "rounded-xl";
+  const fields = session.fields.filter((field) => !field.visibility).slice(0, device === "mobile" ? 5 : 6);
+  return (
+    <div className={`mx-auto mt-4 overflow-hidden border border-slate-200 bg-white shadow-sm transition-all ${device === "mobile" ? "max-w-[300px]" : "max-w-full"}`} style={{ fontFamily: session.theme?.fontFamily || "Inter", borderTop: `6px solid ${accent}` }}>
+      <div className="p-4"><p className="text-[9px] font-black uppercase tracking-[0.18em]" style={{ color: accent }}>CFL Session Attendance</p><h4 className="mt-1 text-lg font-black leading-tight">{session.workshopName}</h4><p className="mt-1 text-xs font-bold text-slate-500">{session.title}</p></div>
+      <div className={`grid gap-3 border-t border-slate-100 p-4 ${device === "desktop" ? "grid-cols-2" : "grid-cols-1"}`}>
+        {fields.map((field) => field.type === "divider" ? <hr className="col-span-full border-slate-200" key={field.id} /> : field.type === "heading" ? <p className="col-span-full text-sm font-black" key={field.id}>{field.label}</p> : <div className={field.width === "full" ? "col-span-full" : ""} key={field.id}><p className="mb-1 text-[10px] font-black text-slate-600">{field.label}{field.required ? " *" : ""}</p><div className={`h-9 border border-slate-200 bg-slate-50 ${radius}`} /></div>)}
+        <button className={`col-span-full min-h-10 text-xs font-black text-white ${radius}`} style={{ backgroundColor: accent }} type="button">{session.submitButtonText || "Mark Attendance"}</button>
+      </div>
+    </div>
+  );
+}
+
 function OptionBoxes({ field, onChange }: { field: BuilderField; onChange: (patch: Partial<BuilderField>) => void }) {
   const options = field.options?.length ? field.options : ["Option 1", "Option 2"];
 
@@ -673,15 +747,19 @@ function OptionBoxes({ field, onChange }: { field: BuilderField; onChange: (patc
 }
 
 function FieldEditor({
+  allFields,
   field,
   index,
+  logicMode,
   onChange,
   onMove,
   onRemove,
   total
 }: {
+  allFields: BuilderField[];
   field: BuilderField;
   index: number;
+  logicMode: boolean;
   onChange: (patch: Partial<BuilderField>) => void;
   onMove: (index: number, direction: -1 | 1) => void;
   onRemove: () => void;
@@ -690,20 +768,30 @@ function FieldEditor({
   const meta = fieldTypeMeta[field.type];
   const Icon = meta.icon;
   const locked = field.role === "name" || field.role === "mobile";
+  const visibilitySources = allFields.slice(0, index).filter((item) => item.type !== "heading" && item.type !== "divider");
   return (
     <div className="min-w-0 rounded-2xl border border-slate-200 bg-slate-50/50 p-3">
       <div className="grid min-w-0 gap-3 sm:grid-cols-[34px_minmax(0,1fr)] sm:items-start min-[1800px]:grid-cols-[34px_minmax(0,1fr)_150px_auto]">
         <span className="grid size-9 place-items-center rounded-xl bg-white text-slate-500 shadow-sm"><Icon className="size-4" /></span>
         <div className="space-y-2">
           <input className={inputClass} onChange={(event) => onChange({ label: event.target.value })} onKeyDown={(event) => event.stopPropagation()} placeholder="Field label" value={field.label} />
-          {field.type !== "heading" ? (
+          {field.type !== "heading" && field.type !== "divider" ? (
             <input className={inputClass} onChange={(event) => onChange({ placeholder: event.target.value })} onKeyDown={(event) => event.stopPropagation()} placeholder="Placeholder text" value={field.placeholder ?? ""} />
           ) : null}
           {meta.hasOptions ? <OptionBoxes field={field} onChange={onChange} /> : null}
+          {logicMode ? (
+            <div className="space-y-3 rounded-xl border border-indigo-100 bg-indigo-50/60 p-3">
+              <p className="text-xs font-black uppercase tracking-[0.12em] text-indigo-700">Display logic</p>
+              <select className={inputClass} onChange={(event) => onChange({ visibility: event.target.value ? { fieldId: event.target.value, operator: "equals", value: "" } : undefined })} value={field.visibility?.fieldId || ""}><option value="">Always show this field</option>{visibilitySources.map((source) => <option key={source.id} value={source.id}>Show based on: {source.label}</option>)}</select>
+              {field.visibility ? <div className="grid gap-2 sm:grid-cols-2"><select className={inputClass} onChange={(event) => onChange({ visibility: { ...field.visibility!, operator: event.target.value as BuilderVisibilityOperator } })} value={field.visibility.operator}><option value="equals">Equals</option><option value="not_equals">Does not equal</option><option value="contains">Contains</option><option value="answered">Is answered</option><option value="not_answered">Is not answered</option></select>{field.visibility.operator !== "answered" && field.visibility.operator !== "not_answered" ? <input className={inputClass} onChange={(event) => onChange({ visibility: { ...field.visibility!, value: event.target.value } })} placeholder="Answer value" value={field.visibility.value || ""} /> : null}</div> : null}
+            </div>
+          ) : (
+            <details className="rounded-xl border border-slate-200 bg-white p-3"><summary className="cursor-pointer text-xs font-black text-slate-600">Validation & helper text</summary><div className="mt-3 grid gap-2 sm:grid-cols-2"><input className={`${inputClass} sm:col-span-2`} onChange={(event) => onChange({ helpText: event.target.value })} placeholder="Helper text shown below field" value={field.helpText || ""} /><select className={inputClass} onChange={(event) => onChange({ width: event.target.value as "full" | "half" })} value={field.width || "half"}><option value="half">Half width</option><option value="full">Full width</option></select>{["short_text", "paragraph", "email", "mobile"].includes(field.type) ? <><input className={inputClass} min={0} onChange={(event) => onChange({ minLength: Number(event.target.value) || undefined })} placeholder="Minimum characters" type="number" value={field.minLength || ""} /><input className={inputClass} min={0} onChange={(event) => onChange({ maxLength: Number(event.target.value) || undefined })} placeholder="Maximum characters" type="number" value={field.maxLength || ""} /></> : null}{["number", "rating"].includes(field.type) ? <><input className={inputClass} onChange={(event) => onChange({ min: Number(event.target.value) })} placeholder="Minimum" type="number" value={field.min ?? ""} /><input className={inputClass} onChange={(event) => onChange({ max: Number(event.target.value) })} placeholder="Maximum" type="number" value={field.max ?? ""} /></> : null}</div></details>
+          )}
         </div>
         <span className="rounded-lg bg-white px-3 py-2.5 text-center text-xs font-black text-slate-500 sm:col-start-2 min-[1800px]:col-start-auto">{meta.label}</span>
         <div className="flex flex-wrap items-center gap-2 sm:col-start-2 min-[1800px]:col-start-auto">
-          {field.type !== "heading" ? (
+          {field.type !== "heading" && field.type !== "divider" ? (
             <label className="inline-flex min-h-[38px] items-center gap-2 rounded-lg bg-white px-3 py-2 text-xs font-black text-slate-600">
               <input checked={Boolean(field.required)} className="size-4 accent-emerald-600" disabled={locked} onChange={(event) => onChange({ required: event.target.checked })} type="checkbox" />
               Required

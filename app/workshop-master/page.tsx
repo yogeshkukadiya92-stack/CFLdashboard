@@ -95,10 +95,15 @@ const fieldTypeMeta: Record<BuilderFieldType, { label: string; hasOptions: boole
   mobile: { label: "Mobile", hasOptions: false },
   number: { label: "Number", hasOptions: false },
   date: { label: "Date", hasOptions: false },
+  time: { label: "Time", hasOptions: false },
   dropdown: { label: "Dropdown", hasOptions: true },
   radio: { label: "Multiple Choice", hasOptions: true },
   checkbox: { label: "Checkboxes", hasOptions: true },
-  heading: { label: "Section Heading", hasOptions: false }
+  yes_no: { label: "Yes / No", hasOptions: false },
+  rating: { label: "Rating", hasOptions: false },
+  consent: { label: "Consent", hasOptions: false },
+  heading: { label: "Section Heading", hasOptions: false },
+  divider: { label: "Divider", hasOptions: false }
 };
 const addableTypes: BuilderFieldType[] = ["short_text", "paragraph", "email", "mobile", "number", "date", "dropdown", "radio", "checkbox", "heading"];
 const richTextColors = ["#0f172a", "#059669", "#4f46e5", "#dc2626", "#ea580c", "#7c3aed"];

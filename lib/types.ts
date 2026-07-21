@@ -266,10 +266,15 @@ export type BuilderFieldType =
   | "mobile"
   | "number"
   | "date"
+  | "time"
   | "dropdown"
   | "radio"
   | "checkbox"
-  | "heading";
+  | "yes_no"
+  | "rating"
+  | "consent"
+  | "heading"
+  | "divider";
 
 export type BuilderFormMode = "classic" | "steps" | "guided";
 
@@ -290,6 +295,12 @@ export interface BuilderField {
   options?: string[];
   allowOther?: boolean;
   visibility?: BuilderFieldVisibility;
+  helpText?: string;
+  minLength?: number;
+  maxLength?: number;
+  min?: number;
+  max?: number;
+  width?: "full" | "half";
   /** Maps a field to a core registration column so reports keep working. */
   role?: "name" | "mobile" | "email" | "city";
 }
@@ -370,6 +381,9 @@ export interface AttendanceSession {
   redirectDelaySeconds?: number;
   allowDuplicate?: boolean;
   successMessage?: string;
+  submitButtonText?: string;
+  formMode?: BuilderFormMode;
+  theme?: BuilderTheme;
   minimumDurationMinutes?: number;
   published: boolean;
   fields: BuilderField[];
