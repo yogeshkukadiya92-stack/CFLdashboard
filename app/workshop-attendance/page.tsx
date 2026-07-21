@@ -5,7 +5,7 @@ import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
 import { hydrateLiveState, readLocalArray, saveLiveState } from "@/lib/live-state";
 import type { AttendanceEntry, AttendanceSession, BuilderField, BuilderFieldType } from "@/lib/types";
 import { generateId } from "@/lib/utils";
-import { ArrowDown, ArrowUp, CalendarDays, CheckSquare, Circle, Copy, Download, ExternalLink, Eye, Heading, Mail, Plus, QrCode, RefreshCw, Search, Smartphone, Trash2, Type, UsersRound, Video, X } from "lucide-react";
+import { ArrowDown, ArrowUp, CalendarDays, CheckSquare, Circle, Copy, Download, ExternalLink, Eye, Heading, Mail, Plus, QrCode, RefreshCw, Save, Search, Smartphone, Trash2, Type, UsersRound, Video, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 const WORKSHOP_MASTER_STORAGE_KEY = "cfl_workshop_master_records_v1";
@@ -69,6 +69,8 @@ export default function WorkshopAttendancePage() {
   const [selectedSessionId, setSelectedSessionId] = useState("");
   const [copied, setCopied] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [savingForm, setSavingForm] = useState(false);
+  const [saveMessage, setSaveMessage] = useState("");
   const [qrDataUrl, setQrDataUrl] = useState("");
   const [deleteSessionTarget, setDeleteSessionTarget] = useState<AttendanceSession | null>(null);
   const [deleteEntryTarget, setDeleteEntryTarget] = useState<AttendanceEntry | null>(null);
@@ -166,7 +168,18 @@ export default function WorkshopAttendancePage() {
     const next = sessions.map((session) => (
       session.id === selectedSession.id ? { ...session, ...patch, updatedAt: new Date().toISOString() } : session
     ));
+    setSaveMessage("");
     persistSessions(next);
+  }
+
+  async function saveSelectedForm() {
+    if (!selectedSession) return;
+    setSavingForm(true);
+    setSaveMessage("");
+    await saveLiveState({ attendanceSessions: sessions });
+    setSavingForm(false);
+    setSaveMessage("Attendance form updated successfully.");
+    window.setTimeout(() => setSaveMessage(""), 2200);
   }
 
   function deleteSession(id: string) {
@@ -336,6 +349,12 @@ export default function WorkshopAttendancePage() {
                   <RefreshCw className={`size-4 ${refreshing ? "animate-spin" : ""}`} />
                   Refresh
                 </button>
+                {selectedSession ? (
+                  <button className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-black text-emerald-700 hover:bg-emerald-100 disabled:cursor-wait disabled:opacity-70" disabled={savingForm} onClick={saveSelectedForm} type="button">
+                    <Save className="size-4" />
+                    {savingForm ? "Saving..." : "Update Form"}
+                  </button>
+                ) : null}
                 <button className="inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-black text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500" disabled={!selectedWorkshop} onClick={() => createSession()} type="button">
                   <Plus className="size-4" />
                   Add Session
@@ -370,6 +389,16 @@ export default function WorkshopAttendancePage() {
             <div className="grid min-w-0 gap-4 min-[1720px]:grid-cols-[minmax(0,1fr)_420px]">
               <div className="min-w-0 space-y-4">
                 <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                  <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                    <div>
+                      <p className="text-sm font-black text-slate-800">Attendance Form</p>
+                      <p className="mt-0.5 text-xs font-bold text-slate-500">{saveMessage || "Edit details, fields, and share link settings."}</p>
+                    </div>
+                    <button className="inline-flex min-h-[40px] items-center gap-2 rounded-lg bg-slate-950 px-4 py-2 text-sm font-black text-white hover:bg-slate-800 disabled:cursor-wait disabled:opacity-70" disabled={savingForm} onClick={saveSelectedForm} type="button">
+                      <Save className="size-4" />
+                      {savingForm ? "Saving..." : "Update Form"}
+                    </button>
+                  </div>
                   <div className="grid gap-4 md:grid-cols-2">
                     <label>
                       <span className="mb-2 block text-sm font-bold text-slate-600">Session Title</span>
