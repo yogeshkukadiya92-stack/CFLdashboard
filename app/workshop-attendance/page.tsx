@@ -5,7 +5,7 @@ import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
 import { hydrateLiveState, readLocalArray, saveLiveState } from "@/lib/live-state";
 import type { AttendanceEntry, AttendanceSession, BuilderField, BuilderFieldType, BuilderVisibilityOperator } from "@/lib/types";
 import { generateId } from "@/lib/utils";
-import { ArrowDown, ArrowUp, BarChart3, CalendarDays, CheckSquare, Circle, Copy, Download, ExternalLink, Eye, Heading, Laptop, LayoutTemplate, Mail, Palette, Plus, QrCode, RefreshCw, Save, Search, Settings2, Smartphone, Star, Trash2, Type, UsersRound, Video, X } from "lucide-react";
+import { ArrowDown, ArrowUp, BarChart3, CalendarDays, CheckSquare, Circle, Copy, Download, ExternalLink, Eye, Heading, Image as ImageIcon, Laptop, LayoutTemplate, Mail, Palette, Plus, QrCode, RefreshCw, Save, Search, Settings2, Smartphone, Star, Trash2, Type, Upload, UsersRound, Video, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 const WORKSHOP_MASTER_STORAGE_KEY = "cfl_workshop_master_records_v1";
@@ -83,6 +83,7 @@ export default function WorkshopAttendancePage() {
   const [entryDetail, setEntryDetail] = useState<AttendanceEntry | null>(null);
   const [builderTab, setBuilderTab] = useState<BuilderTab>("build");
   const [previewDevice, setPreviewDevice] = useState<"desktop" | "mobile">("mobile");
+  const [imageError, setImageError] = useState("");
 
   function loadLocal() {
     const loadedWorkshops = readLocalArray<WorkshopRecord>(WORKSHOP_MASTER_STORAGE_KEY).filter((item) => !item.archived);
@@ -233,6 +234,28 @@ export default function WorkshopAttendancePage() {
   function updateField(id: string, patch: Partial<BuilderField>) {
     if (!selectedSession) return;
     updateSession({ fields: selectedSession.fields.map((field) => (field.id === id ? { ...field, ...patch } : field)) });
+  }
+
+  function updateThemeImage(kind: "bannerUrl" | "logoUrl", file?: File) {
+    if (!selectedSession || !file) return;
+    setImageError("");
+    if (!file.type.startsWith("image/")) {
+      setImageError("Please select a PNG, JPG or WebP image.");
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      setImageError("Image must be smaller than 2 MB.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const value = typeof reader.result === "string" ? reader.result : "";
+      if (!value) return;
+      const theme = selectedSession.theme ?? { accent: "#059669", align: "left", fieldRadius: "rounded", fontFamily: "Inter", fontSize: 16, titleBold: true, titleItalic: false };
+      updateSession({ theme: { ...theme, [kind]: value } });
+    };
+    reader.onerror = () => setImageError("Image could not be loaded. Please try another file.");
+    reader.readAsDataURL(file);
   }
 
   function moveField(index: number, direction: -1 | 1) {
@@ -441,7 +464,8 @@ export default function WorkshopAttendancePage() {
                     </label>
                     <label>
                       <span className="mb-2 block text-sm font-bold text-slate-600">Zoom Meeting Link</span>
-                      <div className="relative"><Video className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-slate-400" /><input className={`${inputClass} pl-10`} onChange={(event) => updateSession({ zoomJoinUrl: event.target.value })} placeholder="https://zoom.us/j/..." type="url" value={selectedSession.zoomJoinUrl || ""} /></div>
+                      <div className="relative"><Video className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-slate-400" /><input className={`${inputClass} pl-10`} onChange={(event) => updateSession({ zoomJoinUrl: event.target.value })} placeholder="Zoom or TagMango redirect URL" type="url" value={selectedSession.zoomJoinUrl || ""} /></div>
+                      <span className="mt-1.5 block text-xs font-semibold text-slate-400">Supports secure Zoom links and zoom.tagmango.com redirect links.</span>
                     </label>
                     <div className="grid gap-3 md:col-span-2 sm:grid-cols-2 lg:grid-cols-3">
                       <NumberSetting label="Open before" onChange={(value) => updateSession({ openMinutesBefore: value })} suffix="min" value={selectedSession.openMinutesBefore ?? 60} />
@@ -523,6 +547,28 @@ export default function WorkshopAttendancePage() {
 
                   {builderTab === "design" ? (
                     <div className="mt-5 space-y-5">
+                      <div>
+                        <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-400">Brand images</p>
+                        <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                          <ThemeImageControl
+                            description="Transparent PNG works best"
+                            imageUrl={selectedSession.theme?.logoUrl}
+                            label="Form logo"
+                            onChange={(file) => updateThemeImage("logoUrl", file)}
+                            onRemove={() => updateSession({ theme: { ...selectedSession.theme!, logoUrl: undefined } })}
+                            variant="logo"
+                          />
+                          <ThemeImageControl
+                            description="Recommended 1600 × 600 px"
+                            imageUrl={selectedSession.theme?.bannerUrl}
+                            label="Cover image"
+                            onChange={(file) => updateThemeImage("bannerUrl", file)}
+                            onRemove={() => updateSession({ theme: { ...selectedSession.theme!, bannerUrl: undefined } })}
+                            variant="banner"
+                          />
+                        </div>
+                        {imageError ? <p className="mt-2 rounded-lg bg-rose-50 px-3 py-2 text-xs font-black text-rose-600">{imageError}</p> : null}
+                      </div>
                       <div>
                         <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-400">Form experience</p>
                         <div className="mt-2 grid gap-2 sm:grid-cols-3">
@@ -666,13 +712,32 @@ function normalizeOptionLines(value: string) {
     .filter(Boolean);
 }
 
+function ThemeImageControl({ description, imageUrl, label, onChange, onRemove, variant }: { description: string; imageUrl?: string; label: string; onChange: (file?: File) => void; onRemove: () => void; variant: "logo" | "banner" }) {
+  return (
+    <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+      <div className={`grid place-items-center bg-white ${variant === "banner" ? "aspect-[8/3]" : "h-32"}`}>
+        {imageUrl ? <img alt={`${label} preview`} className={variant === "banner" ? "h-full w-full object-cover" : "max-h-24 max-w-[80%] object-contain"} src={imageUrl} /> : <div className="text-center text-slate-300"><ImageIcon className="mx-auto size-8" /><p className="mt-2 text-xs font-black">No image selected</p></div>}
+      </div>
+      <div className="p-3">
+        <p className="text-sm font-black text-slate-800">{label}</p>
+        <p className="mt-0.5 text-xs font-semibold text-slate-400">{description} · Max 2 MB</p>
+        <div className="mt-3 flex gap-2">
+          <label className="inline-flex min-h-9 cursor-pointer items-center gap-2 rounded-lg bg-slate-950 px-3 text-xs font-black text-white hover:bg-slate-800"><Upload className="size-3.5" />{imageUrl ? "Replace" : "Upload"}<input accept="image/png,image/jpeg,image/webp" className="sr-only" onChange={(event) => { onChange(event.target.files?.[0]); event.target.value = ""; }} type="file" /></label>
+          {imageUrl ? <button className="min-h-9 rounded-lg bg-rose-50 px-3 text-xs font-black text-rose-600 hover:bg-rose-100" onClick={onRemove} type="button">Remove</button> : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function AttendancePreview({ device, session }: { device: "desktop" | "mobile"; session: AttendanceSession }) {
   const accent = session.theme?.accent || "#059669";
   const radius = session.theme?.fieldRadius === "square" ? "rounded-none" : session.theme?.fieldRadius === "soft" ? "rounded-lg" : "rounded-xl";
   const fields = session.fields.filter((field) => !field.visibility).slice(0, device === "mobile" ? 5 : 6);
   return (
     <div className={`mx-auto mt-4 overflow-hidden border border-slate-200 bg-white shadow-sm transition-all ${device === "mobile" ? "max-w-[300px]" : "max-w-full"}`} style={{ fontFamily: session.theme?.fontFamily || "Inter", borderTop: `6px solid ${accent}` }}>
-      <div className="p-4"><p className="text-[9px] font-black uppercase tracking-[0.18em]" style={{ color: accent }}>CFL Session Attendance</p><h4 className="mt-1 text-lg font-black leading-tight">{session.workshopName}</h4><p className="mt-1 text-xs font-bold text-slate-500">{session.title}</p></div>
+      {session.theme?.bannerUrl ? <img alt="Cover preview" className="aspect-[8/3] w-full object-cover" src={session.theme.bannerUrl} /> : null}
+      <div className="p-4">{session.theme?.logoUrl ? <img alt="Logo preview" className="mb-3 max-h-12 max-w-[55%] object-contain" src={session.theme.logoUrl} /> : null}<p className="text-[9px] font-black uppercase tracking-[0.18em]" style={{ color: accent }}>CFL Session Attendance</p><h4 className="mt-1 text-lg font-black leading-tight">{session.workshopName}</h4><p className="mt-1 text-xs font-bold text-slate-500">{session.title}</p></div>
       <div className={`grid gap-3 border-t border-slate-100 p-4 ${device === "desktop" ? "grid-cols-2" : "grid-cols-1"}`}>
         {fields.map((field) => field.type === "divider" ? <hr className="col-span-full border-slate-200" key={field.id} /> : field.type === "heading" ? <p className="col-span-full text-sm font-black" key={field.id}>{field.label}</p> : <div className={field.width === "full" ? "col-span-full" : ""} key={field.id}><p className="mb-1 text-[10px] font-black text-slate-600">{field.label}{field.required ? " *" : ""}</p><div className={`h-9 border border-slate-200 bg-slate-50 ${radius}`} /></div>)}
         <button className={`col-span-full min-h-10 text-xs font-black text-white ${radius}`} style={{ backgroundColor: accent }} type="button">{session.submitButtonText || "Mark Attendance"}</button>

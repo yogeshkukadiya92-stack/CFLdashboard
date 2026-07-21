@@ -19,7 +19,9 @@ function validZoomUrl(value?: string) {
   if (!value) return "";
   try {
     const url = new URL(value);
-    return url.protocol === "https:" && (url.hostname === "zoom.us" || url.hostname.endsWith(".zoom.us")) ? url.toString() : "";
+    const hostname = url.hostname.toLowerCase();
+    const trustedHost = hostname === "zoom.us" || hostname.endsWith(".zoom.us") || hostname === "zoom.tagmango.com";
+    return url.protocol === "https:" && trustedHost && !url.username && !url.password ? url.toString() : "";
   } catch {
     return "";
   }

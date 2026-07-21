@@ -214,7 +214,9 @@ export default function AttendanceFormPage() {
     <main className="min-h-screen px-4 py-8 text-slate-950 md:py-12" style={{ backgroundColor: theme?.backgroundColor || "#f1f5f9", fontFamily: theme?.fontFamily || "Inter" }}>
       <section className="mx-auto max-w-3xl overflow-hidden rounded-3xl border border-slate-200 shadow-[0_24px_70px_-35px_rgba(15,23,42,0.35)]" style={{ backgroundColor: theme?.surfaceColor || "#ffffff" }}>
         <div className="h-2.5" style={{ backgroundColor: accent }} />
+        {theme?.bannerUrl ? <img alt={`${session.workshopName} cover`} className="aspect-[8/3] w-full object-cover" src={theme.bannerUrl} /> : null}
         <div className="p-6 md:p-8">
+          {theme?.logoUrl ? <img alt="Workshop logo" className={`mb-5 max-h-24 max-w-[220px] object-contain ${theme.logoAlign === "center" ? "mx-auto" : theme.logoAlign === "right" ? "ml-auto" : ""}`} src={theme.logoUrl} /> : null}
           <p className="text-[11px] font-black uppercase tracking-[0.22em]" style={{ color: accent }}>CFL Session Attendance</p>
           <h1 className="mt-2 text-3xl font-black tracking-tight text-slate-950">{session.workshopName}</h1>
           <p className="mt-2 text-lg font-black text-slate-800">{session.title}</p>
