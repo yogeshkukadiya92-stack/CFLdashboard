@@ -322,6 +322,38 @@ textarea:focus-visible {
   background: var(--cfl-canvas);
 }
 
+/* Public attendance forms can have inline workshop theme colors. Keep those
+   branded colors in light mode, but guarantee readable system-dark contrast. */
+.dark .attendance-public-page {
+  color-scheme: dark;
+  color: #f1f5f9;
+  background-color: #0b111d !important;
+}
+
+.dark .attendance-public-card,
+.dark .attendance-success-modal {
+  color: #f1f5f9;
+  background-color: #131b2a !important;
+  border-color: rgba(148, 163, 184, 0.22) !important;
+}
+
+.dark .attendance-form-control {
+  color: #f8fafc !important;
+  background-color: #0f1726 !important;
+  border-color: rgba(148, 163, 184, 0.32) !important;
+  caret-color: #f8fafc;
+}
+
+.dark .attendance-form-control::placeholder {
+  color: #94a3b8 !important;
+  opacity: 1;
+}
+
+.dark .attendance-form-control:focus {
+  background-color: #172033 !important;
+  border-color: #34d399 !important;
+}
+
 /* ============================================================
    Dark theme — drives the chrome from CSS variables and maps
    the neutral Tailwind utilities. Exact-token (~=) selectors

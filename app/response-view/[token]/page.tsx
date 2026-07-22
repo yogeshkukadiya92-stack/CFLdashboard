@@ -1,5 +1,8 @@
 "use client";
 
+import { DuplicateResponseFilter } from "@/components/duplicate-response-filter";
+import { hideDuplicateResponses } from "@/lib/response-dedupe";
+
 import {
   ArrowRight,
   CheckCircle2,
@@ -69,6 +72,7 @@ export default function ResponseViewerPage() {
   const [search, setSearch] = useState("");
   const [workshopId, setWorkshopId] = useState("all");
   const [selected, setSelected] = useState<ViewerRegistration | null>(null);
+  const [hideDuplicates, setHideDuplicates] = useState(false);
 
   useEffect(() => {
     if (!token) return;
@@ -122,7 +126,7 @@ export default function ResponseViewerPage() {
     setWorkshopId("all");
   }
 
-  const filtered = useMemo(() => {
+  const matchingResponses = useMemo(() => {
     if (!data) return [];
     const value = search.trim().toLowerCase();
     return data.registrations.filter((entry) => {
@@ -131,6 +135,13 @@ export default function ResponseViewerPage() {
       return inWorkshop && inSearch;
     });
   }, [data, search, workshopId]);
+  const filtered = useMemo(() => hideDuplicates ? hideDuplicateResponses(matchingResponses, {
+      email: (entry) => entry.email,
+      mobile: (entry) => entry.mobile,
+      name: (entry) => entry.fullName,
+      scope: (entry) => entry.workshopId || entry.workshopTitle,
+      submittedAt: (entry) => entry.createdAt
+    }) : matchingResponses, [hideDuplicates, matchingResponses]);
 
   if (initializing) return <ViewerState title="Opening secure responses" description="Checking your access..." />;
 
@@ -196,6 +207,7 @@ export default function ResponseViewerPage() {
                 {data.workshops.map((workshop) => <FilterButton active={workshopId === workshop.id} count={workshop.count} key={workshop.id} label={workshop.name} onClick={() => setWorkshopId(workshop.id)} />)}
               </div>
               <div className="flex flex-col gap-3 sm:flex-row">
+                <DuplicateResponseFilter checked={hideDuplicates} onChange={setHideDuplicates} rawCount={matchingResponses.length} visibleCount={filtered.length} />
                 <label className="relative min-w-0 sm:w-80"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" /><input className={`${inputClass} py-2.5 pl-9`} onChange={(event) => setSearch(event.target.value)} placeholder="Search responses..." value={search} /></label>
                 {data.grant.permissions.exportCsv ? <button className="inline-flex items-center justify-center gap-2 border border-slate-300 bg-white px-4 py-2.5 text-sm font-black text-slate-700 hover:bg-slate-50" onClick={() => downloadCsv(filtered)} type="button"><Download className="size-4" />Export CSV</button> : null}
               </div>

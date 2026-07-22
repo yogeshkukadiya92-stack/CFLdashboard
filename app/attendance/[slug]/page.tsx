@@ -204,8 +204,8 @@ export default function AttendanceFormPage() {
   const fieldRadius = theme?.fieldRadius === "square" ? "rounded-none" : theme?.fieldRadius === "soft" ? "rounded-lg" : "rounded-xl";
 
   return (
-    <main className="min-h-screen px-4 py-8 text-slate-950 md:py-12" style={{ backgroundColor: theme?.backgroundColor || "#f1f5f9", fontFamily: theme?.fontFamily || "Inter" }}>
-      <section className="mx-auto max-w-3xl overflow-hidden rounded-3xl border border-slate-200 shadow-[0_24px_70px_-35px_rgba(15,23,42,0.35)]" style={{ backgroundColor: theme?.surfaceColor || "#ffffff" }}>
+    <main className="attendance-public-page min-h-screen px-4 py-8 text-slate-950 md:py-12" style={{ backgroundColor: theme?.backgroundColor || "#f1f5f9", fontFamily: theme?.fontFamily || "Inter" }}>
+      <section className="attendance-public-card mx-auto max-w-3xl overflow-hidden rounded-3xl border border-slate-200 shadow-[0_24px_70px_-35px_rgba(15,23,42,0.35)]" style={{ backgroundColor: theme?.surfaceColor || "#ffffff" }}>
         <div className="h-2.5" style={{ backgroundColor: accent }} />
         {theme?.bannerUrl ? <img alt={`${session.workshopName} cover`} className="aspect-[8/3] w-full object-cover" src={theme.bannerUrl} /> : null}
         <div className="p-6 md:p-8">
@@ -256,7 +256,7 @@ export default function AttendanceFormPage() {
       </section>
       {success ? (
         <div aria-modal="true" className="fixed inset-0 z-50 grid place-items-center bg-slate-950/60 p-4 backdrop-blur-sm" role="dialog">
-          <section className="w-full max-w-md overflow-hidden border border-slate-200 bg-white shadow-2xl">
+          <section className="attendance-success-modal w-full max-w-md overflow-hidden border border-slate-200 bg-white shadow-2xl">
             <div className="h-1.5 bg-emerald-600" />
             <div className="p-6 text-center sm:p-8">
               <span className="mx-auto grid size-16 place-items-center rounded-full bg-emerald-50 text-emerald-600"><CheckCircle2 className="size-8" /></span>
@@ -297,7 +297,7 @@ function RenderField({
   }
   if (field.type === "divider") return <hr className="my-2 border-slate-200 md:col-span-2" />;
 
-  const inputClass = `w-full border border-slate-200 bg-slate-50/50 px-4 py-3 text-base sm:text-sm font-semibold outline-none transition-all focus:bg-white focus:ring-4 focus:ring-slate-100 ${fieldRadius}`;
+  const inputClass = `attendance-form-control w-full border border-slate-200 bg-slate-50/50 px-4 py-3 text-base font-semibold outline-none transition-all focus:bg-white focus:ring-4 focus:ring-slate-100 sm:text-sm ${fieldRadius}`;
   const wide = field.width === "full" || field.type === "paragraph" || field.type === "radio" || field.type === "checkbox" || field.type === "consent" || field.type === "rating";
   const options = (field.options ?? []).map((option) => option.trim()).filter(Boolean);
   let control: React.ReactNode;

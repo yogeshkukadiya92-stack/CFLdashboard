@@ -2,9 +2,11 @@
 
 import { AdminPlatformShell } from "@/components/admin-platform-shell";
 import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
+import { DuplicateResponseFilter } from "@/components/duplicate-response-filter";
 import { hydrateLiveState, readLocalArray, saveLiveState } from "@/lib/live-state";
 import type { AttendanceEntry, AttendanceSession, BuilderField, BuilderFieldType, BuilderVisibilityOperator } from "@/lib/types";
 import { generateId } from "@/lib/utils";
+import { hideDuplicateResponses } from "@/lib/response-dedupe";
 import { ArrowDown, ArrowUp, BarChart3, CalendarDays, CheckSquare, Circle, Copy, Download, ExternalLink, Eye, Heading, Image as ImageIcon, Laptop, LayoutTemplate, Mail, Palette, Plus, QrCode, RefreshCw, Save, Search, Settings2, Smartphone, Star, Trash2, Type, Upload, UsersRound, Video, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
@@ -70,6 +72,7 @@ export default function WorkshopAttendancePage() {
   const [workshops, setWorkshops] = useState<WorkshopRecord[]>([]);
   const [sessions, setSessions] = useState<AttendanceSession[]>([]);
   const [entries, setEntries] = useState<AttendanceEntry[]>([]);
+  const [hideDuplicates, setHideDuplicates] = useState(false);
   const [query, setQuery] = useState("");
   const [selectedWorkshopId, setSelectedWorkshopId] = useState("");
   const [selectedSessionId, setSelectedSessionId] = useState("");
@@ -110,6 +113,13 @@ export default function WorkshopAttendancePage() {
   const workshopSessions = sessions.filter((session) => session.workshopId === selectedWorkshop?.id);
   const selectedSession = workshopSessions.find((session) => session.id === selectedSessionId) ?? workshopSessions[0] ?? null;
   const selectedEntries = entries.filter((entry) => entry.sessionId === selectedSession?.id);
+  const displayedEntries = hideDuplicates ? hideDuplicateResponses(selectedEntries, {
+    email: (entry) => entry.email,
+    mobile: (entry) => entry.mobile,
+    name: (entry) => entry.attendeeName,
+    scope: (entry) => entry.sessionId,
+    submittedAt: (entry) => entry.submittedAt
+  }) : selectedEntries;
   const totalAttendees = new Set(entries.map((entry) => `${entry.workshopId}-${entry.mobile}`)).size;
   const link = selectedSession ? attendanceLink(selectedSession.slug) : "";
 
@@ -293,10 +303,10 @@ export default function WorkshopAttendancePage() {
   function exportAttendanceCsv() {
     if (!selectedSession) return;
     const extraLabels = Array.from(
-      new Set(selectedEntries.flatMap((entry) => Object.keys(entry.answers ?? {})))
+      new Set(displayedEntries.flatMap((entry) => Object.keys(entry.answers ?? {})))
     );
     const headers = ["Session", "Workshop", "Name", "Mobile", "Email", "City", "Submitted At", ...extraLabels];
-    const rows = selectedEntries.map((entry) => [
+    const rows = displayedEntries.map((entry) => [
       selectedSession.title,
       entry.workshopName,
       entry.attendeeName,
@@ -624,7 +634,7 @@ export default function WorkshopAttendancePage() {
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-700">Attendance Data</p>
-                      <h3 className="mt-1 text-xl font-black text-slate-950">{selectedEntries.length} attendees</h3>
+                      <h3 className="mt-1 text-xl font-black text-slate-950">{displayedEntries.length} attendees</h3>
                     </div>
                     <div className="flex items-center gap-2">
                       <button className="grid size-9 place-items-center rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40" disabled={selectedEntries.length === 0} onClick={exportAttendanceCsv} title="Export attendance CSV" type="button">
@@ -633,6 +643,7 @@ export default function WorkshopAttendancePage() {
                       <UsersRound className="size-7 text-slate-300" />
                     </div>
                   </div>
+                  <div className="mt-4 flex justify-end"><DuplicateResponseFilter checked={hideDuplicates} onChange={setHideDuplicates} rawCount={selectedEntries.length} visibleCount={displayedEntries.length} /></div>
                   {selectedEntries.length === 0 ? (
                     <div className="mt-4 grid min-h-36 place-items-center rounded-xl border border-dashed border-slate-200 bg-slate-50 px-6 text-center">
                       <div>
@@ -654,7 +665,7 @@ export default function WorkshopAttendancePage() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
-                        {selectedEntries.map((entry) => (
+                        {displayedEntries.map((entry) => (
                           <tr key={entry.id}>
                             <td className="px-3 py-3 font-bold text-slate-800">{entry.attendeeName}</td>
                             <td className="px-3 py-3 font-semibold text-slate-500">{entry.mobile}</td>

@@ -2,10 +2,12 @@
 
 import { AdminPlatformShell } from "@/components/admin-platform-shell";
 import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
+import { DuplicateResponseFilter } from "@/components/duplicate-response-filter";
 import { AlertCircle, Archive, ArrowDown, ArrowUp, BarChart3, Bold, Check, CheckSquare, ChevronDown, Circle, Copy, Download, Edit3, ExternalLink, Eye, Files, Heading, Image, Italic, LayoutList, Link2, List, ListOrdered, Mail, MessageCircle, Monitor, Palette, Plus, QrCode, RefreshCw, Route, Save, Search, Smartphone, Sparkles, Trash2, Type, Underline, UsersRound, X } from "lucide-react";
 import { hydrateLiveState, readLocalArray, readLocalObject, saveLiveState } from "@/lib/live-state";
 import { buildRegistrationUrl, normalizeBaseUrl } from "@/lib/registration-url";
 import { sanitizeRichTextHtml } from "@/lib/rich-text";
+import { hideDuplicateResponses } from "@/lib/response-dedupe";
 import type { BuilderField, BuilderFieldType, BuilderForm, BuilderFormMode, BuilderTheme, FormAnalyticsRecord, RegistrationEntry } from "@/lib/types";
 import { generateId } from "@/lib/utils";
 import { type ClipboardEvent, type FormEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
@@ -168,6 +170,7 @@ export default function WorkshopMasterPage() {
   const [linkWorkshop, setLinkWorkshop] = useState<WorkshopRecord | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<WorkshopRecord | null>(null);
   const [deleteResponseTarget, setDeleteResponseTarget] = useState<RegistrationEntry | null>(null);
+  const [hideDuplicateParticipants, setHideDuplicateParticipants] = useState(false);
 
   useEffect(() => {
     function loadLocal() {
@@ -215,6 +218,13 @@ export default function WorkshopMasterPage() {
     () => selectedParticipants.filter((entry) => isTodayInIndia(entry.createdAt)).length,
     [selectedParticipants]
   );
+  const displayedParticipants = useMemo(() => hideDuplicateParticipants ? hideDuplicateResponses(selectedParticipants, {
+    email: (entry) => entry.email,
+    mobile: (entry) => entry.mobile,
+    name: (entry) => entry.fullName,
+    scope: (entry) => entry.workshopId || entry.workshopTitle,
+    submittedAt: (entry) => entry.createdAt
+  }) : selectedParticipants, [hideDuplicateParticipants, selectedParticipants]);
 
   async function saveRecords(next: WorkshopRecord[]) {
     setRecords(next);
@@ -937,13 +947,15 @@ export default function WorkshopMasterPage() {
               </div>
 
               <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                <MiniStat label="Users" value={selectedParticipants.length} />
-                <MiniStat label="Paid" value={selectedParticipants.filter((entry) => entry.status === "Paid").length} />
-                <MiniStat label="Due" value={selectedParticipants.filter((entry) => entry.status === "Due").length} />
+                <MiniStat label="Users" value={displayedParticipants.length} />
+                <MiniStat label="Paid" value={displayedParticipants.filter((entry) => entry.status === "Paid").length} />
+                <MiniStat label="Due" value={displayedParticipants.filter((entry) => entry.status === "Due").length} />
               </div>
 
               {showParticipants ? (
-                <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+                <div className="mt-4 rounded-2xl border border-slate-200 bg-white">
+                  <div className="flex justify-end border-b border-slate-200 p-3"><DuplicateResponseFilter checked={hideDuplicateParticipants} onChange={setHideDuplicateParticipants} rawCount={selectedParticipants.length} visibleCount={displayedParticipants.length} /></div>
+                  <div className="overflow-x-auto">
                   <table className="min-w-[1020px] w-full text-left text-sm">
                     <thead className="bg-slate-50 text-xs uppercase text-slate-500">
                       <tr>
@@ -953,7 +965,7 @@ export default function WorkshopMasterPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-	                      {selectedParticipants.length ? selectedParticipants.map((entry) => (
+	                      {displayedParticipants.length ? displayedParticipants.map((entry) => (
 	                        <tr className="hover:bg-indigo-50/40" key={entry.id}>
                           <td className="px-4 py-4">
                             <button
@@ -989,7 +1001,7 @@ export default function WorkshopMasterPage() {
 	                        </tr>
                       )}
                     </tbody>
-                  </table>
+                  </table></div>
                 </div>
               ) : null}
             </section>
