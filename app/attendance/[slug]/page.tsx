@@ -3,7 +3,7 @@
 import { readLocalArray, writeLiveStateToLocalStorage } from "@/lib/live-state";
 import type { AttendanceEntry, AttendanceSession, BuilderField } from "@/lib/types";
 import { generateId } from "@/lib/utils";
-import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle2, ClipboardCheck, Clock3, Loader2, ShieldCheck, Star, Video } from "lucide-react";
+import { AlertTriangle, ArrowRight, CheckCircle2, ClipboardCheck, Clock3, Loader2, ShieldCheck, Star, Video } from "lucide-react";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
@@ -35,7 +35,6 @@ export default function AttendanceFormPage() {
   const [joinUrl, setJoinUrl] = useState("");
   const [countdown, setCountdown] = useState(0);
   const [autoRedirect, setAutoRedirect] = useState(true);
-  const [currentStep, setCurrentStep] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -93,12 +92,6 @@ export default function AttendanceFormPage() {
       return source === expected;
     });
   }, [answers, session]);
-
-  const interactiveFields = visibleFields.filter((field) => field.type !== "heading" && field.type !== "divider");
-  const isPaged = session?.formMode === "steps" || session?.formMode === "guided";
-  const stepFields = isPaged ? [interactiveFields[currentStep]].filter(Boolean) : visibleFields;
-  const currentStepField = interactiveFields[currentStep];
-  const currentStepInvalid = Boolean(currentStepField?.required && !(answers[currentStepField.id] ?? "").trim());
 
   const missingRequired = useMemo(() => {
     if (!session) return true;
@@ -227,9 +220,8 @@ export default function AttendanceFormPage() {
         <div className="border-t border-slate-100 p-6 md:p-8">
           {success ? <div className="min-h-24" /> : (
             <>
-              {isPaged ? <div className="mb-6"><div className="mb-2 flex justify-between text-xs font-black text-slate-500"><span>Question {Math.min(currentStep + 1, interactiveFields.length)} of {interactiveFields.length}</span><span>{Math.round(((currentStep + 1) / Math.max(1, interactiveFields.length)) * 100)}%</span></div><div className="h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full transition-all" style={{ backgroundColor: accent, width: `${((currentStep + 1) / Math.max(1, interactiveFields.length)) * 100}%` }} /></div></div> : null}
               <div className="grid gap-4 md:grid-cols-2">
-                {stepFields.map((field) => (
+                {visibleFields.map((field) => (
                   <RenderField
                     accent={accent}
                     field={field}
@@ -244,7 +236,7 @@ export default function AttendanceFormPage() {
 
               {message ? <p className="mt-5 rounded-xl bg-rose-50 px-4 py-3 text-sm font-black text-rose-700">{message}</p> : null}
 
-              {isPaged && currentStep < interactiveFields.length - 1 ? <div className="mt-6 flex gap-3">{currentStep > 0 ? <button className={`grid size-[52px] place-items-center border border-slate-200 ${fieldRadius}`} onClick={() => setCurrentStep((step) => Math.max(0, step - 1))} type="button"><ArrowLeft className="size-5" /></button> : null}<button className={`inline-flex min-h-[52px] flex-1 items-center justify-center gap-2 px-5 text-sm font-black text-white disabled:cursor-not-allowed disabled:opacity-50 ${fieldRadius}`} disabled={currentStepInvalid} onClick={() => setCurrentStep((step) => Math.min(interactiveFields.length - 1, step + 1))} style={{ backgroundColor: accent }} type="button">Continue<ArrowRight className="size-4" /></button></div> : <div className="mt-6 flex gap-3">{isPaged && currentStep > 0 ? <button className={`grid size-[52px] shrink-0 place-items-center border border-slate-200 ${fieldRadius}`} onClick={() => setCurrentStep((step) => Math.max(0, step - 1))} type="button"><ArrowLeft className="size-5" /></button> : null}<button
+              <div className="mt-6"><button
                 className={`inline-flex min-h-[52px] w-full items-center justify-center gap-2 px-5 py-3.5 text-sm font-black uppercase tracking-wide text-white shadow-[0_12px_28px_-15px_rgba(5,150,105,0.7)] hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-70 ${fieldRadius}`}
                 disabled={submitting}
                 onClick={submitAttendance}
@@ -253,7 +245,7 @@ export default function AttendanceFormPage() {
               >
                 {submitting ? <Loader2 className="size-4 animate-spin" /> : <ShieldCheck className="size-4" />}
                 {submitting ? "Saving Attendance" : (session.submitButtonText || "Mark Attendance")}
-              </button></div>}
+              </button></div>
               <p className="mt-3 flex items-center justify-center gap-2 text-center text-xs font-semibold text-slate-400">
                 <ClipboardCheck className="size-3.5" />
                 Your attendance is saved for this session only.
