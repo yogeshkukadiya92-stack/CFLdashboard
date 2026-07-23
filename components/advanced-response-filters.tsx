@@ -6,7 +6,7 @@ import { useState } from "react";
 
 const fieldClass = "min-h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100";
 
-export function AdvancedResponseFilters({ filters, onChange, questions, resultCount, totalCount }: { filters: ResponseFilterState; onChange: (filters: ResponseFilterState) => void; questions: string[]; resultCount: number; totalCount: number }) {
+export function AdvancedResponseFilters({ answerOptions = [], filters, onChange, questions, resultCount, totalCount }: { answerOptions?: string[]; filters: ResponseFilterState; onChange: (filters: ResponseFilterState) => void; questions: string[]; resultCount: number; totalCount: number }) {
   const [open, setOpen] = useState(false);
   const count = activeResponseFilterCount(filters);
   const patch = (next: Partial<ResponseFilterState>) => onChange({ ...filters, ...next });
@@ -26,7 +26,7 @@ export function AdvancedResponseFilters({ filters, onChange, questions, resultCo
             <FilterField label="To time"><input className={fieldClass} onChange={(event) => patch({ toTime: event.target.value })} type="time" value={filters.toTime} /></FilterField>
             <FilterField label="Question"><select className={fieldClass} onChange={(event) => patch({ answer: "", question: event.target.value })} value={filters.question}><option value="">Select question</option>{questions.map((question) => <option key={question} value={question}>{question}</option>)}</select></FilterField>
             <FilterField label="Answer match"><select className={fieldClass} disabled={!filters.question} onChange={(event) => patch({ answerOperator: event.target.value as ResponseFilterState["answerOperator"] })} value={filters.answerOperator}><option value="contains">Contains</option><option value="equals">Exact answer</option><option value="contains_any">Contains any</option><option value="contains_all">Contains all</option><option value="not_contains">Does not contain</option></select></FilterField>
-            <FilterField label="Answer value"><input className={fieldClass} disabled={!filters.question} onChange={(event) => patch({ answer: event.target.value })} placeholder="For multiple: value 1, value 2" value={filters.answer} /></FilterField>
+            <FilterField label="Answer value">{answerOptions.length ? <select className={fieldClass} disabled={!filters.question} onChange={(event) => patch({ answer: event.target.value })} value={filters.answer}><option value="">Select answer</option>{answerOptions.map((answer) => <option key={answer} value={answer}>{answer}</option>)}</select> : <input className={fieldClass} disabled={!filters.question} onChange={(event) => patch({ answer: event.target.value })} placeholder="For multiple: value 1, value 2" value={filters.answer} />}</FilterField>
           </div>
           <button className="mt-4 inline-flex min-h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-xs font-black text-slate-600 hover:bg-slate-100" onClick={() => onChange({ ...emptyResponseFilters })} type="button"><RotateCcw className="size-4" />Clear filters</button>
           </div>

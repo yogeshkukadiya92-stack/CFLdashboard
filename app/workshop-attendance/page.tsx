@@ -129,6 +129,7 @@ export default function WorkshopAttendancePage() {
     submittedAt: (entry) => entry.submittedAt
   }) : filteredEntries;
   const attendanceQuestions = responseQuestionOptions(attendanceFilterRecords);
+  const selectedAnswerOptions = selectedSession?.fields.find((field) => field.label === responseFilters.question)?.options?.filter(Boolean) ?? [];
   const totalAttendees = new Set(entries.map((entry) => `${entry.workshopId}-${entry.mobile}`)).size;
   const link = selectedSession ? attendanceLink(selectedSession.slug) : "";
 
@@ -459,7 +460,7 @@ export default function WorkshopAttendancePage() {
               <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-5">
                 <div><h4 className="text-lg font-black text-slate-950">Attendance Data</h4><p className="mt-1 text-xs font-semibold text-slate-500">Filter, review and export this session's responses.</p></div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <AdvancedResponseFilters filters={responseFilters} onChange={setResponseFilters} questions={attendanceQuestions} resultCount={displayedEntries.length} totalCount={selectedEntries.length} />
+                  <AdvancedResponseFilters answerOptions={selectedAnswerOptions} filters={responseFilters} onChange={setResponseFilters} questions={attendanceQuestions} resultCount={displayedEntries.length} totalCount={selectedEntries.length} />
                   <DuplicateResponseFilter checked={hideDuplicates} onChange={setHideDuplicates} rawCount={filteredEntries.length} visibleCount={displayedEntries.length} />
                   <button className="grid size-10 place-items-center rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40" disabled={selectedEntries.length === 0} onClick={exportAttendanceCsv} title="Export attendance CSV" type="button"><Download className="size-4" /></button>
                 </div>
@@ -688,7 +689,7 @@ export default function WorkshopAttendancePage() {
                       <UsersRound className="size-7 text-slate-300" />
                     </div>
                   </div>
-                  <div className="mt-4 flex flex-wrap justify-end gap-2"><AdvancedResponseFilters filters={responseFilters} onChange={setResponseFilters} questions={attendanceQuestions} resultCount={displayedEntries.length} totalCount={selectedEntries.length} /><DuplicateResponseFilter checked={hideDuplicates} onChange={setHideDuplicates} rawCount={filteredEntries.length} visibleCount={displayedEntries.length} /></div>
+                  <div className="mt-4 flex flex-wrap justify-end gap-2"><AdvancedResponseFilters answerOptions={selectedAnswerOptions} filters={responseFilters} onChange={setResponseFilters} questions={attendanceQuestions} resultCount={displayedEntries.length} totalCount={selectedEntries.length} /><DuplicateResponseFilter checked={hideDuplicates} onChange={setHideDuplicates} rawCount={filteredEntries.length} visibleCount={displayedEntries.length} /></div>
                   {selectedEntries.length === 0 ? (
                     <div className="mt-4 grid min-h-36 place-items-center rounded-xl border border-dashed border-slate-200 bg-slate-50 px-6 text-center">
                       <div>
