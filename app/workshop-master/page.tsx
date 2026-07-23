@@ -7,6 +7,7 @@ import { AdvancedResponseFilters } from "@/components/advanced-response-filters"
 import { AlertCircle, Archive, ArrowDown, ArrowUp, BarChart3, Bold, Check, CheckSquare, ChevronDown, Circle, Copy, Download, Edit3, ExternalLink, Eye, Files, Heading, Image, Italic, LayoutList, Link2, List, ListOrdered, Mail, MessageCircle, Monitor, Palette, Plus, QrCode, RefreshCw, Route, Save, Search, Smartphone, Sparkles, Trash2, Type, Underline, UsersRound, X } from "lucide-react";
 import { hydrateLiveState, readLocalArray, readLocalObject, saveLiveState } from "@/lib/live-state";
 import { buildRegistrationUrl, normalizeBaseUrl } from "@/lib/registration-url";
+import { publicFormSlug } from "@/lib/public-slug";
 import { sanitizeRichTextHtml } from "@/lib/rich-text";
 import { hideDuplicateResponses } from "@/lib/response-dedupe";
 import { applyResponseFilters, emptyResponseFilters, responseQuestionOptions, type ResponseFilterState } from "@/lib/response-filters";
@@ -1045,9 +1046,7 @@ function workshopSlug(value: string) {
 }
 
 function registrationSlug(workshop: WorkshopRecord) {
-  const base = workshopSlug(workshop.name) || "workshop";
-  const shortId = workshop.id.replace(/[^a-zA-Z0-9]/g, "").slice(0, 6).toLowerCase();
-  return shortId ? `${base}-${shortId}` : base;
+  return publicFormSlug("r", workshop.id);
 }
 
 function readMasterNames(key: string, defaults: string[]) {

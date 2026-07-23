@@ -3,9 +3,10 @@
 import { AdminPlatformShell } from "@/components/admin-platform-shell";
 import { hydrateLiveState, readLocalArray, saveLiveState } from "@/lib/live-state";
 import { buildRegistrationUrl, normalizeBaseUrl } from "@/lib/registration-url";
+import { publicFormSlug } from "@/lib/public-slug";
 import { sanitizeRichTextHtml } from "@/lib/rich-text";
 import type { BuilderField, BuilderFieldType, BuilderForm, PaymentTier } from "@/lib/types";
-import { encodeJsonParam, generateId } from "@/lib/utils";
+import { generateId } from "@/lib/utils";
 import {
   AlignCenter,
   AlignLeft,
@@ -191,7 +192,7 @@ export default function FormBuilderPage() {
       id: workshopId ? `form-${workshopId}-${slugify(batch) || "main"}` : "form-draft",
       workshopId,
       workshopName: name,
-      workshopSlug: slugify(name) || workshopId || "workshop",
+      workshopSlug: workshopId ? publicFormSlug("r", workshopId) : "workshop",
       batch,
       title,
       tagline: tagline.trim() || undefined,
@@ -213,7 +214,6 @@ export default function FormBuilderPage() {
     if (typeof window === "undefined" || !workshopId) return "";
     return buildRegistrationUrl({
       baseUrl: customBaseUrl,
-      query: `f=${encodeJsonParam(form)}`,
       slug: form.workshopSlug
     });
   }, [customBaseUrl, form, workshopId]);

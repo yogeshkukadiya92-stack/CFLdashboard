@@ -7,6 +7,7 @@ import { AdvancedResponseFilters } from "@/components/advanced-response-filters"
 import { hydrateLiveState, readLocalArray, saveLiveState } from "@/lib/live-state";
 import type { AttendanceEntry, AttendanceSession, BuilderField, BuilderFieldType, BuilderVisibilityOperator } from "@/lib/types";
 import { generateId } from "@/lib/utils";
+import { publicFormSlug } from "@/lib/public-slug";
 import { hideDuplicateResponses } from "@/lib/response-dedupe";
 import { applyResponseFilters, emptyResponseFilters, responseQuestionOptions, type ResponseFilterState } from "@/lib/response-filters";
 import { ArrowDown, ArrowUp, BarChart3, CalendarDays, CheckSquare, Circle, Copy, Download, ExternalLink, Eye, Heading, Image as ImageIcon, Laptop, LayoutTemplate, Mail, Palette, Plus, QrCode, RefreshCw, Save, Search, Settings2, Smartphone, Star, Trash2, Type, Upload, UsersRound, Video, X } from "lucide-react";
@@ -46,6 +47,7 @@ const fieldTypeMeta: Record<BuilderFieldType, { icon: typeof Type; label: string
 
 const addableTypes: BuilderFieldType[] = ["short_text", "paragraph", "email", "mobile", "number", "date", "time", "dropdown", "radio", "checkbox", "yes_no", "rating", "consent", "heading", "divider"];
 type BuilderTab = "build" | "logic" | "design" | "share";
+type SessionView = "responses" | "edit";
 
 function slugify(value: string) {
   return value.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
@@ -88,6 +90,7 @@ export default function WorkshopAttendancePage() {
   const [deleteEntryTarget, setDeleteEntryTarget] = useState<AttendanceEntry | null>(null);
   const [entryDetail, setEntryDetail] = useState<AttendanceEntry | null>(null);
   const [builderTab, setBuilderTab] = useState<BuilderTab>("build");
+  const [sessionView, setSessionView] = useState<SessionView>("responses");
   const [previewDevice, setPreviewDevice] = useState<"desktop" | "mobile">("mobile");
   const [imageError, setImageError] = useState("");
 
@@ -158,7 +161,7 @@ export default function WorkshopAttendancePage() {
     const now = new Date().toISOString();
     const number = sessions.filter((session) => session.workshopId === workshop.id).length + 1;
     const id = generateId();
-    const slug = `${slugify(workshop.name) || "workshop"}-session-${number}-${id.slice(0, 6)}`;
+    const slug = publicFormSlug("a", id);
     const session: AttendanceSession = {
       createdAt: now,
       description: "Please mark your attendance for this workshop session.",
@@ -188,6 +191,7 @@ export default function WorkshopAttendancePage() {
     };
     persistSessions([session, ...sessions]);
     setSelectedWorkshopId(workshop.id);
+    setSessionView("edit");
     setSelectedSessionId(id);
   }
 
@@ -360,6 +364,7 @@ export default function WorkshopAttendancePage() {
                     onClick={() => {
                       setSelectedWorkshopId(workshop.id);
                       setSelectedSessionId(sessions.find((session) => session.workshopId === workshop.id)?.id || "");
+                      setSessionView("responses");
                     }}
                     type="button"
                   >
@@ -399,12 +404,7 @@ export default function WorkshopAttendancePage() {
                   <RefreshCw className={`size-4 ${refreshing ? "animate-spin" : ""}`} />
                   Refresh
                 </button>
-                {selectedSession ? (
-                  <button className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-black text-emerald-700 hover:bg-emerald-100 disabled:cursor-wait disabled:opacity-70" disabled={savingForm} onClick={saveSelectedForm} type="button">
-                    <Save className="size-4" />
-                    {savingForm ? "Saving..." : "Update Form"}
-                  </button>
-                ) : null}
+                {selectedSession ? <button className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-black text-emerald-700 hover:bg-emerald-100" onClick={() => setSessionView(sessionView === "edit" ? "responses" : "edit")} type="button">{sessionView === "edit" ? <UsersRound className="size-4" /> : <Settings2 className="size-4" />}{sessionView === "edit" ? "View Responses" : "Edit Form"}</button> : null}
                 <button className="inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-black text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500" disabled={!selectedWorkshop} onClick={() => createSession()} type="button">
                   <Plus className="size-4" />
                   Add Session
@@ -418,11 +418,11 @@ export default function WorkshopAttendancePage() {
                   <button
                     className={`shrink-0 rounded-xl border px-4 py-3 text-left text-sm font-black ${selectedSession?.id === session.id ? "border-emerald-300 bg-emerald-50 text-emerald-800" : "border-slate-200 text-slate-600 hover:bg-slate-50"}`}
                     key={session.id}
-                    onClick={() => setSelectedSessionId(session.id)}
+                    onClick={() => { setSelectedSessionId(session.id); setSessionView("responses"); }}
                     type="button"
                   >
                     <span>{session.title}</span>
-                    <span className="mt-1 block text-xs text-slate-400">{formatDate(session.sessionDate)}</span>
+                    <span className="mt-1 block text-xs text-slate-400">{formatDate(session.sessionDate)} · {entries.filter((entry) => entry.sessionId === session.id).length} responses</span>
                   </button>
                 ))}
               </div>
@@ -435,7 +435,46 @@ export default function WorkshopAttendancePage() {
             )}
           </div>
 
-          {selectedSession ? (
+          {selectedSession && sessionView === "responses" ? (
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-700">Session Responses</p>
+                  <h3 className="mt-1 text-2xl font-black text-slate-950">{selectedSession.title}</h3>
+                  <p className="mt-1 text-sm font-semibold text-slate-500">{formatDate(selectedSession.sessionDate)} · {selectedSession.facilitator || "Facilitator not set"} · {selectedSession.batch || "Main Batch"}</p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-slate-200 px-3 text-sm font-black text-slate-700 hover:bg-slate-50" onClick={copyLink} type="button"><Copy className="size-4" />{copied ? "Copied" : "Copy Link"}</button>
+                  <a className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-slate-200 px-3 text-sm font-black text-slate-700 hover:bg-slate-50" href={link} rel="noreferrer" target="_blank"><ExternalLink className="size-4" />Open Form</a>
+                  <button className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-slate-950 px-3 text-sm font-black text-white hover:bg-slate-800" onClick={() => setSessionView("edit")} type="button"><Settings2 className="size-4" />Edit Form</button>
+                </div>
+              </div>
+
+              <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                <Metric label="Total Responses" value={selectedEntries.length} />
+                <Metric label="Visible Responses" value={displayedEntries.length} />
+                <Metric label="Form Fields" value={selectedSession.fields.length} />
+              </div>
+
+              <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-5">
+                <div><h4 className="text-lg font-black text-slate-950">Attendance Data</h4><p className="mt-1 text-xs font-semibold text-slate-500">Filter, review and export this session's responses.</p></div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <AdvancedResponseFilters filters={responseFilters} onChange={setResponseFilters} questions={attendanceQuestions} resultCount={displayedEntries.length} totalCount={selectedEntries.length} />
+                  <DuplicateResponseFilter checked={hideDuplicates} onChange={setHideDuplicates} rawCount={filteredEntries.length} visibleCount={displayedEntries.length} />
+                  <button className="grid size-10 place-items-center rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40" disabled={selectedEntries.length === 0} onClick={exportAttendanceCsv} title="Export attendance CSV" type="button"><Download className="size-4" /></button>
+                </div>
+              </div>
+
+              {selectedEntries.length === 0 ? <div className="mt-5 grid min-h-52 place-items-center rounded-xl border border-dashed border-slate-200 bg-slate-50 px-6 text-center"><div><UsersRound className="mx-auto size-9 text-slate-300" /><p className="mt-3 text-sm font-black text-slate-700">No attendance recorded yet</p><p className="mt-1 text-xs font-semibold text-slate-500">Share the public form link to start collecting responses.</p></div></div> : (
+                <div className="mt-4 w-full overflow-auto rounded-xl border border-slate-200">
+                  <table className="w-full min-w-[820px] text-left text-sm">
+                    <thead className="bg-slate-50 text-xs uppercase tracking-[0.12em] text-slate-400"><tr><th className="px-4 py-3">Name</th><th className="px-4 py-3">Mobile</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Check-in</th><th className="px-4 py-3">Actions</th></tr></thead>
+                    <tbody className="divide-y divide-slate-100">{displayedEntries.map((entry) => <tr className="hover:bg-slate-50" key={entry.id}><td className="px-4 py-3 font-bold text-slate-900">{entry.attendeeName}</td><td className="px-4 py-3 font-semibold text-slate-500">{entry.mobile}</td><td className="px-4 py-3"><select aria-label={`Attendance status for ${entry.attendeeName}`} className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs font-black text-slate-700" onChange={(event) => updateEntry(entry.id, { status: event.target.value as AttendanceEntry["status"] })} value={entry.status || "checked_in"}><option value="checked_in">Checked In</option><option value="late">Late</option><option value="joined_zoom">Joined Zoom</option><option value="completed">Completed</option></select></td><td className="px-4 py-3 font-semibold text-slate-500">{entry.submittedAt ? new Date(entry.submittedAt).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : "-"}</td><td className="px-4 py-3"><div className="flex gap-2"><button aria-label={`View ${entry.attendeeName} answers`} className="grid size-8 place-items-center rounded-lg border border-slate-200 text-slate-500 hover:bg-white" onClick={() => setEntryDetail(entry)} type="button"><Eye className="size-3.5" /></button><button aria-label={`Delete ${entry.attendeeName} attendance`} className="grid size-8 place-items-center rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100" onClick={() => setDeleteEntryTarget(entry)} type="button"><Trash2 className="size-3.5" /></button></div></td></tr>)}</tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          ) : selectedSession ? (
             <div className="grid min-w-0 gap-4 min-[1720px]:grid-cols-[minmax(0,1fr)_420px]">
               <div className="min-w-0 space-y-4">
                 <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
