@@ -3,11 +3,13 @@
 import { AdminPlatformShell } from "@/components/admin-platform-shell";
 import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
 import { DuplicateResponseFilter } from "@/components/duplicate-response-filter";
+import { AdvancedResponseFilters } from "@/components/advanced-response-filters";
 import { AlertCircle, Archive, ArrowDown, ArrowUp, BarChart3, Bold, Check, CheckSquare, ChevronDown, Circle, Copy, Download, Edit3, ExternalLink, Eye, Files, Heading, Image, Italic, LayoutList, Link2, List, ListOrdered, Mail, MessageCircle, Monitor, Palette, Plus, QrCode, RefreshCw, Route, Save, Search, Smartphone, Sparkles, Trash2, Type, Underline, UsersRound, X } from "lucide-react";
 import { hydrateLiveState, readLocalArray, readLocalObject, saveLiveState } from "@/lib/live-state";
 import { buildRegistrationUrl, normalizeBaseUrl } from "@/lib/registration-url";
 import { sanitizeRichTextHtml } from "@/lib/rich-text";
 import { hideDuplicateResponses } from "@/lib/response-dedupe";
+import { applyResponseFilters, emptyResponseFilters, responseQuestionOptions, type ResponseFilterState } from "@/lib/response-filters";
 import type { BuilderField, BuilderFieldType, BuilderForm, BuilderFormMode, BuilderTheme, FormAnalyticsRecord, RegistrationEntry } from "@/lib/types";
 import { generateId } from "@/lib/utils";
 import { type ClipboardEvent, type FormEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
@@ -171,6 +173,7 @@ export default function WorkshopMasterPage() {
   const [deleteTarget, setDeleteTarget] = useState<WorkshopRecord | null>(null);
   const [deleteResponseTarget, setDeleteResponseTarget] = useState<RegistrationEntry | null>(null);
   const [hideDuplicateParticipants, setHideDuplicateParticipants] = useState(false);
+  const [responseFilters, setResponseFilters] = useState<ResponseFilterState>({ ...emptyResponseFilters });
 
   useEffect(() => {
     function loadLocal() {
@@ -218,13 +221,16 @@ export default function WorkshopMasterPage() {
     () => selectedParticipants.filter((entry) => isTodayInIndia(entry.createdAt)).length,
     [selectedParticipants]
   );
-  const displayedParticipants = useMemo(() => hideDuplicateParticipants ? hideDuplicateResponses(selectedParticipants, {
+  const participantFilterRecords = useMemo(() => selectedParticipants.map((entry) => ({ ...entry, answers: { "Full Name": entry.fullName, Mobile: entry.mobile, Email: entry.email, City: entry.city, "Payment Status": entry.status, Source: entry.source ?? "Registration Link", ...(entry.answers ?? {}) }, submittedAt: entry.createdAt })), [selectedParticipants]);
+  const filteredParticipants = useMemo(() => applyResponseFilters(participantFilterRecords, responseFilters), [participantFilterRecords, responseFilters]);
+  const displayedParticipants = useMemo(() => hideDuplicateParticipants ? hideDuplicateResponses(filteredParticipants, {
     email: (entry) => entry.email,
     mobile: (entry) => entry.mobile,
     name: (entry) => entry.fullName,
     scope: (entry) => entry.workshopId || entry.workshopTitle,
     submittedAt: (entry) => entry.createdAt
-  }) : selectedParticipants, [hideDuplicateParticipants, selectedParticipants]);
+  }) : filteredParticipants, [filteredParticipants, hideDuplicateParticipants]);
+  const participantQuestions = useMemo(() => responseQuestionOptions(participantFilterRecords), [participantFilterRecords]);
 
   async function saveRecords(next: WorkshopRecord[]) {
     setRecords(next);
@@ -954,7 +960,7 @@ export default function WorkshopMasterPage() {
 
               {showParticipants ? (
                 <div className="mt-4 rounded-2xl border border-slate-200 bg-white">
-                  <div className="flex justify-end border-b border-slate-200 p-3"><DuplicateResponseFilter checked={hideDuplicateParticipants} onChange={setHideDuplicateParticipants} rawCount={selectedParticipants.length} visibleCount={displayedParticipants.length} /></div>
+                  <div className="flex flex-wrap justify-end gap-2 border-b border-slate-200 p-3"><AdvancedResponseFilters filters={responseFilters} onChange={setResponseFilters} questions={participantQuestions} resultCount={displayedParticipants.length} totalCount={selectedParticipants.length} /><DuplicateResponseFilter checked={hideDuplicateParticipants} onChange={setHideDuplicateParticipants} rawCount={filteredParticipants.length} visibleCount={displayedParticipants.length} /></div>
                   <div className="overflow-x-auto">
                   <table className="min-w-[1020px] w-full text-left text-sm">
                     <thead className="bg-slate-50 text-xs uppercase text-slate-500">

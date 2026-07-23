@@ -3,10 +3,12 @@
 import { AdminPlatformShell } from "@/components/admin-platform-shell";
 import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
 import { DuplicateResponseFilter } from "@/components/duplicate-response-filter";
+import { AdvancedResponseFilters } from "@/components/advanced-response-filters";
 import { hydrateLiveState, readLocalArray, saveLiveState } from "@/lib/live-state";
 import type { AttendanceEntry, AttendanceSession, BuilderField, BuilderFieldType, BuilderVisibilityOperator } from "@/lib/types";
 import { generateId } from "@/lib/utils";
 import { hideDuplicateResponses } from "@/lib/response-dedupe";
+import { applyResponseFilters, emptyResponseFilters, responseQuestionOptions, type ResponseFilterState } from "@/lib/response-filters";
 import { ArrowDown, ArrowUp, BarChart3, CalendarDays, CheckSquare, Circle, Copy, Download, ExternalLink, Eye, Heading, Image as ImageIcon, Laptop, LayoutTemplate, Mail, Palette, Plus, QrCode, RefreshCw, Save, Search, Settings2, Smartphone, Star, Trash2, Type, Upload, UsersRound, Video, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
@@ -73,6 +75,7 @@ export default function WorkshopAttendancePage() {
   const [sessions, setSessions] = useState<AttendanceSession[]>([]);
   const [entries, setEntries] = useState<AttendanceEntry[]>([]);
   const [hideDuplicates, setHideDuplicates] = useState(false);
+  const [responseFilters, setResponseFilters] = useState<ResponseFilterState>({ ...emptyResponseFilters });
   const [query, setQuery] = useState("");
   const [selectedWorkshopId, setSelectedWorkshopId] = useState("");
   const [selectedSessionId, setSelectedSessionId] = useState("");
@@ -113,13 +116,16 @@ export default function WorkshopAttendancePage() {
   const workshopSessions = sessions.filter((session) => session.workshopId === selectedWorkshop?.id);
   const selectedSession = workshopSessions.find((session) => session.id === selectedSessionId) ?? workshopSessions[0] ?? null;
   const selectedEntries = entries.filter((entry) => entry.sessionId === selectedSession?.id);
-  const displayedEntries = hideDuplicates ? hideDuplicateResponses(selectedEntries, {
+  const attendanceFilterRecords = selectedEntries.map((entry) => ({ ...entry, answers: { "Full Name": entry.attendeeName, Mobile: entry.mobile, Email: entry.email ?? "", City: entry.city ?? "", Status: entry.status ?? "checked_in", ...(entry.answers ?? {}) } as Record<string, string> }));
+  const filteredEntries = applyResponseFilters(attendanceFilterRecords, responseFilters);
+  const displayedEntries = hideDuplicates ? hideDuplicateResponses(filteredEntries, {
     email: (entry) => entry.email,
     mobile: (entry) => entry.mobile,
     name: (entry) => entry.attendeeName,
     scope: (entry) => entry.sessionId,
     submittedAt: (entry) => entry.submittedAt
-  }) : selectedEntries;
+  }) : filteredEntries;
+  const attendanceQuestions = responseQuestionOptions(attendanceFilterRecords);
   const totalAttendees = new Set(entries.map((entry) => `${entry.workshopId}-${entry.mobile}`)).size;
   const link = selectedSession ? attendanceLink(selectedSession.slug) : "";
 
@@ -643,7 +649,7 @@ export default function WorkshopAttendancePage() {
                       <UsersRound className="size-7 text-slate-300" />
                     </div>
                   </div>
-                  <div className="mt-4 flex justify-end"><DuplicateResponseFilter checked={hideDuplicates} onChange={setHideDuplicates} rawCount={selectedEntries.length} visibleCount={displayedEntries.length} /></div>
+                  <div className="mt-4 flex flex-wrap justify-end gap-2"><AdvancedResponseFilters filters={responseFilters} onChange={setResponseFilters} questions={attendanceQuestions} resultCount={displayedEntries.length} totalCount={selectedEntries.length} /><DuplicateResponseFilter checked={hideDuplicates} onChange={setHideDuplicates} rawCount={filteredEntries.length} visibleCount={displayedEntries.length} /></div>
                   {selectedEntries.length === 0 ? (
                     <div className="mt-4 grid min-h-36 place-items-center rounded-xl border border-dashed border-slate-200 bg-slate-50 px-6 text-center">
                       <div>
