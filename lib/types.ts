@@ -381,6 +381,7 @@ export interface AttendanceSession {
   redirectDelaySeconds?: number;
   allowDuplicate?: boolean;
   successMessage?: string;
+  noZoomMessage?: string;
   submitButtonText?: string;
   formMode?: BuilderFormMode;
   theme?: BuilderTheme;

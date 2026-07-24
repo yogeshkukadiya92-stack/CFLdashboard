@@ -183,6 +183,7 @@ export default function WorkshopAttendancePage() {
       updatedAt: now,
       venue: "",
       successMessage: "Attendance marked successfully. You can now join the live session.",
+      noZoomMessage: "Attendance is saved. The Zoom link has not been configured for this session.",
       submitButtonText: "Mark Attendance",
       formMode: "classic",
       theme: { accent: "#059669", align: "left", fieldRadius: "rounded", fontFamily: "Inter", fontSize: 16, titleBold: true, titleItalic: false, backgroundColor: "#f1f5f9", surfaceColor: "#ffffff" },
@@ -537,6 +538,11 @@ export default function WorkshopAttendancePage() {
                     <label className="md:col-span-2">
                       <span className="mb-2 block text-sm font-bold text-slate-600">Success Message</span>
                       <input className={inputClass} onChange={(event) => updateSession({ successMessage: event.target.value })} value={selectedSession.successMessage || ""} />
+                    </label>
+                    <label className="md:col-span-2">
+                      <span className="mb-2 block text-sm font-bold text-slate-600">Message when Zoom link is not configured</span>
+                      <textarea className={inputClass} onChange={(event) => updateSession({ noZoomMessage: event.target.value })} placeholder="Attendance is saved. The Zoom link has not been configured for this session." rows={2} value={selectedSession.noZoomMessage ?? "Attendance is saved. The Zoom link has not been configured for this session."} />
+                      <span className="mt-1.5 block text-xs font-semibold text-slate-400">Shown after attendance is submitted when this session has no Zoom link.</span>
                     </label>
                     <label className="md:col-span-2">
                       <span className="mb-2 block text-sm font-bold text-slate-600">Form Description</span>

@@ -268,7 +268,7 @@ export default function AttendanceFormPage() {
                   <a className="mt-5 inline-flex min-h-12 w-full items-center justify-center gap-2 bg-emerald-600 px-5 py-3 text-sm font-black text-white hover:bg-emerald-700" href={joinUrl}><Video className="size-5" />Join Zoom Session<ArrowRight className="size-4" /></a>
                   {autoRedirect ? <button className="mt-3 text-xs font-black text-slate-500 hover:text-slate-800" onClick={() => setAutoRedirect(false)} type="button">Stay on this page</button> : null}
                 </>
-              ) : <p className="mt-5 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-700">Attendance is saved. The Zoom link has not been configured for this session.</p>}
+              ) : <p className="mt-5 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-700">{session.noZoomMessage || "Attendance is saved. The Zoom link has not been configured for this session."}</p>}
             </div>
           </section>
         </div>
