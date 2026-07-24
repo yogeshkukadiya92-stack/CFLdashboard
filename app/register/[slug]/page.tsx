@@ -52,6 +52,7 @@ type FormModel = {
   tiers?: PaymentTier[];
   highlights?: string[];
   whatsappGroupUrl?: string;
+  submitButtonText?: string;
   theme: BuilderTheme;
   fields: BuilderField[];
 };
@@ -164,6 +165,7 @@ function modelFromBuilderForm(form: BuilderForm, overrides?: Partial<Pick<FormMo
     tiers: form.tiers && form.tiers.length > 0 ? form.tiers : undefined,
     highlights: form.highlights && form.highlights.length > 0 ? form.highlights : undefined,
     whatsappGroupUrl: form.whatsappGroupUrl,
+    submitButtonText: form.submitButtonText,
     theme: { ...defaultTheme, ...form.theme },
     fields: form.fields?.length ? normalizeCoreFieldRequirements(form.fields) : simpleFields()
   };
@@ -940,7 +942,7 @@ export default function RegistrationPage() {
                   type="button"
                 >
                   {isLastPage ? <ShieldCheck className="size-4" /> : null}
-                  {isLastPage ? (model.paid ? "Register & Pay" : "Confirm Registration") : <>Continue<ArrowRight className="size-4" /></>}
+                  {isLastPage ? (model.submitButtonText?.trim() || (model.paid ? "Register & Pay" : "Confirm Registration")) : <>Continue<ArrowRight className="size-4" /></>}
                 </button>
               </div>
               <p className="mt-3 text-center text-xs font-semibold text-slate-400">Your progress saves automatically on this device.</p>

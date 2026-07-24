@@ -134,6 +134,7 @@ export default function FormBuilderPage() {
   const [title, setTitle] = useState("Workshop Registration");
   const [tagline, setTagline] = useState("");
   const [description, setDescription] = useState("Please fill in your details to confirm your seat.");
+  const [submitButtonText, setSubmitButtonText] = useState("Confirm Registration");
   const [paid, setPaid] = useState(false);
   const [fee, setFee] = useState("");
   const [partPayment, setPartPayment] = useState(false);
@@ -205,10 +206,11 @@ export default function FormBuilderPage() {
       tiers: tiers.length > 0 ? tiers : undefined,
       highlights: highlights.filter(Boolean).length > 0 ? highlights.filter(Boolean) : undefined,
       whatsappGroupUrl: whatsappGroupUrl.trim() || undefined,
+      submitButtonText: submitButtonText.trim() || undefined,
       fields,
       updatedAt: new Date().toISOString()
     };
-  }, [accent, align, bannerUrl, batch, description, fee, fields, fontFamily, fontSize, highlights, logoUrl, otpRequired, paid, partPayment, tagline, tiers, title, titleBold, titleItalic, whatsappGroupUrl, workshop, workshopId]);
+  }, [accent, align, bannerUrl, batch, description, fee, fields, fontFamily, fontSize, highlights, logoUrl, otpRequired, paid, partPayment, submitButtonText, tagline, tiers, title, titleBold, titleItalic, whatsappGroupUrl, workshop, workshopId]);
 
   const link = useMemo(() => {
     if (typeof window === "undefined" || !workshopId) return "";
@@ -384,6 +386,17 @@ export default function FormBuilderPage() {
                   rows={2}
                   value={description}
                 />
+              </label>
+              <label className="block">
+                <span className="mb-2 block text-sm font-bold text-slate-600">Submit Button Text</span>
+                <input
+                  className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-3 text-sm font-semibold outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
+                  maxLength={60}
+                  onChange={(event) => setSubmitButtonText(event.target.value)}
+                  placeholder={paid ? "Register & Pay" : "Confirm Registration"}
+                  value={submitButtonText}
+                />
+                <span className="mt-1 block text-xs font-semibold text-slate-400">Shown on the final registration button.</span>
               </label>
               <label className="block">
                 <span className="mb-2 block text-sm font-bold text-slate-600">WhatsApp Group Invite Link</span>
@@ -998,7 +1011,7 @@ function FormPreview({ form }: { form: BuilderForm }) {
           style={{ backgroundColor: theme.accent, boxShadow: `0 6px 20px -4px ${theme.accent}55, 0 2px 4px -1px ${theme.accent}33` }}
           type="button"
         >
-          {form.paid ? "Register & Pay" : "Confirm Registration"}
+          {form.submitButtonText?.trim() || (form.paid ? "Register & Pay" : "Confirm Registration")}
         </button>
       </div>
     </div>

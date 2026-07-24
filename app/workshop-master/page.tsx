@@ -155,6 +155,7 @@ export default function WorkshopMasterPage() {
   const [formTitle, setFormTitle] = useState("Workshop Registration");
   const [formTagline, setFormTagline] = useState("");
   const [formDescription, setFormDescription] = useState("Please fill in your details to confirm your seat.");
+  const [formSubmitButtonText, setFormSubmitButtonText] = useState("Confirm Registration");
   const [formLogoUrl, setFormLogoUrl] = useState("");
   const [formMode, setFormMode] = useState<BuilderFormMode>("classic");
   const [formTheme, setFormTheme] = useState<BuilderTheme>(defaultTheme);
@@ -409,6 +410,7 @@ export default function WorkshopMasterPage() {
     setFormTitle("Workshop Registration");
     setFormTagline("");
     setFormDescription("Please fill in your details to confirm your seat.");
+    setFormSubmitButtonText("Confirm Registration");
     setFormLogoUrl("");
     setFormMode("classic");
     setFormTheme(defaultTheme);
@@ -436,6 +438,7 @@ export default function WorkshopMasterPage() {
       otpRequired: formOtpRequired,
       highlights: formHighlights.map((item) => item.trim()).filter(Boolean),
       whatsappGroupUrl: whatsappGroupUrl.trim() || undefined,
+      submitButtonText: formSubmitButtonText.trim() || undefined,
       fields: normalizeCoreFieldRequirements(formFields),
       updatedAt: new Date().toISOString()
     };
@@ -461,6 +464,7 @@ export default function WorkshopMasterPage() {
         setFormTitle(`${record.name} Registration`);
         setFormTagline("");
         setFormDescription("Please fill in your details to confirm your seat.");
+        setFormSubmitButtonText(record.isPaid ? "Register & Pay" : "Confirm Registration");
         setFormLogoUrl("");
         setFormMode("classic");
         setFormTheme(defaultTheme);
@@ -473,6 +477,7 @@ export default function WorkshopMasterPage() {
       setFormTitle(savedForm.title || `${record.name} Registration`);
       setFormTagline(savedForm.tagline ?? "");
       setFormDescription(savedForm.description || "");
+      setFormSubmitButtonText(savedForm.submitButtonText || (savedForm.paid ? "Register & Pay" : "Confirm Registration"));
       setFormLogoUrl(savedForm.theme?.logoUrl ?? "");
       setFormMode(savedForm.mode ?? "classic");
       setFormTheme({ ...defaultTheme, ...savedForm.theme, logoUrl: undefined });
@@ -712,6 +717,11 @@ export default function WorkshopMasterPage() {
               <RichTextEditor onChange={setFormDescription} value={formDescription} />
             </div>
             <label className="block md:col-span-2">
+              <span className="mb-2 block text-sm font-bold text-slate-600">Submit Button Text</span>
+              <input className={inputClass} maxLength={60} onChange={(event) => setFormSubmitButtonText(event.target.value)} placeholder={isPaid ? "Register & Pay" : "Confirm Registration"} value={formSubmitButtonText} />
+              <span className="mt-1 block text-xs font-semibold text-slate-400">Shown on the final button of the public registration form.</span>
+            </label>
+            <label className="block md:col-span-2">
               <span className="mb-2 block text-sm font-bold text-slate-600">WhatsApp Group Invite Link</span>
               <input className={inputClass} onChange={(event) => setWhatsappGroupUrl(event.target.value)} placeholder="https://chat.whatsapp.com/xxxxxxxx" value={whatsappGroupUrl} />
               <span className="mt-1 block text-xs font-semibold text-slate-400">After registration, the thank-you page can redirect to this group link after 5 seconds.</span>
@@ -794,6 +804,7 @@ export default function WorkshopMasterPage() {
               logoUrl={formLogoUrl}
               mode={formMode}
               paid={isPaid}
+              submitButtonText={formSubmitButtonText}
               theme={formTheme}
               title={formTitle || `${name || "Workshop"} Registration`}
               tagline={formTagline}
@@ -1230,6 +1241,7 @@ function WorkshopFormLivePreview({
   logoUrl,
   mode,
   paid,
+  submitButtonText,
   tagline,
   theme,
   title
@@ -1240,6 +1252,7 @@ function WorkshopFormLivePreview({
   logoUrl: string;
   mode: BuilderFormMode;
   paid: boolean;
+  submitButtonText: string;
   tagline: string;
   theme: BuilderTheme;
   title: string;
@@ -1301,7 +1314,7 @@ function WorkshopFormLivePreview({
 
             <div className="mt-5 flex gap-2">
               {mode !== "classic" && previewPage > 0 ? <button className={`border border-slate-200 px-4 py-3 text-sm font-black text-slate-600 ${radiusClass}`} onClick={() => setPreviewPage((value) => Math.max(0, value - 1))} type="button">Back</button> : null}
-              <button className={`flex flex-1 items-center justify-center px-4 py-3 text-sm font-black uppercase text-white shadow-sm ${radiusClass}`} onClick={() => setPreviewPage((value) => Math.min(pages.length - 1, value + 1))} style={{ backgroundColor: accent }} type="button">{mode !== "classic" && previewPage < pages.length - 1 ? "Continue" : "Confirm Registration"}</button>
+              <button className={`flex flex-1 items-center justify-center px-4 py-3 text-sm font-black uppercase text-white shadow-sm ${radiusClass}`} onClick={() => setPreviewPage((value) => Math.min(pages.length - 1, value + 1))} style={{ backgroundColor: accent }} type="button">{mode !== "classic" && previewPage < pages.length - 1 ? "Continue" : (submitButtonText.trim() || (paid ? "Register & Pay" : "Confirm Registration"))}</button>
             </div>
             <p className="mt-3 text-center text-xs font-semibold text-slate-400">Progress saves automatically.</p>
           </div>

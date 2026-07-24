@@ -356,6 +356,7 @@ export interface BuilderForm {
   tiers?: PaymentTier[];
   highlights?: string[];
   whatsappGroupUrl?: string;
+  submitButtonText?: string;
   fields: BuilderField[];
   updatedAt: string;
 }
