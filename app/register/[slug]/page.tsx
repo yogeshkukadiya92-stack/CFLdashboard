@@ -749,7 +749,9 @@ export default function RegistrationPage() {
 
   const theme = model.theme;
   const displayLogoUrl = theme.logoUrl || BRAND_LOGO_SRC;
-  const metaLine = [model.batch && `Batch: ${model.batch}`, model.facilitator && `Facilitator: ${model.facilitator}`, model.venue && `Venue: ${model.venue}`].filter(Boolean);
+  const venue = model.venue?.trim();
+  const hasVenue = Boolean(venue && !["tba", "n/a", "na"].includes(venue.toLowerCase()));
+  const metaLine = [model.batch && `Batch: ${model.batch}`, model.facilitator && `Facilitator: ${model.facilitator}`, hasVenue && `Venue: ${venue}`].filter(Boolean);
   const fieldRadiusClass = theme.fieldRadius === "square" ? "rounded-md" : theme.fieldRadius === "soft" ? "rounded-lg" : "rounded-xl";
   const logoAlign = theme.logoAlign || defaultTheme.logoAlign || "center";
   const logoSize = Math.min(Math.max(theme.logoSize || defaultTheme.logoSize || 140, 72), 240);
