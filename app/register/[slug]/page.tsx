@@ -17,7 +17,7 @@ const CLIENTS_STORAGE_KEY = "cfl_clients_v1";
 const FORM_ANALYTICS_STORAGE_KEY = "cfl_form_analytics_v1";
 const BRAND_LOGO_SRC = "/brand/coach-for-life-logo-horizontal.png";
 
-type WorkshopMasterRecord = { archived?: boolean; id: string; name: string; facilitator?: string; isPaid?: boolean };
+type WorkshopMasterRecord = { archived?: boolean; batch?: string; id: string; name: string; facilitator?: string; isPaid?: boolean };
 type ClientRecord = { city?: string; email?: string; id: number | string; mobile?: string; name?: string };
 type RegistrationLinkConfig = {
   batch?: string;
@@ -263,11 +263,13 @@ export default function RegistrationPage() {
           if (config?.title && !linkBlocked) {
             const fee = Number(config.fee || 0);
             const forms = readLocalArray<BuilderForm>(FORMS_STORAGE_KEY);
+            const records = readLocalArray<WorkshopMasterRecord>(WORKSHOP_MASTER_STORAGE_KEY);
+            const currentWorkshop = records.find((record) => !record.archived && record.id === config.id);
             const savedForm = forms.find((item) => item.workshopId === config.id || item.workshopSlug === slug || item.workshopSlug === config.slug);
             if (savedForm) {
               resolved = modelFromBuilderForm(savedForm, {
-                batch: config.batch || savedForm.batch || "Main Batch",
-                facilitator: config.facilitator || "CFL Facilitator",
+                batch: currentWorkshop?.batch || savedForm.batch || config.batch || "Main Batch",
+                facilitator: currentWorkshop?.facilitator || config.facilitator || "CFL Facilitator",
                 fee,
                 paid: Boolean(config.paid) && (fee > 0 || Boolean(savedForm.tiers?.length)),
                 partPayment: Boolean(config.partPayment),
@@ -284,7 +286,7 @@ export default function RegistrationPage() {
                 mode: "classic",
                 facilitator: config.facilitator || "CFL Facilitator",
                 venue: config.venue || "TBA",
-                batch: config.batch || "Main Batch",
+                batch: currentWorkshop?.batch || config.batch || "Main Batch",
                 paid: Boolean(config.paid) && fee > 0,
                 fee,
                 partPayment: Boolean(config.partPayment),
