@@ -566,6 +566,57 @@ export default function WorkshopMasterPage() {
     setMessage(`Exported ${filteredRecords.length} workshop records.`);
   }
 
+  function exportSelectedRegistrations() {
+    if (!selectedWorkshop) return;
+
+    const coreAnswerKeys = new Set(["Full Name", "Mobile", "Email", "City", "Payment Status", "Source"]);
+    const customAnswerKeys = Array.from(new Set(
+      displayedParticipants.flatMap((entry) => Object.keys((entry.answers ?? {}) as Record<string, unknown>))
+    )).filter((key) => !coreAnswerKeys.has(key));
+    const headers = [
+      "Name",
+      "Mobile",
+      "Email",
+      "City",
+      "Source",
+      "WhatsApp Verification",
+      "Payment Status",
+      "Paid",
+      "Due",
+      "Submitted",
+      ...customAnswerKeys
+    ];
+    const rows = displayedParticipants.map((entry) => [
+      entry.fullName,
+      entry.mobile,
+      entry.email,
+      entry.city,
+      entry.source ?? "Registration Link",
+      entry.whatsappVerificationStatus ?? "Not Required",
+      entry.status,
+      entry.amountPaid,
+      entry.amountDue,
+      formatSubmittedAt(entry.createdAt),
+      ...customAnswerKeys.map((key) => ((entry.answers ?? {}) as Record<string, unknown>)[key] ?? "")
+    ]);
+    const cell = (value: unknown) => {
+      const text = Array.isArray(value) ? value.join(", ") : String(value ?? "");
+      return `"${text.replace(/"/g, '""')}"`;
+    };
+    const csv = "\ufeff" + [headers, ...rows].map((row) => row.map(cell).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    const filename = selectedWorkshop.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "workshop";
+    link.href = url;
+    link.download = `${filename}-registrations.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    setMessage(`Downloaded ${displayedParticipants.length} registration responses.`);
+  }
+
   return (
     <AdminPlatformShell activeLabel="Workshop Master" description="Create workshop/product masters and configure registration fields in one platform." title="Manage Workshop">
       {!showData ? (
@@ -942,6 +993,15 @@ export default function WorkshopMasterPage() {
                   >
                     <MessageCircle className="size-4" />
                     Send Summary
+                  </button>
+                  <button
+                    className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50"
+                    onClick={exportSelectedRegistrations}
+                    title="Download this workshop's registration responses as an Excel-compatible CSV"
+                    type="button"
+                  >
+                    <Download className="size-4" />
+                    Download Excel
                   </button>
                   <button
                     className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-bold text-white hover:bg-indigo-700"
