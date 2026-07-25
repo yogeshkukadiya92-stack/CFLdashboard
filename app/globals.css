@@ -546,6 +546,89 @@ textarea:focus-visible {
   contain-intrinsic-size: 0 56px;
 }
 
+/* Public registration forms own their surface colors. This prevents the
+   dashboard dark theme from placing light text on a light custom form. */
+main.registration-public-page {
+  color: var(--registration-text) !important;
+}
+
+main.registration-public-page .registration-public-card {
+  color: var(--registration-text);
+}
+
+main.registration-public-page .registration-public-card h1,
+main.registration-public-page .registration-public-card h2,
+main.registration-public-page .registration-public-card h3,
+main.registration-public-page .registration-public-card h4,
+.dark main.registration-public-page .registration-public-card h1,
+.dark main.registration-public-page .registration-public-card h2,
+.dark main.registration-public-page .registration-public-card h3,
+.dark main.registration-public-page .registration-public-card h4 {
+  color: var(--registration-text) !important;
+}
+
+main.registration-public-page .registration-public-title {
+  color: var(--registration-text) !important;
+  font-size: var(--registration-title-mobile-size);
+  overflow-wrap: anywhere;
+}
+
+main.registration-public-page .registration-public-tagline,
+main.registration-public-page .registration-public-description,
+.dark main.registration-public-page .registration-public-tagline,
+.dark main.registration-public-page .registration-public-description {
+  color: var(--registration-muted) !important;
+}
+
+main.registration-public-page .registration-public-meta,
+.dark main.registration-public-page .registration-public-meta {
+  color: var(--registration-subdued) !important;
+}
+
+main.registration-public-page .registration-public-description {
+  overflow-wrap: anywhere;
+}
+
+main.registration-public-page .registration-public-form label,
+.dark main.registration-public-page .registration-public-form label {
+  color: var(--registration-muted) !important;
+}
+
+main.registration-public-page .registration-public-form input,
+main.registration-public-page .registration-public-form select,
+main.registration-public-page .registration-public-form textarea,
+.dark main.registration-public-page .registration-public-form input,
+.dark main.registration-public-page .registration-public-form select,
+.dark main.registration-public-page .registration-public-form textarea {
+  border-color: var(--registration-border) !important;
+  background-color: var(--registration-field) !important;
+  color: var(--registration-text) !important;
+}
+
+@media (min-width: 640px) {
+  main.registration-public-page .registration-public-title {
+    font-size: var(--registration-title-size);
+  }
+}
+
+@media (max-width: 639px) {
+  main.registration-public-page .registration-public-header,
+  main.registration-public-page .registration-public-form {
+    padding-left: 1.25rem;
+    padding-right: 1.25rem;
+  }
+
+  main.registration-public-page .registration-public-description {
+    font-size: 0.9375rem;
+    line-height: 1.7;
+  }
+
+  main.registration-public-page .registration-public-description p,
+  main.registration-public-page .registration-public-description div {
+    margin: 0.3rem 0;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

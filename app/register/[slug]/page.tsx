@@ -6,6 +6,7 @@ import { sanitizeRichTextHtml } from "@/lib/rich-text";
 import type { BuilderField, BuilderForm, BuilderFormMode, BuilderTheme, FormAnalyticsRecord, PaymentTier, RegistrationEntry } from "@/lib/types";
 import { decodeJsonParam, formatCurrency } from "@/lib/utils";
 import { AlertTriangle, ArrowLeft, ArrowRight, Check, CheckCircle2, Loader2, ShieldCheck } from "lucide-react";
+import type { CSSProperties } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 
@@ -94,6 +95,15 @@ function slugify(value: string) {
 
 function cleanMobile(value: string) {
   return value.replace(/\D/g, "");
+}
+
+function isDarkColor(value: string | undefined) {
+  const hex = value?.trim().replace("#", "");
+  if (!hex || !/^[0-9a-f]{6}$/i.test(hex)) return false;
+  const red = Number.parseInt(hex.slice(0, 2), 16);
+  const green = Number.parseInt(hex.slice(2, 4), 16);
+  const blue = Number.parseInt(hex.slice(4, 6), 16);
+  return (red * 299 + green * 587 + blue * 114) / 1000 < 150;
 }
 
 function isFieldVisible(field: BuilderField, answers: Record<string, string>) {
@@ -758,11 +768,25 @@ export default function RegistrationPage() {
   const logoAlign = theme.logoAlign || defaultTheme.logoAlign || "center";
   const logoSize = Math.min(Math.max(theme.logoSize || defaultTheme.logoSize || 140, 72), 240);
   const logoPositionClass = logoAlign === "center" ? "mx-auto" : logoAlign === "right" ? "ml-auto" : "";
+  const darkSurface = isDarkColor(theme.surfaceColor);
+  const registrationStyle = {
+    "--registration-border": darkSurface ? "rgba(148, 163, 184, 0.28)" : "#dbe4ee",
+    "--registration-field": darkSurface ? "#172033" : "#f8fafc",
+    "--registration-muted": darkSurface ? "#cbd5e1" : "#475569",
+    "--registration-subdued": darkSurface ? "#94a3b8" : "#64748b",
+    "--registration-text": darkSurface ? "#f8fafc" : "#0f172a",
+    "--registration-title-mobile-size": `${Math.min(theme.fontSize + 10, 30)}px`,
+    "--registration-title-size": `${Math.min(theme.fontSize + 16, 38)}px`,
+    backgroundColor: theme.backgroundColor || defaultTheme.backgroundColor,
+    colorScheme: darkSurface ? "dark" : "light",
+    fontFamily: theme.fontFamily,
+    fontSize: theme.fontSize
+  } as CSSProperties;
 
   return (
-    <main className="min-h-screen px-4 py-8 text-slate-950 md:py-12" style={{ backgroundColor: theme.backgroundColor || defaultTheme.backgroundColor, fontFamily: theme.fontFamily, fontSize: theme.fontSize }}>
+    <main className="registration-public-page min-h-[100dvh] overflow-x-hidden px-3 py-3 text-slate-950 sm:px-4 sm:py-8 md:py-12" style={registrationStyle}>
       <section
-        className="mx-auto max-w-3xl overflow-hidden rounded-3xl"
+        className="registration-public-card mx-auto max-w-3xl overflow-hidden rounded-2xl sm:rounded-3xl"
         style={{ backgroundColor: theme.surfaceColor || "#ffffff", boxShadow: `0 2px 0 0 ${theme.accent}22, 0 8px 30px -6px rgba(0,0,0,0.12), 0 25px 60px -15px rgba(0,0,0,0.08), 0 0 0 1px rgba(0,0,0,0.04)` }}
       >
         {theme.bannerUrl ? (
@@ -773,30 +797,30 @@ export default function RegistrationPage() {
         ) : (
           <div className="h-2.5 rounded-t-3xl" style={{ background: `linear-gradient(90deg, ${theme.accent}, ${theme.accent}88)` }} />
         )}
-        <div className="relative p-6 md:p-8" style={{ textAlign: theme.align }}>
+        <div className="registration-public-header relative p-5 sm:p-6 md:p-8" style={{ textAlign: theme.align }}>
           {displayLogoUrl ? (
             <img
               alt="Coach For Life"
-              className={`mb-5 h-auto max-w-full object-contain ${logoPositionClass}`}
+              className={`mb-4 h-auto max-w-full object-contain sm:mb-5 ${logoPositionClass}`}
               src={displayLogoUrl}
-              style={{ width: logoSize }}
+              style={{ width: `min(${logoSize}px, 62vw)` }}
             />
           ) : null}
           <p className="text-[11px] font-black uppercase tracking-[0.2em]" style={{ color: theme.accent }}>CFL Workshop Registration</p>
           <h1
-            className="mt-2 tracking-tight"
-            style={{ fontWeight: theme.titleBold ? 800 : 600, fontStyle: theme.titleItalic ? "italic" : "normal", fontSize: theme.fontSize + 16, lineHeight: 1.2 }}
+            className="registration-public-title mt-2 break-words tracking-normal"
+            style={{ fontWeight: theme.titleBold ? 800 : 600, fontStyle: theme.titleItalic ? "italic" : "normal", lineHeight: 1.18 }}
           >
             {model.title}
           </h1>
-          {model.tagline ? <p className="mt-2 text-base font-bold text-slate-600">{model.tagline}</p> : null}
+          {model.tagline ? <p className="registration-public-tagline mt-2 text-base font-bold leading-6 text-slate-600">{model.tagline}</p> : null}
           {model.description ? (
             <div
-              className="rich-text-content mt-3 leading-relaxed text-slate-500"
+              className="registration-public-description rich-text-content mt-4 break-words leading-7 text-slate-500"
               dangerouslySetInnerHTML={{ __html: sanitizeRichTextHtml(model.description) }}
             />
           ) : null}
-          {metaLine.length ? <p className="mt-3 text-sm font-semibold text-slate-400">{metaLine.join("  •  ")}</p> : null}
+          {metaLine.length ? <p className="registration-public-meta mt-4 break-words text-sm font-semibold leading-6 text-slate-400">{metaLine.join("  •  ")}</p> : null}
           <p
             className="mt-5 inline-flex rounded-xl px-4 py-2.5 text-sm font-black text-white"
             style={{ backgroundColor: theme.accent, boxShadow: `0 4px 14px -3px ${theme.accent}55` }}
@@ -827,7 +851,7 @@ export default function RegistrationPage() {
           </div>
         ) : null}
 
-        <div className="p-6 md:p-8">
+        <div className="registration-public-form p-5 sm:p-6 md:p-8">
           {success ? (
             <div className="rounded-2xl bg-emerald-50 px-4 py-5 text-center text-sm font-bold text-emerald-700">
               Registration completed successfully.
