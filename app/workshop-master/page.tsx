@@ -10,7 +10,7 @@ import { buildRegistrationUrl, normalizeBaseUrl } from "@/lib/registration-url";
 import { publicFormSlug } from "@/lib/public-slug";
 import { sanitizeRichTextHtml } from "@/lib/rich-text";
 import { hideDuplicateResponses } from "@/lib/response-dedupe";
-import { applyResponseFilters, emptyResponseFilters, responseQuestionOptions, type ResponseFilterState } from "@/lib/response-filters";
+import { activeResponseFilterCount, applyResponseFilters, emptyResponseFilters, responseQuestionOptions, type ResponseFilterState } from "@/lib/response-filters";
 import type { BuilderField, BuilderFieldType, BuilderForm, BuilderFormMode, BuilderTheme, FormAnalyticsRecord, RegistrationEntry } from "@/lib/types";
 import { generateId } from "@/lib/utils";
 import { type ClipboardEvent, type FormEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
@@ -62,6 +62,7 @@ const FORMS_STORAGE_KEY = "cfl_forms_v1";
 const REGISTRATION_LINK_CONFIG_STORAGE_KEY = "cfl_registration_link_configs_v1";
 const WORKSHOP_TYPES_STORAGE_KEY = "cfl_workshop_types_v1";
 const FACILITATORS_STORAGE_KEY = "cfl_facilitators_v1";
+const WORKSHOP_RESPONSE_FILTERS_STORAGE_KEY = "cfl_workshop_response_filters_v1";
 const IMAGE_QUALITY = 0.7;
 const MAX_LOGO_WIDTH = 240;
 const BRAND_LOGO_SRC = "/brand/coach-for-life-logo-horizontal.png";
@@ -233,6 +234,38 @@ export default function WorkshopMasterPage() {
     submittedAt: (entry) => entry.createdAt
   }) : filteredParticipants, [filteredParticipants, hideDuplicateParticipants]);
   const participantQuestions = useMemo(() => responseQuestionOptions(participantFilterRecords), [participantFilterRecords]);
+  const activeParticipantFilterCount = activeResponseFilterCount(responseFilters) + Number(hideDuplicateParticipants);
+
+  useEffect(() => {
+    if (!selectedWorkshopId) return;
+    try {
+      const saved = readLocalObject<Record<string, { filters?: ResponseFilterState; hideDuplicates?: boolean; showParticipants?: boolean }>>(WORKSHOP_RESPONSE_FILTERS_STORAGE_KEY);
+      const workshopState = saved[selectedWorkshopId];
+      if (!workshopState) return;
+      setResponseFilters({ ...emptyResponseFilters, ...(workshopState.filters ?? {}) });
+      setHideDuplicateParticipants(Boolean(workshopState.hideDuplicates));
+      if (workshopState.showParticipants !== undefined) setShowParticipants(Boolean(workshopState.showParticipants));
+    } catch {
+      // Filters are convenience state; ignore storage issues.
+    }
+  }, [selectedWorkshopId]);
+
+  useEffect(() => {
+    if (!selectedWorkshopId) return;
+    try {
+      const saved = readLocalObject<Record<string, { filters?: ResponseFilterState; hideDuplicates?: boolean; showParticipants?: boolean }>>(WORKSHOP_RESPONSE_FILTERS_STORAGE_KEY);
+      window.localStorage.setItem(WORKSHOP_RESPONSE_FILTERS_STORAGE_KEY, JSON.stringify({
+        ...saved,
+        [selectedWorkshopId]: {
+          filters: responseFilters,
+          hideDuplicates: hideDuplicateParticipants,
+          showParticipants
+        }
+      }));
+    } catch {
+      // Filters are convenience state; ignore storage issues.
+    }
+  }, [hideDuplicateParticipants, responseFilters, selectedWorkshopId, showParticipants]);
 
   async function saveRecords(next: WorkshopRecord[]) {
     setRecords(next);
@@ -349,8 +382,18 @@ export default function WorkshopMasterPage() {
 
   function openWorkshop(record: WorkshopRecord) {
     setRegistrations(readLocalArray<RegistrationEntry>(REGISTRATION_STORAGE_KEY));
+    try {
+      const saved = readLocalObject<Record<string, { filters?: ResponseFilterState; hideDuplicates?: boolean; showParticipants?: boolean }>>(WORKSHOP_RESPONSE_FILTERS_STORAGE_KEY);
+      const workshopState = saved[record.id];
+      setResponseFilters({ ...emptyResponseFilters, ...(workshopState?.filters ?? {}) });
+      setHideDuplicateParticipants(Boolean(workshopState?.hideDuplicates));
+      setShowParticipants(Boolean(workshopState?.showParticipants));
+    } catch {
+      setResponseFilters({ ...emptyResponseFilters });
+      setHideDuplicateParticipants(false);
+      setShowParticipants(false);
+    }
     setSelectedWorkshopId(record.id);
-    setShowParticipants(false);
   }
 
   function deleteRecord(id: string) {
@@ -372,15 +415,43 @@ export default function WorkshopMasterPage() {
   function sendResponseSummaryOnWhatsApp() {
     if (!selectedWorkshop) return;
 
+    const filteredCount = displayedParticipants.length;
+    const paidRows = displayedParticipants.filter((entry) => entry.status === "Paid");
+    const dueRows = displayedParticipants.filter((entry) => entry.status === "Due");
+    const totalPaid = displayedParticipants.reduce((sum, entry) => sum + Number(entry.amountPaid || 0), 0);
+    const totalDue = displayedParticipants.reduce((sum, entry) => sum + Number(entry.amountDue || 0), 0);
+    const todayFilteredCount = displayedParticipants.filter((entry) => isTodayInIndia(entry.createdAt)).length;
+    const filterParts = [
+      responseFilters.datePreset !== "all" ? `Date: ${responseFilters.datePreset === "custom" ? `${responseFilters.fromDate || "start"} to ${responseFilters.toDate || "now"}` : responseFilters.datePreset}` : "",
+      responseFilters.fromTime || responseFilters.toTime ? `Time: ${responseFilters.fromTime || "00:00"}-${responseFilters.toTime || "23:59"}` : "",
+      responseFilters.question && responseFilters.answer.trim() ? `${responseFilters.question} ${responseFilters.answerOperator.replaceAll("_", " ")} "${responseFilters.answer.trim()}"` : "",
+      hideDuplicateParticipants ? "Duplicates hidden" : ""
+    ].filter(Boolean);
+    const recentRows = displayedParticipants.slice(0, 10).map((entry, index) => `${index + 1}. ${entry.fullName} - ${entry.mobile} - ${entry.status}`);
     const message = [
       "*Workshop Registration Summary*",
       "",
       `Workshop: ${selectedWorkshop.name}`,
-      `Total Registrations: ${selectedParticipants.length}`,
-      `Today's Registrations: ${todayRegistrationCount}`
+      `Batch: ${selectedWorkshop.batch || "Main Batch"}`,
+      `Facilitator: ${selectedWorkshop.facilitator}`,
+      "",
+      `Filtered Users: ${filteredCount} of ${selectedParticipants.length}`,
+      `Today's Filtered: ${todayFilteredCount}`,
+      `Today's Total: ${todayRegistrationCount}`,
+      `Paid Users: ${paidRows.length}`,
+      `Due Users: ${dueRows.length}`,
+      `Paid Amount: INR ${totalPaid.toLocaleString("en-IN")}`,
+      `Due Amount: INR ${totalDue.toLocaleString("en-IN")}`,
+      "",
+      `Filters: ${filterParts.length ? filterParts.join(" | ") : "No filters"}`,
+      "",
+      recentRows.length ? "*Latest visible users*" : "",
+      ...recentRows,
+      filteredCount > recentRows.length ? `...and ${filteredCount - recentRows.length} more` : ""
     ].join("\n");
 
     window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, "_blank", "noopener,noreferrer");
+    setMessage(`WhatsApp summary prepared for ${filteredCount} filtered users.`);
   }
 
   function buildWorkshopRecord(id: string): WorkshopRecord {
@@ -988,11 +1059,11 @@ export default function WorkshopMasterPage() {
                   <button
                     className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white hover:bg-emerald-700"
                     onClick={sendResponseSummaryOnWhatsApp}
-                    title="Send registration summary on WhatsApp"
+                    title="Share the currently filtered registration summary on WhatsApp"
                     type="button"
                   >
                     <MessageCircle className="size-4" />
-                    Send Summary
+                    Share Filtered Summary
                   </button>
                   <button
                     className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50"
@@ -1028,11 +1099,20 @@ export default function WorkshopMasterPage() {
                 <MiniStat label="Users" value={displayedParticipants.length} />
                 <MiniStat label="Paid" value={displayedParticipants.filter((entry) => entry.status === "Paid").length} />
                 <MiniStat label="Due" value={displayedParticipants.filter((entry) => entry.status === "Due").length} />
+                {activeParticipantFilterCount ? <MiniStat label="Saved filters" value={activeParticipantFilterCount} /> : null}
               </div>
 
               {showParticipants ? (
                 <div className="mt-4 rounded-2xl border border-slate-200 bg-white">
-                  <div className="flex flex-wrap justify-end gap-2 border-b border-slate-200 p-3"><AdvancedResponseFilters filters={responseFilters} onChange={setResponseFilters} questions={participantQuestions} resultCount={displayedParticipants.length} totalCount={selectedParticipants.length} /><DuplicateResponseFilter checked={hideDuplicateParticipants} onChange={setHideDuplicateParticipants} rawCount={filteredParticipants.length} visibleCount={displayedParticipants.length} /></div>
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 p-3">
+                    <p className="text-xs font-bold text-slate-500">
+                      Filters stay saved for this workshop. WhatsApp summary uses the visible filtered data.
+                    </p>
+                    <div className="flex flex-wrap justify-end gap-2">
+                      <AdvancedResponseFilters filters={responseFilters} onChange={setResponseFilters} questions={participantQuestions} resultCount={displayedParticipants.length} totalCount={selectedParticipants.length} />
+                      <DuplicateResponseFilter checked={hideDuplicateParticipants} onChange={setHideDuplicateParticipants} rawCount={filteredParticipants.length} visibleCount={displayedParticipants.length} />
+                    </div>
+                  </div>
                   <div className="overflow-x-auto">
                   <table className="min-w-[1020px] w-full text-left text-sm">
                     <thead className="bg-slate-50 text-xs uppercase text-slate-500">
