@@ -96,6 +96,21 @@ function normalizedBatch(value?: string) {
   return String(value ?? "").trim().toLowerCase();
 }
 
+function sessionRegistrationCutoff(session: AttendanceSession, sessionEntries: AttendanceEntry[]) {
+  if (!session.sessionDate) return null;
+  if (session.endTime?.trim()) {
+    const scheduledCutoff = new Date(`${session.sessionDate}T${session.endTime.trim()}`);
+    return Number.isNaN(scheduledCutoff.getTime()) ? null : scheduledCutoff;
+  }
+  const lastCheckIn = sessionEntries
+    .map((entry) => new Date(entry.submittedAt))
+    .filter((date) => !Number.isNaN(date.getTime()) && date.toLocaleDateString("en-CA") === session.sessionDate)
+    .sort((a, b) => b.getTime() - a.getTime())[0];
+  if (lastCheckIn) return lastCheckIn;
+  const cutoff = new Date(`${session.sessionDate}T23:59:59.999`);
+  return Number.isNaN(cutoff.getTime()) ? null : cutoff;
+}
+
 export default function WorkshopAttendancePage() {
   const [workshops, setWorkshops] = useState<WorkshopRecord[]>([]);
   const [sessions, setSessions] = useState<AttendanceSession[]>([]);
@@ -160,6 +175,7 @@ export default function WorkshopAttendancePage() {
   const selectedAnswerOptions = selectedSession?.fields.find((field) => field.label === responseFilters.question)?.options?.filter(Boolean) ?? [];
   const totalAttendees = new Set(entries.map((entry) => `${entry.workshopId}-${entry.mobile}`)).size;
   const link = selectedSession ? attendanceLink(selectedSession.slug) : "";
+  const registrationCutoff = selectedSession ? sessionRegistrationCutoff(selectedSession, selectedEntries) : null;
   const comparison = useMemo(() => {
     if (!selectedWorkshop || !selectedSession) {
       return { registered: [] as RegistrationEntry[], attended: [] as Array<{ attendance: AttendanceEntry; registration: RegistrationEntry }>, absent: [] as RegistrationEntry[], walkIns: [] as AttendanceEntry[] };
@@ -169,10 +185,16 @@ export default function WorkshopAttendancePage() {
       const registrationBatch = normalizedBatch(registration.batch);
       return !sessionBatch || !registrationBatch || sessionBatch === registrationBatch;
     };
-    const exactWorkshopRecords = registrations.filter((registration) => registration.workshopId === selectedWorkshop.id);
+    const registeredBeforeSessionEnded = (registration: RegistrationEntry) => {
+      if (!registrationCutoff) return true;
+      const registeredAt = new Date(registration.createdAt);
+      return !Number.isNaN(registeredAt.getTime()) && registeredAt.getTime() <= registrationCutoff.getTime();
+    };
+    const eligibleRegistrations = registrations.filter(registeredBeforeSessionEnded);
+    const exactWorkshopRecords = eligibleRegistrations.filter((registration) => registration.workshopId === selectedWorkshop.id);
     const exactWorkshop = exactWorkshopRecords.filter(batchMatches);
     const workshopTitle = selectedWorkshop.name.trim().toLowerCase();
-    const candidates = exactWorkshopRecords.length ? exactWorkshop : registrations.filter((registration) => (
+    const candidates = exactWorkshopRecords.length ? exactWorkshop : eligibleRegistrations.filter((registration) => (
       registration.workshopTitle.trim().toLowerCase() === workshopTitle && batchMatches(registration)
     ));
     const uniqueRegistrations = new Map<string, RegistrationEntry>();
@@ -210,7 +232,7 @@ export default function WorkshopAttendancePage() {
     });
     const walkIns = Array.from(uniqueAttendance.values()).filter((entry) => !consumedAttendanceIds.has(entry.id));
     return { registered: Array.from(uniqueRegistrations.values()), attended, absent, walkIns };
-  }, [registrations, selectedEntries, selectedSession, selectedWorkshop]);
+  }, [registrationCutoff, registrations, selectedEntries, selectedSession, selectedWorkshop]);
   const attendanceRate = comparison.registered.length ? Math.round((comparison.attended.length / comparison.registered.length) * 1000) / 10 : 0;
 
   useEffect(() => {
@@ -604,7 +626,9 @@ export default function WorkshopAttendancePage() {
                   <div>
                     <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-700">Registration Comparison</p>
                     <h4 className="mt-1 text-lg font-black text-slate-950">Attendance follow-up</h4>
-                    <p className="mt-1 text-xs font-semibold text-slate-500">Registration mobiles are matched after removing +91, 91, leading zero, spaces and hyphens.</p>
+                    <p className="mt-1 text-xs font-semibold text-slate-500">
+                      Only registrations received by {registrationCutoff ? registrationCutoff.toLocaleString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "the session date"} are included. Mobiles are matched after removing +91, 91, leading zero, spaces and hyphens.
+                    </p>
                   </div>
                   <button className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-black text-slate-700 hover:bg-slate-50 disabled:opacity-40" disabled={comparison[comparisonFilter === "walk_ins" ? "walkIns" : comparisonFilter].length === 0} onClick={exportComparisonCsv} type="button">
                     <Download className="size-4" />
