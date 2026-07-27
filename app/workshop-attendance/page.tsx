@@ -5,15 +5,17 @@ import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
 import { DuplicateResponseFilter } from "@/components/duplicate-response-filter";
 import { AdvancedResponseFilters } from "@/components/advanced-response-filters";
 import { hydrateLiveState, readLocalArray, saveLiveState } from "@/lib/live-state";
-import type { AttendanceEntry, AttendanceSession, BuilderField, BuilderFieldType, BuilderVisibilityOperator } from "@/lib/types";
+import type { AttendanceEntry, AttendanceSession, BuilderField, BuilderFieldType, BuilderVisibilityOperator, RegistrationEntry } from "@/lib/types";
 import { generateId } from "@/lib/utils";
 import { publicFormSlug } from "@/lib/public-slug";
 import { hideDuplicateResponses } from "@/lib/response-dedupe";
 import { applyResponseFilters, emptyResponseFilters, responseQuestionOptions, type ResponseFilterState } from "@/lib/response-filters";
-import { ArrowDown, ArrowUp, BarChart3, CalendarDays, CheckSquare, Circle, Copy, Download, ExternalLink, Eye, Heading, Image as ImageIcon, Laptop, LayoutTemplate, Mail, Palette, Plus, QrCode, RefreshCw, Save, Search, Settings2, Smartphone, Star, Trash2, Type, Upload, UsersRound, Video, X } from "lucide-react";
+import { ArrowDown, ArrowUp, BarChart3, CalendarDays, CheckSquare, Circle, Copy, Download, ExternalLink, Eye, Heading, Image as ImageIcon, Laptop, LayoutTemplate, Mail, MessageCircle, Palette, Phone, Plus, QrCode, RefreshCw, Save, Search, Settings2, Smartphone, Star, Trash2, Type, Upload, UserCheck, UsersRound, UserX, Video, X } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 const WORKSHOP_MASTER_STORAGE_KEY = "cfl_workshop_master_records_v1";
+const REGISTRATION_STORAGE_KEY = "cfl_registrations_v1";
 const ATTENDANCE_SESSIONS_STORAGE_KEY = "cfl_attendance_sessions_v1";
 const ATTENDANCE_ENTRIES_STORAGE_KEY = "cfl_attendance_entries_v1";
 
@@ -48,6 +50,7 @@ const fieldTypeMeta: Record<BuilderFieldType, { icon: typeof Type; label: string
 const addableTypes: BuilderFieldType[] = ["short_text", "paragraph", "email", "mobile", "number", "date", "time", "dropdown", "radio", "checkbox", "yes_no", "rating", "consent", "heading", "divider"];
 type BuilderTab = "build" | "logic" | "design" | "share";
 type SessionView = "responses" | "edit";
+type ComparisonFilter = "registered" | "attended" | "absent" | "walk_ins";
 
 function slugify(value: string) {
   return value.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
@@ -72,10 +75,33 @@ function formatDate(value?: string) {
   return new Date(`${value}T00:00:00`).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
 }
 
+function normalizedMobile(value?: string) {
+  const digits = String(value ?? "").replace(/\D/g, "");
+  const mobile = digits.length >= 10 ? digits.slice(-10) : digits;
+  return /^[6-9]\d{9}$/.test(mobile) ? mobile : "";
+}
+
+function normalizedEmail(value?: string) {
+  return String(value ?? "").trim().toLowerCase();
+}
+
+function contactKey(mobile?: string, email?: string) {
+  const phone = normalizedMobile(mobile);
+  if (phone) return `mobile:${phone}`;
+  const mail = normalizedEmail(email);
+  return mail ? `email:${mail}` : "";
+}
+
+function normalizedBatch(value?: string) {
+  return String(value ?? "").trim().toLowerCase();
+}
+
 export default function WorkshopAttendancePage() {
   const [workshops, setWorkshops] = useState<WorkshopRecord[]>([]);
   const [sessions, setSessions] = useState<AttendanceSession[]>([]);
   const [entries, setEntries] = useState<AttendanceEntry[]>([]);
+  const [registrations, setRegistrations] = useState<RegistrationEntry[]>([]);
+  const [comparisonFilter, setComparisonFilter] = useState<ComparisonFilter>("absent");
   const [hideDuplicates, setHideDuplicates] = useState(false);
   const [responseFilters, setResponseFilters] = useState<ResponseFilterState>({ ...emptyResponseFilters });
   const [query, setQuery] = useState("");
@@ -98,9 +124,11 @@ export default function WorkshopAttendancePage() {
     const loadedWorkshops = readLocalArray<WorkshopRecord>(WORKSHOP_MASTER_STORAGE_KEY).filter((item) => !item.archived);
     const loadedSessions = readLocalArray<AttendanceSession>(ATTENDANCE_SESSIONS_STORAGE_KEY);
     const loadedEntries = readLocalArray<AttendanceEntry>(ATTENDANCE_ENTRIES_STORAGE_KEY);
+    const loadedRegistrations = readLocalArray<RegistrationEntry>(REGISTRATION_STORAGE_KEY);
     setWorkshops(loadedWorkshops);
     setSessions(loadedSessions);
     setEntries(loadedEntries);
+    setRegistrations(loadedRegistrations);
     setSelectedWorkshopId((current) => current || loadedWorkshops[0]?.id || "");
     setSelectedSessionId((current) => current || loadedSessions[0]?.id || "");
   }
@@ -132,6 +160,58 @@ export default function WorkshopAttendancePage() {
   const selectedAnswerOptions = selectedSession?.fields.find((field) => field.label === responseFilters.question)?.options?.filter(Boolean) ?? [];
   const totalAttendees = new Set(entries.map((entry) => `${entry.workshopId}-${entry.mobile}`)).size;
   const link = selectedSession ? attendanceLink(selectedSession.slug) : "";
+  const comparison = useMemo(() => {
+    if (!selectedWorkshop || !selectedSession) {
+      return { registered: [] as RegistrationEntry[], attended: [] as Array<{ attendance: AttendanceEntry; registration: RegistrationEntry }>, absent: [] as RegistrationEntry[], walkIns: [] as AttendanceEntry[] };
+    }
+    const sessionBatch = normalizedBatch(selectedSession.batch);
+    const batchMatches = (registration: RegistrationEntry) => {
+      const registrationBatch = normalizedBatch(registration.batch);
+      return !sessionBatch || !registrationBatch || sessionBatch === registrationBatch;
+    };
+    const exactWorkshopRecords = registrations.filter((registration) => registration.workshopId === selectedWorkshop.id);
+    const exactWorkshop = exactWorkshopRecords.filter(batchMatches);
+    const workshopTitle = selectedWorkshop.name.trim().toLowerCase();
+    const candidates = exactWorkshopRecords.length ? exactWorkshop : registrations.filter((registration) => (
+      registration.workshopTitle.trim().toLowerCase() === workshopTitle && batchMatches(registration)
+    ));
+    const uniqueRegistrations = new Map<string, RegistrationEntry>();
+    candidates.forEach((registration) => {
+      const key = contactKey(registration.mobile, registration.email) || `registration:${registration.id}`;
+      const current = uniqueRegistrations.get(key);
+      if (!current || new Date(registration.createdAt) < new Date(current.createdAt)) uniqueRegistrations.set(key, registration);
+    });
+    const uniqueAttendance = new Map<string, AttendanceEntry>();
+    selectedEntries.forEach((entry) => {
+      const key = contactKey(entry.mobile, entry.email) || `attendance:${entry.id}`;
+      const current = uniqueAttendance.get(key);
+      if (!current || new Date(entry.submittedAt) < new Date(current.submittedAt)) uniqueAttendance.set(key, entry);
+    });
+    const attendanceByMobile = new Map<string, AttendanceEntry>();
+    const attendanceByEmail = new Map<string, AttendanceEntry>();
+    uniqueAttendance.forEach((entry) => {
+      const mobile = normalizedMobile(entry.mobile);
+      const email = normalizedEmail(entry.email);
+      if (mobile) attendanceByMobile.set(mobile, entry);
+      if (email) attendanceByEmail.set(email, entry);
+    });
+    const consumedAttendanceIds = new Set<string>();
+    const attended: Array<{ attendance: AttendanceEntry; registration: RegistrationEntry }> = [];
+    const absent: RegistrationEntry[] = [];
+    uniqueRegistrations.forEach((registration) => {
+      const mobile = normalizedMobile(registration.mobile);
+      const email = normalizedEmail(registration.email);
+      const attendance = (mobile ? attendanceByMobile.get(mobile) : undefined) ?? (email ? attendanceByEmail.get(email) : undefined);
+      if (attendance && !consumedAttendanceIds.has(attendance.id)) {
+        attended.push({ attendance, registration });
+        consumedAttendanceIds.add(attendance.id);
+      }
+      else absent.push(registration);
+    });
+    const walkIns = Array.from(uniqueAttendance.values()).filter((entry) => !consumedAttendanceIds.has(entry.id));
+    return { registered: Array.from(uniqueRegistrations.values()), attended, absent, walkIns };
+  }, [registrations, selectedEntries, selectedSession, selectedWorkshop]);
+  const attendanceRate = comparison.registered.length ? Math.round((comparison.attended.length / comparison.registered.length) * 1000) / 10 : 0;
 
   useEffect(() => {
     let cancelled = false;
@@ -339,6 +419,67 @@ export default function WorkshopAttendancePage() {
     URL.revokeObjectURL(url);
   }
 
+  function exportComparisonCsv() {
+    if (!selectedSession || !selectedWorkshop) return;
+    const rows = comparisonFilter === "registered"
+      ? comparison.registered.map((registration) => ({
+          name: registration.fullName,
+          mobile: normalizedMobile(registration.mobile),
+          email: registration.email ?? "",
+          city: registration.city ?? "",
+          registeredAt: registration.createdAt,
+          attendanceStatus: comparison.attended.some((item) => item.registration.id === registration.id) ? "Attended" : "Absent"
+        }))
+      : comparisonFilter === "attended"
+        ? comparison.attended.map(({ attendance, registration }) => ({
+            name: registration.fullName,
+            mobile: normalizedMobile(registration.mobile),
+            email: registration.email ?? "",
+            city: registration.city ?? "",
+            registeredAt: registration.createdAt,
+            attendanceStatus: attendance.status || "checked_in"
+          }))
+        : comparisonFilter === "absent"
+          ? comparison.absent.map((registration) => ({
+              name: registration.fullName,
+              mobile: normalizedMobile(registration.mobile),
+              email: registration.email ?? "",
+              city: registration.city ?? "",
+              registeredAt: registration.createdAt,
+              attendanceStatus: "Absent"
+            }))
+          : comparison.walkIns.map((attendance) => ({
+              name: attendance.attendeeName,
+              mobile: normalizedMobile(attendance.mobile),
+              email: attendance.email ?? "",
+              city: attendance.city ?? "",
+              registeredAt: attendance.submittedAt,
+              attendanceStatus: "Walk-in"
+            }));
+    const headers = ["Name", "Mobile", "Email", "City", "Workshop", "Batch", "Session", "Session Date", "Registered / Checked-in At", "Status"];
+    const values = rows.map((row) => [
+      row.name,
+      row.mobile,
+      row.email,
+      row.city,
+      selectedWorkshop.name,
+      selectedSession.batch || selectedWorkshop.batch || "Main Batch",
+      selectedSession.title,
+      selectedSession.sessionDate,
+      row.registeredAt ? new Date(row.registeredAt).toLocaleString("en-IN") : "",
+      row.attendanceStatus
+    ]);
+    const escapeCell = (value: string) => `"${String(value).replace(/"/g, '""')}"`;
+    const csv = `\uFEFF${[headers, ...values].map((row) => row.map(escapeCell).join(",")).join("\n")}`;
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `${comparisonFilter}-${selectedSession.slug}.csv`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <AdminPlatformShell activeLabel="Workshop Attendance" description="Create session-wise attendance forms and track who attended every workshop session." title="Workshop Attendance">
       <section className="min-w-0 space-y-4">
@@ -457,6 +598,48 @@ export default function WorkshopAttendancePage() {
                 <Metric label="Visible Responses" value={displayedEntries.length} />
                 <Metric label="Form Fields" value={selectedSession.fields.length} />
               </div>
+
+              <section className="mt-5 border-t border-slate-100 pt-5">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-700">Registration Comparison</p>
+                    <h4 className="mt-1 text-lg font-black text-slate-950">Attendance follow-up</h4>
+                    <p className="mt-1 text-xs font-semibold text-slate-500">Registration mobiles are matched after removing +91, 91, leading zero, spaces and hyphens.</p>
+                  </div>
+                  <button className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-black text-slate-700 hover:bg-slate-50 disabled:opacity-40" disabled={comparison[comparisonFilter === "walk_ins" ? "walkIns" : comparisonFilter].length === 0} onClick={exportComparisonCsv} type="button">
+                    <Download className="size-4" />
+                    Export {comparisonFilter === "walk_ins" ? "Walk-ins" : comparisonFilter.charAt(0).toUpperCase() + comparisonFilter.slice(1)}
+                  </button>
+                </div>
+
+                <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+                  <ComparisonMetric icon={UsersRound} label="Registered" tone="slate" value={comparison.registered.length} />
+                  <ComparisonMetric icon={UserCheck} label="Attended" tone="emerald" value={comparison.attended.length} />
+                  <ComparisonMetric icon={UserX} label="Absent" tone="rose" value={comparison.absent.length} />
+                  <ComparisonMetric icon={Plus} label="Walk-ins" tone="amber" value={comparison.walkIns.length} />
+                  <ComparisonMetric icon={BarChart3} label="Attendance Rate" suffix="%" tone="indigo" value={attendanceRate} />
+                </div>
+
+                <div className="mt-4 flex gap-2 overflow-x-auto pb-1" role="tablist">
+                  {([
+                    ["registered", "Registered", comparison.registered.length],
+                    ["attended", "Attended", comparison.attended.length],
+                    ["absent", "Absent", comparison.absent.length],
+                    ["walk_ins", "Walk-ins", comparison.walkIns.length]
+                  ] as Array<[ComparisonFilter, string, number]>).map(([value, label, count]) => (
+                    <button aria-selected={comparisonFilter === value} className={`shrink-0 rounded-lg px-3 py-2 text-xs font-black ${comparisonFilter === value ? "bg-slate-950 text-white" : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`} key={value} onClick={() => setComparisonFilter(value)} role="tab" type="button">
+                      {label} <span className="ml-1 opacity-70">{count}</span>
+                    </button>
+                  ))}
+                </div>
+
+                <ComparisonTable
+                  comparison={comparison}
+                  filter={comparisonFilter}
+                  sessionTitle={selectedSession.title}
+                  workshopName={selectedWorkshop?.name || selectedSession.workshopName}
+                />
+              </section>
 
               <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-5">
                 <div><h4 className="text-lg font-black text-slate-950">Attendance Data</h4><p className="mt-1 text-xs font-semibold text-slate-500">Filter, review and export this session's responses.</p></div>
@@ -745,6 +928,120 @@ export default function WorkshopAttendancePage() {
       <ConfirmDialog confirmLabel="Delete Response" description="This attendance response will be removed permanently." onCancel={() => setDeleteEntryTarget(null)} onConfirm={deleteEntry} open={Boolean(deleteEntryTarget)} title="Delete attendance response?">{deleteEntryTarget?.attendeeName}</ConfirmDialog>
       {entryDetail ? <EntryDetailDialog entry={entryDetail} onClose={() => setEntryDetail(null)} /> : null}
     </AdminPlatformShell>
+  );
+}
+
+function ComparisonMetric({ icon: Icon, label, suffix = "", tone, value }: { icon: LucideIcon; label: string; suffix?: string; tone: "amber" | "emerald" | "indigo" | "rose" | "slate"; value: number }) {
+  const tones = {
+    amber: "bg-amber-50 text-amber-700",
+    emerald: "bg-emerald-50 text-emerald-700",
+    indigo: "bg-indigo-50 text-indigo-700",
+    rose: "bg-rose-50 text-rose-700",
+    slate: "bg-slate-100 text-slate-700"
+  };
+  return (
+    <div className="flex min-h-20 items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
+      <span className={`grid size-10 shrink-0 place-items-center rounded-lg ${tones[tone]}`}><Icon className="size-5" /></span>
+      <div className="min-w-0">
+        <p className="truncate text-xs font-black uppercase tracking-[0.1em] text-slate-400">{label}</p>
+        <p className="mt-0.5 text-xl font-black text-slate-950">{value}{suffix}</p>
+      </div>
+    </div>
+  );
+}
+
+function ComparisonTable({
+  comparison,
+  filter,
+  sessionTitle,
+  workshopName
+}: {
+  comparison: {
+    registered: RegistrationEntry[];
+    attended: Array<{ attendance: AttendanceEntry; registration: RegistrationEntry }>;
+    absent: RegistrationEntry[];
+    walkIns: AttendanceEntry[];
+  };
+  filter: ComparisonFilter;
+  sessionTitle: string;
+  workshopName: string;
+}) {
+  const registrations = filter === "registered" ? comparison.registered : filter === "absent" ? comparison.absent : [];
+  const count = filter === "attended" ? comparison.attended.length : filter === "walk_ins" ? comparison.walkIns.length : registrations.length;
+  const attendedRegistrationIds = new Set(comparison.attended.map((item) => item.registration.id));
+  const followUpMessage = (name: string) => encodeURIComponent(`Hello ${name}, you registered for ${workshopName}, but we missed you in ${sessionTitle}. Please let us know if you need any help.`);
+
+  if (count === 0) {
+    return (
+      <div className="mt-3 grid min-h-32 place-items-center rounded-xl border border-dashed border-slate-200 bg-slate-50 px-5 text-center">
+        <div><UserCheck className="mx-auto size-7 text-slate-300" /><p className="mt-2 text-sm font-black text-slate-700">No {filter === "walk_ins" ? "walk-ins" : filter} found</p></div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-3 w-full overflow-auto rounded-xl border border-slate-200">
+      <table className="w-full min-w-[900px] text-left text-sm">
+        <thead className="bg-slate-50 text-xs uppercase tracking-[0.1em] text-slate-400">
+          <tr><th className="px-4 py-3">Name</th><th className="px-4 py-3">Mobile</th><th className="px-4 py-3">Email / City</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Date</th><th className="px-4 py-3">Follow-up</th></tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {filter === "attended" ? comparison.attended.map(({ attendance, registration }) => {
+            const mobile = normalizedMobile(registration.mobile || attendance.mobile);
+            return (
+              <tr className="hover:bg-slate-50" key={registration.id}>
+                <td className="px-4 py-3 font-bold text-slate-900">{registration.fullName || attendance.attendeeName}</td>
+                <td className="px-4 py-3 font-semibold text-slate-600">{mobile || "-"}</td>
+                <td className="px-4 py-3"><p className="font-semibold text-slate-600">{registration.email || attendance.email || "-"}</p><p className="mt-0.5 text-xs text-slate-400">{registration.city || attendance.city || "-"}</p></td>
+                <td className="px-4 py-3"><StatusBadge label="Attended" tone="emerald" /></td>
+                <td className="px-4 py-3 font-semibold text-slate-500">{attendance.submittedAt ? new Date(attendance.submittedAt).toLocaleString("en-IN") : "-"}</td>
+                <td className="px-4 py-3"><ContactActions message={followUpMessage(registration.fullName)} mobile={mobile} name={registration.fullName} /></td>
+              </tr>
+            );
+          }) : filter === "walk_ins" ? comparison.walkIns.map((attendance) => {
+            const mobile = normalizedMobile(attendance.mobile);
+            return (
+              <tr className="hover:bg-slate-50" key={attendance.id}>
+                <td className="px-4 py-3 font-bold text-slate-900">{attendance.attendeeName}</td>
+                <td className="px-4 py-3 font-semibold text-slate-600">{mobile || "-"}</td>
+                <td className="px-4 py-3"><p className="font-semibold text-slate-600">{attendance.email || "-"}</p><p className="mt-0.5 text-xs text-slate-400">{attendance.city || "-"}</p></td>
+                <td className="px-4 py-3"><StatusBadge label="Walk-in" tone="amber" /></td>
+                <td className="px-4 py-3 font-semibold text-slate-500">{attendance.submittedAt ? new Date(attendance.submittedAt).toLocaleString("en-IN") : "-"}</td>
+                <td className="px-4 py-3"><ContactActions message={followUpMessage(attendance.attendeeName)} mobile={mobile} name={attendance.attendeeName} /></td>
+              </tr>
+            );
+          }) : registrations.map((registration) => {
+            const mobile = normalizedMobile(registration.mobile);
+            const attended = attendedRegistrationIds.has(registration.id);
+            return (
+              <tr className="hover:bg-slate-50" key={registration.id}>
+                <td className="px-4 py-3 font-bold text-slate-900">{registration.fullName}</td>
+                <td className="px-4 py-3 font-semibold text-slate-600">{mobile || "-"}</td>
+                <td className="px-4 py-3"><p className="font-semibold text-slate-600">{registration.email || "-"}</p><p className="mt-0.5 text-xs text-slate-400">{registration.city || "-"}</p></td>
+                <td className="px-4 py-3"><StatusBadge label={attended ? "Attended" : "Absent"} tone={attended ? "emerald" : "rose"} /></td>
+                <td className="px-4 py-3 font-semibold text-slate-500">{registration.createdAt ? new Date(registration.createdAt).toLocaleString("en-IN") : "-"}</td>
+                <td className="px-4 py-3"><ContactActions message={followUpMessage(registration.fullName)} mobile={mobile} name={registration.fullName} /></td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function StatusBadge({ label, tone }: { label: string; tone: "amber" | "emerald" | "rose" }) {
+  const tones = { amber: "bg-amber-50 text-amber-700", emerald: "bg-emerald-50 text-emerald-700", rose: "bg-rose-50 text-rose-700" };
+  return <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-black ${tones[tone]}`}>{label}</span>;
+}
+
+function ContactActions({ message, mobile, name }: { message: string; mobile: string; name: string }) {
+  if (!mobile) return <span className="text-xs font-semibold text-slate-400">No valid mobile</span>;
+  return (
+    <div className="flex gap-2">
+      <a aria-label={`Call ${name}`} className="grid size-9 place-items-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50" href={`tel:+91${mobile}`} title="Call"><Phone className="size-4" /></a>
+      <a aria-label={`WhatsApp ${name}`} className="grid size-9 place-items-center rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100" href={`https://wa.me/91${mobile}?text=${message}`} rel="noreferrer" target="_blank" title="WhatsApp"><MessageCircle className="size-4" /></a>
+    </div>
   );
 }
 
