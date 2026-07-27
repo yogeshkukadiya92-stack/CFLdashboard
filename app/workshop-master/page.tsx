@@ -220,10 +220,6 @@ export default function WorkshopMasterPage() {
       entry.workshopTitle.trim().toLowerCase() === selectedName
     );
   }, [registrations, selectedWorkshop]);
-  const todayRegistrationCount = useMemo(
-    () => selectedParticipants.filter((entry) => isTodayInIndia(entry.createdAt)).length,
-    [selectedParticipants]
-  );
   const participantFilterRecords = useMemo(() => selectedParticipants.map((entry) => ({ ...entry, answers: { "Full Name": entry.fullName, Mobile: entry.mobile, Email: entry.email, City: entry.city, "Payment Status": entry.status, Source: entry.source ?? "Registration Link", ...(entry.answers ?? {}) }, submittedAt: entry.createdAt })), [selectedParticipants]);
   const filteredParticipants = useMemo(() => applyResponseFilters(participantFilterRecords, responseFilters), [participantFilterRecords, responseFilters]);
   const displayedParticipants = useMemo(() => hideDuplicateParticipants ? hideDuplicateResponses(filteredParticipants, {
@@ -415,43 +411,18 @@ export default function WorkshopMasterPage() {
   function sendResponseSummaryOnWhatsApp() {
     if (!selectedWorkshop) return;
 
-    const filteredCount = displayedParticipants.length;
-    const paidRows = displayedParticipants.filter((entry) => entry.status === "Paid");
-    const dueRows = displayedParticipants.filter((entry) => entry.status === "Due");
-    const totalPaid = displayedParticipants.reduce((sum, entry) => sum + Number(entry.amountPaid || 0), 0);
-    const totalDue = displayedParticipants.reduce((sum, entry) => sum + Number(entry.amountDue || 0), 0);
-    const todayFilteredCount = displayedParticipants.filter((entry) => isTodayInIndia(entry.createdAt)).length;
-    const filterParts = [
-      responseFilters.datePreset !== "all" ? `Date: ${responseFilters.datePreset === "custom" ? `${responseFilters.fromDate || "start"} to ${responseFilters.toDate || "now"}` : responseFilters.datePreset}` : "",
-      responseFilters.fromTime || responseFilters.toTime ? `Time: ${responseFilters.fromTime || "00:00"}-${responseFilters.toTime || "23:59"}` : "",
-      responseFilters.question && responseFilters.answer.trim() ? `${responseFilters.question} ${responseFilters.answerOperator.replaceAll("_", " ")} "${responseFilters.answer.trim()}"` : "",
-      hideDuplicateParticipants ? "Duplicates hidden" : ""
-    ].filter(Boolean);
-    const recentRows = displayedParticipants.slice(0, 10).map((entry, index) => `${index + 1}. ${entry.fullName} - ${entry.mobile} - ${entry.status}`);
+    const totalRegistrations = selectedParticipants.length;
+    const todaysRegistrations = selectedParticipants.filter((entry) => isTodayInIndia(entry.createdAt)).length;
     const message = [
-      "*Workshop Registration Summary*",
+      "Workshop Registration Summary",
       "",
       `Workshop: ${selectedWorkshop.name}`,
-      `Batch: ${selectedWorkshop.batch || "Main Batch"}`,
-      `Facilitator: ${selectedWorkshop.facilitator}`,
-      "",
-      `Filtered Users: ${filteredCount} of ${selectedParticipants.length}`,
-      `Today's Filtered: ${todayFilteredCount}`,
-      `Today's Total: ${todayRegistrationCount}`,
-      `Paid Users: ${paidRows.length}`,
-      `Due Users: ${dueRows.length}`,
-      `Paid Amount: INR ${totalPaid.toLocaleString("en-IN")}`,
-      `Due Amount: INR ${totalDue.toLocaleString("en-IN")}`,
-      "",
-      `Filters: ${filterParts.length ? filterParts.join(" | ") : "No filters"}`,
-      "",
-      recentRows.length ? "*Latest visible users*" : "",
-      ...recentRows,
-      filteredCount > recentRows.length ? `...and ${filteredCount - recentRows.length} more` : ""
+      `Total Registrations: ${totalRegistrations}`,
+      `Today's Registrations: ${todaysRegistrations}`
     ].join("\n");
 
     window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, "_blank", "noopener,noreferrer");
-    setMessage(`WhatsApp summary prepared for ${filteredCount} filtered users.`);
+    setMessage("Workshop registration summary is ready to share.");
   }
 
   function buildWorkshopRecord(id: string): WorkshopRecord {
@@ -1059,11 +1030,11 @@ export default function WorkshopMasterPage() {
                   <button
                     className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white hover:bg-emerald-700"
                     onClick={sendResponseSummaryOnWhatsApp}
-                    title="Share the currently filtered registration summary on WhatsApp"
+                    title="Share workshop registration summary on WhatsApp"
                     type="button"
                   >
                     <MessageCircle className="size-4" />
-                    Share Filtered Summary
+                    Share Summary
                   </button>
                   <button
                     className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50"
@@ -1106,7 +1077,7 @@ export default function WorkshopMasterPage() {
                 <div className="mt-4 rounded-2xl border border-slate-200 bg-white">
                   <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 p-3">
                     <p className="text-xs font-bold text-slate-500">
-                      Filters stay saved for this workshop. WhatsApp summary uses the visible filtered data.
+                      Filters stay saved for this workshop. WhatsApp summary always uses the workshop's total and today's registrations.
                     </p>
                     <div className="flex flex-wrap justify-end gap-2">
                       <AdvancedResponseFilters filters={responseFilters} onChange={setResponseFilters} questions={participantQuestions} resultCount={displayedParticipants.length} totalCount={selectedParticipants.length} />
