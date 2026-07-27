@@ -411,8 +411,8 @@ export default function WorkshopMasterPage() {
   function sendResponseSummaryOnWhatsApp() {
     if (!selectedWorkshop) return;
 
-    const totalRegistrations = selectedParticipants.length;
-    const todaysRegistrations = selectedParticipants.filter((entry) => isTodayInIndia(entry.createdAt)).length;
+    const totalRegistrations = displayedParticipants.length;
+    const todaysRegistrations = displayedParticipants.filter((entry) => isTodayInIndia(entry.createdAt)).length;
     const message = [
       "Workshop Registration Summary",
       "",
@@ -1077,7 +1077,7 @@ export default function WorkshopMasterPage() {
                 <div className="mt-4 rounded-2xl border border-slate-200 bg-white">
                   <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 p-3">
                     <p className="text-xs font-bold text-slate-500">
-                      Filters stay saved for this workshop. WhatsApp summary always uses the workshop's total and today's registrations.
+                      Filters stay saved for this workshop. WhatsApp summary uses the same visible registrations shown below.
                     </p>
                     <div className="flex flex-wrap justify-end gap-2">
                       <AdvancedResponseFilters filters={responseFilters} onChange={setResponseFilters} questions={participantQuestions} resultCount={displayedParticipants.length} totalCount={selectedParticipants.length} />
