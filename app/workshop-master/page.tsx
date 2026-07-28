@@ -191,6 +191,56 @@ export default function WorkshopMasterPage() {
     hydrateLiveState().then(loadLocal);
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    let inFlight = false;
+    let etag = "";
+
+    function loadRegistrationsFromStorage(event?: StorageEvent) {
+      if (event && event.key !== REGISTRATION_STORAGE_KEY) return;
+      setRegistrations(readLocalArray<RegistrationEntry>(REGISTRATION_STORAGE_KEY));
+    }
+
+    async function syncRegistrations() {
+      if (cancelled || inFlight || document.hidden) return;
+      inFlight = true;
+      try {
+        const response = await fetch("/api/registrations/live", {
+          cache: "no-store",
+          headers: etag ? { "If-None-Match": etag } : undefined
+        });
+        if (response.status === 304 || !response.ok || cancelled) return;
+        const state = await response.json() as { dbEnabled?: boolean; registrations?: RegistrationEntry[] };
+        if (!state.dbEnabled || !Array.isArray(state.registrations)) return;
+        etag = response.headers.get("etag") ?? "";
+        window.localStorage.setItem(REGISTRATION_STORAGE_KEY, JSON.stringify(state.registrations));
+        setRegistrations(state.registrations);
+      } catch {
+        // Keep the last successful list visible while the next sync retries.
+      } finally {
+        inFlight = false;
+      }
+    }
+
+    function syncWhenVisible() {
+      if (!document.hidden) void syncRegistrations();
+    }
+
+    void syncRegistrations();
+    const interval = window.setInterval(syncRegistrations, 4000);
+    window.addEventListener("storage", loadRegistrationsFromStorage);
+    window.addEventListener("focus", syncWhenVisible);
+    document.addEventListener("visibilitychange", syncWhenVisible);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+      window.removeEventListener("storage", loadRegistrationsFromStorage);
+      window.removeEventListener("focus", syncWhenVisible);
+      document.removeEventListener("visibilitychange", syncWhenVisible);
+    };
+  }, []);
+
   const progress = useMemo(() => Math.round(([name, type, facilitator, group].filter(Boolean).length / 4) * 100), [facilitator, group, name, type]);
   const filteredRecords = useMemo(() => {
     const value = search.trim().toLowerCase();
