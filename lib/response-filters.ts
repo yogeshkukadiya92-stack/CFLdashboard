@@ -40,6 +40,12 @@ function endOfDay(date: Date) {
   return next;
 }
 
+function customBoundary(date: string, time: string, end: boolean) {
+  if (!date) return null;
+  const fallbackTime = end ? "23:59:59.999" : "00:00:00";
+  return new Date(`${date}T${time || fallbackTime}`);
+}
+
 function dateMatches(value: Date, filters: ResponseFilterState) {
   const now = new Date();
   if (filters.datePreset === "today") return value >= startOfDay(now) && value <= endOfDay(now);
@@ -54,8 +60,8 @@ function dateMatches(value: Date, filters: ResponseFilterState) {
     return value >= start && value <= endOfDay(now);
   }
   if (filters.datePreset === "custom") {
-    const from = filters.fromDate ? new Date(`${filters.fromDate}T00:00:00`) : null;
-    const to = filters.toDate ? new Date(`${filters.toDate}T23:59:59.999`) : null;
+    const from = customBoundary(filters.fromDate, filters.fromTime, false);
+    const to = customBoundary(filters.toDate, filters.toTime, true);
     if (from && value < from) return false;
     if (to && value > to) return false;
   }
@@ -63,14 +69,16 @@ function dateMatches(value: Date, filters: ResponseFilterState) {
 }
 
 function timeMatches(value: Date, filters: ResponseFilterState) {
-  if (!filters.fromTime && !filters.toTime) return true;
+  const fromTime = filters.datePreset === "custom" && filters.fromDate ? "" : filters.fromTime;
+  const toTime = filters.datePreset === "custom" && filters.toDate ? "" : filters.toTime;
+  if (!fromTime && !toTime) return true;
   const minutes = value.getHours() * 60 + value.getMinutes();
   const parse = (time: string) => {
     const [hours, mins] = time.split(":").map(Number);
     return hours * 60 + mins;
   };
-  if (filters.fromTime && minutes < parse(filters.fromTime)) return false;
-  if (filters.toTime && minutes > parse(filters.toTime)) return false;
+  if (fromTime && minutes < parse(fromTime)) return false;
+  if (toTime && minutes > parse(toTime)) return false;
   return true;
 }
 
