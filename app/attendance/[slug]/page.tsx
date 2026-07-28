@@ -123,6 +123,16 @@ export default function AttendanceFormPage() {
     });
   }
 
+  function submitAnotherResponse() {
+    setAutoRedirect(false);
+    setJoinUrl("");
+    setCountdown(0);
+    setMessage("");
+    setAnswers({});
+    setSuccess(false);
+    window.scrollTo({ behavior: "smooth", top: 0 });
+  }
+
   async function submitAttendance() {
     if (submitting) return;
     if (!session) return;
@@ -269,6 +279,15 @@ export default function AttendanceFormPage() {
                   {autoRedirect ? <button className="mt-3 text-xs font-black text-slate-500 hover:text-slate-800" onClick={() => setAutoRedirect(false)} type="button">Stay on this page</button> : null}
                 </>
               ) : <p className="mt-5 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-700">{session.noZoomMessage || "Attendance is saved. The Zoom link has not been configured for this session."}</p>}
+              <button
+                className="mt-4 inline-flex min-h-12 w-full items-center justify-center gap-2 border border-slate-200 bg-white px-5 py-3 text-sm font-black text-slate-700 hover:bg-slate-50"
+                onClick={submitAnotherResponse}
+                type="button"
+              >
+                <ClipboardCheck className="size-5" />
+                Submit another response
+              </button>
+              {!session.allowDuplicate ? <p className="mt-2 text-xs font-semibold text-slate-400">A mobile number can be recorded once for this session.</p> : null}
             </div>
           </section>
         </div>
