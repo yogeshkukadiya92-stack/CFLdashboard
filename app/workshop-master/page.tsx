@@ -176,6 +176,7 @@ export default function WorkshopMasterPage() {
   const [deleteTarget, setDeleteTarget] = useState<WorkshopRecord | null>(null);
   const [deleteResponseTarget, setDeleteResponseTarget] = useState<RegistrationEntry | null>(null);
   const [hideDuplicateParticipants, setHideDuplicateParticipants] = useState(false);
+  const [participantSearch, setParticipantSearch] = useState("");
   const [responseFilters, setResponseFilters] = useState<ResponseFilterState>({ ...emptyResponseFilters });
 
   useEffect(() => {
@@ -284,13 +285,22 @@ export default function WorkshopMasterPage() {
     submittedAt: entry.createdAt
   })), [selectedParticipants]);
   const filteredParticipants = useMemo(() => applyResponseFilters(participantFilterRecords, responseFilters), [participantFilterRecords, responseFilters]);
-  const displayedParticipants = useMemo(() => hideDuplicateParticipants ? hideDuplicateResponses(filteredParticipants, {
+  const searchedParticipants = useMemo(() => {
+    const query = participantSearch.trim().toLowerCase();
+    if (!query) return filteredParticipants;
+    const digits = query.replace(/\D/g, "");
+    return filteredParticipants.filter((entry) =>
+      entry.fullName.toLowerCase().includes(query) ||
+      (digits.length > 0 && entry.mobile.replace(/\D/g, "").includes(digits))
+    );
+  }, [filteredParticipants, participantSearch]);
+  const displayedParticipants = useMemo(() => hideDuplicateParticipants ? hideDuplicateResponses(searchedParticipants, {
     email: (entry) => entry.email,
     mobile: (entry) => entry.mobile,
     name: (entry) => entry.fullName,
     scope: (entry) => entry.workshopId || entry.workshopTitle,
     submittedAt: (entry) => entry.createdAt
-  }) : filteredParticipants, [filteredParticipants, hideDuplicateParticipants]);
+  }) : searchedParticipants, [hideDuplicateParticipants, searchedParticipants]);
   const participantQuestions = useMemo(() => responseQuestionOptions(participantFilterRecords), [participantFilterRecords]);
   const activeParticipantFilterCount = activeResponseFilterCount(responseFilters) + Number(hideDuplicateParticipants);
 
@@ -426,6 +436,7 @@ export default function WorkshopMasterPage() {
 
   function openWorkshop(record: WorkshopRecord) {
     setRegistrations(readLocalArray<RegistrationEntry>(REGISTRATION_STORAGE_KEY));
+    setParticipantSearch("");
     try {
       const saved = readLocalObject<Record<string, { filters?: ResponseFilterState; hideDuplicates?: boolean; showParticipants?: boolean }>>(WORKSHOP_RESPONSE_FILTERS_STORAGE_KEY);
       const workshopState = saved[record.id];
@@ -1129,8 +1140,31 @@ export default function WorkshopMasterPage() {
                     </p>
                     <div className="flex flex-wrap justify-end gap-2">
                       <AdvancedResponseFilters filters={responseFilters} onChange={setResponseFilters} questions={participantQuestions} resultCount={displayedParticipants.length} totalCount={selectedParticipants.length} />
-                      <DuplicateResponseFilter checked={hideDuplicateParticipants} onChange={setHideDuplicateParticipants} rawCount={filteredParticipants.length} visibleCount={displayedParticipants.length} />
+                      <DuplicateResponseFilter checked={hideDuplicateParticipants} onChange={setHideDuplicateParticipants} rawCount={searchedParticipants.length} visibleCount={displayedParticipants.length} />
                     </div>
+                  </div>
+                  <div className="border-b border-slate-200 p-3">
+                    <label className="relative block max-w-lg">
+                      <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
+                      <input
+                        aria-label="Search responses by name or mobile number"
+                        className="min-h-11 w-full rounded-xl border border-slate-200 bg-white py-2 pl-10 pr-10 text-sm font-semibold text-slate-800 outline-none placeholder:text-slate-400 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100"
+                        onChange={(event) => setParticipantSearch(event.target.value)}
+                        placeholder="Search by name or mobile number"
+                        type="search"
+                        value={participantSearch}
+                      />
+                      {participantSearch ? (
+                        <button
+                          aria-label="Clear response search"
+                          className="absolute right-2 top-1/2 grid size-8 -translate-y-1/2 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                          onClick={() => setParticipantSearch("")}
+                          type="button"
+                        >
+                          <X className="size-4" />
+                        </button>
+                      ) : null}
+                    </label>
                   </div>
                   <div className="overflow-x-auto">
                   <table className="min-w-[1020px] w-full text-left text-sm">
@@ -1173,7 +1207,7 @@ export default function WorkshopMasterPage() {
 	                      )) : (
 	                        <tr>
 	                          <td className="px-4 py-8 text-center text-slate-500" colSpan={11}>
-	                            No users registered in this workshop yet.
+	                            {participantSearch ? "No response found for this name or mobile number." : "No users registered in this workshop yet."}
 	                          </td>
 	                        </tr>
                       )}
