@@ -442,6 +442,42 @@ export default function RegistrationPage() {
   }, [clients, mobileValue, model]);
 
   useEffect(() => {
+    const mobile = cleanMobile(mobileValue).slice(-10);
+    if (!model || mobile.length !== 10 || !/^[6-9]/.test(mobile)) return;
+
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      try {
+        const response = await fetch(`/api/public-profile-lookup?type=registration&slug=${encodeURIComponent(slug)}&mobile=${mobile}`, {
+          cache: "no-store",
+          signal: controller.signal
+        });
+        if (!response.ok) return;
+        const data = await response.json() as { profile?: { city?: string; email?: string; name?: string } | null };
+        if (!data.profile) return;
+        setAnswers((current) => {
+          const next = { ...current };
+          const nameId = roleField("name")?.id;
+          const emailId = roleField("email")?.id;
+          const cityId = roleField("city")?.id;
+          if (nameId && !next[nameId]?.trim() && data.profile?.name) next[nameId] = data.profile.name;
+          if (emailId && !next[emailId]?.trim() && data.profile?.email) next[emailId] = data.profile.email;
+          if (cityId && !next[cityId]?.trim() && data.profile?.city) next[cityId] = data.profile.city;
+          return next;
+        });
+      } catch {
+        // Manual entry remains available when lookup is offline.
+      }
+    }, 350);
+
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mobileValue, model, slug]);
+
+  useEffect(() => {
     setOtpCode("");
     setOtpMessage("");
     setOtpModalOpen(false);
