@@ -220,7 +220,19 @@ export default function WorkshopMasterPage() {
       entry.workshopTitle.trim().toLowerCase() === selectedName
     );
   }, [registrations, selectedWorkshop]);
-  const participantFilterRecords = useMemo(() => selectedParticipants.map((entry) => ({ ...entry, answers: { "Full Name": entry.fullName, Mobile: entry.mobile, Email: entry.email, City: entry.city, "Payment Status": entry.status, Source: entry.source ?? "Registration Link", ...(entry.answers ?? {}) }, submittedAt: entry.createdAt })), [selectedParticipants]);
+  const participantFilterRecords = useMemo(() => selectedParticipants.map((entry) => ({
+    ...entry,
+    answers: {
+      ...(entry.answers ?? {}),
+      "Full Name": entry.fullName,
+      Mobile: entry.mobile,
+      Email: entry.email,
+      City: entry.city,
+      "Payment Status": entry.status,
+      Source: entry.source ?? "Registration Link"
+    },
+    submittedAt: entry.createdAt
+  })), [selectedParticipants]);
   const filteredParticipants = useMemo(() => applyResponseFilters(participantFilterRecords, responseFilters), [participantFilterRecords, responseFilters]);
   const displayedParticipants = useMemo(() => hideDuplicateParticipants ? hideDuplicateResponses(filteredParticipants, {
     email: (entry) => entry.email,
@@ -231,20 +243,6 @@ export default function WorkshopMasterPage() {
   }) : filteredParticipants, [filteredParticipants, hideDuplicateParticipants]);
   const participantQuestions = useMemo(() => responseQuestionOptions(participantFilterRecords), [participantFilterRecords]);
   const activeParticipantFilterCount = activeResponseFilterCount(responseFilters) + Number(hideDuplicateParticipants);
-
-  useEffect(() => {
-    if (!selectedWorkshopId) return;
-    try {
-      const saved = readLocalObject<Record<string, { filters?: ResponseFilterState; hideDuplicates?: boolean; showParticipants?: boolean }>>(WORKSHOP_RESPONSE_FILTERS_STORAGE_KEY);
-      const workshopState = saved[selectedWorkshopId];
-      if (!workshopState) return;
-      setResponseFilters({ ...emptyResponseFilters, ...(workshopState.filters ?? {}) });
-      setHideDuplicateParticipants(Boolean(workshopState.hideDuplicates));
-      if (workshopState.showParticipants !== undefined) setShowParticipants(Boolean(workshopState.showParticipants));
-    } catch {
-      // Filters are convenience state; ignore storage issues.
-    }
-  }, [selectedWorkshopId]);
 
   useEffect(() => {
     if (!selectedWorkshopId) return;
