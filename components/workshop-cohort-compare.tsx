@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircle, BarChart3, BrainCircuit, ChevronDown, ChevronUp, Download, RefreshCw, Search, X } from "lucide-react";
+import { AlertCircle, BarChart3, BrainCircuit, ChevronDown, ChevronUp, Download, MessageCircle, RefreshCw, Search, X } from "lucide-react";
 import { hydrateLiveState, readLocalArray } from "@/lib/live-state";
 import type { AttendanceEntry, AttendanceSession, RegistrationEntry } from "@/lib/types";
 import { useEffect, useMemo, useState } from "react";
@@ -150,6 +150,22 @@ export function WorkshopCohortCompare({
     URL.revokeObjectURL(url);
   }
 
+  function shareComparisonOnWhatsApp() {
+    const statusLabel = status === "converted" ? "Registered" : status === "not_registered" ? "Follow-up needed" : "All attendees";
+    const message = [
+      "Workshop Attendance Conversion Summary",
+      "",
+      `Intro session: ${sourceSession?.title || sourceSession?.workshopName || "-"}`,
+      `Main workshop: ${targetWorkshop?.name || "-"}`,
+      `Intro attendees: ${comparison.rows.length}`,
+      `Registered for main: ${comparison.converted}`,
+      `Follow-up needed: ${comparison.notRegistered}`,
+      `Conversion rate: ${comparison.conversionRate}%`,
+      `Current view: ${statusLabel} (${visibleRows.length})`
+    ].join("\n");
+    window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, "_blank", "noopener,noreferrer");
+  }
+
   async function generateInsight() {
     setGeneratingInsight(true);
     setInsight("");
@@ -266,6 +282,7 @@ export function WorkshopCohortCompare({
                     <input aria-label="Search comparison by name or mobile" className="min-h-10 w-full rounded-lg border border-slate-200 py-2 pl-10 pr-10 text-sm outline-none focus:border-indigo-500" onChange={(event) => setQuery(event.target.value)} placeholder="Search name or mobile" type="search" value={query} />
                     {query ? <button aria-label="Clear comparison search" className="absolute right-2 top-1/2 grid size-7 -translate-y-1/2 place-items-center rounded-md text-slate-400 hover:bg-slate-100" onClick={() => setQuery("")} type="button"><X className="size-4" /></button> : null}
                   </label>
+                  <button aria-label="Share comparison summary on WhatsApp" className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-emerald-600 px-3 text-xs font-black text-white hover:bg-emerald-700" onClick={shareComparisonOnWhatsApp} title="Share summary on WhatsApp" type="button"><MessageCircle className="size-4" /><span className="hidden sm:inline">WhatsApp</span></button>
                   <button aria-label="Export comparison" className="grid size-10 place-items-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50" onClick={exportComparison} title="Export comparison" type="button"><Download className="size-4" /></button>
                 </div>
               </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { BarChart3, Check, ChevronDown, ChevronUp, Download, Search, UsersRound, X } from "lucide-react";
+import { BarChart3, Check, ChevronDown, ChevronUp, Download, MessageCircle, Search, UsersRound, X } from "lucide-react";
 import type { RegistrationEntry } from "@/lib/types";
 import { useMemo, useState } from "react";
 
@@ -142,6 +142,21 @@ export function MultiWorkshopOverlap({
     URL.revokeObjectURL(url);
   }
 
+  function shareSummaryOnWhatsApp() {
+    const viewLabel = mode === "all" ? "Common in all" : "Attended 2+";
+    const message = [
+      "Multi-Workshop Participant Summary",
+      "",
+      `Workshops: ${selectedWorkshops.map((workshop) => workshop.name).join(", ")}`,
+      `Selected workshops: ${selectedIds.length}`,
+      `Unique people: ${rows.length}`,
+      `Common in all: ${commonCount}`,
+      `Attended 2 or more: ${repeatCount}`,
+      `Current view: ${viewLabel} (${visibleRows.length})`
+    ].join("\n");
+    window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, "_blank", "noopener,noreferrer");
+  }
+
   return (
     <section className="mt-4">
       <button className="flex w-full items-center justify-between gap-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-4 text-left hover:bg-slate-100" onClick={() => setOpen((value) => !value)} type="button">
@@ -199,7 +214,10 @@ export function MultiWorkshopOverlap({
                       <button className={`rounded-md px-3 py-2 text-xs font-black ${mode === "all" ? "bg-slate-950 text-white" : "text-slate-600"}`} onClick={() => setMode("all")} type="button">Common in all ({commonCount})</button>
                       <button className={`rounded-md px-3 py-2 text-xs font-black ${mode === "repeat" ? "bg-slate-950 text-white" : "text-slate-600"}`} onClick={() => setMode("repeat")} type="button">Attended 2+ ({repeatCount})</button>
                     </div>
-                    <button className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-slate-200 px-3 text-xs font-black text-slate-700 hover:bg-slate-50 disabled:opacity-40" disabled={!visibleRows.length} onClick={exportRows} type="button"><Download className="size-4" />Export</button>
+                    <div className="flex gap-2">
+                      <button className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-emerald-600 px-3 text-xs font-black text-white hover:bg-emerald-700" onClick={shareSummaryOnWhatsApp} type="button"><MessageCircle className="size-4" />WhatsApp</button>
+                      <button className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-slate-200 px-3 text-xs font-black text-slate-700 hover:bg-slate-50 disabled:opacity-40" disabled={!visibleRows.length} onClick={exportRows} type="button"><Download className="size-4" />Export</button>
+                    </div>
                   </div>
                   <label className="relative mt-3 block">
                     <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
