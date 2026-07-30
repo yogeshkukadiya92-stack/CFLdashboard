@@ -6,7 +6,7 @@ import { DuplicateResponseFilter } from "@/components/duplicate-response-filter"
 import { AdvancedResponseFilters } from "@/components/advanced-response-filters";
 import { WorkshopCohortCompare } from "@/components/workshop-cohort-compare";
 import { MultiWorkshopOverlap } from "@/components/multi-workshop-overlap";
-import { AlertCircle, Archive, ArrowDown, ArrowUp, BarChart3, Bold, Check, CheckSquare, ChevronDown, Circle, Copy, Download, Edit3, ExternalLink, Eye, Files, Heading, Image, Italic, LayoutList, Link2, List, ListOrdered, Mail, MessageCircle, Monitor, Palette, Plus, QrCode, RefreshCw, Route, Save, Search, Smartphone, Sparkles, Trash2, Type, Underline, Upload, UsersRound, X } from "lucide-react";
+import { AlertCircle, Archive, ArrowDown, ArrowUp, BarChart3, Bold, Check, CheckSquare, ChevronDown, Circle, Copy, Download, Edit3, ExternalLink, Eye, Files, Heading, Image, Italic, LayoutList, Link2, List, ListOrdered, Mail, MessageCircle, Monitor, Palette, PhoneCall, Plus, QrCode, RefreshCw, Route, Save, Search, Share2, Smartphone, Sparkles, Trash2, Type, Underline, Upload, UsersRound, X } from "lucide-react";
 import { hydrateLiveState, readLocalArray, readLocalObject, saveLiveState } from "@/lib/live-state";
 import { buildRegistrationUrl, normalizeBaseUrl } from "@/lib/registration-url";
 import { publicFormSlug } from "@/lib/public-slug";
@@ -184,6 +184,10 @@ export default function WorkshopMasterPage() {
   const [hideDuplicateParticipants, setHideDuplicateParticipants] = useState(false);
   const [participantSearch, setParticipantSearch] = useState("");
   const [responseFilters, setResponseFilters] = useState<ResponseFilterState>({ ...emptyResponseFilters });
+  const [followUpScope, setFollowUpScope] = useState<"needs_follow_up" | "completed" | "all">("needs_follow_up");
+  const [selectedParticipantIds, setSelectedParticipantIds] = useState<string[]>([]);
+  const [followUpTarget, setFollowUpTarget] = useState<RegistrationEntry | null>(null);
+  const [shareSelectedOpen, setShareSelectedOpen] = useState(false);
 
   useEffect(() => {
     function loadLocal() {
@@ -312,19 +316,25 @@ export default function WorkshopMasterPage() {
       (digits.length > 0 && entry.mobile.replace(/\D/g, "").includes(digits))
     );
   }, [filteredParticipants, participantSearch]);
+  const followUpParticipants = useMemo(() => searchedParticipants.filter((entry) => {
+    const completed = Boolean(entry.confirmationStatus && entry.confirmationStatus !== "pending" && entry.confirmationNote?.trim());
+    if (followUpScope === "completed") return completed;
+    if (followUpScope === "needs_follow_up") return !completed;
+    return true;
+  }), [followUpScope, searchedParticipants]);
   const displayedParticipants = useMemo(() => {
-    const visibleParticipants = hideDuplicateParticipants ? hideDuplicateResponses(searchedParticipants, {
+    const visibleParticipants = hideDuplicateParticipants ? hideDuplicateResponses(followUpParticipants, {
       email: (entry) => entry.email,
       mobile: (entry) => entry.mobile,
       name: (entry) => entry.fullName,
       scope: (entry) => entry.workshopId || entry.workshopTitle,
       submittedAt: (entry) => entry.createdAt
-    }) : searchedParticipants;
+    }) : followUpParticipants;
 
     return [...visibleParticipants].sort((first, second) =>
       submittedAtTimestamp(second.createdAt) - submittedAtTimestamp(first.createdAt)
     );
-  }, [hideDuplicateParticipants, searchedParticipants]);
+  }, [followUpParticipants, hideDuplicateParticipants]);
   const participantQuestions = useMemo(() => responseQuestionOptions(participantFilterRecords), [participantFilterRecords]);
   const activeParticipantFilterCount = activeResponseFilterCount(responseFilters) + Number(hideDuplicateParticipants);
 
@@ -461,6 +471,8 @@ export default function WorkshopMasterPage() {
   async function openWorkshop(record: WorkshopRecord) {
     setRegistrations(readLocalArray<RegistrationEntry>(REGISTRATION_STORAGE_KEY));
     setParticipantSearch("");
+    setFollowUpScope("needs_follow_up");
+    setSelectedParticipantIds([]);
     try {
       const saved = readLocalObject<Record<string, { filters?: ResponseFilterState; hideDuplicates?: boolean; showParticipants?: boolean }>>(WORKSHOP_RESPONSE_FILTERS_STORAGE_KEY);
       const workshopState = saved[record.id];
@@ -514,6 +526,22 @@ export default function WorkshopMasterPage() {
     setDeleteResponseTarget(null);
     setMessage("Registration response deleted.");
     if (!response.ok) await saveLiveState({ registrations: next });
+  }
+
+  async function updateRegistrationFollowUp(status: RegistrationEntry["confirmationStatus"], note: string) {
+    if (!followUpTarget || !status) return;
+    const response = await fetch("/api/admin/registration-follow-up", {
+      body: JSON.stringify({ registrationId: followUpTarget.id, status, note }),
+      headers: { "Content-Type": "application/json" },
+      method: "PATCH"
+    });
+    const result = await response.json().catch(() => ({})) as { error?: string; registration?: RegistrationEntry };
+    if (!response.ok || !result.registration) throw new Error(result.error || "Could not update follow-up.");
+    const next = registrations.map((entry) => entry.id === result.registration?.id ? result.registration : entry);
+    setRegistrations(next);
+    window.localStorage.setItem(REGISTRATION_STORAGE_KEY, JSON.stringify(next));
+    setFollowUpTarget(null);
+    setMessage("Confirmation and call note updated.");
   }
 
   async function removeDuplicateRegistrationResponses() {
@@ -1253,8 +1281,27 @@ export default function WorkshopMasterPage() {
                       </button>
                     </div>
                   </div>
-                  <div className="border-b border-slate-200 p-3">
-                    <label className="relative block max-w-lg">
+                  <div className="flex flex-col gap-3 border-b border-slate-200 p-3 xl:flex-row xl:items-center xl:justify-between">
+                    <div className="flex flex-wrap gap-2">
+                      {([
+                        ["needs_follow_up", "Needs follow-up"],
+                        ["completed", "Completed"],
+                        ["all", "All responses"]
+                      ] as const).map(([value, label]) => (
+                        <button
+                          className={`min-h-10 rounded-lg px-3 text-xs font-black ${followUpScope === value ? "bg-slate-950 text-white" : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}
+                          key={value}
+                          onClick={() => {
+                            setFollowUpScope(value);
+                            setSelectedParticipantIds([]);
+                          }}
+                          type="button"
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                    <label className="relative block w-full max-w-lg">
                       <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
                       <input
                         aria-label="Search responses by name or mobile number"
@@ -1276,19 +1323,42 @@ export default function WorkshopMasterPage() {
                       ) : null}
                     </label>
                   </div>
+                  {selectedParticipantIds.length ? (
+                    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-emerald-200 bg-emerald-50 px-4 py-3">
+                      <p className="text-sm font-black text-emerald-900">{selectedParticipantIds.length} participant{selectedParticipantIds.length === 1 ? "" : "s"} selected</p>
+                      <div className="flex gap-2">
+                        <button className="min-h-10 rounded-lg border border-emerald-300 bg-white px-3 text-xs font-black text-emerald-800" onClick={() => setSelectedParticipantIds([])} type="button">Clear</button>
+                        <button className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-emerald-700 px-3 text-xs font-black text-white hover:bg-emerald-800" onClick={() => setShareSelectedOpen(true)} type="button"><Share2 className="size-4" />Share Selected</button>
+                      </div>
+                    </div>
+                  ) : null}
                   <div className="overflow-x-auto">
                   <table className="min-w-[1240px] w-full text-left text-sm">
                     <thead className="bg-slate-50 text-xs uppercase text-slate-500">
                       <tr>
-                        {["Action", "User", "Mobile", "Email", "City", "Source", "WhatsApp", "Confirmation", "Call Note", "Payment", "Paid", "Due", "Submitted"].map((head) => (
-                          <th className="px-4 py-3" key={head}>{head}</th>
-                        ))}
+                        <th className="px-4 py-3">
+                          <input
+                            aria-label="Select all visible responses"
+                            checked={displayedParticipants.length > 0 && displayedParticipants.every((entry) => selectedParticipantIds.includes(entry.id))}
+                            className="size-4 accent-emerald-600"
+                            onChange={(event) => setSelectedParticipantIds((current) => event.target.checked
+                              ? Array.from(new Set([...current, ...displayedParticipants.map((entry) => entry.id)]))
+                              : current.filter((id) => !displayedParticipants.some((entry) => entry.id === id)))}
+                            type="checkbox"
+                          />
+                        </th>
+                        {["Action", "User", "Mobile", "Email", "City", "Source", "WhatsApp", "Confirmation", "Call Note", "Payment", "Paid", "Due", "Submitted"].map((head) => <th className="px-4 py-3" key={head}>{head}</th>)}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
 	                      {displayedParticipants.length ? displayedParticipants.map((entry) => (
 	                        <tr className="hover:bg-indigo-50/40" key={entry.id}>
                           <td className="px-4 py-4">
+                            <input aria-label={`Select ${entry.fullName}`} checked={selectedParticipantIds.includes(entry.id)} className="size-4 accent-emerald-600" onChange={(event) => setSelectedParticipantIds((current) => event.target.checked ? [...new Set([...current, entry.id])] : current.filter((id) => id !== entry.id))} type="checkbox" />
+                          </td>
+                          <td className="px-4 py-4">
+                            <div className="flex gap-2">
+                            <button aria-label={`Update follow-up for ${entry.fullName}`} className="grid size-9 place-items-center rounded-xl bg-emerald-50 text-emerald-700 hover:bg-emerald-100" onClick={() => setFollowUpTarget(entry)} title="Update confirmation and call note" type="button"><PhoneCall className="size-4" /></button>
                             <button
                               aria-label={`Delete response from ${entry.fullName}`}
                               className="grid size-9 place-items-center rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-100"
@@ -1298,6 +1368,7 @@ export default function WorkshopMasterPage() {
                             >
                               <Trash2 className="size-4" />
                             </button>
+                            </div>
                           </td>
 	                          <td className="px-4 py-4 font-black text-slate-950">{entry.fullName}</td>
 	                          <td className="px-4 py-4">{entry.mobile}</td>
@@ -1321,7 +1392,7 @@ export default function WorkshopMasterPage() {
                         </tr>
 	                      )) : (
 	                        <tr>
-	                          <td className="px-4 py-8 text-center text-slate-500" colSpan={13}>
+	                          <td className="px-4 py-8 text-center text-slate-500" colSpan={14}>
 	                            {participantSearch ? "No response found for this name or mobile number." : "No users registered in this workshop yet."}
 	                          </td>
 	                        </tr>
@@ -1336,6 +1407,18 @@ export default function WorkshopMasterPage() {
       ) : null}
 
       {linkWorkshop ? <RegistrationLinkModal workshop={linkWorkshop} onClose={() => setLinkWorkshop(null)} /> : null}
+      {followUpTarget ? <FollowUpModal entry={followUpTarget} onClose={() => setFollowUpTarget(null)} onSave={updateRegistrationFollowUp} /> : null}
+      {shareSelectedOpen && selectedWorkshop ? (
+        <ShareSelectedResponsesModal
+          entries={selectedParticipants.filter((entry) => selectedParticipantIds.includes(entry.id))}
+          onClose={() => setShareSelectedOpen(false)}
+          onCreated={() => {
+            setShareSelectedOpen(false);
+            setSelectedParticipantIds([]);
+          }}
+          workshop={selectedWorkshop}
+        />
+      ) : null}
       <ConfirmDialog
         confirmLabel="Delete Workshop"
         description="This removes the workshop master and its linked registration form."
@@ -1369,6 +1452,147 @@ export default function WorkshopMasterPage() {
         This action affects only {selectedWorkshop?.name || "the selected workshop"} and cannot be undone.
       </ConfirmDialog>
     </AdminPlatformShell>
+  );
+}
+
+function FollowUpModal({
+  entry,
+  onClose,
+  onSave
+}: {
+  entry: RegistrationEntry;
+  onClose: () => void;
+  onSave: (status: RegistrationEntry["confirmationStatus"], note: string) => Promise<void>;
+}) {
+  const [status, setStatus] = useState<RegistrationEntry["confirmationStatus"]>(entry.confirmationStatus ?? "pending");
+  const [note, setNote] = useState(entry.confirmationNote ?? "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  async function save() {
+    setSaving(true);
+    setError("");
+    try {
+      await onSave(status, note);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Could not update follow-up.");
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div aria-modal="true" className="fixed inset-0 z-50 grid place-items-end bg-slate-950/55 p-0 sm:place-items-center sm:p-4" role="dialog">
+      <section className="w-full max-w-xl rounded-t-2xl bg-white shadow-2xl sm:rounded-lg">
+        <header className="flex items-start justify-between gap-4 border-b border-slate-200 p-5">
+          <div><p className="text-xs font-black uppercase text-emerald-700">Participant follow-up</p><h2 className="mt-1 text-xl font-black">{entry.fullName}</h2><p className="mt-1 text-sm font-bold text-slate-500">{entry.mobile}</p></div>
+          <button aria-label="Close follow-up editor" className="grid size-9 place-items-center rounded-lg border border-slate-200 text-slate-500" onClick={onClose} type="button"><X className="size-4" /></button>
+        </header>
+        <div className="p-5">
+          {error ? <p className="mb-4 rounded-lg bg-rose-50 px-4 py-3 text-sm font-bold text-rose-700">{error}</p> : null}
+          <label className="block text-sm font-black text-slate-700">Confirmation
+            <select className={`${inputClass} mt-2`} onChange={(event) => setStatus(event.target.value as RegistrationEntry["confirmationStatus"])} value={status}>
+              <option value="pending">Pending</option>
+              <option value="confirmed">Confirmed</option>
+              <option value="not_confirmed">Not confirmed</option>
+              <option value="no_answer">No answer</option>
+              <option value="callback">Call back</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
+          </label>
+          <label className="mt-4 block text-sm font-black text-slate-700">Call note
+            <textarea className={`${inputClass} mt-2 min-h-32 resize-y`} maxLength={2000} onChange={(event) => setNote(event.target.value)} placeholder="Add call outcome or follow-up details..." value={note} />
+          </label>
+          <button className="mt-5 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-emerald-700 px-4 text-sm font-black text-white disabled:opacity-60" disabled={saving} onClick={() => void save()} type="button"><Save className="size-4" />{saving ? "Saving..." : "Save follow-up"}</button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function ShareSelectedResponsesModal({
+  entries,
+  onClose,
+  onCreated,
+  workshop
+}: {
+  entries: RegistrationEntry[];
+  onClose: () => void;
+  onCreated: () => void;
+  workshop: WorkshopRecord;
+}) {
+  const [recipientName, setRecipientName] = useState("");
+  const [recipientContact, setRecipientContact] = useState("");
+  const [accessCode, setAccessCode] = useState("");
+  const [expiresAt, setExpiresAt] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [createdLink, setCreatedLink] = useState("");
+  const [copied, setCopied] = useState("");
+
+  async function createLink() {
+    setSaving(true);
+    setError("");
+    try {
+      const response = await fetch("/api/admin/response-access", {
+        body: JSON.stringify({
+          accessCode,
+          active: true,
+          expiresAt: expiresAt ? new Date(expiresAt).toISOString() : "",
+          permissions: { exportCsv: false, manageConfirmations: true, revealContact: true, viewAnswers: false },
+          recipientContact,
+          recipientName,
+          registrationIds: entries.map((entry) => entry.id),
+          workshopIds: [workshop.id]
+        }),
+        headers: { "Content-Type": "application/json" },
+        method: "POST"
+      });
+      const result = await response.json().catch(() => ({})) as { error?: string; path?: string };
+      if (!response.ok || !result.path) throw new Error(result.error || "Could not create sharing link.");
+      setCreatedLink(`${window.location.origin}${result.path}`);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Could not create sharing link.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function copy(value: string, label: string) {
+    await navigator.clipboard.writeText(value);
+    setCopied(label);
+  }
+
+  return (
+    <div aria-modal="true" className="fixed inset-0 z-50 grid place-items-end bg-slate-950/55 p-0 sm:place-items-center sm:p-4" role="dialog">
+      <section className="max-h-[94vh] w-full max-w-2xl overflow-y-auto rounded-t-2xl bg-white shadow-2xl sm:rounded-lg">
+        <header className="flex items-start justify-between gap-4 border-b border-slate-200 p-5">
+          <div><p className="text-xs font-black uppercase text-emerald-700">Restricted response access</p><h2 className="mt-1 text-xl font-black">Share {entries.length} selected participant{entries.length === 1 ? "" : "s"}</h2><p className="mt-1 text-sm font-bold text-slate-500">{workshop.name}</p></div>
+          <button aria-label="Close share dialog" className="grid size-9 place-items-center rounded-lg border border-slate-200 text-slate-500" onClick={createdLink ? onCreated : onClose} type="button"><X className="size-4" /></button>
+        </header>
+        <div className="p-5">
+          {error ? <p className="mb-4 rounded-lg bg-rose-50 px-4 py-3 text-sm font-bold text-rose-700">{error}</p> : null}
+          {createdLink ? (
+            <div>
+              <p className="rounded-lg bg-emerald-50 px-4 py-3 text-sm font-black text-emerald-800">Secure link created. Only the selected participants are included.</p>
+              <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4"><p className="break-all font-mono text-xs font-bold text-slate-700">{createdLink}</p><button className="mt-3 inline-flex min-h-10 items-center gap-2 rounded-lg bg-slate-950 px-3 text-xs font-black text-white" onClick={() => void copy(createdLink, "Link copied")} type="button"><Copy className="size-4" />{copied === "Link copied" ? copied : "Copy link"}</button></div>
+              <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-4"><p className="text-xs font-black uppercase text-amber-800">Access code</p><p className="mt-1 font-mono text-lg font-black">{accessCode}</p><button className="mt-3 inline-flex min-h-10 items-center gap-2 rounded-lg border border-amber-300 bg-white px-3 text-xs font-black" onClick={() => void copy(accessCode, "Code copied")} type="button"><Copy className="size-4" />{copied === "Code copied" ? copied : "Copy code"}</button></div>
+              <button className="mt-5 min-h-12 w-full rounded-lg bg-emerald-700 px-4 text-sm font-black text-white" onClick={onCreated} type="button">Done</button>
+            </div>
+          ) : (
+            <>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="text-sm font-black text-slate-700">Recipient name<input className={`${inputClass} mt-2`} maxLength={150} onChange={(event) => setRecipientName(event.target.value)} placeholder="Person or team name" value={recipientName} /></label>
+                <label className="text-sm font-black text-slate-700">Mobile or email<input className={`${inputClass} mt-2`} maxLength={200} onChange={(event) => setRecipientContact(event.target.value)} placeholder="Optional" value={recipientContact} /></label>
+                <label className="text-sm font-black text-slate-700">Access code<input className={`${inputClass} mt-2`} maxLength={32} minLength={4} onChange={(event) => setAccessCode(event.target.value)} placeholder="Minimum 4 characters" value={accessCode} /></label>
+                <label className="text-sm font-black text-slate-700">Expires on<input className={`${inputClass} mt-2`} min={new Date().toISOString().slice(0, 16)} onChange={(event) => setExpiresAt(event.target.value)} type="datetime-local" value={expiresAt} /></label>
+              </div>
+              <p className="mt-4 rounded-lg bg-slate-50 px-4 py-3 text-xs font-bold leading-5 text-slate-600">The recipient can see contact details and update confirmation status and call notes for these selected participants only.</p>
+              <button className="mt-5 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-emerald-700 px-4 text-sm font-black text-white disabled:opacity-50" disabled={saving || !recipientName.trim() || accessCode.trim().length < 4 || entries.length === 0} onClick={() => void createLink()} type="button"><Share2 className="size-4" />{saving ? "Creating..." : "Create secure sharing link"}</button>
+            </>
+          )}
+        </div>
+      </section>
+    </div>
   );
 }
 

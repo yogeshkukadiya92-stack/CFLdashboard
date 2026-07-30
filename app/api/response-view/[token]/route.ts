@@ -75,7 +75,11 @@ function responseData(state: Awaited<ReturnType<typeof getAppState>>, grant: Res
   const registrations = (Array.isArray(state?.registrations) ? state.registrations : []) as RegistrationEntry[];
   const workshopNames = new Map(grant.workshopIds.map((id, index) => [id, grant.workshopNames[index] ?? id]));
   const allowedNames = new Set(grant.workshopNames.map((name) => name.trim().toLowerCase()));
-  const filtered = registrations.filter((entry) => grant.workshopIds.includes(entry.workshopId) || allowedNames.has(entry.workshopTitle.trim().toLowerCase()));
+  const allowedRegistrationIds = grant.registrationIds?.length ? new Set(grant.registrationIds) : null;
+  const filtered = registrations.filter((entry) =>
+    (!allowedRegistrationIds || allowedRegistrationIds.has(entry.id)) &&
+    (grant.workshopIds.includes(entry.workshopId) || allowedNames.has(entry.workshopTitle.trim().toLowerCase()))
+  );
   return {
     grant: {
       recipientName: grant.recipientName,
@@ -91,6 +95,7 @@ function responseData(state: Awaited<ReturnType<typeof getAppState>>, grant: Res
 }
 
 function grantAllowsRegistration(grant: ResponseAccessGrant, entry: RegistrationEntry) {
+  if (grant.registrationIds?.length && !grant.registrationIds.includes(entry.id)) return false;
   const allowedNames = new Set(grant.workshopNames.map((name) => name.trim().toLowerCase()));
   return grant.workshopIds.includes(entry.workshopId) || allowedNames.has(entry.workshopTitle.trim().toLowerCase());
 }

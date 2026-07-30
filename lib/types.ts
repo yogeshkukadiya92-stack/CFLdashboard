@@ -242,6 +242,7 @@ export interface ResponseAccessGrant {
   recipientContact?: string;
   workshopIds: string[];
   workshopNames: string[];
+  registrationIds?: string[];
   permissions: ResponseAccessPermissions;
   active: boolean;
   expiresAt?: string;

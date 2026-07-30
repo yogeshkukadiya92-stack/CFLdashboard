@@ -57,6 +57,8 @@ export async function POST(request: Request) {
     const code = String(body.accessCode ?? "").trim();
     const rawWorkshopIds: unknown[] = Array.isArray(body.workshopIds) ? body.workshopIds as unknown[] : [];
     const workshopIds = Array.from(new Set<string>(rawWorkshopIds.map((value) => String(value)))).slice(0, 100);
+    const rawRegistrationIds: unknown[] = Array.isArray(body.registrationIds) ? body.registrationIds as unknown[] : [];
+    const registrationIds = Array.from(new Set<string>(rawRegistrationIds.map((value) => String(value).trim()).filter(Boolean))).slice(0, 5000);
     const workshopMap = new Map(activeWorkshops(state).map((workshop) => [workshop.id, workshop.name]));
     const validWorkshopIds = workshopIds.filter((id) => workshopMap.has(id));
     if (!recipientName || !validWorkshopIds.length) {
@@ -83,6 +85,7 @@ export async function POST(request: Request) {
       recipientContact: recipientContact || undefined,
       workshopIds: validWorkshopIds,
       workshopNames: validWorkshopIds.map((id) => workshopMap.get(id) ?? id),
+      registrationIds: registrationIds.length ? registrationIds : existing?.registrationIds,
       permissions: cleanPermissions(body.permissions),
       active: body.active !== false,
       expiresAt: expiresAtDate?.toISOString(),
