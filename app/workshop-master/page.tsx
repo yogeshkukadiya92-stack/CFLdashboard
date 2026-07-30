@@ -10,7 +10,7 @@ import { hydrateLiveState, readLocalArray, readLocalObject, saveLiveState } from
 import { buildRegistrationUrl, normalizeBaseUrl } from "@/lib/registration-url";
 import { publicFormSlug } from "@/lib/public-slug";
 import { sanitizeRichTextHtml } from "@/lib/rich-text";
-import { hideDuplicateResponses } from "@/lib/response-dedupe";
+import { hideDuplicateResponses, partitionDuplicateResponses } from "@/lib/response-dedupe";
 import { activeResponseFilterCount, applyResponseFilters, emptyResponseFilters, responseQuestionOptions, type ResponseFilterState } from "@/lib/response-filters";
 import type { BuilderField, BuilderFieldType, BuilderForm, BuilderFormMode, BuilderTheme, FormAnalyticsRecord, RegistrationEntry } from "@/lib/types";
 import { generateId } from "@/lib/utils";
@@ -177,6 +177,7 @@ export default function WorkshopMasterPage() {
   const [deleteTarget, setDeleteTarget] = useState<WorkshopRecord | null>(null);
   const [deleteResponseTarget, setDeleteResponseTarget] = useState<RegistrationEntry | null>(null);
   const [removeDuplicatesOpen, setRemoveDuplicatesOpen] = useState(false);
+  const [removingDuplicates, setRemovingDuplicates] = useState(false);
   const [hideDuplicateParticipants, setHideDuplicateParticipants] = useState(false);
   const [participantSearch, setParticipantSearch] = useState("");
   const [responseFilters, setResponseFilters] = useState<ResponseFilterState>({ ...emptyResponseFilters });
@@ -274,15 +275,14 @@ export default function WorkshopMasterPage() {
     );
   }, [registrations, selectedWorkshop]);
   const duplicateParticipantIds = useMemo(() => {
-    const retained = hideDuplicateResponses(selectedParticipants, {
+    const { duplicates } = partitionDuplicateResponses(selectedParticipants, {
       email: (entry) => entry.email,
       mobile: (entry) => entry.mobile,
       name: (entry) => entry.fullName,
       scope: (entry) => entry.workshopId || entry.workshopTitle,
       submittedAt: (entry) => entry.createdAt
     });
-    const retainedIds = new Set(retained.map((entry) => entry.id));
-    return selectedParticipants.filter((entry) => !retainedIds.has(entry.id)).map((entry) => entry.id);
+    return duplicates.map((entry) => entry.id);
   }, [selectedParticipants]);
   const participantFilterRecords = useMemo(() => selectedParticipants.map((entry) => ({
     ...entry,
@@ -506,26 +506,30 @@ export default function WorkshopMasterPage() {
   }
 
   async function removeDuplicateRegistrationResponses() {
-    if (!duplicateParticipantIds.length) return;
-    const response = await fetch("/api/crm/registrations/sync", {
-      body: JSON.stringify({ ids: duplicateParticipantIds }),
-      headers: { "Content-Type": "application/json" },
-      method: "DELETE"
-    });
-    if (!response.ok) {
+    if (!duplicateParticipantIds.length || removingDuplicates) return;
+    setRemovingDuplicates(true);
+    try {
+      const response = await fetch("/api/crm/registrations/sync", {
+        body: JSON.stringify({ ids: duplicateParticipantIds }),
+        headers: { "Content-Type": "application/json" },
+        method: "DELETE"
+      });
+      if (!response.ok) throw new Error("Remove request failed.");
+      const result = await response.json() as { registrations?: RegistrationEntry[] };
+      const removedIds = new Set(duplicateParticipantIds);
+      const next = Array.isArray(result.registrations)
+        ? result.registrations
+        : registrations.filter((entry) => !removedIds.has(entry.id));
+      setRegistrations(next);
+      window.localStorage.setItem(REGISTRATION_STORAGE_KEY, JSON.stringify(next));
+      setHideDuplicateParticipants(false);
       setRemoveDuplicatesOpen(false);
+      setMessage(`${duplicateParticipantIds.length} duplicate registrations permanently removed.`);
+    } catch {
       setMessage("Duplicate registrations could not be removed. Please try again.");
-      return;
+    } finally {
+      setRemovingDuplicates(false);
     }
-    const result = await response.json() as { registrations?: RegistrationEntry[] };
-    const next = Array.isArray(result.registrations)
-      ? result.registrations
-      : registrations.filter((entry) => !new Set(duplicateParticipantIds).has(entry.id));
-    setRegistrations(next);
-    window.localStorage.setItem(REGISTRATION_STORAGE_KEY, JSON.stringify(next));
-    setHideDuplicateParticipants(false);
-    setRemoveDuplicatesOpen(false);
-    setMessage(`${duplicateParticipantIds.length} duplicate registrations permanently removed.`);
   }
 
   function sendResponseSummaryOnWhatsApp() {
@@ -1336,9 +1340,11 @@ export default function WorkshopMasterPage() {
         {deleteResponseTarget ? `${deleteResponseTarget.fullName} · ${deleteResponseTarget.mobile}` : null}
       </ConfirmDialog>
       <ConfirmDialog
-        confirmLabel={`Remove ${duplicateParticipantIds.length} Duplicates`}
+        confirmLabel={removingDuplicates ? "Removing..." : `Remove ${duplicateParticipantIds.length} Duplicates`}
         description="The newest registration for each matching mobile, email or name will be kept. Older duplicates will be permanently deleted."
-        onCancel={() => setRemoveDuplicatesOpen(false)}
+        onCancel={() => {
+          if (!removingDuplicates) setRemoveDuplicatesOpen(false);
+        }}
         onConfirm={() => void removeDuplicateRegistrationResponses()}
         open={removeDuplicatesOpen}
         title="Remove duplicate registrations?"

@@ -20,7 +20,7 @@ function identityKey<T>(item: T, options: ResponseIdentityOptions<T>, index: num
   return name ? `${scope}|name:${name}` : `${scope}|row:${index}`;
 }
 
-export function hideDuplicateResponses<T>(items: T[], options: ResponseIdentityOptions<T>) {
+export function partitionDuplicateResponses<T>(items: T[], options: ResponseIdentityOptions<T>) {
   const newest = new Map<string, { index: number; timestamp: number }>();
   items.forEach((item, index) => {
     const key = identityKey(item, options, index);
@@ -30,5 +30,12 @@ export function hideDuplicateResponses<T>(items: T[], options: ResponseIdentityO
     if (!current || timestamp > current.timestamp) newest.set(key, { index, timestamp });
   });
   const retained = new Set(Array.from(newest.values(), (value) => value.index));
-  return items.filter((_, index) => retained.has(index));
+  return {
+    duplicates: items.filter((_, index) => !retained.has(index)),
+    retained: items.filter((_, index) => retained.has(index))
+  };
+}
+
+export function hideDuplicateResponses<T>(items: T[], options: ResponseIdentityOptions<T>) {
+  return partitionDuplicateResponses(items, options).retained;
 }
