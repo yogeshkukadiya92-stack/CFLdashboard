@@ -1,13 +1,20 @@
 "use client";
 
 import { BarChart3, Check, ChevronDown, ChevronUp, Download, MessageCircle, Search, UsersRound, X } from "lucide-react";
-import type { RegistrationEntry } from "@/lib/types";
+import type { AttendanceEntry, AttendanceSession, RegistrationEntry } from "@/lib/types";
 import { useMemo, useState } from "react";
 
 type WorkshopOption = {
   archived?: boolean;
   id: string;
   name: string;
+};
+
+type FormOption = {
+  id: string;
+  name: string;
+  sourceId: string;
+  type: "attendance" | "registration";
 };
 
 type OverlapRow = {
@@ -30,9 +37,13 @@ function csvCell(value: string | number) {
 
 export function MultiWorkshopOverlap({
   registrations,
+  attendanceEntries,
+  attendanceSessions,
   workshops
 }: {
   registrations: RegistrationEntry[];
+  attendanceEntries: AttendanceEntry[];
+  attendanceSessions: AttendanceSession[];
   workshops: WorkshopOption[];
 }) {
   const [open, setOpen] = useState(false);
@@ -41,10 +52,20 @@ export function MultiWorkshopOverlap({
   const [query, setQuery] = useState("");
   const [workshopQuery, setWorkshopQuery] = useState("");
 
-  const availableWorkshops = useMemo(
-    () => workshops.filter((workshop) => !workshop.archived),
-    [workshops]
-  );
+  const availableWorkshops = useMemo<FormOption[]>(() => [
+    ...workshops.map((workshop) => ({
+      id: `registration:${workshop.id}`,
+      name: workshop.name,
+      sourceId: workshop.id,
+      type: "registration" as const
+    })),
+    ...attendanceSessions.map((session) => ({
+      id: `attendance:${session.id}`,
+      name: session.title || `${session.workshopName} attendance`,
+      sourceId: session.id,
+      type: "attendance" as const
+    }))
+  ], [attendanceSessions, workshops]);
   const selectedWorkshops = useMemo(
     () => availableWorkshops.filter((workshop) => selectedIds.includes(workshop.id)),
     [availableWorkshops, selectedIds]
@@ -61,13 +82,28 @@ export function MultiWorkshopOverlap({
     }>();
 
     selectedWorkshops.forEach((workshop) => {
-      const workshopName = workshop.name.trim().toLowerCase();
-      registrations
-        .filter((entry) =>
-          entry.workshopId === workshop.id ||
-          entry.workshopTitle.trim().toLowerCase() === workshopName
-        )
-        .forEach((entry) => {
+      const formEntries = workshop.type === "attendance"
+        ? attendanceEntries
+          .filter((entry) => entry.sessionId === workshop.sourceId)
+          .map((entry) => ({
+            createdAt: entry.submittedAt,
+            email: entry.email || "",
+            mobile: entry.mobile,
+            name: entry.attendeeName
+          }))
+        : registrations
+          .filter((entry) =>
+            entry.workshopId === workshop.sourceId ||
+            entry.workshopTitle.trim().toLowerCase() === workshop.name.trim().toLowerCase()
+          )
+          .map((entry) => ({
+            createdAt: entry.createdAt,
+            email: entry.email || "",
+            mobile: entry.mobile,
+            name: entry.fullName
+          }));
+
+      formEntries.forEach((entry) => {
           const key = normalizedMobile(entry.mobile);
           if (!key) return;
           const timestamp = Date.parse(entry.createdAt);
@@ -77,19 +113,19 @@ export function MultiWorkshopOverlap({
               email: entry.email || "",
               latestAt: Number.isNaN(timestamp) ? 0 : timestamp,
               mobile: entry.mobile,
-              name: entry.fullName,
+              name: entry.name,
               workshopIds: new Set([workshop.id]),
-              workshopNames: new Set([workshop.name])
+              workshopNames: new Set([`${workshop.name} (${workshop.type === "attendance" ? "Attendance" : "Registration"})`])
             });
             return;
           }
           current.workshopIds.add(workshop.id);
-          current.workshopNames.add(workshop.name);
+          current.workshopNames.add(`${workshop.name} (${workshop.type === "attendance" ? "Attendance" : "Registration"})`);
           if (!Number.isNaN(timestamp) && timestamp > current.latestAt) {
             current.email = entry.email || current.email;
             current.latestAt = timestamp;
             current.mobile = entry.mobile;
-            current.name = entry.fullName || current.name;
+            current.name = entry.name || current.name;
           }
         });
     });
@@ -102,7 +138,7 @@ export function MultiWorkshopOverlap({
       workshopIds: Array.from(person.workshopIds),
       workshopNames: Array.from(person.workshopNames)
     })).sort((a, b) => b.workshopIds.length - a.workshopIds.length || a.name.localeCompare(b.name));
-  }, [registrations, selectedWorkshops]);
+  }, [attendanceEntries, registrations, selectedWorkshops]);
 
   const commonCount = rows.filter((row) => selectedIds.length >= 2 && row.workshopIds.length === selectedIds.length).length;
   const repeatCount = rows.filter((row) => row.workshopIds.length >= 2).length;
@@ -147,8 +183,8 @@ export function MultiWorkshopOverlap({
     const message = [
       "Multi-Workshop Participant Summary",
       "",
-      `Workshops: ${selectedWorkshops.map((workshop) => workshop.name).join(", ")}`,
-      `Selected workshops: ${selectedIds.length}`,
+      `Forms: ${selectedWorkshops.map((workshop) => `${workshop.name} (${workshop.type === "attendance" ? "Attendance" : "Registration"})`).join(", ")}`,
+      `Selected forms: ${selectedIds.length}`,
       `Unique people: ${rows.length}`,
       `Common in all: ${commonCount}`,
       `Attended 2 or more: ${repeatCount}`,
@@ -164,7 +200,7 @@ export function MultiWorkshopOverlap({
           <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-emerald-50 text-emerald-700"><UsersRound className="size-5" /></span>
           <span className="min-w-0">
             <span className="block text-sm font-black text-slate-950">Compare people across workshops</span>
-            <span className="mt-1 block text-xs font-semibold text-slate-500">Select multiple workshops and find repeat or common participants by mobile number.</span>
+            <span className="mt-1 block text-xs font-semibold text-slate-500">Select registration or attendance forms and find repeat or common participants by mobile number.</span>
           </span>
         </span>
         {open ? <ChevronUp className="size-5 shrink-0 text-slate-500" /> : <ChevronDown className="size-5 shrink-0 text-slate-500" />}
@@ -175,12 +211,12 @@ export function MultiWorkshopOverlap({
           <div className="grid gap-5 lg:grid-cols-[320px_1fr]">
             <div>
               <div className="flex items-center justify-between gap-2">
-                <h4 className="text-base font-black text-slate-950">Select workshops</h4>
+                <h4 className="text-base font-black text-slate-950">Select forms</h4>
                 {selectedIds.length ? <button className="text-xs font-black text-rose-600 hover:underline" onClick={() => setSelectedIds([])} type="button">Clear all</button> : null}
               </div>
               <label className="relative mt-3 block">
                 <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
-                <input className="min-h-11 w-full rounded-lg border border-slate-200 pl-10 pr-3 text-sm font-semibold outline-none focus:border-indigo-500" onChange={(event) => setWorkshopQuery(event.target.value)} placeholder="Search workshops" value={workshopQuery} />
+                <input className="min-h-11 w-full rounded-lg border border-slate-200 pl-10 pr-3 text-sm font-semibold outline-none focus:border-indigo-500" onChange={(event) => setWorkshopQuery(event.target.value)} placeholder="Search all forms" value={workshopQuery} />
               </label>
               <div className="mt-2 max-h-72 overflow-y-auto rounded-lg border border-slate-200">
                 {filteredWorkshopOptions.map((workshop) => {
@@ -189,7 +225,10 @@ export function MultiWorkshopOverlap({
                     <label className="flex cursor-pointer items-center gap-3 border-b border-slate-100 px-3 py-3 last:border-0 hover:bg-slate-50" key={workshop.id}>
                       <input checked={checked} className="sr-only" onChange={() => toggleWorkshop(workshop.id)} type="checkbox" />
                       <span className={`grid size-5 shrink-0 place-items-center rounded border ${checked ? "border-indigo-600 bg-indigo-600 text-white" : "border-slate-300 bg-white"}`}>{checked ? <Check className="size-3.5" /> : null}</span>
-                      <span className="text-sm font-bold text-slate-700">{workshop.name}</span>
+                      <span className="min-w-0 flex-1 text-sm font-bold text-slate-700">{workshop.name}</span>
+                      <span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-black uppercase ${workshop.type === "attendance" ? "bg-amber-50 text-amber-700" : "bg-indigo-50 text-indigo-700"}`}>
+                        {workshop.type === "attendance" ? "Attendance" : "Registration"}
+                      </span>
                     </label>
                   );
                 })}
@@ -199,7 +238,7 @@ export function MultiWorkshopOverlap({
             <div className="min-w-0">
               {selectedIds.length < 2 ? (
                 <div className="grid min-h-64 place-items-center rounded-lg border border-dashed border-slate-300 bg-slate-50 p-6 text-center">
-                  <div><BarChart3 className="mx-auto size-7 text-slate-400" /><p className="mt-3 text-sm font-black text-slate-700">Select at least 2 workshops</p><p className="mt-1 text-xs font-semibold text-slate-500">Common participant results will appear here.</p></div>
+                  <div><BarChart3 className="mx-auto size-7 text-slate-400" /><p className="mt-3 text-sm font-black text-slate-700">Select at least 2 forms</p><p className="mt-1 text-xs font-semibold text-slate-500">Common participant results will appear here.</p></div>
                 </div>
               ) : (
                 <>

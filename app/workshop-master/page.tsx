@@ -13,7 +13,7 @@ import { publicFormSlug } from "@/lib/public-slug";
 import { sanitizeRichTextHtml } from "@/lib/rich-text";
 import { hideDuplicateResponses, partitionDuplicateResponses } from "@/lib/response-dedupe";
 import { activeResponseFilterCount, applyResponseFilters, emptyResponseFilters, responseQuestionOptions, type ResponseFilterState } from "@/lib/response-filters";
-import type { BuilderField, BuilderFieldType, BuilderForm, BuilderFormMode, BuilderTheme, FormAnalyticsRecord, RegistrationEntry } from "@/lib/types";
+import type { AttendanceEntry, AttendanceSession, BuilderField, BuilderFieldType, BuilderForm, BuilderFormMode, BuilderTheme, FormAnalyticsRecord, RegistrationEntry } from "@/lib/types";
 import { generateId } from "@/lib/utils";
 import { type ClipboardEvent, type FormEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
@@ -173,6 +173,8 @@ export default function WorkshopMasterPage() {
   const [selectedWorkshopId, setSelectedWorkshopId] = useState<string | null>(null);
   const [showParticipants, setShowParticipants] = useState(false);
   const [registrations, setRegistrations] = useState<RegistrationEntry[]>([]);
+  const [attendanceEntries, setAttendanceEntries] = useState<AttendanceEntry[]>([]);
+  const [attendanceSessions, setAttendanceSessions] = useState<AttendanceSession[]>([]);
   const [formAnalytics, setFormAnalytics] = useState<FormAnalyticsRecord[]>([]);
   const [linkWorkshop, setLinkWorkshop] = useState<WorkshopRecord | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<WorkshopRecord | null>(null);
@@ -189,6 +191,8 @@ export default function WorkshopMasterPage() {
       setWorkshopTypes(readMasterNames(WORKSHOP_TYPES_STORAGE_KEY, defaultWorkshopTypes));
       setFacilitators(readMasterNames(FACILITATORS_STORAGE_KEY, defaultFacilitators));
       setRegistrations(readLocalArray<RegistrationEntry>(REGISTRATION_STORAGE_KEY));
+      setAttendanceEntries(readLocalArray<AttendanceEntry>("cfl_attendance_entries_v1"));
+      setAttendanceSessions(readLocalArray<AttendanceSession>("cfl_attendance_sessions_v1"));
       setFormAnalytics(readLocalArray<FormAnalyticsRecord>("cfl_form_analytics_v1"));
     }
 
@@ -1150,7 +1154,12 @@ export default function WorkshopMasterPage() {
           </div>
 
           <WorkshopCohortCompare registrations={registrations} workshops={records} />
-          <MultiWorkshopOverlap registrations={registrations} workshops={records} />
+          <MultiWorkshopOverlap
+            attendanceEntries={attendanceEntries}
+            attendanceSessions={attendanceSessions}
+            registrations={registrations}
+            workshops={records}
+          />
 
           {selectedWorkshop ? (
             <section className="mt-5 rounded-3xl border border-indigo-100 bg-indigo-50/50 p-5">
