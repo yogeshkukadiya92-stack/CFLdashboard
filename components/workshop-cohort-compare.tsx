@@ -1,6 +1,6 @@
 "use client";
 
-import { BarChart3, BrainCircuit, Download, RefreshCw, Search, X } from "lucide-react";
+import { AlertCircle, BarChart3, BrainCircuit, ChevronDown, ChevronUp, Download, RefreshCw, Search, X } from "lucide-react";
 import { hydrateLiveState, readLocalArray } from "@/lib/live-state";
 import type { AttendanceEntry, AttendanceSession, RegistrationEntry } from "@/lib/types";
 import { useEffect, useMemo, useState } from "react";
@@ -38,6 +38,8 @@ export function WorkshopCohortCompare({
 }) {
   const [sessions, setSessions] = useState<AttendanceSession[]>([]);
   const [entries, setEntries] = useState<AttendanceEntry[]>([]);
+  const [open, setOpen] = useState(false);
+  const [hasCompared, setHasCompared] = useState(false);
   const [sourceSessionId, setSourceSessionId] = useState("");
   const [targetWorkshopId, setTargetWorkshopId] = useState("");
   const [status, setStatus] = useState<"all" | "converted" | "not_registered">("all");
@@ -51,20 +53,12 @@ export function WorkshopCohortCompare({
     const nextSessions = readLocalArray<AttendanceSession>(ATTENDANCE_SESSIONS_KEY);
     setSessions(nextSessions);
     setEntries(readLocalArray<AttendanceEntry>(ATTENDANCE_ENTRIES_KEY));
-    setSourceSessionId((current) => current || nextSessions[0]?.id || "");
   }
 
   useEffect(() => {
     loadAttendanceFromStorage();
     void hydrateLiveState().then(loadAttendanceFromStorage);
   }, []);
-
-  useEffect(() => {
-    if (targetWorkshopId || workshops.length === 0) return;
-    const source = sessions.find((session) => session.id === sourceSessionId);
-    const preferred = workshops.find((workshop) => workshop.id !== source?.workshopId && !workshop.archived);
-    setTargetWorkshopId(preferred?.id ?? workshops[0]?.id ?? "");
-  }, [sessions, sourceSessionId, targetWorkshopId, workshops]);
 
   const sourceSession = sessions.find((session) => session.id === sourceSessionId);
   const targetWorkshop = workshops.find((workshop) => workshop.id === targetWorkshopId);
@@ -130,6 +124,7 @@ export function WorkshopCohortCompare({
     setRefreshing(true);
     await hydrateLiveState();
     loadAttendanceFromStorage();
+    setHasCompared(false);
     setRefreshing(false);
   }
 
@@ -185,100 +180,135 @@ export function WorkshopCohortCompare({
 
   return (
     <section className="mt-5 border-t border-slate-200 pt-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="text-xs font-black uppercase tracking-[0.2em] text-emerald-700">Cohort Intelligence</p>
-          <h4 className="mt-1 text-xl font-black text-slate-950">Intro attendance to main registration</h4>
-          <p className="mt-1 text-sm text-slate-500">Compare people by exact mobile number and find who has not registered yet.</p>
-        </div>
-        <div className="flex gap-2">
-          <button aria-label="Refresh comparison data" className="grid size-11 place-items-center rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50" disabled={refreshing} onClick={refreshData} title="Refresh comparison data" type="button">
-            <RefreshCw className={`size-4 ${refreshing ? "animate-spin" : ""}`} />
-          </button>
-          <button className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50" disabled={!comparison.rows.length} onClick={exportComparison} type="button">
-            <Download className="size-4" />
-            Export
-          </button>
-        </div>
-      </div>
+      <button className="flex w-full items-center justify-between gap-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-4 text-left hover:bg-slate-100" onClick={() => setOpen((value) => !value)} type="button">
+        <span className="flex min-w-0 items-center gap-3">
+          <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-indigo-50 text-indigo-700"><BarChart3 className="size-5" /></span>
+          <span className="min-w-0">
+            <span className="block text-sm font-black text-slate-950">Compare attendance with registrations</span>
+            <span className="mt-1 block text-xs font-semibold text-slate-500">See who attended the intro session and who registered for the main workshop.</span>
+          </span>
+        </span>
+        {open ? <ChevronUp className="size-5 shrink-0 text-slate-500" /> : <ChevronDown className="size-5 shrink-0 text-slate-500" />}
+      </button>
 
-      <div className="mt-4 grid gap-3 md:grid-cols-2">
-        <label className="text-xs font-black uppercase text-slate-500">
-          Intro attendance session
-          <select className="mt-1.5 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold normal-case text-slate-800 outline-none focus:border-indigo-500" onChange={(event) => setSourceSessionId(event.target.value)} value={sourceSessionId}>
-            <option value="">Select attendance session</option>
-            {sessions.map((session) => <option key={session.id} value={session.id}>{session.title || session.workshopName} - {session.sessionDate}</option>)}
-          </select>
-        </label>
-        <label className="text-xs font-black uppercase text-slate-500">
-          Main registration workshop
-          <select className="mt-1.5 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold normal-case text-slate-800 outline-none focus:border-indigo-500" onChange={(event) => setTargetWorkshopId(event.target.value)} value={targetWorkshopId}>
-            <option value="">Select main workshop</option>
-            {workshops.map((workshop) => <option key={workshop.id} value={workshop.id}>{workshop.name}</option>)}
-          </select>
-        </label>
-      </div>
-
-      <div className="mt-4 grid grid-cols-2 gap-2 lg:grid-cols-5">
-        <CompareStat label="Intro attendees" value={comparison.rows.length} />
-        <CompareStat label="Converted" value={comparison.converted} tone="success" />
-        <CompareStat label="Not registered" value={comparison.notRegistered} tone="warning" />
-        <CompareStat label="Conversion" suffix="%" value={comparison.conversionRate} />
-        <CompareStat label="All main registrations" value={comparison.targetRegistrations} />
-      </div>
-
-      <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex rounded-xl border border-slate-200 p-1">
-          {([
-            ["all", "All"],
-            ["converted", "Registered"],
-            ["not_registered", "Not registered"]
-          ] as const).map(([value, label]) => (
-            <button className={`rounded-lg px-3 py-2 text-xs font-black ${status === value ? "bg-slate-950 text-white" : "text-slate-600 hover:bg-slate-50"}`} key={value} onClick={() => setStatus(value)} type="button">{label}</button>
-          ))}
-        </div>
-        <label className="relative block min-w-[260px] flex-1 lg:max-w-md">
-          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
-          <input aria-label="Search comparison by name or mobile" className="min-h-11 w-full rounded-xl border border-slate-200 py-2 pl-10 pr-10 text-sm outline-none focus:border-indigo-500" onChange={(event) => setQuery(event.target.value)} placeholder="Search name or mobile" type="search" value={query} />
-          {query ? <button aria-label="Clear comparison search" className="absolute right-2 top-1/2 grid size-8 -translate-y-1/2 place-items-center rounded-lg text-slate-400 hover:bg-slate-100" onClick={() => setQuery("")} type="button"><X className="size-4" /></button> : null}
-        </label>
-      </div>
-
-      <div className="mt-3 max-h-[440px] overflow-auto rounded-2xl border border-slate-200">
-        <table className="w-full min-w-[720px] text-left text-sm">
-          <thead className="sticky top-0 bg-slate-50 text-xs uppercase text-slate-500">
-            <tr>{["Person", "Mobile", "Intro attendance", "Main registration", "Status"].map((heading) => <th className="px-4 py-3" key={heading}>{heading}</th>)}</tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {visibleRows.map((row) => (
-              <tr className="hover:bg-slate-50" key={row.mobileKey}>
-                <td className="px-4 py-3 font-black text-slate-950">{row.attendance.attendeeName}</td>
-                <td className="px-4 py-3">{row.attendance.mobile}</td>
-                <td className="px-4 py-3 text-slate-600">{new Date(row.attendance.submittedAt).toLocaleString("en-IN")}</td>
-                <td className="px-4 py-3 text-slate-600">{row.registration ? new Date(row.registration.createdAt).toLocaleString("en-IN") : "-"}</td>
-                <td className="px-4 py-3"><span className={`rounded-full px-2.5 py-1 text-xs font-black ${row.registration ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>{row.registration ? "Registered" : "Not registered"}</span></td>
-              </tr>
-            ))}
-            {!visibleRows.length ? <tr><td className="px-4 py-8 text-center text-slate-500" colSpan={5}>{sourceSessionId && targetWorkshopId ? "No matching people in this view." : "Select an attendance session and main workshop to compare."}</td></tr> : null}
-          </tbody>
-        </table>
-      </div>
-
-      <div className="mt-4 flex flex-wrap items-start justify-between gap-3 border-t border-slate-200 pt-4">
-        <div className="flex max-w-2xl gap-3">
-          <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-indigo-50 text-indigo-700"><BrainCircuit className="size-5" /></div>
-          <div>
-            <p className="text-sm font-black text-slate-950">Private local AI insight</p>
-            <p className="text-xs leading-5 text-slate-500">Uses configured Ollama and sends aggregate counts only. Names and mobile numbers stay out of the AI prompt.</p>
-            {insight ? <p className="mt-2 whitespace-pre-line text-sm leading-6 text-slate-700">{insight}</p> : null}
-            {insightError ? <p className="mt-2 text-sm font-semibold text-rose-600">{insightError}</p> : null}
+      {open ? (
+        <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4 md:p-5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h4 className="text-lg font-black text-slate-950">Attendance conversion report</h4>
+              <p className="mt-1 text-sm text-slate-500">Select both lists below. Matching is done using the participant&apos;s mobile number.</p>
+            </div>
+            <button aria-label="Refresh comparison data" className="grid size-10 place-items-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50" disabled={refreshing} onClick={refreshData} title="Refresh attendance data" type="button">
+              <RefreshCw className={`size-4 ${refreshing ? "animate-spin" : ""}`} />
+            </button>
           </div>
+
+          <div className="mt-5 grid gap-4 lg:grid-cols-[1fr_1fr_auto] lg:items-end">
+            <label className="block text-sm font-black text-slate-700">
+              <span className="mr-2 inline-grid size-6 place-items-center rounded-full bg-slate-950 text-xs text-white">1</span>
+              Intro attendance session
+              <select className="mt-2 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-800 outline-none focus:border-indigo-500" onChange={(event) => { setSourceSessionId(event.target.value); setHasCompared(false); }} value={sourceSessionId}>
+                <option value="">Choose attendance session</option>
+                {sessions.map((session) => <option key={session.id} value={session.id}>{session.title || session.workshopName} · {session.sessionDate}</option>)}
+              </select>
+              <span className="mt-1.5 block text-xs font-semibold text-slate-500">People who actually attended.</span>
+            </label>
+            <label className="block text-sm font-black text-slate-700">
+              <span className="mr-2 inline-grid size-6 place-items-center rounded-full bg-slate-950 text-xs text-white">2</span>
+              Main registration workshop
+              <select className="mt-2 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-800 outline-none focus:border-indigo-500" onChange={(event) => { setTargetWorkshopId(event.target.value); setHasCompared(false); }} value={targetWorkshopId}>
+                <option value="">Choose main workshop</option>
+                {workshops.filter((workshop) => !workshop.archived).map((workshop) => <option key={workshop.id} value={workshop.id}>{workshop.name}</option>)}
+              </select>
+              <span className="mt-1.5 block text-xs font-semibold text-slate-500">Workshop registrations to check against.</span>
+            </label>
+            <button className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-indigo-600 px-5 text-sm font-black text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-40" disabled={!sourceSessionId || !targetWorkshopId} onClick={() => { setHasCompared(true); setStatus("all"); setQuery(""); setInsight(""); setInsightError(""); }} type="button">
+              <BarChart3 className="size-4" />
+              <span><span className="mr-2 inline-grid size-6 place-items-center rounded-full bg-white/20 text-xs">3</span>Compare</span>
+            </button>
+          </div>
+
+          {!hasCompared ? (
+            <div className="mt-5 rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center">
+              <p className="text-sm font-black text-slate-700">Choose the two lists, then click Compare.</p>
+              <p className="mt-1 text-xs font-semibold text-slate-500">Results will appear here only after comparison.</p>
+            </div>
+          ) : comparison.rows.length === 0 ? (
+            <div className="mt-5 flex gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4">
+              <AlertCircle className="mt-0.5 size-5 shrink-0 text-amber-700" />
+              <div>
+                <p className="text-sm font-black text-amber-900">No attendance responses found for this session.</p>
+                <p className="mt-1 text-xs font-semibold leading-5 text-amber-800">Select the intro session that contains participant responses, or use the refresh button after attendance has been submitted.</p>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="mt-5 grid grid-cols-2 gap-2 lg:grid-cols-4">
+                <CompareStat label="Attended intro" value={comparison.rows.length} />
+                <CompareStat label="Registered for main" value={comparison.converted} tone="success" />
+                <CompareStat label="Follow-up needed" value={comparison.notRegistered} tone="warning" />
+                <CompareStat label="Conversion rate" suffix="%" value={comparison.conversionRate} />
+              </div>
+
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex rounded-lg border border-slate-200 p-1">
+                  {([
+                    ["all", "All attendees"],
+                    ["converted", "Registered"],
+                    ["not_registered", "Follow-up needed"]
+                  ] as const).map(([value, label]) => (
+                    <button className={`rounded-md px-3 py-2 text-xs font-black ${status === value ? "bg-slate-950 text-white" : "text-slate-600 hover:bg-slate-50"}`} key={value} onClick={() => setStatus(value)} type="button">{label}</button>
+                  ))}
+                </div>
+                <div className="flex flex-1 justify-end gap-2">
+                  <label className="relative block min-w-[240px] max-w-md flex-1">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
+                    <input aria-label="Search comparison by name or mobile" className="min-h-10 w-full rounded-lg border border-slate-200 py-2 pl-10 pr-10 text-sm outline-none focus:border-indigo-500" onChange={(event) => setQuery(event.target.value)} placeholder="Search name or mobile" type="search" value={query} />
+                    {query ? <button aria-label="Clear comparison search" className="absolute right-2 top-1/2 grid size-7 -translate-y-1/2 place-items-center rounded-md text-slate-400 hover:bg-slate-100" onClick={() => setQuery("")} type="button"><X className="size-4" /></button> : null}
+                  </label>
+                  <button aria-label="Export comparison" className="grid size-10 place-items-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50" onClick={exportComparison} title="Export comparison" type="button"><Download className="size-4" /></button>
+                </div>
+              </div>
+
+              <div className="mt-3 max-h-[440px] overflow-auto rounded-lg border border-slate-200">
+                <table className="w-full min-w-[720px] text-left text-sm">
+                  <thead className="sticky top-0 bg-slate-50 text-xs uppercase text-slate-500">
+                    <tr>{["Person", "Mobile", "Intro attendance", "Main registration", "Result"].map((heading) => <th className="px-4 py-3" key={heading}>{heading}</th>)}</tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {visibleRows.map((row) => (
+                      <tr className="hover:bg-slate-50" key={row.mobileKey}>
+                        <td className="px-4 py-3 font-black text-slate-950">{row.attendance.attendeeName}</td>
+                        <td className="px-4 py-3">{row.attendance.mobile}</td>
+                        <td className="px-4 py-3 text-slate-600">{new Date(row.attendance.submittedAt).toLocaleString("en-IN")}</td>
+                        <td className="px-4 py-3 text-slate-600">{row.registration ? new Date(row.registration.createdAt).toLocaleString("en-IN") : "-"}</td>
+                        <td className="px-4 py-3"><span className={`rounded-full px-2.5 py-1 text-xs font-black ${row.registration ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>{row.registration ? "Registered" : "Follow up"}</span></td>
+                      </tr>
+                    ))}
+                    {!visibleRows.length ? <tr><td className="px-4 py-8 text-center text-slate-500" colSpan={5}>No people match this filter.</td></tr> : null}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="mt-4 flex flex-wrap items-start justify-between gap-3 border-t border-slate-200 pt-4">
+                <div className="flex max-w-2xl gap-3">
+                  <div className="grid size-9 shrink-0 place-items-center rounded-lg bg-indigo-50 text-indigo-700"><BrainCircuit className="size-4" /></div>
+                  <div>
+                    <p className="text-sm font-black text-slate-950">Optional local AI summary</p>
+                    <p className="text-xs leading-5 text-slate-500">Creates a short action summary from counts only. No names or mobile numbers are sent.</p>
+                    {insight ? <p className="mt-2 whitespace-pre-line text-sm leading-6 text-slate-700">{insight}</p> : null}
+                    {insightError ? <p className="mt-2 text-sm font-semibold text-rose-600">{insightError}</p> : null}
+                  </div>
+                </div>
+                <button className="inline-flex items-center gap-2 rounded-lg border border-indigo-200 px-4 py-2.5 text-sm font-bold text-indigo-700 hover:bg-indigo-50 disabled:opacity-50" disabled={generatingInsight} onClick={generateInsight} type="button">
+                  <BrainCircuit className="size-4" />
+                  {generatingInsight ? "Analyzing..." : "Generate summary"}
+                </button>
+              </div>
+            </>
+          )}
         </div>
-        <button className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-bold text-white hover:bg-indigo-700 disabled:opacity-50" disabled={!comparison.rows.length || generatingInsight} onClick={generateInsight} type="button">
-          <BarChart3 className="size-4" />
-          {generatingInsight ? "Analyzing..." : "Generate insight"}
-        </button>
-      </div>
+      ) : null}
     </section>
   );
 }
