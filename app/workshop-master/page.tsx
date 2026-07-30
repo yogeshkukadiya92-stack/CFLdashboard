@@ -5,6 +5,7 @@ import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
 import { DuplicateResponseFilter } from "@/components/duplicate-response-filter";
 import { AdvancedResponseFilters } from "@/components/advanced-response-filters";
 import { WorkshopCohortCompare } from "@/components/workshop-cohort-compare";
+import { MultiWorkshopOverlap } from "@/components/multi-workshop-overlap";
 import { AlertCircle, Archive, ArrowDown, ArrowUp, BarChart3, Bold, Check, CheckSquare, ChevronDown, Circle, Copy, Download, Edit3, ExternalLink, Eye, Files, Heading, Image, Italic, LayoutList, Link2, List, ListOrdered, Mail, MessageCircle, Monitor, Palette, Plus, QrCode, RefreshCw, Route, Save, Search, Smartphone, Sparkles, Trash2, Type, Underline, Upload, UsersRound, X } from "lucide-react";
 import { hydrateLiveState, readLocalArray, readLocalObject, saveLiveState } from "@/lib/live-state";
 import { buildRegistrationUrl, normalizeBaseUrl } from "@/lib/registration-url";
@@ -1149,6 +1150,7 @@ export default function WorkshopMasterPage() {
           </div>
 
           <WorkshopCohortCompare registrations={registrations} workshops={records} />
+          <MultiWorkshopOverlap registrations={registrations} workshops={records} />
 
           {selectedWorkshop ? (
             <section className="mt-5 rounded-3xl border border-indigo-100 bg-indigo-50/50 p-5">
