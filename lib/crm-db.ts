@@ -1113,6 +1113,71 @@ export async function listCrmRegistrations(input: {
   };
 }
 
+export async function listLiveRegistrationsByAppWorkshopId(appWorkshopId: string) {
+  await ensureCrmSchema();
+  const pool = requirePool();
+  const normalizedWorkshopId = `app:${appWorkshopId.trim().toLowerCase()}`;
+  const result = await pool.query<{
+    amount_due: string;
+    amount_paid: string;
+    batch: string;
+    city: string;
+    email: string;
+    external_id: string | null;
+    facilitator: string;
+    full_name: string;
+    mobile: string;
+    payment_mode: string;
+    registered_at: string;
+    status: string;
+    workshop_title: string;
+  }>(`
+    SELECT
+      registration.external_id,
+      registration.registered_at,
+      registration.status,
+      registration.payment_mode,
+      registration.amount_paid,
+      registration.amount_due,
+      client.name AS full_name,
+      client.mobile,
+      client.email,
+      client.city,
+      workshop.name AS workshop_title,
+      batch.batch_label AS batch,
+      facilitator.name AS facilitator
+    FROM crm_registrations AS registration
+    JOIN crm_clients AS client ON client.id = registration.client_id
+    JOIN crm_workshop_masters AS workshop ON workshop.id = registration.workshop_id
+    JOIN crm_workshop_batches AS batch ON batch.id = registration.workshop_batch_id
+    JOIN crm_facilitators AS facilitator ON facilitator.id = batch.facilitator_id
+    WHERE registration.tenant_id = $1
+      AND workshop.normalized_name = $2
+    ORDER BY registration.id DESC
+    LIMIT 5000
+  `, [TENANT_ID, normalizedWorkshopId]);
+
+  return result.rows.map((row, index) => ({
+    amountDue: Number(row.amount_due) || 0,
+    amountPaid: Number(row.amount_paid) || 0,
+    batch: row.batch || "Main Batch",
+    city: row.city || "",
+    createdAt: row.registered_at,
+    email: row.email || "",
+    facilitator: row.facilitator || "CFL Facilitator",
+    fullName: row.full_name || "Guest",
+    id: row.external_id || `crm-recovered-${appWorkshopId}-${index}-${row.mobile.replace(/\D/g, "").slice(-10)}`,
+    mobile: row.mobile || "",
+    paymentMode: row.payment_mode === "Part" ? "Part" as const : "Full" as const,
+    source: "manual" as const,
+    status: row.status === "Due" ? "Due" as const : "Paid" as const,
+    whatsappVerificationStatus: "not_required" as const,
+    workshopId: appWorkshopId,
+    workshopSlug: row.workshop_title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, ""),
+    workshopTitle: row.workshop_title
+  }));
+}
+
 function cleanMobile(value: string) {
   const digits = value.replace(/\D/g, "");
   return digits.length > 10 && digits.startsWith("91") ? digits.slice(-10) : digits;

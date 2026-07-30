@@ -435,7 +435,7 @@ export default function WorkshopMasterPage() {
     window.requestAnimationFrame(() => window.scrollTo({ behavior: "smooth", top: 0 }));
   }
 
-  function openWorkshop(record: WorkshopRecord) {
+  async function openWorkshop(record: WorkshopRecord) {
     setRegistrations(readLocalArray<RegistrationEntry>(REGISTRATION_STORAGE_KEY));
     setParticipantSearch("");
     try {
@@ -450,6 +450,22 @@ export default function WorkshopMasterPage() {
       setShowParticipants(false);
     }
     setSelectedWorkshopId(record.id);
+    try {
+      const response = await fetch("/api/crm/registrations/sync", {
+        body: JSON.stringify({ workshopId: record.id }),
+        headers: { "Content-Type": "application/json" },
+        method: "POST"
+      });
+      if (!response.ok) return;
+      const result = await response.json() as { recovered?: number; registrations?: RegistrationEntry[] };
+      if (Array.isArray(result.registrations)) {
+        setRegistrations(result.registrations);
+        window.localStorage.setItem(REGISTRATION_STORAGE_KEY, JSON.stringify(result.registrations));
+      }
+      if (result.recovered) setMessage(`${result.recovered} imported registrations restored and synced.`);
+    } catch {
+      // Keep locally available registrations visible if CRM recovery is unavailable.
+    }
   }
 
   function deleteRecord(id: string) {

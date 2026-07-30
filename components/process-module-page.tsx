@@ -1537,6 +1537,16 @@ function ImportWorkshopDataWorkflow() {
         if (failedRows) throw new Error(`${failedRows} registration row(s) could not be saved.`);
         imported += group.length;
       }
+      await hydrateLiveState();
+      const currentRegistrations = readLocalStorageArray<Record<string, unknown>>(REGISTRATION_STORAGE_KEY);
+      const importedIds = new Set(validPayloads.map((payload) => payload.id));
+      const saved = await saveLiveState({
+        registrations: [
+          ...validPayloads,
+          ...currentRegistrations.filter((registration) => !importedIds.has(String(registration.id ?? "")))
+        ].slice(0, 5000)
+      });
+      if (!saved) throw new Error("Rows reached CRM, but the Workshop Master sync failed. Please retry the upload.");
       setSuccess(`${imported} workshop registration rows imported successfully.`);
       setFile(null);
       setFileName("");
