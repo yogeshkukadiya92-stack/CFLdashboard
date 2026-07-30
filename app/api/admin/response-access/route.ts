@@ -10,9 +10,11 @@ type WorkshopOption = { id: string; name: string };
 
 function cleanPermissions(value: unknown): ResponseAccessPermissions {
   const input = value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+  const manageConfirmations = Boolean(input.manageConfirmations);
   return {
     exportCsv: Boolean(input.exportCsv),
-    revealContact: Boolean(input.revealContact),
+    manageConfirmations,
+    revealContact: manageConfirmations || Boolean(input.revealContact),
     viewAnswers: input.viewAnswers !== false
   };
 }

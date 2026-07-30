@@ -4,6 +4,7 @@ import { AdminPlatformShell } from "@/components/admin-platform-shell";
 import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
 import { DuplicateResponseFilter } from "@/components/duplicate-response-filter";
 import { AdvancedResponseFilters } from "@/components/advanced-response-filters";
+import { WorkshopCohortCompare } from "@/components/workshop-cohort-compare";
 import { AlertCircle, Archive, ArrowDown, ArrowUp, BarChart3, Bold, Check, CheckSquare, ChevronDown, Circle, Copy, Download, Edit3, ExternalLink, Eye, Files, Heading, Image, Italic, LayoutList, Link2, List, ListOrdered, Mail, MessageCircle, Monitor, Palette, Plus, QrCode, RefreshCw, Route, Save, Search, Smartphone, Sparkles, Trash2, Type, Underline, UsersRound, X } from "lucide-react";
 import { hydrateLiveState, readLocalArray, readLocalObject, saveLiveState } from "@/lib/live-state";
 import { buildRegistrationUrl, normalizeBaseUrl } from "@/lib/registration-url";
@@ -681,6 +682,10 @@ export default function WorkshopMasterPage() {
       "City",
       "Source",
       "WhatsApp Verification",
+      "Call Confirmation",
+      "Call Note",
+      "Confirmation Updated By",
+      "Confirmation Updated At",
       "Payment Status",
       "Paid",
       "Due",
@@ -694,6 +699,10 @@ export default function WorkshopMasterPage() {
       entry.city,
       entry.source ?? "Registration Link",
       entry.whatsappVerificationStatus ?? "Not Required",
+      entry.confirmationStatus ?? "pending",
+      entry.confirmationNote ?? "",
+      entry.confirmationUpdatedBy ?? "",
+      entry.confirmationUpdatedAt ? formatSubmittedAt(entry.confirmationUpdatedAt) : "",
       entry.status,
       entry.amountPaid,
       entry.amountDue,
@@ -1075,6 +1084,8 @@ export default function WorkshopMasterPage() {
             </table>
           </div>
 
+          <WorkshopCohortCompare registrations={registrations} workshops={records} />
+
           {selectedWorkshop ? (
             <section className="mt-5 rounded-3xl border border-indigo-100 bg-indigo-50/50 p-5">
               <div className="flex flex-wrap items-start justify-between gap-3">
@@ -1167,10 +1178,10 @@ export default function WorkshopMasterPage() {
                     </label>
                   </div>
                   <div className="overflow-x-auto">
-                  <table className="min-w-[1020px] w-full text-left text-sm">
+                  <table className="min-w-[1240px] w-full text-left text-sm">
                     <thead className="bg-slate-50 text-xs uppercase text-slate-500">
                       <tr>
-                        {["Action", "User", "Mobile", "Email", "City", "Source", "WhatsApp", "Payment", "Paid", "Due", "Submitted"].map((head) => (
+                        {["Action", "User", "Mobile", "Email", "City", "Source", "WhatsApp", "Confirmation", "Call Note", "Payment", "Paid", "Due", "Submitted"].map((head) => (
                           <th className="px-4 py-3" key={head}>{head}</th>
                         ))}
                       </tr>
@@ -1196,6 +1207,11 @@ export default function WorkshopMasterPage() {
                           <td className="px-4 py-4"><RegistrationSourceBadge source={entry.source} /></td>
                           <td className="px-4 py-4"><WhatsAppVerificationBadge status={entry.whatsappVerificationStatus} /></td>
                           <td className="px-4 py-4">
+                            <RegistrationConfirmationBadge status={entry.confirmationStatus} />
+                            {entry.confirmationUpdatedBy ? <p className="mt-1 text-xs text-slate-500">{entry.confirmationUpdatedBy}{entry.confirmationUpdatedAt ? ` · ${formatSubmittedAt(entry.confirmationUpdatedAt)}` : ""}</p> : null}
+                          </td>
+                          <td className="max-w-[240px] px-4 py-4 text-xs leading-5 text-slate-600">{entry.confirmationNote || "-"}</td>
+                          <td className="px-4 py-4">
                             <span className={`rounded-full px-3 py-1 text-xs font-black ${entry.status === "Paid" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
                               {entry.status}
                             </span>
@@ -1206,7 +1222,7 @@ export default function WorkshopMasterPage() {
                         </tr>
 	                      )) : (
 	                        <tr>
-	                          <td className="px-4 py-8 text-center text-slate-500" colSpan={11}>
+	                          <td className="px-4 py-8 text-center text-slate-500" colSpan={13}>
 	                            {participantSearch ? "No response found for this name or mobile number." : "No users registered in this workshop yet."}
 	                          </td>
 	                        </tr>
@@ -2167,6 +2183,29 @@ function WhatsAppVerificationBadge({ status }: { status?: RegistrationEntry["wha
     return <span className="rounded-full bg-rose-50 px-3 py-1 text-xs font-black text-rose-700">Not Verified</span>;
   }
   return <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-500">Not Required</span>;
+}
+
+function RegistrationConfirmationBadge({ status = "pending" }: { status?: RegistrationEntry["confirmationStatus"] }) {
+  const labels = {
+    callback: "Call back",
+    cancelled: "Cancelled",
+    carried_forward: "Carried forward",
+    confirmed: "Confirmed",
+    no_answer: "No answer",
+    not_confirmed: "Not confirmed",
+    pending: "Pending",
+    repeater: "Repeater"
+  };
+  const tone = status === "confirmed"
+    ? "bg-emerald-50 text-emerald-700"
+    : status === "not_confirmed" || status === "cancelled"
+      ? "bg-rose-50 text-rose-700"
+      : status === "repeater"
+        ? "bg-indigo-50 text-indigo-700"
+        : status === "carried_forward"
+          ? "bg-sky-50 text-sky-700"
+          : "bg-amber-50 text-amber-700";
+  return <span className={`rounded-full px-2.5 py-1 text-xs font-black ${tone}`}>{labels[status]}</span>;
 }
 
 function RegistrationSourceBadge({ source }: { source?: RegistrationEntry["source"] }) {

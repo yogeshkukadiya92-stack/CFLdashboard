@@ -10,7 +10,7 @@ import {
   verifyResponseAccessCode,
   verifyResponseViewerSession
 } from "@/lib/response-access";
-import type { RegistrationEntry, ResponseAccessGrant } from "@/lib/types";
+import type { RegistrationConfirmationActivity, RegistrationConfirmationStatus, RegistrationEntry, ResponseAccessGrant } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -32,13 +32,14 @@ function unavailable(grant?: ResponseAccessGrant) {
 }
 
 function sanitizeRegistration(entry: RegistrationEntry, grant: ResponseAccessGrant) {
+  const canManage = grant.permissions.manageConfirmations;
   return {
     id: entry.id,
     workshopId: entry.workshopId,
     workshopTitle: entry.workshopTitle,
     fullName: entry.fullName,
-    mobile: grant.permissions.revealContact ? entry.mobile : maskResponseMobile(entry.mobile),
-    email: grant.permissions.revealContact ? entry.email : maskResponseEmail(entry.email),
+    mobile: grant.permissions.revealContact || canManage ? entry.mobile : maskResponseMobile(entry.mobile),
+    email: grant.permissions.revealContact || canManage ? entry.email : maskResponseEmail(entry.email),
     city: entry.city,
     facilitator: entry.facilitator,
     status: entry.status,
@@ -48,8 +49,26 @@ function sanitizeRegistration(entry: RegistrationEntry, grant: ResponseAccessGra
     source: entry.source,
     createdAt: entry.createdAt,
     batch: entry.batch,
-    answers: grant.permissions.viewAnswers ? entry.answers : undefined
+    answers: grant.permissions.viewAnswers ? entry.answers : undefined,
+    confirmationStatus: entry.confirmationStatus ?? "pending",
+    confirmationNote: canManage ? entry.confirmationNote : undefined,
+    confirmationUpdatedAt: entry.confirmationUpdatedAt,
+    confirmationUpdatedBy: entry.confirmationUpdatedBy,
+    isRepeater: entry.isRepeater,
+    carriedForwardToWorkshopId: entry.carriedForwardToWorkshopId,
+    carriedForwardToWorkshopTitle: entry.carriedForwardToWorkshopTitle,
+    confirmationHistory: canManage ? entry.confirmationHistory : undefined
   };
+}
+
+function activeWorkshopOptions(state: Awaited<ReturnType<typeof getAppState>>) {
+  const workshops = Array.isArray(state?.workshops) ? state.workshops : [];
+  return workshops.flatMap((value: unknown) => {
+    if (!value || typeof value !== "object") return [];
+    const item = value as { archived?: boolean; id?: string; name?: string };
+    if (item.archived || !item.id || !item.name) return [];
+    return [{ id: item.id, name: item.name }];
+  });
 }
 
 function responseData(state: Awaited<ReturnType<typeof getAppState>>, grant: ResponseAccessGrant) {
@@ -65,9 +84,15 @@ function responseData(state: Awaited<ReturnType<typeof getAppState>>, grant: Res
       workshopIds: grant.workshopIds,
       workshopNames: grant.workshopNames
     },
+    carryForwardTargets: activeWorkshopOptions(state),
     workshops: grant.workshopIds.map((id) => ({ id, name: workshopNames.get(id) ?? id, count: filtered.filter((entry) => entry.workshopId === id || entry.workshopTitle.trim().toLowerCase() === (workshopNames.get(id) ?? "").trim().toLowerCase()).length })),
     registrations: filtered.map((entry) => sanitizeRegistration(entry, grant))
   };
+}
+
+function grantAllowsRegistration(grant: ResponseAccessGrant, entry: RegistrationEntry) {
+  const allowedNames = new Set(grant.workshopNames.map((name) => name.trim().toLowerCase()));
+  return grant.workshopIds.includes(entry.workshopId) || allowedNames.has(entry.workshopTitle.trim().toLowerCase());
 }
 
 export async function GET(request: NextRequest, context: { params: Promise<{ token: string }> }) {
@@ -121,6 +146,113 @@ export async function POST(request: NextRequest, context: { params: Promise<{ to
     return response;
   } catch {
     return NextResponse.json({ error: "Could not verify access code." }, { status: 500 });
+  }
+}
+
+export async function PATCH(request: NextRequest, context: { params: Promise<{ token: string }> }) {
+  if (!(await isDbEnabled())) return NextResponse.json({ error: "Response access is unavailable." }, { status: 503 });
+  try {
+    const { token } = await context.params;
+    const { grant, state } = await findGrant(token);
+    const error = unavailable(grant);
+    if (error || !grant) return NextResponse.json({ error }, { status: 404 });
+    if (!verifyResponseViewerSession(request.cookies.get(RESPONSE_VIEWER_COOKIE)?.value, grant)) {
+      return NextResponse.json({ error: "Your response access session has expired." }, { status: 401 });
+    }
+    if (!grant.permissions.manageConfirmations) {
+      return NextResponse.json({ error: "You do not have confirmation permission." }, { status: 403 });
+    }
+
+    const body = await request.json().catch(() => ({})) as Record<string, unknown>;
+    const registrationId = String(body.registrationId ?? "").trim();
+    const action = String(body.action ?? "").trim() as RegistrationConfirmationActivity["action"];
+    const note = String(body.note ?? "").trim().slice(0, 2000);
+    const allowedActions: RegistrationConfirmationActivity["action"][] = ["status", "note", "carry_forward", "repeater"];
+    if (!registrationId || !allowedActions.includes(action)) {
+      return NextResponse.json({ error: "Registration and a valid action are required." }, { status: 400 });
+    }
+
+    const registrations = (Array.isArray(state?.registrations) ? state.registrations : []) as RegistrationEntry[];
+    const current = registrations.find((entry) => entry.id === registrationId);
+    if (!current || !grantAllowsRegistration(grant, current)) {
+      return NextResponse.json({ error: "Registration is outside your assigned workshop access." }, { status: 404 });
+    }
+
+    const validStatuses: RegistrationConfirmationStatus[] = ["pending", "confirmed", "not_confirmed", "no_answer", "callback", "cancelled"];
+    let status = String(body.status ?? current.confirmationStatus ?? "pending") as RegistrationConfirmationStatus;
+    let targetWorkshopId: string | undefined;
+    let targetWorkshopTitle: string | undefined;
+    let forwardedRegistration: RegistrationEntry | undefined;
+    if (action === "status" && !validStatuses.includes(status)) {
+      return NextResponse.json({ error: "Choose a valid call confirmation status." }, { status: 400 });
+    }
+    if (action === "note" && !note) {
+      return NextResponse.json({ error: "Write a note before saving." }, { status: 400 });
+    }
+    if (action === "repeater") status = "repeater";
+    if (action === "carry_forward") {
+      targetWorkshopId = String(body.targetWorkshopId ?? "").trim();
+      const target = activeWorkshopOptions(state).find((workshop: { id: string; name: string }) => workshop.id === targetWorkshopId);
+      if (!target || target.id === current.workshopId) {
+        return NextResponse.json({ error: "Select a different active workshop." }, { status: 400 });
+      }
+      targetWorkshopTitle = target.name;
+      status = "carried_forward";
+      const alreadyForwarded = registrations.some((entry) =>
+        entry.carriedForwardFromRegistrationId === current.id &&
+        entry.workshopId === target.id
+      );
+      if (!alreadyForwarded) {
+        forwardedRegistration = {
+          ...current,
+          id: crypto.randomUUID(),
+          workshopId: target.id,
+          workshopSlug: "",
+          workshopTitle: target.name,
+          source: "manual",
+          createdAt: new Date().toISOString(),
+          confirmationStatus: "pending",
+          confirmationNote: "",
+          confirmationUpdatedAt: undefined,
+          confirmationUpdatedBy: undefined,
+          confirmationHistory: [],
+          carriedForwardFromRegistrationId: current.id,
+          carriedForwardToWorkshopId: undefined,
+          carriedForwardToWorkshopTitle: undefined
+        };
+      }
+    }
+
+    const now = new Date().toISOString();
+    const activity: RegistrationConfirmationActivity = {
+      id: crypto.randomUUID(),
+      action,
+      status,
+      note: note || undefined,
+      targetWorkshopId,
+      targetWorkshopTitle,
+      actorGrantId: grant.id,
+      actorName: grant.recipientName,
+      createdAt: now
+    };
+    const updated: RegistrationEntry = {
+      ...current,
+      confirmationStatus: action === "note" ? current.confirmationStatus ?? "pending" : status,
+      confirmationNote: note || current.confirmationNote,
+      confirmationUpdatedAt: now,
+      confirmationUpdatedBy: grant.recipientName,
+      isRepeater: action === "repeater" ? true : current.isRepeater,
+      carriedForwardToWorkshopId: targetWorkshopId ?? current.carriedForwardToWorkshopId,
+      carriedForwardToWorkshopTitle: targetWorkshopTitle ?? current.carriedForwardToWorkshopTitle,
+      confirmationHistory: [activity, ...(current.confirmationHistory ?? [])].slice(0, 200)
+    };
+    const next = registrations.map((entry) => entry.id === current.id ? updated : entry);
+    if (forwardedRegistration) next.unshift(forwardedRegistration);
+    await saveAppState({ registrations: next });
+    const nextState = { ...state, registrations: next };
+    return NextResponse.json({ ok: true, ...responseData(nextState, grant) });
+  } catch {
+    return NextResponse.json({ error: "Could not update registration confirmation." }, { status: 500 });
   }
 }
 

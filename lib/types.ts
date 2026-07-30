@@ -195,10 +195,42 @@ export interface RegistrationEntry {
   createdAt: string;
   batch?: string;
   answers?: Record<string, string>;
+  confirmationStatus?: RegistrationConfirmationStatus;
+  confirmationNote?: string;
+  confirmationUpdatedAt?: string;
+  confirmationUpdatedBy?: string;
+  isRepeater?: boolean;
+  carriedForwardFromRegistrationId?: string;
+  carriedForwardToWorkshopId?: string;
+  carriedForwardToWorkshopTitle?: string;
+  confirmationHistory?: RegistrationConfirmationActivity[];
+}
+
+export type RegistrationConfirmationStatus =
+  | "pending"
+  | "confirmed"
+  | "not_confirmed"
+  | "no_answer"
+  | "callback"
+  | "cancelled"
+  | "carried_forward"
+  | "repeater";
+
+export interface RegistrationConfirmationActivity {
+  id: string;
+  action: "status" | "note" | "carry_forward" | "repeater";
+  status: RegistrationConfirmationStatus;
+  note?: string;
+  targetWorkshopId?: string;
+  targetWorkshopTitle?: string;
+  actorGrantId: string;
+  actorName: string;
+  createdAt: string;
 }
 
 export interface ResponseAccessPermissions {
   exportCsv: boolean;
+  manageConfirmations: boolean;
   revealContact: boolean;
   viewAnswers: boolean;
 }

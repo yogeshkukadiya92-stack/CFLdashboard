@@ -16,6 +16,10 @@ import {
   FileText,
   KeyRound,
   LogOut,
+  MessageSquareText,
+  PhoneCall,
+  Repeat2,
+  RotateCcw,
   Search,
   ShieldCheck,
   UserRound,
@@ -27,13 +31,23 @@ import { useEffect, useMemo, useState } from "react";
 
 type ViewerGrant = {
   recipientName: string;
-  permissions: { exportCsv: boolean; revealContact: boolean; viewAnswers: boolean };
+  permissions: { exportCsv: boolean; manageConfirmations: boolean; revealContact: boolean; viewAnswers: boolean };
   expiresAt?: string;
   workshopIds: string[];
   workshopNames: string[];
 };
 
 type ViewerWorkshop = { id: string; name: string; count: number };
+type ConfirmationStatus = "pending" | "confirmed" | "not_confirmed" | "no_answer" | "callback" | "cancelled" | "carried_forward" | "repeater";
+type ConfirmationActivity = {
+  id: string;
+  action: "status" | "note" | "carry_forward" | "repeater";
+  status: ConfirmationStatus;
+  note?: string;
+  targetWorkshopTitle?: string;
+  actorName: string;
+  createdAt: string;
+};
 
 type ViewerRegistration = {
   id: string;
@@ -51,11 +65,20 @@ type ViewerRegistration = {
   createdAt: string;
   batch?: string;
   answers?: Record<string, string>;
+  confirmationStatus?: ConfirmationStatus;
+  confirmationNote?: string;
+  confirmationUpdatedAt?: string;
+  confirmationUpdatedBy?: string;
+  isRepeater?: boolean;
+  carriedForwardToWorkshopId?: string;
+  carriedForwardToWorkshopTitle?: string;
+  confirmationHistory?: ConfirmationActivity[];
 };
 
 type ViewerData = {
   authorized: true;
   grant: ViewerGrant;
+  carryForwardTargets: Array<{ id: string; name: string }>;
   workshops: ViewerWorkshop[];
   registrations: ViewerRegistration[];
 };
@@ -74,6 +97,7 @@ export default function ResponseViewerPage() {
   const [search, setSearch] = useState("");
   const [workshopId, setWorkshopId] = useState("all");
   const [selected, setSelected] = useState<ViewerRegistration | null>(null);
+  const [confirmationTarget, setConfirmationTarget] = useState<ViewerRegistration | null>(null);
   const [hideDuplicates, setHideDuplicates] = useState(false);
   const [responseFilters, setResponseFilters] = useState<ResponseFilterState>({ ...emptyResponseFilters });
 
@@ -129,6 +153,19 @@ export default function ResponseViewerPage() {
     setWorkshopId("all");
   }
 
+  async function updateConfirmation(input: { action: ConfirmationActivity["action"]; note: string; status?: ConfirmationStatus; targetWorkshopId?: string }) {
+    if (!confirmationTarget) return;
+    const response = await fetch(`/api/response-view/${encodeURIComponent(token)}`, {
+      body: JSON.stringify({ registrationId: confirmationTarget.id, ...input }),
+      headers: { "Content-Type": "application/json" },
+      method: "PATCH"
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.error || "Could not save confirmation.");
+    setData(result as ViewerData);
+    setConfirmationTarget(null);
+  }
+
   const matchingResponses = useMemo(() => {
     if (!data) return [];
     const value = search.trim().toLowerCase();
@@ -138,7 +175,7 @@ export default function ResponseViewerPage() {
       return inWorkshop && inSearch;
     });
   }, [data, search, workshopId]);
-  const filterRecords = useMemo(() => matchingResponses.map((entry) => ({ ...entry, answers: { "Full Name": entry.fullName, Mobile: entry.mobile, Email: entry.email, City: entry.city, "Payment Status": entry.status, Source: entry.source ?? "Registration Link", ...(entry.answers ?? {}) }, submittedAt: entry.createdAt })), [matchingResponses]);
+  const filterRecords = useMemo(() => matchingResponses.map((entry) => ({ ...entry, answers: { "Full Name": entry.fullName, Mobile: entry.mobile, Email: entry.email, City: entry.city, "Payment Status": entry.status, "Call Confirmation": entry.confirmationStatus ?? "pending", "Call Note": entry.confirmationNote ?? "", Repeater: entry.isRepeater ? "Yes" : "No", Source: entry.source ?? "Registration Link", ...(entry.answers ?? {}) }, submittedAt: entry.createdAt })), [matchingResponses]);
   const advancedFiltered = useMemo(() => applyResponseFilters(filterRecords, responseFilters), [filterRecords, responseFilters]);
   const filtered = useMemo(() => hideDuplicates ? hideDuplicateResponses(advancedFiltered, {
       email: (entry) => entry.email,
@@ -181,8 +218,9 @@ export default function ResponseViewerPage() {
     );
   }
 
-  const verified = data.registrations.filter((entry) => entry.whatsappVerificationStatus === "verified").length;
-  const due = data.registrations.filter((entry) => entry.status === "Due").length;
+  const confirmed = data.registrations.filter((entry) => entry.confirmationStatus === "confirmed").length;
+  const pending = data.registrations.filter((entry) => !entry.confirmationStatus || entry.confirmationStatus === "pending").length;
+  const repeaters = data.registrations.filter((entry) => entry.isRepeater).length;
 
   return (
     <main className="min-h-screen bg-slate-100 text-slate-950">
@@ -195,14 +233,15 @@ export default function ResponseViewerPage() {
 
       <div className="mx-auto max-w-[1500px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
         <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
-          <div><p className="text-xs font-black uppercase tracking-widest text-emerald-700">Read-only report</p><h1 className="mt-2 text-3xl font-black sm:text-4xl">Registration Responses</h1><p className="mt-2 text-sm font-semibold text-slate-500">Live responses from {data.workshops.length} workshop{data.workshops.length === 1 ? "" : "s"}.</p></div>
+          <div><p className="text-xs font-black uppercase tracking-widest text-emerald-700">{data.grant.permissions.manageConfirmations ? "Registration confirmation desk" : "Read-only report"}</p><h1 className="mt-2 text-3xl font-black sm:text-4xl">Registration Responses</h1><p className="mt-2 text-sm font-semibold text-slate-500">Live responses from {data.workshops.length} workshop{data.workshops.length === 1 ? "" : "s"}.</p></div>
           {data.grant.expiresAt ? <p className="inline-flex items-center gap-2 text-xs font-bold text-slate-500"><Clock3 className="size-4 text-amber-600" />Access expires {formatDateTime(data.grant.expiresAt)}</p> : null}
         </div>
 
-        <section className="mt-6 grid gap-px overflow-hidden border border-slate-200 bg-slate-200 sm:grid-cols-3">
+        <section className="mt-6 grid gap-px overflow-hidden border border-slate-200 bg-slate-200 sm:grid-cols-2 lg:grid-cols-4">
           <Stat icon={Users} label="Total responses" value={data.registrations.length} />
-          <Stat icon={CheckCircle2} label="WhatsApp verified" value={verified} />
-          <Stat icon={Clock3} label="Payment due" value={due} />
+          <Stat icon={CheckCircle2} label="Call confirmed" value={confirmed} />
+          <Stat icon={PhoneCall} label="Pending calls" value={pending} />
+          <Stat icon={Repeat2} label="Repeaters" value={repeaters} />
         </section>
 
         <section className="mt-6 border border-slate-200 bg-white">
@@ -224,13 +263,13 @@ export default function ResponseViewerPage() {
 
           <div className="hidden overflow-x-auto lg:block">
             <table className="w-full min-w-[1120px] text-left text-sm">
-              <thead className="bg-slate-50 text-[11px] font-black uppercase text-slate-500"><tr>{["Participant", "Contact", "Workshop", "WhatsApp", "Payment", "Source", "Submitted", ""].map((heading) => <th className="px-5 py-3" key={heading}>{heading}</th>)}</tr></thead>
-              <tbody className="divide-y divide-slate-100">{filtered.map((entry) => <ResponseRow canViewAnswers={data.grant.permissions.viewAnswers} entry={entry} key={entry.id} onSelect={setSelected} />)}{!filtered.length ? <tr><td className="px-5 py-16 text-center font-bold text-slate-500" colSpan={8}>No responses match your filters.</td></tr> : null}</tbody>
+              <thead className="bg-slate-50 text-[11px] font-black uppercase text-slate-500"><tr>{["Participant", "Contact", "Workshop", "Confirmation", "Payment", "Source", "Submitted", "Actions"].map((heading) => <th className="px-5 py-3" key={heading}>{heading}</th>)}</tr></thead>
+              <tbody className="divide-y divide-slate-100">{filtered.map((entry) => <ResponseRow canManage={data.grant.permissions.manageConfirmations} canViewAnswers={data.grant.permissions.viewAnswers} entry={entry} key={entry.id} onManage={setConfirmationTarget} onSelect={setSelected} />)}{!filtered.length ? <tr><td className="px-5 py-16 text-center font-bold text-slate-500" colSpan={8}>No responses match your filters.</td></tr> : null}</tbody>
             </table>
           </div>
 
           <div className="divide-y divide-slate-200 lg:hidden">
-            {filtered.map((entry) => <MobileResponse canViewAnswers={data.grant.permissions.viewAnswers} entry={entry} key={entry.id} onSelect={setSelected} />)}
+            {filtered.map((entry) => <MobileResponse canManage={data.grant.permissions.manageConfirmations} canViewAnswers={data.grant.permissions.viewAnswers} entry={entry} key={entry.id} onManage={setConfirmationTarget} onSelect={setSelected} />)}
             {!filtered.length ? <p className="px-5 py-16 text-center text-sm font-bold text-slate-500">No responses match your filters.</p> : null}
           </div>
         </section>
@@ -238,6 +277,7 @@ export default function ResponseViewerPage() {
       </div>
 
       {selected ? <AnswerDialog entry={selected} onClose={() => setSelected(null)} /> : null}
+      {confirmationTarget ? <ConfirmationDialog entry={confirmationTarget} onClose={() => setConfirmationTarget(null)} onSave={updateConfirmation} workshops={data.carryForwardTargets} /> : null}
     </main>
   );
 }
@@ -254,14 +294,14 @@ function FilterButton({ active, count, label, onClick }: { active: boolean; coun
   return <button className={`shrink-0 border px-3.5 py-2 text-xs font-black ${active ? "border-slate-950 bg-slate-950 text-white" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`} onClick={onClick} type="button">{label} <span className={active ? "text-emerald-300" : "text-slate-400"}>{count}</span></button>;
 }
 
-function ResponseRow({ canViewAnswers, entry, onSelect }: { canViewAnswers: boolean; entry: ViewerRegistration; onSelect: (entry: ViewerRegistration) => void }) {
+function ResponseRow({ canManage, canViewAnswers, entry, onManage, onSelect }: { canManage: boolean; canViewAnswers: boolean; entry: ViewerRegistration; onManage: (entry: ViewerRegistration) => void; onSelect: (entry: ViewerRegistration) => void }) {
   const hasAnswers = Boolean(entry.answers && Object.keys(entry.answers).length);
-  return <tr className="hover:bg-emerald-50/30"><td className="px-5 py-4"><p className="font-black text-slate-950">{entry.fullName || "Unnamed"}</p><p className="mt-1 text-xs font-semibold text-slate-500">{entry.city || "City not added"}</p></td><td className="px-5 py-4"><p className="font-bold text-slate-700">{entry.mobile || "-"}</p><p className="mt-1 text-xs text-slate-500">{entry.email || "-"}</p></td><td className="px-5 py-4"><p className="max-w-[220px] font-bold text-slate-700">{entry.workshopTitle}</p>{entry.batch ? <p className="mt-1 text-xs text-slate-500">{entry.batch}</p> : null}</td><td className="px-5 py-4"><WhatsAppBadge value={entry.whatsappVerificationStatus} /></td><td className="px-5 py-4"><PaymentBadge status={entry.status} /><p className="mt-1 text-xs font-semibold text-slate-500">INR {entry.amountPaid} paid · INR {entry.amountDue} due</p></td><td className="px-5 py-4"><span className="text-xs font-bold text-slate-600">{sourceLabel(entry.source)}</span></td><td className="whitespace-nowrap px-5 py-4 text-xs font-bold text-slate-600">{formatDateTime(entry.createdAt)}</td><td className="px-5 py-4">{canViewAnswers && hasAnswers ? <button aria-label={`View ${entry.fullName}'s answers`} className="grid size-9 place-items-center border border-slate-200 text-slate-600 hover:bg-slate-100" onClick={() => onSelect(entry)} title="View answers" type="button"><ChevronRight className="size-4" /></button> : null}</td></tr>;
+  return <tr className="hover:bg-emerald-50/30"><td className="px-5 py-4"><p className="font-black text-slate-950">{entry.fullName || "Unnamed"}</p><p className="mt-1 text-xs font-semibold text-slate-500">{entry.city || "City not added"}</p></td><td className="px-5 py-4"><p className="font-bold text-slate-700">{entry.mobile || "-"}</p><p className="mt-1 text-xs text-slate-500">{entry.email || "-"}</p></td><td className="px-5 py-4"><p className="max-w-[220px] font-bold text-slate-700">{entry.workshopTitle}</p>{entry.batch ? <p className="mt-1 text-xs text-slate-500">{entry.batch}</p> : null}</td><td className="px-5 py-4"><ConfirmationBadge value={entry.confirmationStatus} />{entry.confirmationNote ? <p className="mt-1 max-w-[190px] truncate text-xs text-slate-500">{entry.confirmationNote}</p> : null}</td><td className="px-5 py-4"><PaymentBadge status={entry.status} /><p className="mt-1 text-xs font-semibold text-slate-500">INR {entry.amountPaid} paid · INR {entry.amountDue} due</p></td><td className="px-5 py-4"><span className="text-xs font-bold text-slate-600">{sourceLabel(entry.source)}</span></td><td className="whitespace-nowrap px-5 py-4 text-xs font-bold text-slate-600">{formatDateTime(entry.createdAt)}</td><td className="px-5 py-4"><div className="flex gap-2">{canManage ? <button aria-label={`Manage ${entry.fullName} confirmation`} className="grid size-9 place-items-center bg-emerald-600 text-white hover:bg-emerald-700" onClick={() => onManage(entry)} title="Call confirmation" type="button"><PhoneCall className="size-4" /></button> : null}{canViewAnswers && hasAnswers ? <button aria-label={`View ${entry.fullName}'s answers`} className="grid size-9 place-items-center border border-slate-200 text-slate-600 hover:bg-slate-100" onClick={() => onSelect(entry)} title="View answers" type="button"><ChevronRight className="size-4" /></button> : null}</div></td></tr>;
 }
 
-function MobileResponse({ canViewAnswers, entry, onSelect }: { canViewAnswers: boolean; entry: ViewerRegistration; onSelect: (entry: ViewerRegistration) => void }) {
+function MobileResponse({ canManage, canViewAnswers, entry, onManage, onSelect }: { canManage: boolean; canViewAnswers: boolean; entry: ViewerRegistration; onManage: (entry: ViewerRegistration) => void; onSelect: (entry: ViewerRegistration) => void }) {
   const hasAnswers = Boolean(entry.answers && Object.keys(entry.answers).length);
-  return <article className="p-4"><div className="flex items-start justify-between gap-3"><div><h2 className="font-black text-slate-950">{entry.fullName || "Unnamed"}</h2><p className="mt-1 text-xs font-bold text-slate-500">{entry.workshopTitle}</p></div><WhatsAppBadge value={entry.whatsappVerificationStatus} /></div><dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-xs"><MobileDetail label="Mobile" value={entry.mobile || "-"} /><MobileDetail label="City" value={entry.city || "-"} /><MobileDetail label="Payment" value={`${entry.status} · INR ${entry.amountDue} due`} /><MobileDetail label="Submitted" value={formatDateTime(entry.createdAt)} /></dl>{canViewAnswers && hasAnswers ? <button className="mt-4 inline-flex w-full items-center justify-between border border-slate-200 px-3 py-2.5 text-xs font-black text-slate-700" onClick={() => onSelect(entry)} type="button"><span className="inline-flex items-center gap-2"><FileText className="size-4" />View detailed answers</span><ChevronRight className="size-4" /></button> : null}</article>;
+  return <article className="p-4"><div className="flex items-start justify-between gap-3"><div><h2 className="font-black text-slate-950">{entry.fullName || "Unnamed"}</h2><p className="mt-1 text-xs font-bold text-slate-500">{entry.workshopTitle}</p></div><ConfirmationBadge value={entry.confirmationStatus} /></div><dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-xs"><MobileDetail label="Mobile" value={entry.mobile || "-"} /><MobileDetail label="City" value={entry.city || "-"} /><MobileDetail label="Payment" value={`${entry.status} · INR ${entry.amountDue} due`} /><MobileDetail label="Submitted" value={formatDateTime(entry.createdAt)} /></dl><div className="mt-4 grid gap-2">{canManage ? <button className="inline-flex w-full items-center justify-center gap-2 bg-emerald-600 px-3 py-2.5 text-xs font-black text-white" onClick={() => onManage(entry)} type="button"><PhoneCall className="size-4" />Update confirmation</button> : null}{canViewAnswers && hasAnswers ? <button className="inline-flex w-full items-center justify-between border border-slate-200 px-3 py-2.5 text-xs font-black text-slate-700" onClick={() => onSelect(entry)} type="button"><span className="inline-flex items-center gap-2"><FileText className="size-4" />View detailed answers</span><ChevronRight className="size-4" /></button> : null}</div></article>;
 }
 
 function MobileDetail({ label, value }: { label: string; value: string }) { return <div><dt className="font-black uppercase text-slate-400">{label}</dt><dd className="mt-1 break-words font-bold text-slate-700">{value}</dd></div>; }
@@ -274,6 +314,124 @@ function WhatsAppBadge({ value }: { value?: ViewerRegistration["whatsappVerifica
 
 function PaymentBadge({ status }: { status: ViewerRegistration["status"] }) { return <span className={`px-2.5 py-1 text-[11px] font-black ${status === "Paid" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>{status}</span>; }
 
+function ConfirmationBadge({ value = "pending" }: { value?: ConfirmationStatus }) {
+  const labels: Record<ConfirmationStatus, string> = {
+    pending: "Pending",
+    confirmed: "Confirmed",
+    not_confirmed: "Not confirmed",
+    no_answer: "No answer",
+    callback: "Call back",
+    cancelled: "Cancelled",
+    carried_forward: "Carried forward",
+    repeater: "Repeater"
+  };
+  const tone = value === "confirmed"
+    ? "bg-emerald-50 text-emerald-700"
+    : value === "cancelled" || value === "not_confirmed"
+      ? "bg-rose-50 text-rose-700"
+      : value === "repeater"
+        ? "bg-indigo-50 text-indigo-700"
+        : value === "carried_forward"
+          ? "bg-sky-50 text-sky-700"
+          : "bg-amber-50 text-amber-700";
+  return <span className={`inline-flex px-2.5 py-1 text-[11px] font-black ${tone}`}>{labels[value]}</span>;
+}
+
+function ConfirmationDialog({
+  entry,
+  onClose,
+  onSave,
+  workshops
+}: {
+  entry: ViewerRegistration;
+  onClose: () => void;
+  onSave: (input: { action: ConfirmationActivity["action"]; note: string; status?: ConfirmationStatus; targetWorkshopId?: string }) => Promise<void>;
+  workshops: Array<{ id: string; name: string }>;
+}) {
+  const [status, setStatus] = useState<ConfirmationStatus>(entry.confirmationStatus && !["carried_forward", "repeater"].includes(entry.confirmationStatus) ? entry.confirmationStatus : "pending");
+  const [note, setNote] = useState(entry.confirmationNote ?? "");
+  const [targetWorkshopId, setTargetWorkshopId] = useState("");
+  const [saving, setSaving] = useState<ConfirmationActivity["action"] | "">("");
+  const [error, setError] = useState("");
+  const targets = workshops.filter((workshop) => workshop.id !== entry.workshopId);
+
+  async function save(action: ConfirmationActivity["action"]) {
+    setSaving(action);
+    setError("");
+    try {
+      await onSave({ action, note, status, targetWorkshopId });
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Could not save confirmation.");
+      setSaving("");
+    }
+  }
+
+  return (
+    <div aria-modal="true" className="fixed inset-0 z-50 grid place-items-end bg-slate-950/55 p-0 backdrop-blur-sm sm:place-items-center sm:p-4" role="dialog">
+      <section className="max-h-[94vh] w-full overflow-hidden bg-white shadow-2xl sm:max-w-3xl">
+        <header className="flex items-start justify-between gap-4 border-b border-slate-200 p-5">
+          <div className="min-w-0">
+            <p className="text-xs font-black uppercase text-emerald-700">Call confirmation</p>
+            <h2 className="mt-1 truncate text-xl font-black">{entry.fullName}</h2>
+            <p className="mt-1 text-sm font-bold text-slate-500">{entry.mobile} · {entry.workshopTitle}</p>
+          </div>
+          <button aria-label="Close confirmation" className="grid size-9 shrink-0 place-items-center border border-slate-200 text-slate-500 hover:bg-slate-50" onClick={onClose} type="button"><X className="size-4" /></button>
+        </header>
+
+        <div className="max-h-[78vh] overflow-y-auto p-5">
+          {error ? <p className="mb-4 border-l-4 border-rose-500 bg-rose-50 px-4 py-3 text-sm font-bold text-rose-700">{error}</p> : null}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="text-sm font-black text-slate-700">
+              Call status
+              <select className={`${inputClass} mt-2`} onChange={(event) => setStatus(event.target.value as ConfirmationStatus)} value={status}>
+                <option value="pending">Pending</option>
+                <option value="confirmed">Confirmed</option>
+                <option value="not_confirmed">Not confirmed</option>
+                <option value="no_answer">No answer</option>
+                <option value="callback">Call back</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+            </label>
+            <label className="text-sm font-black text-slate-700">
+              Carry forward to
+              <select className={`${inputClass} mt-2`} onChange={(event) => setTargetWorkshopId(event.target.value)} value={targetWorkshopId}>
+                <option value="">Select next workshop</option>
+                {targets.map((workshop) => <option key={workshop.id} value={workshop.id}>{workshop.name}</option>)}
+              </select>
+            </label>
+          </div>
+          <label className="mt-4 block text-sm font-black text-slate-700">
+            Call note
+            <textarea className={`${inputClass} mt-2 min-h-28 resize-y`} maxLength={2000} onChange={(event) => setNote(event.target.value)} placeholder="Write call outcome, follow-up details or any important information..." value={note} />
+          </label>
+
+          <div className="mt-4 grid gap-2 sm:grid-cols-3">
+            <button className="inline-flex min-h-12 items-center justify-center gap-2 bg-emerald-600 px-4 text-sm font-black text-white hover:bg-emerald-700 disabled:opacity-50" disabled={Boolean(saving)} onClick={() => void save("status")} type="button"><PhoneCall className="size-4" />{saving === "status" ? "Saving..." : "Save confirmation"}</button>
+            <button className="inline-flex min-h-12 items-center justify-center gap-2 bg-sky-600 px-4 text-sm font-black text-white hover:bg-sky-700 disabled:opacity-50" disabled={Boolean(saving) || !targetWorkshopId} onClick={() => void save("carry_forward")} type="button"><RotateCcw className="size-4" />{saving === "carry_forward" ? "Moving..." : "Carry forward"}</button>
+            <button className="inline-flex min-h-12 items-center justify-center gap-2 bg-indigo-600 px-4 text-sm font-black text-white hover:bg-indigo-700 disabled:opacity-50" disabled={Boolean(saving)} onClick={() => void save("repeater")} type="button"><Repeat2 className="size-4" />{saving === "repeater" ? "Saving..." : "Mark repeater"}</button>
+          </div>
+          <button className="mt-2 inline-flex min-h-11 w-full items-center justify-center gap-2 border border-slate-300 text-sm font-black text-slate-700 hover:bg-slate-50 disabled:opacity-50" disabled={Boolean(saving) || !note.trim()} onClick={() => void save("note")} type="button"><MessageSquareText className="size-4" />Save note only</button>
+
+          <div className="mt-6 border-t border-slate-200 pt-5">
+            <h3 className="text-sm font-black text-slate-950">Activity history</h3>
+            {entry.confirmationHistory?.length ? (
+              <div className="mt-3 divide-y divide-slate-200 border-y border-slate-200">
+                {entry.confirmationHistory.map((activity) => (
+                  <div className="py-3" key={activity.id}>
+                    <div className="flex flex-wrap items-center justify-between gap-2"><ConfirmationBadge value={activity.status} /><span className="text-xs font-bold text-slate-500">{formatDateTime(activity.createdAt)}</span></div>
+                    <p className="mt-2 text-xs font-bold text-slate-600">{activity.actorName}{activity.targetWorkshopTitle ? ` · ${activity.targetWorkshopTitle}` : ""}</p>
+                    {activity.note ? <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-slate-700">{activity.note}</p> : null}
+                  </div>
+                ))}
+              </div>
+            ) : <p className="mt-3 py-6 text-center text-sm font-bold text-slate-500">No call activity recorded yet.</p>}
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function AnswerDialog({ entry, onClose }: { entry: ViewerRegistration; onClose: () => void }) {
   const answers = Object.entries(entry.answers ?? {});
   return <div aria-modal="true" className="fixed inset-0 z-50 grid place-items-end bg-slate-950/55 p-0 backdrop-blur-sm sm:place-items-center sm:p-4" role="dialog"><section className="max-h-[90vh] w-full overflow-hidden bg-white shadow-2xl sm:max-w-2xl"><header className="flex items-start justify-between gap-4 border-b border-slate-200 p-5"><div className="flex min-w-0 items-center gap-3"><span className="grid size-10 shrink-0 place-items-center bg-emerald-50 text-emerald-700"><UserRound className="size-5" /></span><div className="min-w-0"><h2 className="truncate text-lg font-black">{entry.fullName}</h2><p className="mt-1 truncate text-xs font-bold text-slate-500">{entry.workshopTitle}</p></div></div><button aria-label="Close answers" className="grid size-9 shrink-0 place-items-center border border-slate-200 text-slate-500 hover:bg-slate-50" onClick={onClose} type="button"><X className="size-4" /></button></header><div className="max-h-[70vh] overflow-y-auto p-5">{answers.length ? <dl className="divide-y divide-slate-200 border-y border-slate-200">{answers.map(([question, answer]) => <div className="py-4" key={question}><dt className="text-xs font-black uppercase leading-5 text-slate-500">{question}</dt><dd className="mt-2 whitespace-pre-wrap text-sm font-semibold leading-6 text-slate-900">{answer || "No answer"}</dd></div>)}</dl> : <p className="py-12 text-center text-sm font-bold text-slate-500">No custom answers are available.</p>}</div></section></div>;
@@ -281,8 +439,8 @@ function AnswerDialog({ entry, onClose }: { entry: ViewerRegistration; onClose: 
 
 function downloadCsv(rows: ViewerRegistration[]) {
   const answerHeaders = [...new Set(rows.flatMap((entry) => Object.keys(entry.answers ?? {})))];
-  const headers = ["Participant", "Mobile", "Email", "City", "Workshop", "Batch", "WhatsApp", "Payment", "Paid", "Due", "Source", "Submitted", ...answerHeaders];
-  const values = rows.map((entry) => [entry.fullName, entry.mobile, entry.email, entry.city, entry.workshopTitle, entry.batch ?? "", entry.whatsappVerificationStatus ?? "", entry.status, entry.amountPaid, entry.amountDue, sourceLabel(entry.source), entry.createdAt, ...answerHeaders.map((header) => entry.answers?.[header] ?? "")]);
+  const headers = ["Participant", "Mobile", "Email", "City", "Workshop", "Batch", "WhatsApp", "Call Confirmation", "Call Note", "Repeater", "Carried Forward To", "Updated By", "Updated At", "Payment", "Paid", "Due", "Source", "Submitted", ...answerHeaders];
+  const values = rows.map((entry) => [entry.fullName, entry.mobile, entry.email, entry.city, entry.workshopTitle, entry.batch ?? "", entry.whatsappVerificationStatus ?? "", entry.confirmationStatus ?? "pending", entry.confirmationNote ?? "", entry.isRepeater ? "Yes" : "No", entry.carriedForwardToWorkshopTitle ?? "", entry.confirmationUpdatedBy ?? "", entry.confirmationUpdatedAt ?? "", entry.status, entry.amountPaid, entry.amountDue, sourceLabel(entry.source), entry.createdAt, ...answerHeaders.map((header) => entry.answers?.[header] ?? "")]);
   const csv = [headers, ...values].map((row) => row.map(csvCell).join(",")).join("\n");
   const url = URL.createObjectURL(new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" }));
   const anchor = document.createElement("a");
