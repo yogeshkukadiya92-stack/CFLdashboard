@@ -1,5 +1,5 @@
 import { getAppState, isDbEnabled, saveAppState } from "@/lib/db";
-import { listLiveRegistrationsByAppWorkshopId } from "@/lib/crm-db";
+import { deleteLiveRegistrationsByExternalIds, listLiveRegistrationsByAppWorkshopId } from "@/lib/crm-db";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -29,5 +29,33 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, recovered: missing.length, registrations });
   } catch {
     return NextResponse.json({ error: "Failed to sync imported registrations." }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: Request) {
+  if (!(await isDbEnabled())) {
+    return NextResponse.json({ dbEnabled: false }, { status: 400 });
+  }
+
+  try {
+    const body = await request.json();
+    const ids = Array.isArray(body?.ids)
+      ? body.ids.map((id: unknown) => String(id ?? "").trim()).filter(Boolean).slice(0, 5000)
+      : [];
+    if (!ids.length) return NextResponse.json({ error: "Registration IDs are required." }, { status: 400 });
+
+    await deleteLiveRegistrationsByExternalIds(ids);
+    const removedIds = new Set(ids);
+    const state = await getAppState();
+    const current = Array.isArray(state?.registrations) ? state.registrations : [];
+    const registrations = current.filter((item: unknown) => {
+      if (!item || typeof item !== "object" || Array.isArray(item)) return true;
+      return !removedIds.has(String((item as { id?: unknown }).id ?? ""));
+    });
+    await saveAppState({ registrations });
+
+    return NextResponse.json({ ok: true, removed: current.length - registrations.length, registrations });
+  } catch {
+    return NextResponse.json({ error: "Failed to remove duplicate registrations." }, { status: 500 });
   }
 }

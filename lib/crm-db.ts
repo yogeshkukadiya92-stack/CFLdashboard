@@ -1178,6 +1178,18 @@ export async function listLiveRegistrationsByAppWorkshopId(appWorkshopId: string
   }));
 }
 
+export async function deleteLiveRegistrationsByExternalIds(externalIds: string[]) {
+  if (!externalIds.length) return 0;
+  await ensureCrmSchema();
+  const pool = requirePool();
+  const result = await pool.query(
+    `DELETE FROM crm_registrations
+     WHERE tenant_id = $1 AND external_id = ANY($2::text[])`,
+    [TENANT_ID, externalIds]
+  );
+  return result.rowCount ?? 0;
+}
+
 function cleanMobile(value: string) {
   const digits = value.replace(/\D/g, "");
   return digits.length > 10 && digits.startsWith("91") ? digits.slice(-10) : digits;
