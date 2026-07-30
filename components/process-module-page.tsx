@@ -40,7 +40,8 @@ type WorkshopMasterRecord = {
   facilitator: string;
   productGroup: string;
   isPaid: boolean;
-  activeFields: string[];
+  activeFields?: string[];
+  batch?: string;
 };
 
 type ClientStorageRecord = {
@@ -1433,10 +1434,28 @@ function ImportWorkshopDataWorkflow() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [uploading, setUploading] = useState(false);
+  const [targetWorkshop, setTargetWorkshop] = useState<WorkshopMasterRecord | null>(null);
+
+  useEffect(() => {
+    async function loadTargetWorkshop() {
+      await hydrateLiveState();
+      const workshopId = new URLSearchParams(window.location.search).get("workshopId");
+      if (!workshopId) return;
+      const workshop = readLocalStorageArray<WorkshopMasterRecord>(WORKSHOP_MASTER_STORAGE_KEY)
+        .find((item) => item.id === workshopId);
+      if (workshop) setTargetWorkshop(workshop);
+      else setError("The selected workshop could not be found. Return to Workshop Master and open it again.");
+    }
+    loadTargetWorkshop();
+  }, []);
 
   function downloadSample() {
-    const headers = ["Workshop Name", "Client Name", "Mobile", "Email", "Batch", "Payment Status", "Amount"];
-    const row = ["Sample Workshop", "Sample Client", "+91 00000 00000", "sample@example.com", "Sample Batch", "SUCCESS", "0"];
+    const headers = targetWorkshop
+      ? ["Client Name", "Mobile", "Email", "City", "Batch", "Payment Status", "Amount"]
+      : ["Workshop Name", "Client Name", "Mobile", "Email", "City", "Batch", "Payment Status", "Amount"];
+    const row = targetWorkshop
+      ? ["Sample Client", "+91 00000 00000", "sample@example.com", "Surat", targetWorkshop.batch || "Main Batch", "SUCCESS", "0"]
+      : ["Sample Workshop", "Sample Client", "+91 00000 00000", "sample@example.com", "Surat", "Sample Batch", "SUCCESS", "0"];
     const csv = [headers, row].map((items) => items.map((item) => `"${item}"`).join(",")).join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
@@ -1475,7 +1494,7 @@ function ImportWorkshopDataWorkflow() {
           const entry = Object.entries(row).find(([key]) => aliases.includes(key.toLowerCase().replace(/[^a-z0-9]/g, "")));
           return String(entry?.[1] ?? "").trim();
         };
-        const workshop = value(["workshopname", "workshop"]);
+        const workshop = targetWorkshop?.name || value(["workshopname", "workshop"]);
         const fullName = value(["clientname", "membername", "name"]);
         const mobileDigits = value(["mobile", "mobileno", "phone"]).replace(/\D/g, "").slice(-10);
         if (!workshop || !fullName || mobileDigits.length < 10) return null;
@@ -1486,17 +1505,19 @@ function ImportWorkshopDataWorkflow() {
         return {
           amountDue: paid ? 0 : amount,
           amountPaid: paid ? amount : 0,
-          batch: value(["batch", "batchname"]) || "Main Batch",
+          batch: value(["batch", "batchname"]) || targetWorkshop?.batch || "Main Batch",
           city: value(["city", "cityname"]),
           createdAt: new Date().toISOString(),
           email: value(["email", "emailid"]),
-          facilitator: value(["facilitator", "facilitatorname", "fname"]) || "CFL Facilitator",
+          facilitator: value(["facilitator", "facilitatorname", "fname"]) || targetWorkshop?.facilitator || "CFL Facilitator",
           fullName,
-          id: `bulk-${workshopKey}-${mobileDigits}-${rowIndex + 2}`,
+          id: `bulk-${targetWorkshop?.id || workshopKey}-${mobileDigits}-${Date.now()}-${rowIndex + 2}`,
           mobile: mobileDigits,
           paymentMode: "Full",
+          source: "manual",
           status: paid ? "Paid" : "Due",
-          workshopId: `bulk-${workshopKey}`,
+          workshopId: targetWorkshop?.id || `bulk-${workshopKey}`,
+          workshopSlug: workshopKey,
           workshopTitle: workshop
         };
       });
@@ -1537,6 +1558,11 @@ function ImportWorkshopDataWorkflow() {
           <div>
             <p className="text-sm font-bold text-slate-500">Bulk Import</p>
             <h3 className="mt-1 text-2xl font-black text-slate-950">Import Workshop Data</h3>
+            <p className="mt-2 text-sm font-semibold text-slate-600">
+              {targetWorkshop
+                ? <>Adding registrations to <span className="font-black text-indigo-700">{targetWorkshop.name}</span>. Workshop Name is not required in the file.</>
+                : "Include Workshop Name, Client Name and Mobile in every row."}
+            </p>
           </div>
           <button
             className="inline-flex items-center gap-2 rounded-xl bg-[#00CFE8] px-4 py-3 text-sm font-black text-white shadow-sm hover:bg-cyan-500"
@@ -1547,6 +1573,13 @@ function ImportWorkshopDataWorkflow() {
             Download Sample
           </button>
         </div>
+
+        {targetWorkshop ? (
+          <a className="mt-5 inline-flex items-center gap-2 text-sm font-black text-indigo-700 hover:underline" href="/workshop-master">
+            <ChevronLeft className="size-4" />
+            Back to Workshop Master
+          </a>
+        ) : null}
 
         <div className="mt-8 rounded-3xl border border-dashed border-slate-300 bg-slate-50 p-6">
           <label className="block">
