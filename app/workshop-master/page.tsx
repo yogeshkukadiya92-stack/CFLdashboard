@@ -312,13 +312,19 @@ export default function WorkshopMasterPage() {
       (digits.length > 0 && entry.mobile.replace(/\D/g, "").includes(digits))
     );
   }, [filteredParticipants, participantSearch]);
-  const displayedParticipants = useMemo(() => hideDuplicateParticipants ? hideDuplicateResponses(searchedParticipants, {
-    email: (entry) => entry.email,
-    mobile: (entry) => entry.mobile,
-    name: (entry) => entry.fullName,
-    scope: (entry) => entry.workshopId || entry.workshopTitle,
-    submittedAt: (entry) => entry.createdAt
-  }) : searchedParticipants, [hideDuplicateParticipants, searchedParticipants]);
+  const displayedParticipants = useMemo(() => {
+    const visibleParticipants = hideDuplicateParticipants ? hideDuplicateResponses(searchedParticipants, {
+      email: (entry) => entry.email,
+      mobile: (entry) => entry.mobile,
+      name: (entry) => entry.fullName,
+      scope: (entry) => entry.workshopId || entry.workshopTitle,
+      submittedAt: (entry) => entry.createdAt
+    }) : searchedParticipants;
+
+    return [...visibleParticipants].sort((first, second) =>
+      submittedAtTimestamp(second.createdAt) - submittedAtTimestamp(first.createdAt)
+    );
+  }, [hideDuplicateParticipants, searchedParticipants]);
   const participantQuestions = useMemo(() => responseQuestionOptions(participantFilterRecords), [participantFilterRecords]);
   const activeParticipantFilterCount = activeResponseFilterCount(responseFilters) + Number(hideDuplicateParticipants);
 
@@ -2262,6 +2268,11 @@ function formatSubmittedAt(value?: string) {
     minute: "2-digit",
     hour12: true
   });
+}
+
+function submittedAtTimestamp(value?: string) {
+  const timestamp = Date.parse(value ?? "");
+  return Number.isNaN(timestamp) ? Number.MIN_SAFE_INTEGER : timestamp;
 }
 
 function isTodayInIndia(value?: string) {
