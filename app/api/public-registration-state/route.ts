@@ -1,4 +1,4 @@
-import { getAppState, isDbEnabled, saveAppState } from "@/lib/db";
+import { ensurePersistenceTable, getAppState, getDbPool, isDbEnabled } from "@/lib/db";
 import { upsertLiveRegistration } from "@/lib/crm-db";
 import { upsertLeadFromRegistration } from "@/lib/lead-utils";
 import { NextResponse } from "next/server";
@@ -78,36 +78,63 @@ export async function POST(request: Request) {
       workshopTitle
     };
 
-    const state = await getAppState();
-    const current = Array.isArray(state?.registrations) ? state.registrations : [];
-    const registrationWithId = sanitizedRegistration as { id?: string };
-    const next = registrationWithId.id
-      ? [
-          sanitizedRegistration,
-          ...current.filter((item: unknown) => {
-            return !(item && typeof item === "object" && "id" in item && (item as { id?: string }).id === registrationWithId.id);
-          })
-        ]
-      : [sanitizedRegistration, ...current];
+    const database = getDbPool();
+    if (!database) return NextResponse.json({ error: "Database is not configured." }, { status: 500 });
+    await ensurePersistenceTable();
+    const client = await database.connect();
+    try {
+      await client.query("BEGIN");
+      const selected = await client.query(`SELECT registrations, forms, workshops, leads, sales_people FROM app_state WHERE id = 1 FOR UPDATE`);
+      const state = selected.rows[0] ?? {};
+      const current = Array.isArray(state.registrations) ? state.registrations : [];
+      const forms = Array.isArray(state.forms) ? state.forms as Array<Record<string, unknown>> : [];
+      const form = forms.find((value) => String(value.workshopId ?? "") === sanitizedRegistration.workshopId || String(value.workshopSlug ?? "") === sanitizedRegistration.workshopSlug);
+      const capacity = Math.max(0, Number(form?.registrationCapacity ?? 0) || 0);
+      const confirmedCount = current.filter((value: unknown) => {
+        if (!value || typeof value !== "object") return false;
+        const entry = value as Record<string, unknown>;
+        return String(entry.workshopId ?? "") === sanitizedRegistration.workshopId && entry.registrationStatus !== "waiting" && String(entry.id ?? "") !== sanitizedRegistration.id;
+      }).length;
+      const waitingCount = current.filter((value: unknown) => {
+        if (!value || typeof value !== "object") return false;
+        const entry = value as Record<string, unknown>;
+        return String(entry.workshopId ?? "") === sanitizedRegistration.workshopId && entry.registrationStatus === "waiting" && String(entry.id ?? "") !== sanitizedRegistration.id;
+      }).length;
+      const isWaiting = form?.waitingMode === true || (capacity > 0 && confirmedCount >= capacity);
+      const finalRegistration = {
+        ...sanitizedRegistration,
+        registrationStatus: isWaiting ? "waiting" : "confirmed",
+        waitingPosition: isWaiting ? waitingCount + 1 : undefined
+      };
+      const next = [
+        finalRegistration,
+        ...current.filter((item: unknown) => !(item && typeof item === "object" && "id" in item && (item as { id?: string }).id === sanitizedRegistration.id))
+      ];
+      const workshops = Array.isArray(state.workshops) ? state.workshops : [];
+      const linkedWorkshop = workshops.find((value: unknown) => {
+        if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+        const workshop = value as { id?: unknown; name?: unknown };
+        return String(workshop.id ?? "") === sanitizedRegistration.workshopId
+          || String(workshop.name ?? "").trim().toLowerCase() === workshopTitle.toLowerCase();
+      }) as { transferLeadToCrm?: unknown } | undefined;
+      const leads = linkedWorkshop?.transferLeadToCrm === true
+        ? upsertLeadFromRegistration(
+            Array.isArray(state.leads) ? state.leads : [],
+            finalRegistration,
+            Array.isArray(state.sales_people) ? state.sales_people : []
+          )
+        : Array.isArray(state.leads) ? state.leads : [];
 
-    const workshops = Array.isArray(state?.workshops) ? state.workshops : [];
-    const linkedWorkshop = workshops.find((value: unknown) => {
-      if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-      const workshop = value as { id?: unknown; name?: unknown };
-      return String(workshop.id ?? "") === sanitizedRegistration.workshopId
-        || String(workshop.name ?? "").trim().toLowerCase() === workshopTitle.toLowerCase();
-    }) as { transferLeadToCrm?: unknown } | undefined;
-    const leads = linkedWorkshop?.transferLeadToCrm === true
-      ? upsertLeadFromRegistration(
-          Array.isArray(state?.leads) ? state.leads : [],
-          sanitizedRegistration,
-          Array.isArray(state?.salesPeople) ? state.salesPeople : []
-        )
-      : Array.isArray(state?.leads) ? state.leads : [];
-
-    await upsertLiveRegistration(sanitizedRegistration);
-    await saveAppState({ leads, registrations: next.slice(0, 5000) });
-    return NextResponse.json({ ok: true, dbEnabled: true });
+      await upsertLiveRegistration(finalRegistration);
+      await client.query(`UPDATE app_state SET leads = $1::jsonb, registrations = $2::jsonb, updated_at = NOW() WHERE id = 1`, [JSON.stringify(leads), JSON.stringify(next.slice(0, 5000))]);
+      await client.query("COMMIT");
+      return NextResponse.json({ ok: true, dbEnabled: true, registration: finalRegistration });
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
   } catch {
     return NextResponse.json({ error: "Failed to save registration" }, { status: 500 });
   }

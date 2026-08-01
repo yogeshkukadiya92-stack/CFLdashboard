@@ -135,6 +135,9 @@ export default function FormBuilderPage() {
   const [tagline, setTagline] = useState("");
   const [description, setDescription] = useState("Please fill in your details to confirm your seat.");
   const [submitButtonText, setSubmitButtonText] = useState("Confirm Registration");
+  const [registrationCapacity, setRegistrationCapacity] = useState("");
+  const [waitingMode, setWaitingMode] = useState(false);
+  const [waitingMessage, setWaitingMessage] = useState("Seats are currently full. Your registration will be added to the waiting list.");
   const [paid, setPaid] = useState(false);
   const [fee, setFee] = useState("");
   const [partPayment, setPartPayment] = useState(false);
@@ -179,6 +182,14 @@ export default function FormBuilderPage() {
     void loadRegistrationDomains();
   }, []);
 
+  useEffect(() => {
+    if (!workshopId) return;
+    const savedForm = readLocalArray<BuilderForm>(FORMS_STORAGE_KEY).find((item) => item.workshopId === workshopId);
+    setRegistrationCapacity(savedForm?.registrationCapacity ? String(savedForm.registrationCapacity) : "");
+    setWaitingMode(Boolean(savedForm?.waitingMode));
+    setWaitingMessage(savedForm?.waitingMessage || "Seats are currently full. Your registration will be added to the waiting list.");
+  }, [workshopId]);
+
   const workshop = workshops.find((item) => item.id === workshopId) ?? null;
   const selectedWorkshopName = workshop?.name ?? "";
   const filteredWorkshops = useMemo(() => {
@@ -207,10 +218,13 @@ export default function FormBuilderPage() {
       highlights: highlights.filter(Boolean).length > 0 ? highlights.filter(Boolean) : undefined,
       whatsappGroupUrl: whatsappGroupUrl.trim() || undefined,
       submitButtonText: submitButtonText.trim() || undefined,
+      registrationCapacity: Math.max(0, Number(registrationCapacity) || 0) || undefined,
+      waitingMode,
+      waitingMessage: waitingMessage.trim() || undefined,
       fields,
       updatedAt: new Date().toISOString()
     };
-  }, [accent, align, bannerUrl, batch, description, fee, fields, fontFamily, fontSize, highlights, logoUrl, otpRequired, paid, partPayment, submitButtonText, tagline, tiers, title, titleBold, titleItalic, whatsappGroupUrl, workshop, workshopId]);
+  }, [accent, align, bannerUrl, batch, description, fee, fields, fontFamily, fontSize, highlights, logoUrl, otpRequired, paid, partPayment, registrationCapacity, submitButtonText, tagline, tiers, title, titleBold, titleItalic, waitingMessage, waitingMode, whatsappGroupUrl, workshop, workshopId]);
 
   const link = useMemo(() => {
     if (typeof window === "undefined" || !workshopId) return "";
@@ -415,6 +429,26 @@ export default function FormBuilderPage() {
                 </span>
                 <input checked={otpRequired} className="size-5 shrink-0 accent-emerald-600" onChange={(event) => setOtpRequired(event.target.checked)} type="checkbox" />
               </label>
+
+              <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-4">
+                <label className="flex min-h-[48px] items-center justify-between gap-4">
+                  <span>
+                    <span className="block text-sm font-black text-slate-800">Waiting Mode</span>
+                    <span className="mt-0.5 block text-xs font-semibold text-slate-500">When enabled, every new submission goes directly to the waiting list.</span>
+                  </span>
+                  <input checked={waitingMode} className="size-5 shrink-0 accent-amber-600" onChange={(event) => setWaitingMode(event.target.checked)} type="checkbox" />
+                </label>
+                <div className="mt-3 grid gap-3 sm:grid-cols-[180px_1fr]">
+                  <label className="block">
+                    <span className="mb-2 block text-xs font-black text-slate-600">Registration Capacity</span>
+                    <input className="w-full rounded-xl border border-amber-200 bg-white px-3.5 py-3 text-sm font-semibold outline-none focus:border-amber-500 focus:ring-4 focus:ring-amber-100" inputMode="numeric" min={1} onChange={(event) => setRegistrationCapacity(event.target.value.replace(/\D/g, ""))} placeholder="No limit" value={registrationCapacity} />
+                  </label>
+                  <label className="block">
+                    <span className="mb-2 block text-xs font-black text-slate-600">Waiting Message</span>
+                    <input className="w-full rounded-xl border border-amber-200 bg-white px-3.5 py-3 text-sm font-semibold outline-none focus:border-amber-500 focus:ring-4 focus:ring-amber-100" maxLength={240} onChange={(event) => setWaitingMessage(event.target.value)} value={waitingMessage} />
+                  </label>
+                </div>
+              </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className="block">

@@ -181,7 +181,8 @@ export async function savePublicRegistration(registration: unknown, registration
       keepalive: true,
       method: "POST"
     });
-    return response.ok;
+    if (!response.ok) return false;
+    return await response.json() as unknown;
   } catch {
     return false;
   }

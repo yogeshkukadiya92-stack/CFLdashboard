@@ -54,6 +54,9 @@ type FormModel = {
   highlights?: string[];
   whatsappGroupUrl?: string;
   submitButtonText?: string;
+  registrationCapacity?: number;
+  waitingMode?: boolean;
+  waitingMessage?: string;
   theme: BuilderTheme;
   fields: BuilderField[];
 };
@@ -176,6 +179,9 @@ function modelFromBuilderForm(form: BuilderForm, overrides?: Partial<Pick<FormMo
     highlights: form.highlights && form.highlights.length > 0 ? form.highlights : undefined,
     whatsappGroupUrl: form.whatsappGroupUrl,
     submitButtonText: form.submitButtonText,
+    registrationCapacity: form.registrationCapacity,
+    waitingMode: Boolean(form.waitingMode),
+    waitingMessage: form.waitingMessage,
     theme: { ...defaultTheme, ...form.theme },
     fields: form.fields?.length ? normalizeCoreFieldRequirements(form.fields) : simpleFields()
   };
@@ -212,6 +218,8 @@ export default function RegistrationPage() {
   const [otpVerifiedMobile, setOtpVerifiedMobile] = useState("");
   const [otpModalOpen, setOtpModalOpen] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [waitingPosition, setWaitingPosition] = useState<number | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   const [redirectCountdown, setRedirectCountdown] = useState(5);
   const [currentPage, setCurrentPage] = useState(0);
   const [draftRestored, setDraftRestored] = useState(false);
@@ -388,7 +396,7 @@ export default function RegistrationPage() {
   }, []);
 
   useEffect(() => {
-    if (!success || !model?.whatsappGroupUrl) {
+    if (!success || waitingPosition || !model?.whatsappGroupUrl) {
       return;
     }
 
@@ -404,7 +412,7 @@ export default function RegistrationPage() {
       window.clearInterval(countdownTimer);
       window.clearTimeout(redirectTimer);
     };
-  }, [model?.whatsappGroupUrl, success]);
+  }, [model?.whatsappGroupUrl, success, waitingPosition]);
 
   const roleField = (role: NonNullable<BuilderField["role"]>) => model?.fields.find((field) => field.role === role) ?? null;
   const mobileFieldId = roleField("mobile")?.id;
@@ -703,7 +711,7 @@ export default function RegistrationPage() {
     submitRegistration("verified");
   }
 
-  function submitRegistration(whatsappVerificationStatus: RegistrationEntry["whatsappVerificationStatus"] = "not_required") {
+  async function submitRegistration(whatsappVerificationStatus: RegistrationEntry["whatsappVerificationStatus"] = "not_required") {
     if (!model) return;
     if (missingRequired) {
       setMessage("Please fill all required fields (and a valid 10-digit mobile).");
@@ -752,9 +760,17 @@ export default function RegistrationPage() {
       const existingIndex = current.findIndex((item) => item.id === registrationId);
       if (existingIndex >= 0) current[existingIndex] = payload;
       else current.unshift(payload);
-      void savePublicRegistration(payload, current);
+      setSubmitting(true);
+      const result = await savePublicRegistration(payload, current) as false | { registration?: RegistrationEntry };
+      const saved = result && result.registration ? result.registration : payload;
+      const savedIndex = current.findIndex((item) => item.id === registrationId);
+      if (savedIndex >= 0) current[savedIndex] = saved;
+      writeLiveStateToLocalStorage({ registrations: current });
+      setWaitingPosition(saved.registrationStatus === "waiting" ? saved.waitingPosition ?? 1 : null);
     } catch {
       // ignore storage write failures
+    } finally {
+      setSubmitting(false);
     }
 
     setSuccess(true);
@@ -762,7 +778,7 @@ export default function RegistrationPage() {
     trackAnalytics("complete");
     window.localStorage.removeItem(`cfl_registration_draft_${model.formId}`);
     setRedirectCountdown(5);
-    setMessage("Registration confirmed. See you at the workshop!");
+    setMessage("");
     setAnswers({});
     setOtpCode("");
     setOtpMessage("");
@@ -918,6 +934,13 @@ export default function RegistrationPage() {
                 </div>
               ) : null}
 
+              {model.waitingMode ? (
+                <div className="mb-6 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-800">
+                  <AlertTriangle className="mt-0.5 size-5 shrink-0" />
+                  <span>{model.waitingMessage || "This workshop is currently accepting waiting-list registrations."}</span>
+                </div>
+              ) : null}
+
               {activePage.title ? <h2 className="mb-4 text-xl font-black text-slate-950">{activePage.title}</h2> : null}
               <div className={`grid gap-4 ${model.mode === "guided" ? "grid-cols-1" : "md:grid-cols-2"}`}>
                 {activePage.fields.map((field) => (
@@ -1002,11 +1025,12 @@ export default function RegistrationPage() {
                 <button
                   className={`inline-flex min-h-[52px] flex-1 items-center justify-center gap-2 px-5 py-3.5 text-base font-black uppercase tracking-wide text-white transition-transform hover:scale-[1.01] active:scale-[0.99] sm:text-sm ${fieldRadiusClass}`}
                   onClick={isLastPage ? handlePrimarySubmit : goToNextPage}
+                  disabled={submitting}
                   style={{ backgroundColor: theme.accent, boxShadow: `0 6px 20px -4px ${theme.accent}55, 0 2px 4px -1px ${theme.accent}33` }}
                   type="button"
                 >
                   {isLastPage ? <ShieldCheck className="size-4" /> : null}
-                  {isLastPage ? (model.submitButtonText?.trim() || (model.paid ? "Register & Pay" : "Confirm Registration")) : <>Continue<ArrowRight className="size-4" /></>}
+                  {isLastPage ? (submitting ? "Submitting..." : model.waitingMode ? "Join Waiting List" : (model.submitButtonText?.trim() || (model.paid ? "Register & Pay" : "Confirm Registration"))) : <>Continue<ArrowRight className="size-4" /></>}
                 </button>
               </div>
               <p className="mt-3 text-center text-xs font-semibold text-slate-400">Your progress saves automatically on this device.</p>
@@ -1071,16 +1095,16 @@ export default function RegistrationPage() {
             <span className="mx-auto grid size-16 place-items-center rounded-full bg-emerald-50 text-emerald-700">
               <CheckCircle2 className="size-9" />
             </span>
-            <h2 className="mt-5 text-2xl font-black text-slate-950">Registration Confirmed</h2>
+            <h2 className="mt-5 text-2xl font-black text-slate-950">{waitingPosition ? "Added to Waiting List" : "Registration Confirmed"}</h2>
             <p className="mt-2 text-sm font-bold leading-6 text-slate-500">
-              {message || "Your registration has been saved successfully."}
+              {waitingPosition ? `Your waiting list number is WL-${waitingPosition}. We will contact you when a seat becomes available.` : (message || "Your registration has been saved successfully.")}
             </p>
-            {model.whatsappGroupUrl ? (
+            {model.whatsappGroupUrl && !waitingPosition ? (
               <p className="mt-3 rounded-2xl bg-emerald-50 px-4 py-3 text-sm font-black text-emerald-700">
                 WhatsApp group opens in {redirectCountdown} seconds.
               </p>
             ) : null}
-            {model.whatsappGroupUrl ? (
+            {model.whatsappGroupUrl && !waitingPosition ? (
               <a
                 className="mt-5 inline-flex min-h-[48px] w-full items-center justify-center rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-black text-white shadow-sm hover:bg-emerald-700"
                 href={model.whatsappGroupUrl}
