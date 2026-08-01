@@ -857,9 +857,6 @@ export default function RegistrationPage() {
               <AlertTriangle className="size-7 shrink-0" />
               <p className="break-words text-2xl font-black uppercase tracking-normal sm:text-3xl">{model.waitingTitle || "Waiting List Registration"}</p>
             </div>
-            <p className="mx-auto mt-2 max-w-2xl text-sm font-bold leading-6 text-amber-900 sm:text-base">
-              {model.waitingMessage || "This workshop is currently accepting waiting-list registrations."}
-            </p>
           </div>
         ) : null}
         <div className="registration-public-header relative p-5 sm:p-6 md:p-8" style={{ textAlign: theme.align }}>
@@ -930,6 +927,13 @@ export default function RegistrationPage() {
                     <span>{Math.round(((activePageIndex + 1) / pages.length) * 100)}%</span>
                   </div>
                   <div className="h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full transition-all duration-300" style={{ backgroundColor: theme.accent, width: `${((activePageIndex + 1) / pages.length) * 100}%` }} /></div>
+                </div>
+              ) : null}
+
+              {model.waitingMode ? (
+                <div className="mb-6 flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3.5 text-sm font-bold leading-6 text-amber-900">
+                  <AlertTriangle className="mt-0.5 size-5 shrink-0" />
+                  <span>{model.waitingMessage || "This workshop is currently accepting waiting-list registrations."}</span>
                 </div>
               ) : null}
 
