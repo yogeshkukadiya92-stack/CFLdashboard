@@ -165,6 +165,7 @@ export default function WorkshopMasterPage() {
   const [formFields, setFormFields] = useState<BuilderField[]>(defaultBuilderFields);
   const [formHighlights, setFormHighlights] = useState<string[]>([]);
   const [formOtpRequired, setFormOtpRequired] = useState(false);
+  const [formWaitingMode, setFormWaitingMode] = useState(false);
   const [whatsappGroupUrl, setWhatsappGroupUrl] = useState("");
   const [message, setMessage] = useState("");
   const [search, setSearch] = useState("");
@@ -622,6 +623,7 @@ export default function WorkshopMasterPage() {
     setFormFields(defaultBuilderFields());
     setFormHighlights([]);
     setFormOtpRequired(false);
+    setFormWaitingMode(false);
     setWhatsappGroupUrl("");
   }
 
@@ -641,6 +643,7 @@ export default function WorkshopMasterPage() {
       fee: Number(record.feesWithTax || 0),
       partPayment: Boolean(record.isPartPaymentAllow),
       otpRequired: formOtpRequired,
+      waitingMode: formWaitingMode,
       highlights: formHighlights.map((item) => item.trim()).filter(Boolean),
       whatsappGroupUrl: whatsappGroupUrl.trim() || undefined,
       submitButtonText: formSubmitButtonText.trim() || undefined,
@@ -676,6 +679,7 @@ export default function WorkshopMasterPage() {
         setFormFields(defaultBuilderFields());
         setFormHighlights([]);
         setFormOtpRequired(false);
+        setFormWaitingMode(false);
         setWhatsappGroupUrl("");
         return;
       }
@@ -689,9 +693,26 @@ export default function WorkshopMasterPage() {
       setFormFields(savedForm.fields?.length ? normalizeCoreFieldRequirements(savedForm.fields) : defaultBuilderFields());
       setFormHighlights(savedForm.highlights ?? []);
       setFormOtpRequired(Boolean(savedForm.otpRequired));
+      setFormWaitingMode(Boolean(savedForm.waitingMode));
       setWhatsappGroupUrl(savedForm.whatsappGroupUrl ?? "");
     } catch {
       resetBuilderForm();
+    }
+  }
+
+  async function updateSelectedWaitingMode(enabled: boolean) {
+    if (!selectedWorkshop) return;
+    const forms = readLocalArray<BuilderForm>(FORMS_STORAGE_KEY);
+    const existing = forms.find((item) => item.workshopId === selectedWorkshop.id || item.workshopSlug === workshopSlug(selectedWorkshop.name));
+    const updated = existing
+      ? { ...existing, waitingMode: enabled, updatedAt: new Date().toISOString() }
+      : { ...buildRegistrationForm(selectedWorkshop), waitingMode: enabled };
+    const saved = await saveLiveState({ forms: [updated, ...forms.filter((item) => item.id !== updated.id && item.workshopId !== selectedWorkshop.id)] });
+    if (saved) {
+      setFormWaitingMode(enabled);
+      setMessage(enabled ? "Waiting Mode is ON. New registrations will join the waiting list." : "Waiting Mode is OFF. New registrations will be confirmed normally.");
+    } else {
+      setMessage("Could not update Waiting Mode. Please try again.");
     }
   }
 
@@ -1206,6 +1227,10 @@ export default function WorkshopMasterPage() {
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
+                  <label className={`inline-flex min-h-11 cursor-pointer items-center gap-3 rounded-xl border px-4 py-2 text-sm font-black ${formWaitingMode ? "border-amber-300 bg-amber-100 text-amber-900" : "border-slate-200 bg-white text-slate-700"}`}>
+                    <input checked={formWaitingMode} className="size-5 accent-amber-600" onChange={(event) => void updateSelectedWaitingMode(event.target.checked)} type="checkbox" />
+                    Waiting Mode {formWaitingMode ? "ON" : "OFF"}
+                  </label>
                   <button
                     className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white hover:bg-emerald-700"
                     onClick={sendResponseSummaryOnWhatsApp}
@@ -1253,10 +1278,18 @@ export default function WorkshopMasterPage() {
                 </div>
               </div>
 
-              <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              {formWaitingMode ? (
+                <div className="mt-4 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-900">
+                  <AlertCircle className="mt-0.5 size-5 shrink-0" />
+                  All new form submissions are going directly to the waiting list.
+                </div>
+              ) : null}
+
+              <div className="mt-4 grid gap-3 sm:grid-cols-4">
                 <MiniStat label="Users" value={displayedParticipants.length} />
                 <MiniStat label="Paid" value={displayedParticipants.filter((entry) => entry.status === "Paid").length} />
                 <MiniStat label="Due" value={displayedParticipants.filter((entry) => entry.status === "Due").length} />
+                <MiniStat label="Waiting" value={selectedParticipants.filter((entry) => entry.registrationStatus === "waiting").length} />
                 {activeParticipantFilterCount ? <MiniStat label="Saved filters" value={activeParticipantFilterCount} /> : null}
               </div>
 
@@ -1370,7 +1403,10 @@ export default function WorkshopMasterPage() {
                             </button>
                             </div>
                           </td>
-	                          <td className="px-4 py-4 font-black text-slate-950">{entry.fullName}</td>
+	                          <td className="px-4 py-4 font-black text-slate-950">
+                              {entry.fullName}
+                              {entry.registrationStatus === "waiting" ? <span className="mt-1 block w-fit rounded-full bg-amber-100 px-2 py-1 text-[11px] font-black text-amber-800">Waiting WL-{entry.waitingPosition ?? "-"}</span> : null}
+                            </td>
 	                          <td className="px-4 py-4">{entry.mobile}</td>
 	                          <td className="px-4 py-4">{entry.email}</td>
                           <td className="px-4 py-4">{entry.city}</td>
