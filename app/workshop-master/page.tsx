@@ -2119,6 +2119,9 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
   const [publishUntil, setPublishUntil] = useState("");
   const [customBaseUrl, setCustomBaseUrl] = useState("");
   const [otpRequired, setOtpRequired] = useState(false);
+  const [waitingMode, setWaitingMode] = useState(false);
+  const [waitingTitle, setWaitingTitle] = useState("Waiting List Registration");
+  const [waitingMessage, setWaitingMessage] = useState("Seats are currently full. Your registration will be added to the waiting list.");
   const [registrationDomains, setRegistrationDomains] = useState<string[]>([]);
   const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "failed">("idle");
   const [saveStatus, setSaveStatus] = useState<"idle" | "saved">("idle");
@@ -2141,6 +2144,8 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
     if (typeof window === "undefined") return;
     try {
       const configs = readLocalObject<Record<string, RegistrationLinkConfig>>(REGISTRATION_LINK_CONFIG_STORAGE_KEY);
+      const forms = readLocalArray<BuilderForm>(FORMS_STORAGE_KEY);
+      const savedForm = forms.find((item) => item.workshopId === workshop.id || item.workshopSlug === workshopSlug(workshop.name));
       const existing = configs[shortSlug] ?? Object.values(configs).find((config) => config.id === workshop.id);
       if (existing) {
         setBatch(existing.batch || "Main Batch");
@@ -2153,10 +2158,11 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
         setCustomBaseUrl(existing.customBaseUrl || "");
         setOtpRequired(Boolean(existing.otpRequired));
       } else {
-        const forms = readLocalArray<BuilderForm>(FORMS_STORAGE_KEY);
-        const savedForm = forms.find((item) => item.workshopId === workshop.id || item.workshopSlug === workshopSlug(workshop.name));
         setOtpRequired(Boolean(savedForm?.otpRequired));
       }
+      setWaitingMode(Boolean(savedForm?.waitingMode));
+      setWaitingTitle(savedForm?.waitingTitle || "Waiting List Registration");
+      setWaitingMessage(savedForm?.waitingMessage || "Seats are currently full. Your registration will be added to the waiting list.");
     } catch {
       // Use defaults if saved link settings are not readable.
     } finally {
@@ -2198,14 +2204,17 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
         title: workshop.name,
         venue: venue.trim() || "TBA"
       };
-      void saveLiveState({ registrationLinks: configs });
+      const forms = readLocalArray<BuilderForm>(FORMS_STORAGE_KEY);
+      const existingForm = forms.find((item) => item.workshopId === workshop.id || item.workshopSlug === workshopSlug(workshop.name));
+      const nextForms = existingForm ? [{ ...existingForm, waitingMode, waitingTitle: waitingTitle.trim() || undefined, waitingMessage: waitingMessage.trim() || undefined, updatedAt: new Date().toISOString() }, ...forms.filter((item) => item.id !== existingForm.id)] : forms;
+      void saveLiveState({ forms: nextForms, registrationLinks: configs });
       setSaveStatus("saved");
       const timeout = window.setTimeout(() => setSaveStatus("idle"), 1600);
       return () => window.clearTimeout(timeout);
     } catch {
       // The link still opens from Workshop Master fallback if storage is unavailable.
     }
-  }, [batch, customBaseUrl, fee, linkSettingsLoaded, otpRequired, paid, partPayment, publishUntil, published, shortSlug, venue, workshop]);
+  }, [batch, customBaseUrl, fee, linkSettingsLoaded, otpRequired, paid, partPayment, publishUntil, published, shortSlug, venue, waitingMessage, waitingMode, waitingTitle, workshop]);
 
   async function copyLink() {
     let copied = false;
@@ -2328,6 +2337,26 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
             </span>
             <input checked={otpRequired} className="size-5 shrink-0 accent-emerald-600" onChange={(event) => setOtpRequired(event.target.checked)} type="checkbox" />
           </label>
+
+          <div className="rounded-2xl border border-amber-200 bg-amber-50/70 p-4">
+            <label className="flex min-h-[48px] items-center justify-between gap-4">
+              <span>
+                <span className="block text-sm font-black text-slate-800">Waiting Mode</span>
+                <span className="mt-0.5 block text-xs font-semibold text-slate-500">Waiting content below is shown on the public registration link.</span>
+              </span>
+              <input checked={waitingMode} className="size-5 shrink-0 accent-amber-600" onChange={(event) => setWaitingMode(event.target.checked)} type="checkbox" />
+            </label>
+            <div className="mt-3 grid gap-3">
+              <label className="block">
+                <span className="mb-2 block text-sm font-bold text-slate-600">Waiting Heading</span>
+                <input className={inputClass} maxLength={80} onChange={(event) => setWaitingTitle(event.target.value)} value={waitingTitle} />
+              </label>
+              <label className="block">
+                <span className="mb-2 block text-sm font-bold text-slate-600">Waiting Message</span>
+                <textarea className={inputClass} maxLength={240} onChange={(event) => setWaitingMessage(event.target.value)} rows={3} value={waitingMessage} />
+              </label>
+            </div>
+          </div>
 
           <div className="grid gap-4 lg:grid-cols-[1fr_240px]">
             <div>
