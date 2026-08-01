@@ -167,6 +167,7 @@ export default function WorkshopMasterPage() {
   const [formOtpRequired, setFormOtpRequired] = useState(false);
   const [formWaitingMode, setFormWaitingMode] = useState(false);
   const [formRegistrationCapacity, setFormRegistrationCapacity] = useState("");
+  const [formWaitingTitle, setFormWaitingTitle] = useState("Waiting List Registration");
   const [formWaitingMessage, setFormWaitingMessage] = useState("Seats are currently full. Your registration will be added to the waiting list.");
   const [whatsappGroupUrl, setWhatsappGroupUrl] = useState("");
   const [message, setMessage] = useState("");
@@ -627,6 +628,7 @@ export default function WorkshopMasterPage() {
     setFormOtpRequired(false);
     setFormWaitingMode(false);
     setFormRegistrationCapacity("");
+    setFormWaitingTitle("Waiting List Registration");
     setFormWaitingMessage("Seats are currently full. Your registration will be added to the waiting list.");
     setWhatsappGroupUrl("");
   }
@@ -649,6 +651,7 @@ export default function WorkshopMasterPage() {
       otpRequired: formOtpRequired,
       waitingMode: formWaitingMode,
       registrationCapacity: Math.max(0, Number(formRegistrationCapacity) || 0) || undefined,
+      waitingTitle: formWaitingTitle.trim() || undefined,
       waitingMessage: formWaitingMessage.trim() || undefined,
       highlights: formHighlights.map((item) => item.trim()).filter(Boolean),
       whatsappGroupUrl: whatsappGroupUrl.trim() || undefined,
@@ -687,6 +690,7 @@ export default function WorkshopMasterPage() {
         setFormOtpRequired(false);
         setFormWaitingMode(false);
         setFormRegistrationCapacity("");
+        setFormWaitingTitle("Waiting List Registration");
         setFormWaitingMessage("Seats are currently full. Your registration will be added to the waiting list.");
         setWhatsappGroupUrl("");
         return;
@@ -703,6 +707,7 @@ export default function WorkshopMasterPage() {
       setFormOtpRequired(Boolean(savedForm.otpRequired));
       setFormWaitingMode(Boolean(savedForm.waitingMode));
       setFormRegistrationCapacity(savedForm.registrationCapacity ? String(savedForm.registrationCapacity) : "");
+      setFormWaitingTitle(savedForm.waitingTitle || "Waiting List Registration");
       setFormWaitingMessage(savedForm.waitingMessage || "Seats are currently full. Your registration will be added to the waiting list.");
       setWhatsappGroupUrl(savedForm.whatsappGroupUrl ?? "");
     } catch {
@@ -1036,12 +1041,16 @@ export default function WorkshopMasterPage() {
                 </span>
                 <input checked={formWaitingMode} className="size-5 shrink-0 accent-amber-600" onChange={(event) => setFormWaitingMode(event.target.checked)} type="checkbox" />
               </label>
-              <div className="mt-3 grid gap-3 md:grid-cols-[180px_1fr]">
+              <div className="mt-3 grid gap-3 md:grid-cols-2">
                 <label className="block">
                   <span className="mb-2 block text-xs font-black text-slate-600">Registration Capacity</span>
                   <input className={inputClass} inputMode="numeric" min={1} onChange={(event) => setFormRegistrationCapacity(event.target.value.replace(/\D/g, ""))} placeholder="No limit" value={formRegistrationCapacity} />
                 </label>
                 <label className="block">
+                  <span className="mb-2 block text-xs font-black text-slate-600">Waiting Heading</span>
+                  <input className={inputClass} maxLength={80} onChange={(event) => setFormWaitingTitle(event.target.value)} placeholder="Waiting List Registration" value={formWaitingTitle} />
+                </label>
+                <label className="block md:col-span-2">
                   <span className="mb-2 block text-xs font-black text-slate-600">Waiting Message</span>
                   <input className={inputClass} maxLength={240} onChange={(event) => setFormWaitingMessage(event.target.value)} value={formWaitingMessage} />
                 </label>

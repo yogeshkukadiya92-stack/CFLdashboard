@@ -394,6 +394,7 @@ export interface BuilderForm {
   submitButtonText?: string;
   registrationCapacity?: number;
   waitingMode?: boolean;
+  waitingTitle?: string;
   waitingMessage?: string;
   fields: BuilderField[];
   updatedAt: string;

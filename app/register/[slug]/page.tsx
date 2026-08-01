@@ -56,6 +56,7 @@ type FormModel = {
   submitButtonText?: string;
   registrationCapacity?: number;
   waitingMode?: boolean;
+  waitingTitle?: string;
   waitingMessage?: string;
   theme: BuilderTheme;
   fields: BuilderField[];
@@ -181,6 +182,7 @@ function modelFromBuilderForm(form: BuilderForm, overrides?: Partial<Pick<FormMo
     submitButtonText: form.submitButtonText,
     registrationCapacity: form.registrationCapacity,
     waitingMode: Boolean(form.waitingMode),
+    waitingTitle: form.waitingTitle,
     waitingMessage: form.waitingMessage,
     theme: { ...defaultTheme, ...form.theme },
     fields: form.fields?.length ? normalizeCoreFieldRequirements(form.fields) : simpleFields()
@@ -853,7 +855,7 @@ export default function RegistrationPage() {
           <div className="border-b border-amber-300 bg-amber-100 px-5 py-5 text-center sm:px-8 sm:py-6">
             <div className="flex items-center justify-center gap-3 text-amber-950">
               <AlertTriangle className="size-7 shrink-0" />
-              <p className="text-2xl font-black uppercase tracking-normal sm:text-3xl">Waiting List Registration</p>
+              <p className="break-words text-2xl font-black uppercase tracking-normal sm:text-3xl">{model.waitingTitle || "Waiting List Registration"}</p>
             </div>
             <p className="mx-auto mt-2 max-w-2xl text-sm font-bold leading-6 text-amber-900 sm:text-base">
               {model.waitingMessage || "This workshop is currently accepting waiting-list registrations."}
