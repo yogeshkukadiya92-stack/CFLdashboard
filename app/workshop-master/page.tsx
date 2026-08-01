@@ -166,6 +166,8 @@ export default function WorkshopMasterPage() {
   const [formHighlights, setFormHighlights] = useState<string[]>([]);
   const [formOtpRequired, setFormOtpRequired] = useState(false);
   const [formWaitingMode, setFormWaitingMode] = useState(false);
+  const [formRegistrationCapacity, setFormRegistrationCapacity] = useState("");
+  const [formWaitingMessage, setFormWaitingMessage] = useState("Seats are currently full. Your registration will be added to the waiting list.");
   const [whatsappGroupUrl, setWhatsappGroupUrl] = useState("");
   const [message, setMessage] = useState("");
   const [search, setSearch] = useState("");
@@ -624,6 +626,8 @@ export default function WorkshopMasterPage() {
     setFormHighlights([]);
     setFormOtpRequired(false);
     setFormWaitingMode(false);
+    setFormRegistrationCapacity("");
+    setFormWaitingMessage("Seats are currently full. Your registration will be added to the waiting list.");
     setWhatsappGroupUrl("");
   }
 
@@ -644,6 +648,8 @@ export default function WorkshopMasterPage() {
       partPayment: Boolean(record.isPartPaymentAllow),
       otpRequired: formOtpRequired,
       waitingMode: formWaitingMode,
+      registrationCapacity: Math.max(0, Number(formRegistrationCapacity) || 0) || undefined,
+      waitingMessage: formWaitingMessage.trim() || undefined,
       highlights: formHighlights.map((item) => item.trim()).filter(Boolean),
       whatsappGroupUrl: whatsappGroupUrl.trim() || undefined,
       submitButtonText: formSubmitButtonText.trim() || undefined,
@@ -680,6 +686,8 @@ export default function WorkshopMasterPage() {
         setFormHighlights([]);
         setFormOtpRequired(false);
         setFormWaitingMode(false);
+        setFormRegistrationCapacity("");
+        setFormWaitingMessage("Seats are currently full. Your registration will be added to the waiting list.");
         setWhatsappGroupUrl("");
         return;
       }
@@ -694,6 +702,8 @@ export default function WorkshopMasterPage() {
       setFormHighlights(savedForm.highlights ?? []);
       setFormOtpRequired(Boolean(savedForm.otpRequired));
       setFormWaitingMode(Boolean(savedForm.waitingMode));
+      setFormRegistrationCapacity(savedForm.registrationCapacity ? String(savedForm.registrationCapacity) : "");
+      setFormWaitingMessage(savedForm.waitingMessage || "Seats are currently full. Your registration will be added to the waiting list.");
       setWhatsappGroupUrl(savedForm.whatsappGroupUrl ?? "");
     } catch {
       resetBuilderForm();
@@ -1018,6 +1028,25 @@ export default function WorkshopMasterPage() {
               </span>
               <input checked={formOtpRequired} className="size-5 shrink-0 accent-emerald-600" onChange={(event) => setFormOtpRequired(event.target.checked)} type="checkbox" />
             </label>
+            <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-4 md:col-span-2">
+              <label className="flex min-h-[48px] items-center justify-between gap-4">
+                <span>
+                  <span className="block text-sm font-black text-slate-800">Waiting Mode</span>
+                  <span className="mt-0.5 block text-xs font-semibold text-slate-500">When enabled, every new form submission goes directly to the waiting list.</span>
+                </span>
+                <input checked={formWaitingMode} className="size-5 shrink-0 accent-amber-600" onChange={(event) => setFormWaitingMode(event.target.checked)} type="checkbox" />
+              </label>
+              <div className="mt-3 grid gap-3 md:grid-cols-[180px_1fr]">
+                <label className="block">
+                  <span className="mb-2 block text-xs font-black text-slate-600">Registration Capacity</span>
+                  <input className={inputClass} inputMode="numeric" min={1} onChange={(event) => setFormRegistrationCapacity(event.target.value.replace(/\D/g, ""))} placeholder="No limit" value={formRegistrationCapacity} />
+                </label>
+                <label className="block">
+                  <span className="mb-2 block text-xs font-black text-slate-600">Waiting Message</span>
+                  <input className={inputClass} maxLength={240} onChange={(event) => setFormWaitingMessage(event.target.value)} value={formWaitingMessage} />
+                </label>
+              </div>
+            </div>
           </div>
 
           {editingAnalytics ? (
