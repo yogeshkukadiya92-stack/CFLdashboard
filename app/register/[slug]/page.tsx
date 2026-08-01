@@ -849,6 +849,17 @@ export default function RegistrationPage() {
         ) : (
           <div className="h-2.5 rounded-t-3xl" style={{ background: `linear-gradient(90deg, ${theme.accent}, ${theme.accent}88)` }} />
         )}
+        {model.waitingMode ? (
+          <div className="border-b border-amber-300 bg-amber-100 px-5 py-5 text-center sm:px-8 sm:py-6">
+            <div className="flex items-center justify-center gap-3 text-amber-950">
+              <AlertTriangle className="size-7 shrink-0" />
+              <p className="text-2xl font-black uppercase tracking-normal sm:text-3xl">Waiting List Registration</p>
+            </div>
+            <p className="mx-auto mt-2 max-w-2xl text-sm font-bold leading-6 text-amber-900 sm:text-base">
+              {model.waitingMessage || "This workshop is currently accepting waiting-list registrations."}
+            </p>
+          </div>
+        ) : null}
         <div className="registration-public-header relative p-5 sm:p-6 md:p-8" style={{ textAlign: theme.align }}>
           {displayLogoUrl ? (
             <img
@@ -931,13 +942,6 @@ export default function RegistrationPage() {
                 <div className="mb-6 flex items-start gap-3 rounded-xl bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700">
                   <CheckCircle2 className="mt-0.5 size-5 shrink-0" />
                   <span>Welcome back, {matchedClient.name || "valued client"}! We filled in your saved details — please review.</span>
-                </div>
-              ) : null}
-
-              {model.waitingMode ? (
-                <div className="mb-6 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-800">
-                  <AlertTriangle className="mt-0.5 size-5 shrink-0" />
-                  <span>{model.waitingMessage || "This workshop is currently accepting waiting-list registrations."}</span>
                 </div>
               ) : null}
 
