@@ -95,21 +95,27 @@ export async function POST(request: Request) {
         const entry = value as Record<string, unknown>;
         return String(entry.workshopId ?? "") === sanitizedRegistration.workshopId && entry.registrationStatus !== "waiting" && String(entry.id ?? "") !== sanitizedRegistration.id;
       }).length;
-      const waitingCount = current.filter((value: unknown) => {
-        if (!value || typeof value !== "object") return false;
-        const entry = value as Record<string, unknown>;
-        return String(entry.workshopId ?? "") === sanitizedRegistration.workshopId && entry.registrationStatus === "waiting" && String(entry.id ?? "") !== sanitizedRegistration.id;
-      }).length;
       const isWaiting = form?.waitingMode === true || (capacity > 0 && confirmedCount >= capacity);
-      const finalRegistration = {
+      const pendingRegistration = {
         ...sanitizedRegistration,
         registrationStatus: isWaiting ? "waiting" : "confirmed",
-        waitingPosition: isWaiting ? waitingCount + 1 : undefined
+        waitingPosition: undefined
       };
-      const next = [
-        finalRegistration,
+      const unnumbered = [
+        pendingRegistration,
         ...current.filter((item: unknown) => !(item && typeof item === "object" && "id" in item && (item as { id?: string }).id === sanitizedRegistration.id))
       ];
+      const waiting = unnumbered
+        .filter((item: unknown) => item && typeof item === "object" && String((item as Record<string, unknown>).workshopId ?? "") === sanitizedRegistration.workshopId && (item as Record<string, unknown>).registrationStatus === "waiting")
+        .sort((first: Record<string, unknown>, second: Record<string, unknown>) => new Date(String(first.createdAt ?? "")).getTime() - new Date(String(second.createdAt ?? "")).getTime());
+      const positions = new Map(waiting.map((entry: Record<string, unknown>, index: number) => [String(entry.id ?? ""), index + 1]));
+      const next = unnumbered.map((item: unknown) => {
+        if (!item || typeof item !== "object") return item;
+        const entry = item as Record<string, unknown>;
+        const position = positions.get(String(entry.id ?? ""));
+        return position ? { ...entry, waitingPosition: position } : entry;
+      });
+      const finalRegistration = next.find((item: unknown) => item && typeof item === "object" && String((item as Record<string, unknown>).id ?? "") === sanitizedRegistration.id) as typeof pendingRegistration & { waitingPosition?: number };
       const workshops = Array.isArray(state.workshops) ? state.workshops : [];
       const linkedWorkshop = workshops.find((value: unknown) => {
         if (!value || typeof value !== "object" || Array.isArray(value)) return false;

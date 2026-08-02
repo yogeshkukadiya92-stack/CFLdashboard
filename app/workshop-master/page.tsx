@@ -188,10 +188,12 @@ export default function WorkshopMasterPage() {
   const [hideDuplicateParticipants, setHideDuplicateParticipants] = useState(false);
   const [participantSearch, setParticipantSearch] = useState("");
   const [responseFilters, setResponseFilters] = useState<ResponseFilterState>({ ...emptyResponseFilters });
-  const [followUpScope, setFollowUpScope] = useState<"needs_follow_up" | "completed" | "all">("needs_follow_up");
+  const [followUpScope, setFollowUpScope] = useState<"needs_follow_up" | "completed" | "waiting" | "all">("needs_follow_up");
   const [selectedParticipantIds, setSelectedParticipantIds] = useState<string[]>([]);
   const [followUpTarget, setFollowUpTarget] = useState<RegistrationEntry | null>(null);
   const [shareSelectedOpen, setShareSelectedOpen] = useState(false);
+  const [promoteWaitingOpen, setPromoteWaitingOpen] = useState(false);
+  const [promotingWaiting, setPromotingWaiting] = useState(false);
 
   useEffect(() => {
     function loadLocal() {
@@ -287,6 +289,10 @@ export default function WorkshopMasterPage() {
       entry.workshopTitle.trim().toLowerCase() === selectedName
     );
   }, [registrations, selectedWorkshop]);
+  const waitingParticipants = useMemo(() => selectedParticipants
+    .filter((entry) => entry.registrationStatus === "waiting")
+    .sort((first, second) => (first.waitingPosition ?? Number.MAX_SAFE_INTEGER) - (second.waitingPosition ?? Number.MAX_SAFE_INTEGER)), [selectedParticipants]);
+  const selectedWaitingParticipants = useMemo(() => waitingParticipants.filter((entry) => selectedParticipantIds.includes(entry.id)), [selectedParticipantIds, waitingParticipants]);
   const duplicateParticipantIds = useMemo(() => {
     const { duplicates } = partitionDuplicateResponses(selectedParticipants, {
       email: (entry) => entry.email,
@@ -321,6 +327,7 @@ export default function WorkshopMasterPage() {
     );
   }, [filteredParticipants, participantSearch]);
   const followUpParticipants = useMemo(() => searchedParticipants.filter((entry) => {
+    if (followUpScope === "waiting") return entry.registrationStatus === "waiting";
     const completed = Boolean(entry.confirmationStatus && entry.confirmationStatus !== "pending" && entry.confirmationNote?.trim());
     if (followUpScope === "completed") return completed;
     if (followUpScope === "needs_follow_up") return !completed;
@@ -572,6 +579,32 @@ export default function WorkshopMasterPage() {
       setMessage("Duplicate registrations could not be removed. Please try again.");
     } finally {
       setRemovingDuplicates(false);
+    }
+  }
+
+  async function promoteSelectedWaitingRegistrations() {
+    if (!selectedWorkshop || !selectedWaitingParticipants.length || promotingWaiting) return;
+    setPromotingWaiting(true);
+    try {
+      const response = await fetch("/api/admin/registration-waiting", {
+        body: JSON.stringify({
+          registrationIds: selectedWaitingParticipants.map((entry) => entry.id),
+          workshopId: selectedWorkshop.id
+        }),
+        headers: { "Content-Type": "application/json" },
+        method: "PATCH"
+      });
+      const result = await response.json().catch(() => ({})) as { error?: string; promoted?: number; registrations?: RegistrationEntry[] };
+      if (!response.ok || !Array.isArray(result.registrations)) throw new Error(result.error || "Promotion failed.");
+      setRegistrations(result.registrations);
+      window.localStorage.setItem(REGISTRATION_STORAGE_KEY, JSON.stringify(result.registrations));
+      setSelectedParticipantIds([]);
+      setPromoteWaitingOpen(false);
+      setMessage(`${result.promoted ?? selectedWaitingParticipants.length} waiting registration${(result.promoted ?? selectedWaitingParticipants.length) === 1 ? "" : "s"} converted successfully.`);
+    } catch {
+      setMessage("Waiting registrations could not be converted. Please try again.");
+    } finally {
+      setPromotingWaiting(false);
     }
   }
 
@@ -864,6 +897,34 @@ export default function WorkshopMasterPage() {
     link.remove();
     URL.revokeObjectURL(url);
     setMessage(`Downloaded ${displayedParticipants.length} registration responses.`);
+  }
+
+  function exportWaitingList() {
+    if (!selectedWorkshop || !waitingParticipants.length) return;
+    const headers = ["Waiting Number", "Name", "Mobile", "Email", "City", "Batch", "Source", "Submitted"];
+    const rows = waitingParticipants.map((entry) => [
+      entry.waitingPosition ?? "",
+      entry.fullName,
+      entry.mobile,
+      entry.email,
+      entry.city,
+      entry.batch ?? "Main Batch",
+      entry.source ?? "Registration Link",
+      formatSubmittedAt(entry.createdAt)
+    ]);
+    const cell = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+    const csv = "\ufeff" + [headers, ...rows].map((row) => row.map(cell).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    const filename = selectedWorkshop.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "workshop";
+    link.href = url;
+    link.download = `${filename}-waiting-list.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    setMessage(`Downloaded ${waitingParticipants.length} waiting registrations.`);
   }
 
   return (
@@ -1287,6 +1348,16 @@ export default function WorkshopMasterPage() {
                     <Download className="size-4" />
                     Download Excel
                   </button>
+                  <button
+                    className="inline-flex items-center gap-2 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-900 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled={!waitingParticipants.length}
+                    onClick={exportWaitingList}
+                    title="Download only waiting-list registrations"
+                    type="button"
+                  >
+                    <Download className="size-4" />
+                    Download Waiting List
+                  </button>
                   <a
                     className="inline-flex items-center gap-2 rounded-xl border border-indigo-200 bg-white px-4 py-3 text-sm font-bold text-indigo-700 hover:bg-indigo-50"
                     href={`/process/import-data-workshop-wise?workshopId=${encodeURIComponent(selectedWorkshop.id)}`}
@@ -1357,6 +1428,7 @@ export default function WorkshopMasterPage() {
                       {([
                         ["needs_follow_up", "Needs follow-up"],
                         ["completed", "Completed"],
+                        ["waiting", `Waiting List (${waitingParticipants.length})`],
                         ["all", "All responses"]
                       ] as const).map(([value, label]) => (
                         <button
@@ -1397,8 +1469,14 @@ export default function WorkshopMasterPage() {
                   {selectedParticipantIds.length ? (
                     <div className="flex flex-wrap items-center justify-between gap-3 border-b border-emerald-200 bg-emerald-50 px-4 py-3">
                       <p className="text-sm font-black text-emerald-900">{selectedParticipantIds.length} participant{selectedParticipantIds.length === 1 ? "" : "s"} selected</p>
-                      <div className="flex gap-2">
+                      <div className="flex flex-wrap gap-2">
                         <button className="min-h-10 rounded-lg border border-emerald-300 bg-white px-3 text-xs font-black text-emerald-800" onClick={() => setSelectedParticipantIds([])} type="button">Clear</button>
+                        {selectedWaitingParticipants.length ? (
+                          <button className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-amber-600 px-3 text-xs font-black text-white hover:bg-amber-700" onClick={() => setPromoteWaitingOpen(true)} type="button">
+                            <CheckSquare className="size-4" />
+                            Convert to Registration ({selectedWaitingParticipants.length})
+                          </button>
+                        ) : null}
                         <button className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-emerald-700 px-3 text-xs font-black text-white hover:bg-emerald-800" onClick={() => setShareSelectedOpen(true)} type="button"><Share2 className="size-4" />Share Selected</button>
                       </div>
                     </div>
@@ -1493,6 +1571,18 @@ export default function WorkshopMasterPage() {
           workshop={selectedWorkshop}
         />
       ) : null}
+      <ConfirmDialog
+        confirmLabel={promotingWaiting ? "Converting..." : `Convert ${selectedWaitingParticipants.length} to Registration`}
+        description="Selected people will leave the waiting list and become confirmed registrations. Remaining waiting numbers will be reordered automatically."
+        onCancel={() => {
+          if (!promotingWaiting) setPromoteWaitingOpen(false);
+        }}
+        onConfirm={() => void promoteSelectedWaitingRegistrations()}
+        open={promoteWaitingOpen}
+        title="Convert waiting list to registration?"
+      >
+        {selectedWaitingParticipants.length} selected waiting participant{selectedWaitingParticipants.length === 1 ? "" : "s"} will be confirmed.
+      </ConfirmDialog>
       <ConfirmDialog
         confirmLabel="Delete Workshop"
         description="This removes the workshop master and its linked registration form."
