@@ -738,10 +738,6 @@ export default function WorkshopAttendancePage() {
                       <NumberSetting label="Zoom redirect" onChange={(value) => updateSession({ redirectDelaySeconds: value })} suffix="sec" value={selectedSession.redirectDelaySeconds ?? 3} />
                       <NumberSetting label="Min. duration" onChange={(value) => updateSession({ minimumDurationMinutes: value })} suffix="min" value={selectedSession.minimumDurationMinutes ?? 30} />
                     </div>
-                    <label className="md:col-span-2 flex cursor-pointer items-center justify-between gap-4 border border-slate-200 bg-slate-50 p-4">
-                      <span><span className="block text-sm font-black text-slate-800">Allow repeat check-ins</span><span className="mt-1 block text-xs font-bold text-slate-500">When off, one mobile number creates only one attendance response per session.</span></span>
-                      <input checked={Boolean(selectedSession.allowDuplicate)} className="size-5 accent-emerald-600" onChange={(event) => updateSession({ allowDuplicate: event.target.checked })} type="checkbox" />
-                    </label>
                     <label className="md:col-span-2">
                       <span className="mb-2 block text-sm font-bold text-slate-600">Success Message</span>
                       <input className={inputClass} onChange={(event) => updateSession({ successMessage: event.target.value })} value={selectedSession.successMessage || ""} />

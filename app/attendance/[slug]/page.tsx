@@ -32,6 +32,7 @@ export default function AttendanceFormPage() {
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [duplicateModalOpen, setDuplicateModalOpen] = useState(false);
   const [joinUrl, setJoinUrl] = useState("");
   const [countdown, setCountdown] = useState(0);
   const [autoRedirect, setAutoRedirect] = useState(true);
@@ -210,6 +211,11 @@ export default function AttendanceFormPage() {
         method: "POST"
       });
       const data = await response.json().catch(() => ({}));
+      if (response.status === 409 && data.duplicate) {
+        setDuplicateModalOpen(true);
+        setMessage("");
+        return;
+      }
       if (!response.ok) throw new Error(data.error || "Could not save attendance.");
       const savedEntry = data.entry as AttendanceEntry;
       const current = readLocalArray<AttendanceEntry>(ATTENDANCE_ENTRIES_STORAGE_KEY);
@@ -323,8 +329,18 @@ export default function AttendanceFormPage() {
                 <ClipboardCheck className="size-5" />
                 Submit another response
               </button>
-              {!session.allowDuplicate ? <p className="mt-2 text-xs font-semibold text-slate-400">A mobile number can be recorded once for this session.</p> : null}
+              <p className="mt-2 text-xs font-semibold text-slate-400">A mobile number can be recorded once for this session.</p>
             </div>
+          </section>
+        </div>
+      ) : null}
+      {duplicateModalOpen ? (
+        <div aria-modal="true" className="fixed inset-0 z-[60] grid place-items-center bg-slate-950/60 p-4 backdrop-blur-sm" role="dialog">
+          <section className="w-full max-w-md bg-white p-6 text-center shadow-2xl">
+            <span className="mx-auto grid size-16 place-items-center rounded-full bg-amber-50 text-amber-700"><AlertTriangle className="size-8" /></span>
+            <h2 className="mt-5 text-2xl font-black text-slate-950">Already Registered</h2>
+            <p className="mt-3 text-sm font-semibold leading-6 text-slate-600">Mobile number +91 {cleanMobile(mobileValue)} is already registered for this attendance session. You cannot submit this form again with the same number.</p>
+            <button className="mt-6 min-h-12 w-full bg-slate-950 px-5 text-sm font-black text-white hover:bg-slate-800" onClick={() => setDuplicateModalOpen(false)} type="button">Close</button>
           </section>
         </div>
       ) : null}

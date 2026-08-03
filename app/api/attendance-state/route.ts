@@ -144,7 +144,7 @@ export async function POST(request: Request) {
       checkInAt: now,
       city: cleanText(input.city, 150),
       email,
-      id: session.allowDuplicate ? crypto.randomUUID() : stableId,
+      id: stableId,
       mobile: `+91 ${mobileDigits}`,
       sessionId: session.id,
       sessionSlug: session.slug,
@@ -157,9 +157,16 @@ export async function POST(request: Request) {
     const saved = await mutateAttendanceEntries((rawEntries) => {
       const entries = rawEntries as AttendanceEntry[];
       const existing = entries.find((entry) => entry.id === stableId);
-      if (existing && !session.allowDuplicate) return { entries, result: { duplicate: true, entry: existing } };
+      if (existing) return { entries, result: { duplicate: true, entry: existing } };
       return { entries: [proposedEntry, ...entries].slice(0, 20_000), result: { duplicate: false, entry: proposedEntry } };
     });
+    if (saved.duplicate) {
+      return NextResponse.json({
+        code: "ALREADY_REGISTERED",
+        duplicate: true,
+        error: "This mobile number is already registered for this attendance session."
+      }, { status: 409 });
+    }
     return NextResponse.json({ ...saved, ok: true, ...responseMeta });
   } catch {
     return NextResponse.json({ error: "Failed to save attendance." }, { status: 500 });

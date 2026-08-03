@@ -87,6 +87,20 @@ export async function POST(request: Request) {
       const selected = await client.query(`SELECT registrations, forms, workshops, leads, sales_people FROM app_state WHERE id = 1 FOR UPDATE`);
       const state = selected.rows[0] ?? {};
       const current = Array.isArray(state.registrations) ? state.registrations : [];
+      const duplicate = current.find((value: unknown) => {
+        if (!value || typeof value !== "object") return false;
+        const entry = value as Record<string, unknown>;
+        return String(entry.workshopId ?? "") === sanitizedRegistration.workshopId
+          && String(entry.mobile ?? "").replace(/\D/g, "").slice(-10) === mobileDigits;
+      });
+      if (duplicate) {
+        await client.query("ROLLBACK");
+        return NextResponse.json({
+          code: "ALREADY_REGISTERED",
+          duplicate: true,
+          error: "This mobile number is already registered for this workshop."
+        }, { status: 409 });
+      }
       const forms = Array.isArray(state.forms) ? state.forms as Array<Record<string, unknown>> : [];
       const form = forms.find((value) => String(value.workshopId ?? "") === sanitizedRegistration.workshopId || String(value.workshopSlug ?? "") === sanitizedRegistration.workshopSlug);
       const capacity = Math.max(0, Number(form?.registrationCapacity ?? 0) || 0);

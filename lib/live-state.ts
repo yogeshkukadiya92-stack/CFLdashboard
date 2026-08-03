@@ -172,7 +172,6 @@ export async function hydratePublicRegistrationState(): Promise<LiveState | null
 }
 
 export async function savePublicRegistration(registration: unknown, registrations: unknown[]) {
-  writeLiveStateToLocalStorage({ registrations });
   try {
     const response = await fetch("/api/public-registration-state", {
       body: JSON.stringify({ registration }),
@@ -181,8 +180,10 @@ export async function savePublicRegistration(registration: unknown, registration
       keepalive: true,
       method: "POST"
     });
-    if (!response.ok) return false;
-    return await response.json() as unknown;
+    const result = await response.json().catch(() => ({})) as Record<string, unknown>;
+    if (!response.ok) return { ...result, ok: false, status: response.status };
+    writeLiveStateToLocalStorage({ registrations });
+    return { ...result, ok: true, status: response.status };
   } catch {
     return false;
   }

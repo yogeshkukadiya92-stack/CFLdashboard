@@ -219,6 +219,7 @@ export default function RegistrationPage() {
   const [otpVerifying, setOtpVerifying] = useState(false);
   const [otpVerifiedMobile, setOtpVerifiedMobile] = useState("");
   const [otpModalOpen, setOtpModalOpen] = useState(false);
+  const [duplicateModalOpen, setDuplicateModalOpen] = useState(false);
   const [success, setSuccess] = useState(false);
   const [waitingPosition, setWaitingPosition] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -763,14 +764,24 @@ export default function RegistrationPage() {
       if (existingIndex >= 0) current[existingIndex] = payload;
       else current.unshift(payload);
       setSubmitting(true);
-      const result = await savePublicRegistration(payload, current) as false | { registration?: RegistrationEntry };
+      const result = await savePublicRegistration(payload, current) as false | { duplicate?: boolean; error?: string; ok?: boolean; registration?: RegistrationEntry };
+      if (!result || result.ok === false) {
+        if (result && result.duplicate) {
+          setOtpModalOpen(false);
+          setDuplicateModalOpen(true);
+          setMessage("");
+          return;
+        }
+        throw new Error(result && result.error ? result.error : "Could not complete registration.");
+      }
       const saved = result && result.registration ? result.registration : payload;
       const savedIndex = current.findIndex((item) => item.id === registrationId);
       if (savedIndex >= 0) current[savedIndex] = saved;
       writeLiveStateToLocalStorage({ registrations: current });
       setWaitingPosition(saved.registrationStatus === "waiting" ? saved.waitingPosition ?? 1 : null);
-    } catch {
-      // ignore storage write failures
+    } catch (reason) {
+      setMessage(reason instanceof Error ? reason.message : "Could not complete registration. Please try again.");
+      return;
     } finally {
       setSubmitting(false);
     }
@@ -1095,6 +1106,21 @@ export default function RegistrationPage() {
                 {otpSending ? "Sending OTP..." : "Complete Registration"}
               </button>
             </div>
+          </div>
+        </div>
+      ) : null}
+
+      {duplicateModalOpen ? (
+        <div aria-modal="true" className="fixed inset-0 z-[60] grid place-items-center bg-slate-950/60 p-4 backdrop-blur-sm" role="dialog">
+          <div className="w-full max-w-md rounded-3xl bg-white p-6 text-center shadow-2xl">
+            <span className="mx-auto grid size-16 place-items-center rounded-full bg-amber-50 text-amber-700">
+              <AlertTriangle className="size-8" />
+            </span>
+            <h2 className="mt-5 text-2xl font-black text-slate-950">Already Registered</h2>
+            <p className="mt-3 text-sm font-semibold leading-6 text-slate-600">
+              Mobile number +91 {mobileDigits} is already registered for this workshop. You cannot submit this form again with the same number.
+            </p>
+            <button className="mt-6 min-h-12 w-full rounded-xl bg-slate-950 px-5 text-sm font-black text-white hover:bg-slate-800" onClick={() => setDuplicateModalOpen(false)} type="button">Close</button>
           </div>
         </div>
       ) : null}
