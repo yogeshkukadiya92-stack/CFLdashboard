@@ -6,7 +6,7 @@ import { DuplicateResponseFilter } from "@/components/duplicate-response-filter"
 import { AdvancedResponseFilters } from "@/components/advanced-response-filters";
 import { WorkshopCohortCompare } from "@/components/workshop-cohort-compare";
 import { MultiWorkshopOverlap } from "@/components/multi-workshop-overlap";
-import { AlertCircle, Archive, ArrowDown, ArrowUp, BarChart3, Bold, Check, CheckSquare, ChevronDown, Circle, Copy, Download, Edit3, ExternalLink, Eye, Files, Heading, Image, Italic, LayoutList, Link2, List, ListOrdered, Mail, MessageCircle, Monitor, Palette, PhoneCall, Plus, QrCode, RefreshCw, Route, Save, Search, Share2, Smartphone, Sparkles, Trash2, Type, Underline, Upload, UsersRound, X } from "lucide-react";
+import { AlertCircle, Archive, ArrowDown, ArrowUp, BarChart3, Bold, Check, CheckSquare, ChevronDown, Circle, Copy, Download, Edit3, ExternalLink, Eye, EyeOff, Files, Heading, Image, Italic, LayoutList, Link2, List, ListOrdered, Mail, MessageCircle, Monitor, Palette, PhoneCall, Plus, QrCode, RefreshCw, Route, Save, Search, Share2, Smartphone, Sparkles, Trash2, Type, Underline, Upload, UsersRound, X } from "lucide-react";
 import { hydrateLiveState, readLocalArray, readLocalObject, saveLiveState } from "@/lib/live-state";
 import { buildRegistrationUrl, normalizeBaseUrl } from "@/lib/registration-url";
 import { publicFormSlug } from "@/lib/public-slug";
@@ -186,6 +186,7 @@ export default function WorkshopMasterPage() {
   const [removeDuplicatesOpen, setRemoveDuplicatesOpen] = useState(false);
   const [removingDuplicates, setRemovingDuplicates] = useState(false);
   const [hideDuplicateParticipants, setHideDuplicateParticipants] = useState(false);
+  const [hideWaitingParticipants, setHideWaitingParticipants] = useState(false);
   const [participantSearch, setParticipantSearch] = useState("");
   const [responseFilters, setResponseFilters] = useState<ResponseFilterState>({ ...emptyResponseFilters });
   const [followUpScope, setFollowUpScope] = useState<"needs_follow_up" | "completed" | "waiting" | "all">("needs_follow_up");
@@ -334,37 +335,41 @@ export default function WorkshopMasterPage() {
     return true;
   }), [followUpScope, searchedParticipants]);
   const displayedParticipants = useMemo(() => {
-    const visibleParticipants = hideDuplicateParticipants ? hideDuplicateResponses(followUpParticipants, {
+    const withoutWaiting = hideWaitingParticipants
+      ? followUpParticipants.filter((entry) => entry.registrationStatus !== "waiting")
+      : followUpParticipants;
+    const visibleParticipants = hideDuplicateParticipants ? hideDuplicateResponses(withoutWaiting, {
       email: (entry) => entry.email,
       mobile: (entry) => entry.mobile,
       name: (entry) => entry.fullName,
       scope: (entry) => entry.workshopId || entry.workshopTitle,
       submittedAt: (entry) => entry.createdAt
-    }) : followUpParticipants;
+    }) : withoutWaiting;
 
     return [...visibleParticipants].sort((first, second) =>
       submittedAtTimestamp(second.createdAt) - submittedAtTimestamp(first.createdAt)
     );
-  }, [followUpParticipants, hideDuplicateParticipants]);
+  }, [followUpParticipants, hideDuplicateParticipants, hideWaitingParticipants]);
   const participantQuestions = useMemo(() => responseQuestionOptions(participantFilterRecords), [participantFilterRecords]);
-  const activeParticipantFilterCount = activeResponseFilterCount(responseFilters) + Number(hideDuplicateParticipants);
+  const activeParticipantFilterCount = activeResponseFilterCount(responseFilters) + Number(hideDuplicateParticipants) + Number(hideWaitingParticipants);
 
   useEffect(() => {
     if (!selectedWorkshopId) return;
     try {
-      const saved = readLocalObject<Record<string, { filters?: ResponseFilterState; hideDuplicates?: boolean; showParticipants?: boolean }>>(WORKSHOP_RESPONSE_FILTERS_STORAGE_KEY);
+      const saved = readLocalObject<Record<string, { filters?: ResponseFilterState; hideDuplicates?: boolean; hideWaiting?: boolean; showParticipants?: boolean }>>(WORKSHOP_RESPONSE_FILTERS_STORAGE_KEY);
       window.localStorage.setItem(WORKSHOP_RESPONSE_FILTERS_STORAGE_KEY, JSON.stringify({
         ...saved,
         [selectedWorkshopId]: {
           filters: responseFilters,
           hideDuplicates: hideDuplicateParticipants,
+          hideWaiting: hideWaitingParticipants,
           showParticipants
         }
       }));
     } catch {
       // Filters are convenience state; ignore storage issues.
     }
-  }, [hideDuplicateParticipants, responseFilters, selectedWorkshopId, showParticipants]);
+  }, [hideDuplicateParticipants, hideWaitingParticipants, responseFilters, selectedWorkshopId, showParticipants]);
 
   async function saveRecords(next: WorkshopRecord[]) {
     setRecords(next);
@@ -485,14 +490,18 @@ export default function WorkshopMasterPage() {
     setFollowUpScope("needs_follow_up");
     setSelectedParticipantIds([]);
     try {
-      const saved = readLocalObject<Record<string, { filters?: ResponseFilterState; hideDuplicates?: boolean; showParticipants?: boolean }>>(WORKSHOP_RESPONSE_FILTERS_STORAGE_KEY);
+      const saved = readLocalObject<Record<string, { filters?: ResponseFilterState; hideDuplicates?: boolean; hideWaiting?: boolean; showParticipants?: boolean }>>(WORKSHOP_RESPONSE_FILTERS_STORAGE_KEY);
       const workshopState = saved[record.id];
+      const hideWaiting = Boolean(workshopState?.hideWaiting);
       setResponseFilters({ ...emptyResponseFilters, ...(workshopState?.filters ?? {}) });
       setHideDuplicateParticipants(Boolean(workshopState?.hideDuplicates));
+      setHideWaitingParticipants(hideWaiting);
+      setFollowUpScope(hideWaiting ? "all" : "needs_follow_up");
       setShowParticipants(Boolean(workshopState?.showParticipants));
     } catch {
       setResponseFilters({ ...emptyResponseFilters });
       setHideDuplicateParticipants(false);
+      setHideWaitingParticipants(false);
       setShowParticipants(false);
     }
     setSelectedWorkshopId(record.id);
@@ -1411,6 +1420,21 @@ export default function WorkshopMasterPage() {
                     <div className="flex flex-wrap justify-end gap-2">
                       <AdvancedResponseFilters filters={responseFilters} onChange={setResponseFilters} questions={participantQuestions} resultCount={displayedParticipants.length} totalCount={selectedParticipants.length} />
                       <DuplicateResponseFilter checked={hideDuplicateParticipants} onChange={setHideDuplicateParticipants} rawCount={searchedParticipants.length} visibleCount={displayedParticipants.length} />
+                      <label className={`inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-xl border px-3.5 text-sm font-black ${hideWaitingParticipants ? "border-amber-300 bg-amber-50 text-amber-900" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"}`}>
+                        <input
+                          checked={hideWaitingParticipants}
+                          className="size-5 accent-amber-600"
+                          onChange={(event) => {
+                            const checked = event.target.checked;
+                            setHideWaitingParticipants(checked);
+                            if (checked) setFollowUpScope("all");
+                            if (checked) setSelectedParticipantIds((current) => current.filter((id) => !waitingParticipants.some((entry) => entry.id === id)));
+                          }}
+                          type="checkbox"
+                        />
+                        <EyeOff className="size-4" />
+                        Hide waiting list ({waitingParticipants.length})
+                      </label>
                       <button
                         className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-rose-200 bg-white px-3.5 text-sm font-black text-rose-700 hover:bg-rose-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400 disabled:hover:bg-white"
                         disabled={!duplicateParticipantIds.length}
@@ -1436,6 +1460,7 @@ export default function WorkshopMasterPage() {
                           key={value}
                           onClick={() => {
                             setFollowUpScope(value);
+                            if (value === "waiting") setHideWaitingParticipants(false);
                             setSelectedParticipantIds([]);
                           }}
                           type="button"
