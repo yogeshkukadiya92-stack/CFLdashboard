@@ -1,6 +1,6 @@
 "use client";
 
-import { HeightInput } from "@/components/height-input";
+import { HeightInput, isHeightField } from "@/components/height-input";
 import { readLocalArray, writeLiveStateToLocalStorage } from "@/lib/live-state";
 import type { AttendanceEntry, AttendanceSession, BuilderField } from "@/lib/types";
 import { generateId } from "@/lib/utils";
@@ -376,7 +376,7 @@ function RenderField({
 
   if (field.type === "paragraph") {
     control = <textarea className={inputClass} onChange={(event) => onChange(event.target.value)} placeholder={field.placeholder} rows={3} value={value} />;
-  } else if (field.type === "height") {
+  } else if (isHeightField(field.type, field.label)) {
     control = <HeightInput className={inputClass} onChange={onChange} value={value} />;
   } else if (field.type === "dropdown") {
     control = (
@@ -439,6 +439,6 @@ function RenderField({
       {field.helpText ? <span className="mt-1.5 block text-xs font-semibold text-slate-400">{field.helpText}</span> : null}
     </>
   );
-  if (field.type === "height") return <div className={`block ${wide ? "md:col-span-2" : ""}`}>{content}</div>;
+  if (isHeightField(field.type, field.label)) return <div className={`block ${wide ? "md:col-span-2" : ""}`}>{content}</div>;
   return <label className={`block ${wide ? "md:col-span-2" : ""}`}>{content}</label>;
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { AdminPlatformShell } from "@/components/admin-platform-shell";
+import { isHeightField } from "@/components/height-input";
 import { hydrateLiveState, readLocalArray, saveLiveState } from "@/lib/live-state";
 import { buildRegistrationUrl, normalizeBaseUrl } from "@/lib/registration-url";
 import { publicFormSlug } from "@/lib/public-slug";
@@ -1109,7 +1110,7 @@ function PreviewField({ field, accent }: { field: BuilderField; accent: string }
       </div>
     );
   }
-  if (field.type === "height") {
+  if (isHeightField(field.type, field.label)) {
     return <div>{label}<div className="grid grid-cols-[1fr_1fr_auto] gap-2"><input className={inputClass} disabled placeholder="Feet" /><input className={inputClass} disabled placeholder="Inches" /><span className="flex min-w-[92px] items-center justify-center rounded-xl bg-emerald-50 px-3 text-sm font-bold text-emerald-700">-- cm</span></div></div>;
   }
   const inputType = field.type === "email" ? "email" : field.type === "number" ? "number" : field.type === "date" ? "date" : "text";

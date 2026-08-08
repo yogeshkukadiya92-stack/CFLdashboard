@@ -6,6 +6,10 @@ type HeightInputProps = {
   value: string;
 };
 
+export function isHeightField(type: string, label: string) {
+  return type === "height" || (type === "short_text" && label.trim().toLowerCase() === "height");
+}
+
 function parseHeight(value: string) {
   return {
     feet: value.match(/(\d+)\s*ft/i)?.[1] ?? "",
