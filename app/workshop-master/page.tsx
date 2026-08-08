@@ -102,6 +102,7 @@ const fieldTypeMeta: Record<BuilderFieldType, { label: string; hasOptions: boole
   email: { label: "Email", hasOptions: false },
   mobile: { label: "Mobile", hasOptions: false },
   number: { label: "Number", hasOptions: false },
+  height: { label: "Height", hasOptions: false },
   date: { label: "Date", hasOptions: false },
   time: { label: "Time", hasOptions: false },
   dropdown: { label: "Dropdown", hasOptions: true },
@@ -113,7 +114,7 @@ const fieldTypeMeta: Record<BuilderFieldType, { label: string; hasOptions: boole
   heading: { label: "Section Heading", hasOptions: false },
   divider: { label: "Divider", hasOptions: false }
 };
-const addableTypes: BuilderFieldType[] = ["short_text", "paragraph", "email", "mobile", "number", "date", "dropdown", "radio", "checkbox", "heading"];
+const addableTypes: BuilderFieldType[] = ["short_text", "paragraph", "email", "mobile", "number", "height", "date", "dropdown", "radio", "checkbox", "heading"];
 const richTextColors = ["#0f172a", "#059669", "#4f46e5", "#dc2626", "#ea580c", "#7c3aed"];
 
 function defaultBuilderFields(): BuilderField[] {

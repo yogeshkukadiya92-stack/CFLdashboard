@@ -300,6 +300,7 @@ export type BuilderFieldType =
   | "email"
   | "mobile"
   | "number"
+  | "height"
   | "date"
   | "time"
   | "dropdown"

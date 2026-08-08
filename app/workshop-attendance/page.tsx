@@ -10,7 +10,7 @@ import { generateId } from "@/lib/utils";
 import { publicFormSlug } from "@/lib/public-slug";
 import { hideDuplicateResponses } from "@/lib/response-dedupe";
 import { applyResponseFilters, emptyResponseFilters, responseQuestionOptions, type ResponseFilterState } from "@/lib/response-filters";
-import { ArrowDown, ArrowUp, BarChart3, CalendarDays, CheckSquare, Circle, Copy, Download, ExternalLink, Eye, Heading, Image as ImageIcon, Laptop, LayoutTemplate, Mail, MessageCircle, Palette, Phone, Plus, QrCode, RefreshCw, Save, Search, Settings2, Smartphone, Star, Trash2, Type, Upload, UserCheck, UsersRound, UserX, Video, X } from "lucide-react";
+import { ArrowDown, ArrowUp, BarChart3, CalendarDays, CheckSquare, Circle, Copy, Download, ExternalLink, Eye, Heading, Image as ImageIcon, Laptop, LayoutTemplate, Mail, MessageCircle, Palette, Phone, Plus, QrCode, RefreshCw, Ruler, Save, Search, Settings2, Smartphone, Star, Trash2, Type, Upload, UserCheck, UsersRound, UserX, Video, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
@@ -35,6 +35,7 @@ const fieldTypeMeta: Record<BuilderFieldType, { icon: typeof Type; label: string
   email: { icon: Mail, label: "Email", hasOptions: false },
   mobile: { icon: Smartphone, label: "Mobile", hasOptions: false },
   number: { icon: Type, label: "Number", hasOptions: false },
+  height: { icon: Ruler, label: "Height", hasOptions: false },
   date: { icon: CalendarDays, label: "Date", hasOptions: false },
   time: { icon: CalendarDays, label: "Time", hasOptions: false },
   dropdown: { icon: Circle, label: "Dropdown", hasOptions: true },
@@ -47,7 +48,7 @@ const fieldTypeMeta: Record<BuilderFieldType, { icon: typeof Type; label: string
   divider: { icon: Heading, label: "Divider", hasOptions: false }
 };
 
-const addableTypes: BuilderFieldType[] = ["short_text", "paragraph", "email", "mobile", "number", "date", "time", "dropdown", "radio", "checkbox", "yes_no", "rating", "consent", "heading", "divider"];
+const addableTypes: BuilderFieldType[] = ["short_text", "paragraph", "email", "mobile", "number", "height", "date", "time", "dropdown", "radio", "checkbox", "yes_no", "rating", "consent", "heading", "divider"];
 type BuilderTab = "build" | "logic" | "design" | "share";
 type SessionView = "responses" | "edit";
 type ComparisonFilter = "registered" | "attended" | "absent" | "walk_ins";

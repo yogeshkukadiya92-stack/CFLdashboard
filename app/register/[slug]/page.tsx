@@ -1,5 +1,6 @@
 "use client";
 
+import { HeightInput } from "@/components/height-input";
 import { workshops as seedWorkshops } from "@/lib/data";
 import { hydratePublicRegistrationState, readLocalArray, readLocalObject, savePublicRegistration, writeLiveStateToLocalStorage } from "@/lib/live-state";
 import { sanitizeRichTextHtml } from "@/lib/rich-text";
@@ -1188,6 +1189,8 @@ function RenderField({
   let control: React.ReactNode;
   if (field.type === "paragraph") {
     control = <textarea className={inputClass} onChange={(event) => onChange(event.target.value)} placeholder={field.placeholder} rows={3} value={value} />;
+  } else if (field.type === "height") {
+    control = <HeightInput className={inputClass} onChange={onChange} value={value} />;
   } else if (field.type === "dropdown") {
     const isOther = value.startsWith("Other: ");
     control = (
@@ -1272,5 +1275,8 @@ function RenderField({
     );
   }
 
+  if (field.type === "height") {
+    return <div className={`block ${wide ? "md:col-span-2" : ""}`}>{labelNode}{control}</div>;
+  }
   return <label className={`block ${wide ? "md:col-span-2" : ""}`}>{labelNode}{control}</label>;
 }
