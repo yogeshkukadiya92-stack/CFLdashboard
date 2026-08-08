@@ -2,6 +2,7 @@
 
 import { AdminPlatformShell } from "@/components/admin-platform-shell";
 import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
+import { isHeightField } from "@/components/height-input";
 import { DuplicateResponseFilter } from "@/components/duplicate-response-filter";
 import { AdvancedResponseFilters } from "@/components/advanced-response-filters";
 import { WorkshopCohortCompare } from "@/components/workshop-cohort-compare";
@@ -2586,7 +2587,26 @@ function FieldEditor({
         <span className="hidden rounded-md bg-slate-100 px-2 py-1 text-[11px] font-bold text-slate-500 sm:inline">{meta.label}</span>
       </div>
 
-      {field.type !== "heading" ? (
+      {isHeightField(field.type, field.label) ? (
+        <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:pl-11">
+          <input
+            aria-label="Height preview in feet"
+            className="min-w-0 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-semibold text-slate-500"
+            disabled
+            placeholder="Feet"
+          />
+          <input
+            aria-label="Height preview in inches"
+            className="min-w-0 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-semibold text-slate-500"
+            disabled
+            placeholder="Inches"
+          />
+          <span className="col-span-2 flex min-h-[42px] items-center justify-between rounded-lg border border-emerald-100 bg-emerald-50 px-3 text-xs font-black text-emerald-700 sm:col-span-1 sm:min-w-[104px] sm:justify-center">
+            <span className="sm:hidden">Centimeters</span>
+            -- cm
+          </span>
+        </div>
+      ) : field.type !== "heading" ? (
         <div className="mt-2 sm:pl-11">
           <input
             className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
