@@ -172,6 +172,8 @@ export default function WorkshopMasterPage() {
   const [formWaitingTitle, setFormWaitingTitle] = useState("Waiting List Registration");
   const [formWaitingMessage, setFormWaitingMessage] = useState("Seats are currently full. Your registration will be added to the waiting list.");
   const [whatsappGroupUrl, setWhatsappGroupUrl] = useState("");
+  const [whatsappConfirmationEnabled, setWhatsappConfirmationEnabled] = useState(false);
+  const [whatsappConfirmationTemplate, setWhatsappConfirmationTemplate] = useState("");
   const [message, setMessage] = useState("");
   const [search, setSearch] = useState("");
   const [recordScope, setRecordScope] = useState<"all" | "active" | "historical">("active");
@@ -675,6 +677,8 @@ export default function WorkshopMasterPage() {
     setFormWaitingTitle("Waiting List Registration");
     setFormWaitingMessage("Seats are currently full. Your registration will be added to the waiting list.");
     setWhatsappGroupUrl("");
+    setWhatsappConfirmationEnabled(false);
+    setWhatsappConfirmationTemplate("");
   }
 
   function buildRegistrationForm(record: WorkshopRecord): BuilderForm {
@@ -699,6 +703,8 @@ export default function WorkshopMasterPage() {
       waitingMessage: formWaitingMessage.trim() || undefined,
       highlights: formHighlights.map((item) => item.trim()).filter(Boolean),
       whatsappGroupUrl: whatsappGroupUrl.trim() || undefined,
+      whatsappConfirmationEnabled,
+      whatsappConfirmationTemplate: whatsappConfirmationTemplate.trim() || undefined,
       submitButtonText: formSubmitButtonText.trim() || undefined,
       fields: normalizeCoreFieldRequirements(formFields),
       updatedAt: new Date().toISOString()
@@ -737,6 +743,8 @@ export default function WorkshopMasterPage() {
         setFormWaitingTitle("Waiting List Registration");
         setFormWaitingMessage("Seats are currently full. Your registration will be added to the waiting list.");
         setWhatsappGroupUrl("");
+        setWhatsappConfirmationEnabled(false);
+        setWhatsappConfirmationTemplate("");
         return;
       }
       setFormTitle(savedForm.title || `${record.name} Registration`);
@@ -754,6 +762,8 @@ export default function WorkshopMasterPage() {
       setFormWaitingTitle(savedForm.waitingTitle || "Waiting List Registration");
       setFormWaitingMessage(savedForm.waitingMessage || "Seats are currently full. Your registration will be added to the waiting list.");
       setWhatsappGroupUrl(savedForm.whatsappGroupUrl ?? "");
+      setWhatsappConfirmationEnabled(Boolean(savedForm.whatsappConfirmationEnabled));
+      setWhatsappConfirmationTemplate(savedForm.whatsappConfirmationTemplate ?? "");
     } catch {
       resetBuilderForm();
     }
@@ -859,6 +869,7 @@ export default function WorkshopMasterPage() {
       displayedParticipants.flatMap((entry) => Object.keys((entry.answers ?? {}) as Record<string, unknown>))
     )).filter((key) => !coreAnswerKeys.has(key));
     const headers = [
+      "Registration Number",
       "Name",
       "Mobile",
       "Email",
@@ -876,6 +887,7 @@ export default function WorkshopMasterPage() {
       ...customAnswerKeys
     ];
     const rows = displayedParticipants.map((entry) => [
+      entry.registrationNumber ?? "",
       entry.fullName,
       entry.mobile,
       entry.email,
@@ -1098,6 +1110,21 @@ export default function WorkshopMasterPage() {
               <input className={inputClass} onChange={(event) => setWhatsappGroupUrl(event.target.value)} placeholder="https://chat.whatsapp.com/xxxxxxxx" value={whatsappGroupUrl} />
               <span className="mt-1 block text-xs font-semibold text-slate-400">After registration, the thank-you page can redirect to this group link after 5 seconds.</span>
             </label>
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4 md:col-span-2">
+              <label className="flex min-h-[48px] items-center justify-between gap-4">
+                <span>
+                  <span className="block text-sm font-black text-slate-700">Send confirmation on WhatsApp</span>
+                  <span className="mt-0.5 block text-xs font-semibold text-slate-500">Uses the configured 11za connection after a seat is confirmed.</span>
+                </span>
+                <input checked={whatsappConfirmationEnabled} className="size-5 shrink-0 accent-emerald-600" onChange={(event) => setWhatsappConfirmationEnabled(event.target.checked)} type="checkbox" />
+              </label>
+              {whatsappConfirmationEnabled ? (
+                <label className="mt-3 block">
+                  <span className="mb-2 block text-sm font-bold text-slate-600">11za Template Name</span>
+                  <input className={inputClass} onChange={(event) => setWhatsappConfirmationTemplate(event.target.value)} placeholder="registration_confirmed" value={whatsappConfirmationTemplate} />
+                </label>
+              ) : null}
+            </div>
             <label className="flex min-h-[58px] items-center justify-between gap-4 rounded-xl border border-emerald-100 bg-white px-4 py-3 md:col-span-2">
               <span>
                 <span className="block text-sm font-black text-slate-700">WhatsApp OTP Verification</span>
@@ -1549,6 +1576,7 @@ export default function WorkshopMasterPage() {
 	                          <td className="px-4 py-4 font-black text-slate-950">
                               {entry.fullName}
                               {entry.registrationStatus === "waiting" ? <span className="mt-1 block w-fit rounded-full bg-amber-100 px-2 py-1 text-[11px] font-black text-amber-800">Waiting WL-{entry.waitingPosition ?? "-"}</span> : null}
+                              {entry.registrationStatus !== "waiting" && entry.registrationNumber ? <span className="mt-1 block w-fit rounded-full bg-emerald-100 px-2 py-1 text-[11px] font-black text-emerald-800">{entry.registrationNumber}</span> : null}
                             </td>
 	                          <td className="px-4 py-4">{entry.mobile}</td>
 	                          <td className="px-4 py-4">{entry.email}</td>

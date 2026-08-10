@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 import { getAppState, isDbEnabled, saveAppState } from "@/lib/db";
 import type {
+  BuilderForm,
   RegistrationConfirmationActivity,
   RegistrationConfirmationStatus,
   RegistrationEntry
 } from "@/lib/types";
+import { assignRegistrationNumbers, sendRegistrationConfirmation } from "@/lib/registration-confirmation";
 
 export const runtime = "nodejs";
 
@@ -54,9 +56,19 @@ export async function PATCH(request: Request) {
       confirmationUpdatedBy: "Admin User",
       confirmationHistory: [activity, ...(current.confirmationHistory ?? [])].slice(0, 200)
     };
-    const next = registrations.map((entry) => entry.id === registrationId ? updated : entry);
+    let next = assignRegistrationNumbers(registrations.map((entry) => entry.id === registrationId ? updated : entry), current.workshopId);
+    let saved = next.find((entry) => entry.id === registrationId) as RegistrationEntry;
+    if (status === "confirmed") {
+      const form = (Array.isArray(state?.forms) ? state.forms : [])
+        .find((item: BuilderForm) => item.workshopId === current.workshopId) as BuilderForm | undefined;
+      const whatsapp = await sendRegistrationConfirmation(saved, form).catch(() => ({ configured: true, sent: false }));
+      if (whatsapp.sent) {
+        saved = { ...saved, confirmationWhatsappSentAt: now };
+        next = next.map((entry) => entry.id === registrationId ? saved : entry);
+      }
+    }
     await saveAppState({ registrations: next });
-    return NextResponse.json({ registration: updated });
+    return NextResponse.json({ registration: saved });
   } catch {
     return NextResponse.json({ error: "Could not update follow-up details." }, { status: 500 });
   }

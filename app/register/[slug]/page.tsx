@@ -223,6 +223,7 @@ export default function RegistrationPage() {
   const [duplicateModalOpen, setDuplicateModalOpen] = useState(false);
   const [success, setSuccess] = useState(false);
   const [waitingPosition, setWaitingPosition] = useState<number | null>(null);
+  const [registrationNumber, setRegistrationNumber] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [redirectCountdown, setRedirectCountdown] = useState(5);
   const [currentPage, setCurrentPage] = useState(0);
@@ -780,6 +781,7 @@ export default function RegistrationPage() {
       if (savedIndex >= 0) current[savedIndex] = saved;
       writeLiveStateToLocalStorage({ registrations: current });
       setWaitingPosition(saved.registrationStatus === "waiting" ? saved.waitingPosition ?? 1 : null);
+      setRegistrationNumber(saved.registrationNumber ?? "");
     } catch (reason) {
       setMessage(reason instanceof Error ? reason.message : "Could not complete registration. Please try again.");
       return;
@@ -1136,6 +1138,7 @@ export default function RegistrationPage() {
             <p className="mt-2 text-sm font-bold leading-6 text-slate-500">
               {waitingPosition ? `Your waiting list number is WL-${waitingPosition}. We will contact you when a seat becomes available.` : (message || "Your registration has been saved successfully.")}
             </p>
+            {!waitingPosition && registrationNumber ? <p className="mt-3 text-lg font-black text-emerald-700">Registration No. {registrationNumber}</p> : null}
             {model.whatsappGroupUrl && !waitingPosition ? (
               <p className="mt-3 rounded-2xl bg-emerald-50 px-4 py-3 text-sm font-black text-emerald-700">
                 WhatsApp group opens in {redirectCountdown} seconds.

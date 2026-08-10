@@ -205,7 +205,9 @@ export interface RegistrationEntry {
   carriedForwardToWorkshopTitle?: string;
   confirmationHistory?: RegistrationConfirmationActivity[];
   registrationStatus?: "confirmed" | "waiting";
+  registrationNumber?: string;
   waitingPosition?: number;
+  confirmationWhatsappSentAt?: string;
 }
 
 export type RegistrationConfirmationStatus =
@@ -392,6 +394,8 @@ export interface BuilderForm {
   tiers?: PaymentTier[];
   highlights?: string[];
   whatsappGroupUrl?: string;
+  whatsappConfirmationEnabled?: boolean;
+  whatsappConfirmationTemplate?: string;
   submitButtonText?: string;
   registrationCapacity?: number;
   waitingMode?: boolean;

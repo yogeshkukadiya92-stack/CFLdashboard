@@ -1,6 +1,8 @@
 import { ensurePersistenceTable, getAppState, getDbPool, isDbEnabled } from "@/lib/db";
 import { upsertLiveRegistration } from "@/lib/crm-db";
 import { upsertLeadFromRegistration } from "@/lib/lead-utils";
+import { assignRegistrationNumbers, sendRegistrationConfirmation } from "@/lib/registration-confirmation";
+import type { BuilderForm, RegistrationEntry } from "@/lib/types";
 import { NextResponse } from "next/server";
 
 export async function GET() {
@@ -123,12 +125,13 @@ export async function POST(request: Request) {
         .filter((item: unknown) => item && typeof item === "object" && String((item as Record<string, unknown>).workshopId ?? "") === sanitizedRegistration.workshopId && (item as Record<string, unknown>).registrationStatus === "waiting")
         .sort((first: Record<string, unknown>, second: Record<string, unknown>) => new Date(String(first.createdAt ?? "")).getTime() - new Date(String(second.createdAt ?? "")).getTime());
       const positions = new Map(waiting.map((entry: Record<string, unknown>, index: number) => [String(entry.id ?? ""), index + 1]));
-      const next = unnumbered.map((item: unknown) => {
+      const positioned = unnumbered.map((item: unknown) => {
         if (!item || typeof item !== "object") return item;
         const entry = item as Record<string, unknown>;
         const position = positions.get(String(entry.id ?? ""));
         return position ? { ...entry, waitingPosition: position } : entry;
       });
+      const next = assignRegistrationNumbers(positioned as RegistrationEntry[], sanitizedRegistration.workshopId);
       const finalRegistration = next.find((item: unknown) => item && typeof item === "object" && String((item as Record<string, unknown>).id ?? "") === sanitizedRegistration.id) as typeof pendingRegistration & { waitingPosition?: number };
       const workshops = Array.isArray(state.workshops) ? state.workshops : [];
       const linkedWorkshop = workshops.find((value: unknown) => {
@@ -148,7 +151,14 @@ export async function POST(request: Request) {
       await upsertLiveRegistration(finalRegistration);
       await client.query(`UPDATE app_state SET leads = $1::jsonb, registrations = $2::jsonb, updated_at = NOW() WHERE id = 1`, [JSON.stringify(leads), JSON.stringify(next.slice(0, 5000))]);
       await client.query("COMMIT");
-      return NextResponse.json({ ok: true, dbEnabled: true, registration: finalRegistration });
+      const savedRegistration = next.find((entry) => entry.id === sanitizedRegistration.id) as RegistrationEntry;
+      const whatsapp = await sendRegistrationConfirmation(savedRegistration, form as Partial<BuilderForm>).catch(() => ({ configured: true, sent: false }));
+      if (whatsapp.sent) {
+        savedRegistration.confirmationWhatsappSentAt = new Date().toISOString();
+        const sentState = next.map((entry) => entry.id === savedRegistration.id ? savedRegistration : entry);
+        await client.query(`UPDATE app_state SET registrations = $1::jsonb, updated_at = NOW() WHERE id = 1`, [JSON.stringify(sentState.slice(0, 5000))]);
+      }
+      return NextResponse.json({ ok: true, dbEnabled: true, registration: savedRegistration, whatsapp });
     } catch (error) {
       await client.query("ROLLBACK").catch(() => undefined);
       throw error;

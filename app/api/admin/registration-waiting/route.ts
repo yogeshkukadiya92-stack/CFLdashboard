@@ -1,5 +1,7 @@
 import { ensurePersistenceTable, getDbPool, isDbEnabled } from "@/lib/db";
 import type { RegistrationEntry } from "@/lib/types";
+import type { BuilderForm } from "@/lib/types";
+import { assignRegistrationNumbers, sendRegistrationConfirmation } from "@/lib/registration-confirmation";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
@@ -38,7 +40,7 @@ export async function PATCH(request: Request) {
     const client = await database.connect();
     try {
       await client.query("BEGIN");
-      const selected = await client.query(`SELECT registrations FROM app_state WHERE id = 1 FOR UPDATE`);
+      const selected = await client.query(`SELECT registrations, forms FROM app_state WHERE id = 1 FOR UPDATE`);
       const registrations = (Array.isArray(selected.rows[0]?.registrations) ? selected.rows[0].registrations : []) as RegistrationEntry[];
       const requestedIds = new Set(registrationIds);
       let promoted = 0;
@@ -52,9 +54,22 @@ export async function PATCH(request: Request) {
         return NextResponse.json({ error: "No matching waiting registrations were found." }, { status: 404 });
       }
 
-      const next = renumberWaitingList(promotedRegistrations, workshopId);
+      let next = assignRegistrationNumbers(renumberWaitingList(promotedRegistrations, workshopId), workshopId);
       await client.query(`UPDATE app_state SET registrations = $1::jsonb, updated_at = NOW() WHERE id = 1`, [JSON.stringify(next)]);
       await client.query("COMMIT");
+      const form = (Array.isArray(selected.rows[0]?.forms) ? selected.rows[0].forms : [])
+        .find((item: BuilderForm) => item.workshopId === workshopId) as BuilderForm | undefined;
+      const promotedEntries = next.filter((entry) => requestedIds.has(entry.id) && entry.registrationStatus === "confirmed");
+      const sentIds = new Set<string>();
+      for (const entry of promotedEntries) {
+        const result = await sendRegistrationConfirmation(entry, form).catch(() => ({ configured: true, sent: false }));
+        if (result.sent) sentIds.add(entry.id);
+      }
+      if (sentIds.size) {
+        const sentAt = new Date().toISOString();
+        next = next.map((entry) => sentIds.has(entry.id) ? { ...entry, confirmationWhatsappSentAt: sentAt } : entry);
+        await client.query(`UPDATE app_state SET registrations = $1::jsonb, updated_at = NOW() WHERE id = 1`, [JSON.stringify(next)]);
+      }
       return NextResponse.json({ promoted, registrations: next });
     } catch (error) {
       await client.query("ROLLBACK").catch(() => undefined);
