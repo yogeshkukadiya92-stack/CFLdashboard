@@ -2,7 +2,8 @@
 
 import { AdminPlatformShell } from "@/components/admin-platform-shell";
 import { CalendarDays, ClipboardCheck, Download, FileSpreadsheet, IndianRupee, Plus, Target, TrendingUp, UserPlus, UsersRound } from "lucide-react";
-import { hydrateLiveState, LIVE_STATE_STORAGE_KEYS, readLocalArray } from "@/lib/live-state";
+import { buildDashboardSnapshot, type DashboardSnapshot } from "@/lib/dashboard-summary";
+import { LIVE_STATE_STORAGE_KEYS, readLocalArray, saveLiveState, type LiveStatePatch } from "@/lib/live-state";
 import { useEffect, useMemo, useState } from "react";
 
 type ClientRow = {
@@ -70,9 +71,13 @@ export default function DashboardPage() {
   const [workshops, setWorkshops] = useState<WorkshopRecord[]>([]);
   const [registrations, setRegistrations] = useState<RegistrationEntry[]>([]);
   const [schedules, setSchedules] = useState<ScheduleRecord[]>([]);
+  const [remoteSnapshot, setRemoteSnapshot] = useState<DashboardSnapshot | null>(null);
   const [message, setMessage] = useState("");
 
   useEffect(() => {
+    let remoteController: AbortController | null = null;
+    let usesLocalFallback = false;
+
     function load() {
       setClients(readLocalArray<ClientRow>(LIVE_STATE_STORAGE_KEYS.clients));
       setWorkshops(readLocalArray<WorkshopRecord>(LIVE_STATE_STORAGE_KEYS.workshops));
@@ -80,36 +85,74 @@ export default function DashboardPage() {
       setSchedules(readLocalArray<ScheduleRecord>(LIVE_STATE_STORAGE_KEYS.schedules));
     }
 
-    load();
-    hydrateLiveState().then(load);
-    window.addEventListener("storage", load);
-    window.addEventListener("focus", load);
+    async function loadRemoteSnapshot() {
+      remoteController?.abort();
+      remoteController = new AbortController();
+      try {
+        const response = await fetch("/api/dashboard-summary", {
+          cache: "no-store",
+          signal: remoteController.signal,
+        });
+        const payload = await response.json() as { dbEnabled?: boolean; snapshot?: DashboardSnapshot };
+        if (response.ok && payload.dbEnabled && payload.snapshot) {
+          const repairPatch: LiveStatePatch = {};
+          if (payload.snapshot.clientCount === 0) {
+            const localClients = readLocalArray<ClientRow>(LIVE_STATE_STORAGE_KEYS.clients);
+            if (localClients.length > 0) repairPatch.clients = localClients;
+          }
+          if (payload.snapshot.workshopCount === 0) {
+            const localWorkshops = readLocalArray<WorkshopRecord>(LIVE_STATE_STORAGE_KEYS.workshops);
+            if (localWorkshops.length > 0) repairPatch.workshops = localWorkshops;
+          }
+          if (payload.snapshot.registrationCount === 0) {
+            const localRegistrations = readLocalArray<RegistrationEntry>(LIVE_STATE_STORAGE_KEYS.registrations);
+            if (localRegistrations.length > 0) repairPatch.registrations = localRegistrations;
+          }
+          if (payload.snapshot.scheduleCount === 0) {
+            const localSchedules = readLocalArray<ScheduleRecord>(LIVE_STATE_STORAGE_KEYS.schedules);
+            if (localSchedules.length > 0) repairPatch.schedules = localSchedules;
+          }
+          if (Object.keys(repairPatch).length > 0 && await saveLiveState(repairPatch)) {
+            await loadRemoteSnapshot();
+            return;
+          }
+          usesLocalFallback = false;
+          setRemoteSnapshot(payload.snapshot);
+          return;
+        }
+        usesLocalFallback = true;
+        load();
+      } catch (error) {
+        if ((error as Error).name !== "AbortError") {
+          usesLocalFallback = true;
+          load();
+        }
+      }
+    }
+
+    function refresh() {
+      if (usesLocalFallback) load();
+      void loadRemoteSnapshot();
+    }
+
+    void loadRemoteSnapshot();
+    window.addEventListener("storage", refresh);
+    window.addEventListener("focus", refresh);
     return () => {
-      window.removeEventListener("storage", load);
-      window.removeEventListener("focus", load);
+      remoteController?.abort();
+      window.removeEventListener("storage", refresh);
+      window.removeEventListener("focus", refresh);
     };
   }, []);
 
-  const revenue = registrations.reduce((sum, entry) => sum + entry.amountPaid, 0);
-  const due = registrations.reduce((sum, entry) => sum + entry.amountDue, 0);
-  const paidRegistrations = registrations.filter((entry) => entry.status === "Paid").length;
-  const conversion = registrations.length ? Math.round((paidRegistrations / registrations.length) * 100) : 0;
-  const nextEvent = schedules[0]?.selectedEvent || workshops[0]?.name || "";
-  const nextFacilitator = schedules[0]?.facilitator || workshops[0]?.facilitator || "Not assigned";
-
-  const eventRows = useMemo(() => {
-    return workshops.map((workshop) => {
-      const rows = registrations.filter((entry) => entry.workshopId === workshop.id || entry.workshopTitle === workshop.name);
-      const latest = rows[0];
-      return {
-        dateRange: schedules.find((schedule) => schedule.selectedEvent === workshop.name)?.batch || "Main batch",
-        latest: latest ? latest.fullName : "No registration",
-        name: workshop.name,
-        newCount: rows.filter((entry) => entry.createdAt >= new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10)).length,
-        registrations: rows.length
-      };
-    });
-  }, [registrations, schedules, workshops]);
+  const localSnapshot = useMemo(() => {
+    return buildDashboardSnapshot(clients, workshops, registrations, schedules);
+  }, [clients, registrations, schedules, workshops]);
+  const snapshot = remoteSnapshot ?? localSnapshot;
+  const conversion = snapshot.registrationCount
+    ? Math.round((snapshot.paidRegistrations / snapshot.registrationCount) * 100)
+    : 0;
+  const eventRows = snapshot.eventRows;
 
   function exportDashboard() {
     downloadCsv("dashboard-registration-status.csv", [
@@ -120,10 +163,10 @@ export default function DashboardPage() {
   }
 
   const stats = [
-    { icon: CalendarDays, label: "Workshops", value: String(workshops.length), helper: "Created in Workshop Master", tone: "bg-emerald-50 text-emerald-700" },
-    { icon: TrendingUp, label: "Scheduled", value: String(schedules.length), helper: "Configured schedules", tone: "bg-indigo-50 text-indigo-700" },
-    { icon: UsersRound, label: "Clients", value: String(clients.length), helper: "Imported or added records", tone: "bg-rose-50 text-rose-700" },
-    { icon: IndianRupee, label: "Collected", value: formatInr(revenue), helper: `${formatInr(due)} due`, tone: "bg-amber-50 text-amber-700" }
+    { icon: CalendarDays, label: "Workshops", value: String(snapshot.workshopCount), helper: "Created in Workshop Master", tone: "bg-emerald-50 text-emerald-700" },
+    { icon: TrendingUp, label: "Scheduled", value: String(snapshot.scheduleCount), helper: "Configured schedules", tone: "bg-indigo-50 text-indigo-700" },
+    { icon: UsersRound, label: "Clients", value: String(snapshot.clientCount), helper: "Imported or added records", tone: "bg-rose-50 text-rose-700" },
+    { icon: IndianRupee, label: "Collected", value: formatInr(snapshot.revenue), helper: `${formatInr(snapshot.due)} due`, tone: "bg-amber-50 text-amber-700" }
   ];
 
   return (
@@ -137,7 +180,7 @@ export default function DashboardPage() {
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <p className="text-sm font-black text-slate-500">Paid Session Health</p>
-              <p className="mt-3 text-4xl font-black tracking-tight text-slate-950">{registrations.length}</p>
+              <p className="mt-3 text-4xl font-black tracking-tight text-slate-950">{snapshot.registrationCount}</p>
               <p className="mt-1 text-sm font-semibold text-slate-500">Total registrations tracked across saved workshops.</p>
             </div>
             <div className="grid size-36 place-items-center rounded-full bg-slate-100">
@@ -153,9 +196,9 @@ export default function DashboardPage() {
           </div>
           <div className="mt-5 grid gap-2 sm:grid-cols-3">
             {[
-              ["Paid", paidRegistrations, "bg-emerald-500"],
-              ["Due", registrations.length - paidRegistrations, "bg-amber-500"],
-              ["Clients", clients.length, "bg-rose-500"]
+              ["Paid", snapshot.paidRegistrations, "bg-emerald-500"],
+              ["Due", snapshot.registrationCount - snapshot.paidRegistrations, "bg-amber-500"],
+              ["Clients", snapshot.clientCount, "bg-rose-500"]
             ].map(([label, value, dot]) => (
               <div className="rounded-xl border border-slate-200 px-3 py-3 text-sm font-bold text-slate-700" key={label}>
                 <span className={`mr-2 inline-block size-2 rounded-full ${dot}`} />
@@ -177,12 +220,12 @@ export default function DashboardPage() {
           </div>
           <div className="mt-5 rounded-xl border border-emerald-100 bg-emerald-50 p-5">
             <span className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-black text-white">
-              {nextEvent ? "Ready" : "Setup Needed"}
+              {snapshot.nextEvent ? "Ready" : "Setup Needed"}
             </span>
-            <h3 className="mt-5 text-2xl font-black text-slate-950">{nextEvent || "No upcoming event"}</h3>
-            <p className="mt-2 text-sm font-semibold text-slate-600">Facilitator: {nextFacilitator}</p>
+            <h3 className="mt-5 text-2xl font-black text-slate-950">{snapshot.nextEvent || "No upcoming event"}</h3>
+            <p className="mt-2 text-sm font-semibold text-slate-600">Facilitator: {snapshot.nextFacilitator}</p>
             <a className="mt-5 inline-flex rounded-lg bg-slate-950 px-4 py-3 text-sm font-bold text-white" href="/workshop-master">
-              {nextEvent ? "Manage Workshop" : "Create Workshop"}
+              {snapshot.nextEvent ? "Manage Workshop" : "Create Workshop"}
             </a>
           </div>
         </section>
@@ -265,7 +308,7 @@ export default function DashboardPage() {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {eventRows.length ? eventRows.map((row) => (
-                <tr className="hover:bg-emerald-50/40" key={row.name}>
+                <tr className="hover:bg-emerald-50/40 [contain-intrinsic-size:auto_56px] [content-visibility:auto]" key={row.name}>
                   <td className="px-4 py-4 font-black text-slate-950">{row.name}</td>
                   <td className="px-4 py-4 text-slate-700">{row.dateRange}</td>
                   <td className="px-4 py-4 text-slate-700">{row.latest}</td>

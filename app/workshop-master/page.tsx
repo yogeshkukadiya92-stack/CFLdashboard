@@ -1312,7 +1312,7 @@ export default function WorkshopMasterPage() {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {filteredRecords.length ? filteredRecords.map((record) => (
-                  <tr className="hover:bg-indigo-50/40" key={record.id}>
+                  <tr className="hover:bg-indigo-50/40 [contain-intrinsic-size:auto_64px] [content-visibility:auto]" key={record.id}>
                     <td className="px-4 py-4">
                       <div className="flex gap-2">
                         {record.archived ? (

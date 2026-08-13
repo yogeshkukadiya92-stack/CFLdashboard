@@ -944,6 +944,22 @@ function renderCell(col: Column, row: ReportRow) {
 /* ------------------------------------------------------------------ */
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50];
+const SERVER_REPORT_SLUGS = new Set([
+  "daily-report",
+  "workshop-url-status",
+  "yearly-public-session",
+  "yearly-workshop",
+  "facilitators-performance",
+  "workshop-summary",
+  "batch-wise-workshop-summary",
+  "client-milestone",
+  "failed-payment",
+  "part-payment",
+  "workshop-wise-member",
+  "member-attend-more-workshop",
+  "member-details",
+  "member-details-part-payment"
+]);
 
 /* ------------------------------------------------------------------ */
 /*  Main component                                                     */
@@ -953,6 +969,7 @@ export default function ReportPage() {
   const params = useParams<{ slug: string }>();
   const slug = params.slug;
   const title = titles.get(slug) ?? "Report";
+  const usesServerReport = SERVER_REPORT_SLUGS.has(slug);
 
   const [registrations, setRegistrations] = useState<Registration[]>([]);
   const [workshops, setWorkshops] = useState<Workshop[]>([]);
@@ -963,17 +980,21 @@ export default function ReportPage() {
   const [serverTotalRows, setServerTotalRows] = useState(0);
   const [serverWorkshopOptions, setServerWorkshopOptions] = useState<string[]>([]);
   const [serverLoading, setServerLoading] = useState(false);
+  const [serverFallbackToLocal, setServerFallbackToLocal] = useState(false);
 
   const [workshop, setWorkshop] = useState("All Workshops");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [message, setMessage] = useState("");
 
   const [pageSize, setPageSize] = useState(25);
   const [currentPage, setCurrentPage] = useState(1);
 
   useEffect(() => {
+    if (usesServerReport && !serverFallbackToLocal) return;
+
     function loadLocal() {
       setRegistrations(readLocalArray<Registration>(LIVE_STATE_STORAGE_KEYS.registrations));
       setWorkshops(readLocalArray<Workshop>(LIVE_STATE_STORAGE_KEYS.workshops));
@@ -984,29 +1005,17 @@ export default function ReportPage() {
 
     loadLocal();
     hydrateLiveState().then(loadLocal);
-  }, []);
+  }, [serverFallbackToLocal, usesServerReport]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedQuery(query), 250);
+    return () => window.clearTimeout(timer);
+  }, [query]);
 
   // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
   }, [workshop, fromDate, toDate, query, pageSize]);
-
-  const usesServerReport = [
-    "daily-report",
-    "workshop-url-status",
-    "yearly-public-session",
-    "yearly-workshop",
-    "facilitators-performance",
-    "workshop-summary",
-    "batch-wise-workshop-summary",
-    "client-milestone",
-    "failed-payment",
-    "part-payment",
-    "workshop-wise-member",
-    "member-attend-more-workshop",
-    "member-details",
-    "member-details-part-payment"
-  ].includes(slug);
 
   useEffect(() => {
     if (!usesServerReport) {
@@ -1021,7 +1030,7 @@ export default function ReportPage() {
       const params = new URLSearchParams({
         page: String(currentPage),
         pageSize: String(pageSize),
-        query,
+        query: debouncedQuery,
         workshop,
         fromDate,
         toDate
@@ -1035,8 +1044,10 @@ export default function ReportPage() {
         if (!response.ok || data?.dbEnabled === false) {
           setServerRows(null);
           setServerTotalRows(0);
+          setServerFallbackToLocal(true);
           return;
         }
+        setServerFallbackToLocal(false);
         setServerRows(Array.isArray(data.rows) ? data.rows : []);
         setServerTotalRows(Number(data.total || 0));
         setServerWorkshopOptions(Array.isArray(data.workshopOptions) ? data.workshopOptions : []);
@@ -1044,6 +1055,7 @@ export default function ReportPage() {
         if (!controller.signal.aborted) {
           setServerRows(null);
           setServerTotalRows(0);
+          setServerFallbackToLocal(true);
         }
       } finally {
         if (!controller.signal.aborted) setServerLoading(false);
@@ -1052,7 +1064,7 @@ export default function ReportPage() {
 
     void loadServerReport();
     return () => controller.abort();
-  }, [currentPage, fromDate, pageSize, query, slug, toDate, usesServerReport, workshop]);
+  }, [currentPage, debouncedQuery, fromDate, pageSize, slug, toDate, usesServerReport, workshop]);
 
   const workshopOptions = usesServerReport
     ? serverWorkshopOptions
