@@ -208,6 +208,11 @@ export interface RegistrationEntry {
   registrationNumber?: string;
   waitingPosition?: number;
   confirmationWhatsappSentAt?: string;
+  mfwSyncStatus?: "synced" | "failed";
+  mfwSyncedAt?: string;
+  mfwUserId?: string;
+  mfwParticipantId?: string;
+  mfwWorkshopEventId?: string;
 }
 
 export type RegistrationConfirmationStatus =

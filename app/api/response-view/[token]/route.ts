@@ -11,6 +11,7 @@ import {
   verifyResponseViewerSession
 } from "@/lib/response-access";
 import type { RegistrationConfirmationActivity, RegistrationConfirmationStatus, RegistrationEntry, ResponseAccessGrant } from "@/lib/types";
+import { syncConfirmedRegistrationToMfw } from "@/lib/mfw-registration";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -240,8 +241,10 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ t
       actorName: grant.recipientName,
       createdAt: now
     };
+    const mfwSync = action === "status" && status === "confirmed" ? await syncConfirmedRegistrationToMfw(current) : {};
     const updated: RegistrationEntry = {
       ...current,
+      ...mfwSync,
       confirmationStatus: action === "note" ? current.confirmationStatus ?? "pending" : status,
       confirmationNote: note || current.confirmationNote,
       confirmationUpdatedAt: now,
@@ -256,8 +259,8 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ t
     await saveAppState({ registrations: next });
     const nextState = { ...state, registrations: next };
     return NextResponse.json({ ok: true, ...responseData(nextState, grant) });
-  } catch {
-    return NextResponse.json({ error: "Could not update registration confirmation." }, { status: 500 });
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Could not update registration confirmation." }, { status: 500 });
   }
 }
 

@@ -7,6 +7,7 @@ import type {
   RegistrationEntry
 } from "@/lib/types";
 import { assignRegistrationNumbers, sendRegistrationConfirmation } from "@/lib/registration-confirmation";
+import { syncConfirmedRegistrationToMfw } from "@/lib/mfw-registration";
 
 export const runtime = "nodejs";
 
@@ -48,8 +49,10 @@ export async function PATCH(request: Request) {
       actorName: "Admin User",
       createdAt: now
     };
+    const mfwSync = status === "confirmed" ? await syncConfirmedRegistrationToMfw(current) : {};
     const updated: RegistrationEntry = {
       ...current,
+      ...mfwSync,
       confirmationStatus: status,
       confirmationNote: note,
       confirmationUpdatedAt: now,
@@ -69,7 +72,7 @@ export async function PATCH(request: Request) {
     }
     await saveAppState({ registrations: next });
     return NextResponse.json({ registration: saved });
-  } catch {
-    return NextResponse.json({ error: "Could not update follow-up details." }, { status: 500 });
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Could not update follow-up details." }, { status: 500 });
   }
 }
