@@ -288,11 +288,13 @@ export default function WorkshopMasterPage() {
     : null;
   const selectedParticipants = useMemo(() => {
     if (!selectedWorkshop) return [];
+    const exactMatches = registrations.filter((entry) => entry.workshopId === selectedWorkshop.id);
+    if (exactMatches.length) return exactMatches;
+
+    // Legacy imports sometimes stored only the workshop name as their link.
+    // Use that fallback only when this workshop has no records linked by its stable ID.
     const selectedName = selectedWorkshop.name.trim().toLowerCase();
-    return registrations.filter((entry) =>
-      entry.workshopId === selectedWorkshop.id ||
-      entry.workshopTitle.trim().toLowerCase() === selectedName
-    );
+    return registrations.filter((entry) => entry.workshopTitle.trim().toLowerCase() === selectedName);
   }, [registrations, selectedWorkshop]);
   const waitingParticipants = useMemo(() => selectedParticipants
     .filter((entry) => entry.registrationStatus === "waiting")
