@@ -75,12 +75,17 @@ function activeWorkshopOptions(state: Awaited<ReturnType<typeof getAppState>>) {
 function responseData(state: Awaited<ReturnType<typeof getAppState>>, grant: ResponseAccessGrant) {
   const registrations = (Array.isArray(state?.registrations) ? state.registrations : []) as RegistrationEntry[];
   const workshopNames = new Map(grant.workshopIds.map((id, index) => [id, grant.workshopNames[index] ?? id]));
-  const allowedNames = new Set(grant.workshopNames.map((name) => name.trim().toLowerCase()));
   const allowedRegistrationIds = grant.registrationIds?.length ? new Set(grant.registrationIds) : null;
-  const filtered = registrations.filter((entry) =>
-    (!allowedRegistrationIds || allowedRegistrationIds.has(entry.id)) &&
-    (grant.workshopIds.includes(entry.workshopId) || allowedNames.has(entry.workshopTitle.trim().toLowerCase()))
-  );
+  const eligible = registrations.filter((entry) => !allowedRegistrationIds || allowedRegistrationIds.has(entry.id));
+  const workshopEntries = new Map(grant.workshopIds.map((id) => {
+    const exactMatches = eligible.filter((entry) => entry.workshopId === id);
+    if (exactMatches.length) return [id, exactMatches] as const;
+    const legacyName = (workshopNames.get(id) ?? "").trim().toLowerCase();
+    return [id, eligible.filter((entry) => entry.workshopTitle.trim().toLowerCase() === legacyName)] as const;
+  }));
+  const filtered = Array.from(new Map(
+    grant.workshopIds.flatMap((id) => workshopEntries.get(id) ?? []).map((entry) => [entry.id, entry])
+  ).values());
   return {
     grant: {
       recipientName: grant.recipientName,
@@ -90,15 +95,18 @@ function responseData(state: Awaited<ReturnType<typeof getAppState>>, grant: Res
       workshopNames: grant.workshopNames
     },
     carryForwardTargets: activeWorkshopOptions(state),
-    workshops: grant.workshopIds.map((id) => ({ id, name: workshopNames.get(id) ?? id, count: filtered.filter((entry) => entry.workshopId === id || entry.workshopTitle.trim().toLowerCase() === (workshopNames.get(id) ?? "").trim().toLowerCase()).length })),
+    workshops: grant.workshopIds.map((id) => ({ id, name: workshopNames.get(id) ?? id, count: workshopEntries.get(id)?.length ?? 0 })),
     registrations: filtered.map((entry) => sanitizeRegistration(entry, grant))
   };
 }
 
-function grantAllowsRegistration(grant: ResponseAccessGrant, entry: RegistrationEntry) {
+function grantAllowsRegistration(grant: ResponseAccessGrant, entry: RegistrationEntry, registrations: RegistrationEntry[]) {
   if (grant.registrationIds?.length && !grant.registrationIds.includes(entry.id)) return false;
-  const allowedNames = new Set(grant.workshopNames.map((name) => name.trim().toLowerCase()));
-  return grant.workshopIds.includes(entry.workshopId) || allowedNames.has(entry.workshopTitle.trim().toLowerCase());
+  if (grant.workshopIds.includes(entry.workshopId)) return true;
+  return grant.workshopIds.some((id, index) => {
+    if (registrations.some((registration) => registration.workshopId === id)) return false;
+    return entry.workshopTitle.trim().toLowerCase() === (grant.workshopNames[index] ?? "").trim().toLowerCase();
+  });
 }
 
 export async function GET(request: NextRequest, context: { params: Promise<{ token: string }> }) {
@@ -180,7 +188,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ t
 
     const registrations = (Array.isArray(state?.registrations) ? state.registrations : []) as RegistrationEntry[];
     const current = registrations.find((entry) => entry.id === registrationId);
-    if (!current || !grantAllowsRegistration(grant, current)) {
+    if (!current || !grantAllowsRegistration(grant, current, registrations)) {
       return NextResponse.json({ error: "Registration is outside your assigned workshop access." }, { status: 404 });
     }
 

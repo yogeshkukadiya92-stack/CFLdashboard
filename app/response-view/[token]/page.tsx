@@ -170,7 +170,7 @@ export default function ResponseViewerPage() {
     if (!data) return [];
     const value = search.trim().toLowerCase();
     return data.registrations.filter((entry) => {
-      const inWorkshop = workshopId === "all" || entry.workshopId === workshopId || entry.workshopTitle === data.workshops.find((item) => item.id === workshopId)?.name;
+      const inWorkshop = workshopId === "all" || entry.workshopId === workshopId;
       const inSearch = !value || [entry.fullName, entry.mobile, entry.email, entry.city, entry.workshopTitle, entry.batch ?? ""].some((item) => item.toLowerCase().includes(value));
       return inWorkshop && inSearch;
     });
