@@ -17,6 +17,7 @@ type AppState = {
   registrations: unknown[];
   responseAccessGrants: unknown[];
   salesPeople: unknown[];
+  salesTeamUsers: unknown[];
   schedules: unknown[];
   workshopTypes: unknown[];
   workshops: unknown[];
@@ -37,6 +38,7 @@ const emptyAppState: AppState = {
   registrations: [],
   responseAccessGrants: [],
   salesPeople: [],
+  salesTeamUsers: [],
   schedules: [],
   workshopTypes: [],
   workshops: []
@@ -74,6 +76,7 @@ export async function ensurePersistenceTable() {
       form_analytics JSONB NOT NULL DEFAULT '[]'::jsonb,
       registration_links JSONB NOT NULL DEFAULT '{}'::jsonb,
       sales_people JSONB NOT NULL DEFAULT '[]'::jsonb,
+      sales_team_users JSONB NOT NULL DEFAULT '[]'::jsonb,
       workshop_types JSONB NOT NULL DEFAULT '[]'::jsonb,
       facilitators JSONB NOT NULL DEFAULT '[]'::jsonb,
       integrations JSONB NOT NULL DEFAULT '{}'::jsonb,
@@ -94,6 +97,7 @@ export async function ensurePersistenceTable() {
   await client.query(`ALTER TABLE app_state ADD COLUMN IF NOT EXISTS form_analytics JSONB NOT NULL DEFAULT '[]'::jsonb;`);
   await client.query(`ALTER TABLE app_state ADD COLUMN IF NOT EXISTS registration_links JSONB NOT NULL DEFAULT '{}'::jsonb;`);
   await client.query(`ALTER TABLE app_state ADD COLUMN IF NOT EXISTS sales_people JSONB NOT NULL DEFAULT '[]'::jsonb;`);
+  await client.query(`ALTER TABLE app_state ADD COLUMN IF NOT EXISTS sales_team_users JSONB NOT NULL DEFAULT '[]'::jsonb;`);
   await client.query(`ALTER TABLE app_state ADD COLUMN IF NOT EXISTS workshop_types JSONB NOT NULL DEFAULT '[]'::jsonb;`);
   await client.query(`ALTER TABLE app_state ADD COLUMN IF NOT EXISTS facilitators JSONB NOT NULL DEFAULT '[]'::jsonb;`);
   await client.query(`ALTER TABLE app_state ADD COLUMN IF NOT EXISTS integrations JSONB NOT NULL DEFAULT '{}'::jsonb;`);
@@ -157,6 +161,7 @@ export async function getAppState() {
       form_analytics AS "formAnalytics",
       registration_links AS "registrationLinks",
       sales_people AS "salesPeople",
+      sales_team_users AS "salesTeamUsers",
       workshop_types AS "workshopTypes",
       facilitators,
       integrations,
@@ -191,11 +196,12 @@ export async function saveAppState(input: Partial<AppState>) {
         form_analytics = $10::jsonb,
         registration_links = $11::jsonb,
         sales_people = $12::jsonb,
-        workshop_types = $13::jsonb,
-        facilitators = $14::jsonb,
-        integrations = $15::jsonb,
-        landing_pages = $16::jsonb,
-        response_access_grants = $17::jsonb,
+        sales_team_users = $13::jsonb,
+        workshop_types = $14::jsonb,
+        facilitators = $15::jsonb,
+        integrations = $16::jsonb,
+        landing_pages = $17::jsonb,
+        response_access_grants = $18::jsonb,
         updated_at = NOW()
       WHERE id = 1
     `,
@@ -212,6 +218,7 @@ export async function saveAppState(input: Partial<AppState>) {
       JSON.stringify(input.formAnalytics ?? current.formAnalytics),
       JSON.stringify(input.registrationLinks ?? current.registrationLinks),
       JSON.stringify(input.salesPeople ?? current.salesPeople),
+      JSON.stringify(input.salesTeamUsers ?? current.salesTeamUsers),
       JSON.stringify(input.workshopTypes ?? current.workshopTypes),
       JSON.stringify(input.facilitators ?? current.facilitators),
       JSON.stringify(input.integrations ?? current.integrations),

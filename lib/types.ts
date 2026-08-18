@@ -42,6 +42,21 @@ export interface LeadFollowUp {
   createdAt: string;
 }
 
+export interface SalesTeamUser {
+  id: string;
+  salesPersonId: string;
+  name: string;
+  email: string;
+  mobile: string;
+  passwordHash: string;
+  active: boolean;
+  canViewOther: boolean;
+  createdAt: string;
+  updatedAt: string;
+  lastLoginAt?: string;
+  loginCount: number;
+}
+
 export type PaymentStatus = "Paid" | "Due" | "Overdue" | "Failed" | "Refunded";
 
 export type Channel = "WhatsApp" | "Email" | "SMS" | "Call" | "Landing Page";

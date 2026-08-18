@@ -1,0 +1,10 @@
+export const SALES_SESSION_COOKIE = "cfl_sales_session";
+export const salesSessionMaxAge = 60 * 60 * 12;
+type SessionData={userId:string;salesPersonId:string;name:string;expiresAt:number};
+function secret(){const value=process.env.SALES_AUTH_SECRET?.trim()||process.env.AUTH_SECRET?.trim();if(value)return value;if(process.env.NODE_ENV==="production")throw new Error("SALES_AUTH_SECRET or AUTH_SECRET must be configured.");return "cfl-local-sales-secret-change-before-production"}
+function encode(value:string|Uint8Array){const bytes=typeof value==="string"?new TextEncoder().encode(value):value;let binary="";bytes.forEach((b)=>binary+=String.fromCharCode(b));return btoa(binary).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/g,"")}
+function decode(value:string){const padded=value.replace(/-/g,"+").replace(/_/g,"/").padEnd(Math.ceil(value.length/4)*4,"=");return new TextDecoder().decode(Uint8Array.from(atob(padded),(c)=>c.charCodeAt(0)))}
+async function sign(value:string){const key=await crypto.subtle.importKey("raw",new TextEncoder().encode(secret()),{name:"HMAC",hash:"SHA-256"},false,["sign"]);return encode(new Uint8Array(await crypto.subtle.sign("HMAC",key,new TextEncoder().encode(value))))}
+function equal(a:string,b:string){if(a.length!==b.length)return false;let result=0;for(let i=0;i<a.length;i++)result|=a.charCodeAt(i)^b.charCodeAt(i);return result===0}
+export async function createSalesSession(user:{id:string;salesPersonId:string;name:string}){const payload=encode(JSON.stringify({userId:user.id,salesPersonId:user.salesPersonId,name:user.name,expiresAt:Date.now()+salesSessionMaxAge*1000}));return `${payload}.${await sign(`sales-session:${payload}`)}`}
+export async function readSalesSession(value?:string):Promise<SessionData|null>{if(!value)return null;const[payload,sig]=value.split(".");if(!payload||!sig||!equal(await sign(`sales-session:${payload}`),sig))return null;try{const data=JSON.parse(decode(payload)) as SessionData;return data.expiresAt>Date.now()?data:null}catch{return null}}

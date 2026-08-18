@@ -133,7 +133,7 @@ export default function SalesPersonPage() {
     setDirectPercent(row.directPercent);
   }
 
-  function submit(event: FormEvent<HTMLFormElement>) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSaved(false);
     if (!firstName || !lastName || !mobile || (!editingSalesId && !password) || !email || !group) {
@@ -153,6 +153,14 @@ export default function SalesPersonPage() {
       mobile,
       name: fullName
     };
+    try {
+      const response = await fetch("/api/admin/sales-people", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ salesPerson: payload, password }) });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || "Could not save salesperson login.");
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Could not save salesperson login.");
+      return;
+    }
     saveRecords(editingSalesId ? records.map((record) => record.id === editingSalesId ? payload : record) : [payload, ...records]);
     setSaved(true);
     setShowData(true);
