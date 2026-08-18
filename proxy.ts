@@ -1,5 +1,6 @@
 import { AUTH_COOKIE_NAME, verifyAuthToken } from "@/lib/auth";
 import { readSalesSession, SALES_SESSION_COOKIE } from "@/lib/sales-session";
+import { permissionForPath } from "@/lib/sales-permissions";
 import { NextRequest, NextResponse } from "next/server";
 
 const publicPrefixes = [
@@ -43,8 +44,10 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL("/", request.url));
   }
 
-  if (pathname === "/sales-login" && salesSession) {
-    return NextResponse.redirect(new URL("/crm/today", request.url));
+  const salesHome = salesSession?.permissions.includes("crm_today") ? "/crm/today" : salesSession?.permissions.includes("follow_ups") ? "/crm/follow-ups" : salesSession?.permissions.includes("sales_sessions") ? "/crm/sessions" : salesSession?.permissions.includes("crm_analytics") ? "/crm/analytics" : null;
+
+  if (pathname === "/sales-login" && salesSession && salesHome) {
+    return NextResponse.redirect(new URL(salesHome, request.url));
   }
 
   if (isPublicPath(pathname)) {
@@ -52,10 +55,12 @@ export async function proxy(request: NextRequest) {
   }
 
   if (salesSession) {
-    const allowed = pathname === "/crm/today" || pathname === "/crm/follow-ups" || pathname.startsWith("/crm/leads/") || pathname === "/crm/sessions" || pathname === "/api/state" || pathname.startsWith("/api/crm/sales-sessions");
+    const permission = permissionForPath(pathname);
+    const allowed = pathname === "/api/state" || Boolean(permission && salesSession.permissions.includes(permission));
     if (allowed) return NextResponse.next();
     if (pathname.startsWith("/api/")) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
-    return NextResponse.redirect(new URL("/crm/today", request.url));
+    const fallback = salesHome || "/sales-login?access=none";
+    return NextResponse.redirect(new URL(fallback, request.url));
   }
 
   if (!signedIn) {

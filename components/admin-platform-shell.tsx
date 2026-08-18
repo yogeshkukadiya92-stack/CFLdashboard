@@ -31,6 +31,8 @@ import {
 import { usePathname, useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { permissionForPath } from "@/lib/sales-permissions";
+import type { SalesPermission } from "@/lib/types";
 
 const BRAND_LOGO_SRC = "/brand/coach-for-life-logo-horizontal.png";
 
@@ -176,21 +178,33 @@ export function AdminPlatformShell({
   const [searchQuery, setSearchQuery] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
+  const [viewer, setViewer] = useState<{ role: "admin" | "sales" | "none"; name: string; permissions: SalesPermission[] }>({ role: "none", name: "", permissions: [] });
   const searchInputRef = useRef<HTMLInputElement>(null);
   const searchBoxRef = useRef<HTMLDivElement>(null);
   const activeGroup = useMemo(() => navGroups.find((group) => isGroupActive(group, pathname))?.label ?? "Workshop", [pathname]);
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({ [activeGroup]: true });
   const [openReportSections, setOpenReportSections] = useState<Record<string, boolean>>({ Workshop: true });
+  const visibleQuickItems = viewer.role === "admin" ? quickItems : [];
+  const visibleNavGroups = viewer.role === "admin" ? navGroups : viewer.role === "sales" ? navGroups.filter((group) => group.label === "CRM / Clients").map((group) => ({ ...group, items: group.items.filter((item) => { const permission = permissionForPath(item.href); return permission ? viewer.permissions.includes(permission) : false; }) })) : [];
+  const visibleFooterItems = viewer.role === "admin" ? footerItems : [];
+  const visibleAllNavItems = [...visibleQuickItems, ...visibleNavGroups.flatMap((group) => group.items), ...visibleFooterItems];
   const searchMatches = useMemo(() => {
     const value = searchQuery.trim().toLowerCase();
     if (!value) return [];
-    return allNavItems.filter((item) => item.label.toLowerCase().includes(value)).slice(0, 7);
-  }, [searchQuery]);
+    return visibleAllNavItems.filter((item) => item.label.toLowerCase().includes(value)).slice(0, 7);
+  }, [searchQuery, viewer]);
   const showResults = searchFocused && searchMatches.length > 0;
 
   useEffect(() => {
     setActiveIndex(0);
   }, [searchQuery]);
+
+  useEffect(() => {
+    fetch("/api/auth/me", { cache: "no-store" }).then(async (response) => {
+      const data = await response.json();
+      setViewer({ role: data.role || "none", name: data.name || "", permissions: data.permissions || [] });
+    }).catch(() => setViewer({ role: "none", name: "", permissions: [] }));
+  }, []);
 
   useEffect(() => {
     setSidebarOpen(false);
@@ -267,7 +281,7 @@ export function AdminPlatformShell({
 
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" });
-    window.location.href = "/login";
+    window.location.href = viewer.role === "sales" ? "/sales-login" : "/login";
   }
 
   return (
@@ -342,10 +356,10 @@ export function AdminPlatformShell({
           <div className="flex shrink-0 items-center gap-2 sm:gap-3">
             <div className="hidden text-right sm:block">
               <p className="text-xs font-semibold text-slate-500">Welcome</p>
-              <p className="text-sm font-bold text-slate-900">Admin User</p>
+              <p className="text-sm font-bold text-slate-900">{viewer.name || "User"}</p>
             </div>
             <div className="hidden size-10 place-items-center rounded-lg bg-slate-950 text-sm font-black text-white shadow-lg shadow-slate-950/20 min-[380px]:grid">
-              AU
+              {(viewer.name || "User").split(" ").map((part) => part[0]).join("").slice(0, 2).toUpperCase()}
             </div>
             <button
               aria-expanded={mobileSearchOpen}
@@ -437,7 +451,7 @@ export function AdminPlatformShell({
           </div>
 
           <nav aria-label="Primary navigation" className="mt-3 space-y-1.5">
-            {quickItems.map((item) => {
+            {visibleQuickItems.map((item) => {
               const Icon = item.icon;
               const active = pathname === item.href;
               return (
@@ -458,7 +472,7 @@ export function AdminPlatformShell({
 
             <div className="my-3 border-t border-white/10" />
 
-            {navGroups.map((group) => {
+            {visibleNavGroups.map((group) => {
               const GroupIcon = group.icon;
               const groupActive = isGroupActive(group, pathname);
               const open = openGroups[group.label] ?? groupActive;
@@ -547,7 +561,7 @@ export function AdminPlatformShell({
 
             <div className="my-3 border-t border-white/10" />
 
-            {footerItems.map((item) => {
+            {visibleFooterItems.map((item) => {
               const Icon = item.icon;
               const active = pathname === item.href;
               return (
@@ -576,14 +590,14 @@ export function AdminPlatformShell({
                 <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-950 md:text-[30px]">{title}</h2>
                 {description ? <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">{description}</p> : null}
               </div>
-              <div className="flex shrink-0 items-center gap-2">
+              {viewer.role === "admin" ? <div className="flex shrink-0 items-center gap-2">
                 <a aria-label="Import / Export" className="grid size-10 place-items-center rounded-lg bg-slate-950 text-white shadow-lg shadow-slate-950/15 hover:bg-slate-800" href="/manage-client" title="Import / Export">
                   <Import className="size-4" />
                 </a>
                 <a aria-label="Integrations" className="grid size-10 place-items-center rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100" href="/settings" title="Integrations">
                   <Settings className="size-4" />
                 </a>
-              </div>
+              </div> : null}
             </div>
           </div>
           {children}

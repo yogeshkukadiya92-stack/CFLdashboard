@@ -2,7 +2,7 @@
 
 import { AdminPlatformShell } from "@/components/admin-platform-shell";
 import { IntegrationHubPanel } from "@/components/integration-hub-panel";
-import { CheckCircle2, Copy, CreditCard, Eye, EyeOff, Globe2, Mail, MessageCircle, Plug, Plus, Save, ShieldCheck, Smartphone, Trash2, Webhook, type LucideIcon } from "lucide-react";
+import { CheckCircle2, Copy, CreditCard, Eye, EyeOff, Globe2, KeyRound, Mail, MessageCircle, Plug, Plus, Save, ShieldCheck, Smartphone, Trash2, Webhook, type LucideIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 
 type IntegrationSettings = {
@@ -114,6 +114,9 @@ export default function SettingsPage() {
       description="Add and manage payment, email, WhatsApp, SMS and data plugins from inside the app."
       title="Plugin Manager"
     >
+      <a className="flex items-center justify-between gap-4 rounded-3xl border border-emerald-200 bg-emerald-50 p-5 shadow-sm transition hover:border-emerald-300 hover:bg-emerald-100" href="/settings/sales-access">
+        <span className="flex items-center gap-4"><span className="grid size-12 shrink-0 place-items-center rounded-2xl bg-emerald-600 text-white"><KeyRound className="size-5" /></span><span><strong className="block text-lg font-black text-slate-950">Sales Access Management</strong><span className="mt-1 block text-sm font-semibold text-slate-600">Set page-wise CRM permissions for every salesperson.</span></span></span><span className="rounded-xl bg-white px-4 py-2 text-sm font-black text-emerald-700">Manage access</span>
+      </a>
       <section className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
         <IntegrationHubPanel appUrl={settings.appUrl} />
         <div className="space-y-4">

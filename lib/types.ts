@@ -55,7 +55,10 @@ export interface SalesTeamUser {
   updatedAt: string;
   lastLoginAt?: string;
   loginCount: number;
+  permissions?: SalesPermission[];
 }
+
+export type SalesPermission = "crm_today" | "lead_details" | "follow_ups" | "sales_sessions" | "crm_analytics";
 
 export type PaymentStatus = "Paid" | "Due" | "Overdue" | "Failed" | "Refunded";
 
