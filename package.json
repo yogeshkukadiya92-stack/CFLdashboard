@@ -8,7 +8,8 @@
     "import:members": "node scripts/import-member-details.mjs",
     "preview": "node scripts/start-preview.mjs",
     "start": "next start",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:crm": "node --experimental-strip-types --test tests/crm-scorecard.test.ts"
   },
   "dependencies": {
     "clsx": "^2.1.1",

@@ -15,6 +15,7 @@ import {
   Menu,
   Merge,
   Search,
+  CalendarRange,
   ShieldCheck,
   Settings,
   Tags,
@@ -79,6 +80,7 @@ const navGroups: NavGroup[] = [
     items: [
       { href: "/manage-client", icon: UsersRound, label: "Manage Client" },
       { href: "/lead-management", icon: Target, label: "Lead Management" },
+      { href: "/crm/sessions", icon: CalendarRange, label: "Sales Sessions" },
       { href: "/historical-data", icon: Archive, label: "Historical Data" },
       { href: "/sales-person", icon: Target, label: "Sales Person" },
       { href: "/process/manual-client-registration", icon: UserPlus, label: "Manual Registration" },
