@@ -35,6 +35,10 @@ export async function proxy(request: NextRequest) {
   const signedIn = await verifyAuthToken(request.cookies.get(AUTH_COOKIE_NAME)?.value);
   const salesSession = await readSalesSession(request.cookies.get(SALES_SESSION_COOKIE)?.value);
 
+  if (pathname === "/login" && request.nextUrl.searchParams.get("next") === "/sales-login") {
+    return NextResponse.redirect(new URL("/sales-login", request.url));
+  }
+
   if (pathname === "/login" && signedIn) {
     return NextResponse.redirect(new URL("/", request.url));
   }
