@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { addSessionParticipant, bookParticipantMeeting, createSalesSession, listSalesSessions, saveParticipantScorecard } from "@/lib/crm-sales-db";
+import { addSessionParticipant, bookParticipantMeeting, createSalesSession, getLeadSalesHistory, listSalesSessions, saveParticipantScorecard } from "@/lib/crm-sales-db";
 import { SCORECARD_CONFIG, type ScorecardInput } from "@/lib/crm-scorecard";
 
 const actor = "Admin";
@@ -14,7 +14,7 @@ function validAnswers(value: unknown): value is ScorecardInput {
 }
 
 export async function GET(request: Request) {
-  try { return NextResponse.json(await listSalesSessions(new URL(request.url).searchParams.get("sessionId") || undefined)); }
+  try { const params = new URL(request.url).searchParams; const leadId=params.get("leadId"); return NextResponse.json(leadId ? await getLeadSalesHistory(leadId) : await listSalesSessions(params.get("sessionId") || undefined)); }
   catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to load sessions." }, { status: 503 }); }
 }
 

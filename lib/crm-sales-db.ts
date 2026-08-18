@@ -123,3 +123,22 @@ export async function listSalesSessions(sessionId?: string) {
   const meetingsBooked = rows.filter((row) => row.meeting_id).length;
   return { session: sessions.rows[0] || null, participants: rows, summary: { registrations: rows.length, attended, notAttended: rows.filter((row) => row.calculated_tier === "NOT_ATTENDED").length, tierA, tierB, tierC, meetingsBooked, showUpRate: rows.length ? Math.round(attended / rows.length * 100) : 0, meetingBookingRate: attended ? Math.round(meetingsBooked / attended * 100) : 0, expectedEnrollments: Number((tierA * .30 + tierB * .06).toFixed(2)) } };
 }
+
+export async function getLeadSalesHistory(leadId: string) {
+  const db = await database();
+  const participants = await db.query(
+    `SELECT p.id AS participant_id, p.lead_id, p.lead_name, p.business, p.observer, s.id AS session_id,
+       s.name AS session_name, s.session_date, sc.pre_score, sc.session_score, sc.total_score,
+       sc.instant_signal, sc.calculated_tier, sc.scorecard_version, sc.scored_at,
+       m.id AS meeting_id, m.meeting_at, m.owner AS meeting_owner, m.status AS meeting_status
+     FROM crm_session_participants p
+     JOIN crm_sales_sessions s ON s.id=p.session_id
+     LEFT JOIN LATERAL (SELECT * FROM crm_session_scorecards x WHERE x.participant_id=p.id ORDER BY x.scored_at DESC, x.created_at DESC LIMIT 1) sc ON true
+     LEFT JOIN LATERAL (SELECT * FROM crm_meetings x WHERE x.participant_id=p.id ORDER BY x.created_at DESC LIMIT 1) m ON true
+     WHERE p.lead_id=$1 ORDER BY s.session_date DESC, p.created_at DESC`, [leadId]
+  );
+  const activities = await db.query(
+    `SELECT id, type, actor_user, body, metadata, created_at FROM crm_sales_activities WHERE lead_id=$1 ORDER BY created_at DESC LIMIT 200`, [leadId]
+  );
+  return { participants: participants.rows, activities: activities.rows };
+}

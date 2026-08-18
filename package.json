@@ -9,7 +9,7 @@
     "preview": "node scripts/start-preview.mjs",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "test:crm": "node --experimental-strip-types --test tests/crm-scorecard.test.ts"
+    "test:crm": "node --experimental-strip-types --test tests/*.test.ts"
   },
   "dependencies": {
     "clsx": "^2.1.1",
