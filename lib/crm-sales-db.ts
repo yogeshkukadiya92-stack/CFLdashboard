@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { getDbPool } from "@/lib/db";
-import { calculateSessionScorecard, rankParticipants, type ScorecardInput } from "@/lib/crm-scorecard";
+import { calculateSessionScorecard, rankParticipants, type PreQualificationInput, type ScorecardInput } from "@/lib/crm-scorecard";
 
 let schemaReady: Promise<void> | null = null;
 
@@ -28,15 +28,23 @@ export async function createSalesSession(input: { name: string; sessionDate: str
   return result.rows[0];
 }
 
-export async function addSessionParticipant(input: { sessionId: string; leadId: string; leadName: string; mobile?: string; business?: string; observer?: string; actor: string }) {
+export async function addSessionParticipant(input: { sessionId: string; leadId: string; leadName: string; mobile?: string; business?: string; observer?: string; preQualification?: PreQualificationInput; actor: string }) {
   const db = await database();
+  const preScore = input.preQualification ? calculateSessionScorecard({ ...input.preQualification, attended: false, onTime: false, notesTaken: false, askedQuestion: false, stayedUntilEnd: false, cameWithSomeone: false, metPersonally: false, instantSignal: "-" }).preScore : null;
   const result = await db.query(
-    `INSERT INTO crm_session_participants (session_id, lead_id, lead_name, mobile, business, observer)
-     VALUES ($1,$2,$3,$4,$5,$6)
+    `INSERT INTO crm_session_participants (session_id, lead_id, lead_name, mobile, business, observer, turnover_option, team_size_option, time_freedom_option, vintage_option, pre_score)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
      ON CONFLICT (session_id, lead_id) DO UPDATE SET lead_name=EXCLUDED.lead_name, mobile=EXCLUDED.mobile,
-       business=EXCLUDED.business, observer=EXCLUDED.observer, updated_at=now()
+       business=EXCLUDED.business, observer=EXCLUDED.observer,
+       turnover_option=COALESCE(EXCLUDED.turnover_option, crm_session_participants.turnover_option),
+       team_size_option=COALESCE(EXCLUDED.team_size_option, crm_session_participants.team_size_option),
+       time_freedom_option=COALESCE(EXCLUDED.time_freedom_option, crm_session_participants.time_freedom_option),
+       vintage_option=COALESCE(EXCLUDED.vintage_option, crm_session_participants.vintage_option),
+       pre_score=COALESCE(EXCLUDED.pre_score, crm_session_participants.pre_score), updated_at=now()
      RETURNING *`,
-    [input.sessionId, input.leadId, input.leadName, input.mobile || "", input.business || "", input.observer || ""]
+    [input.sessionId, input.leadId, input.leadName, input.mobile || "", input.business || "", input.observer || "",
+     input.preQualification?.turnoverOption || null, input.preQualification?.teamSizeOption || null,
+     input.preQualification?.timeFreedomOption || null, input.preQualification?.vintageOption || null, preScore]
   );
   await db.query(`INSERT INTO crm_sales_activities (participant_id, lead_id, type, actor_user, body) VALUES ($1,$2,'SESSION_ADDED',$3,$4)`, [result.rows[0].id, input.leadId, input.actor, "Added to sales session"]);
   return result.rows[0];
@@ -86,7 +94,7 @@ export async function bookParticipantMeeting(input: { participantId: string; mee
     );
     await client.query(
       `INSERT INTO crm_sales_activities (participant_id, lead_id, type, actor_user, body, metadata)
-       VALUES ($1,$2,'MEETING',$3,'Meeting booked',jsonb_build_object('meetingAt',$4::text,'owner',$5))`,
+       VALUES ($1,$2,'MEETING',$3,'Meeting booked',jsonb_build_object('meetingAt',$4::text,'owner',$5::text))`,
       [input.participantId, participant.rows[0].lead_id, input.actor, input.meetingAt, input.owner]
     );
     await client.query("COMMIT");
@@ -107,6 +115,11 @@ export async function listSalesSessions(sessionId?: string) {
   if (!sessionId) return { sessions: sessions.rows };
   const participants = await db.query(
     `SELECT p.*, sc.*, p.id AS id, p.entry_sequence::int AS sequence,
+       COALESCE(sc.turnover_option, p.turnover_option) AS turnover_option,
+       COALESCE(sc.team_size_option, p.team_size_option) AS team_size_option,
+       COALESCE(sc.time_freedom_option, p.time_freedom_option) AS time_freedom_option,
+       COALESCE(sc.vintage_option, p.vintage_option) AS vintage_option,
+       COALESCE(sc.pre_score, p.pre_score) AS pre_score,
        m.id AS meeting_id, m.meeting_at, m.owner AS meeting_owner
      FROM crm_session_participants p
      LEFT JOIN LATERAL (SELECT * FROM crm_session_scorecards x WHERE x.participant_id=p.id ORDER BY x.scored_at DESC, x.created_at DESC LIMIT 1) sc ON true

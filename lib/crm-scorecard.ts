@@ -47,6 +47,63 @@ export type TeamSizeOption = keyof typeof SCORECARD_CONFIG.teamSize;
 export type TimeFreedomOption = keyof typeof SCORECARD_CONFIG.timeFreedom;
 export type VintageOption = keyof typeof SCORECARD_CONFIG.vintage;
 
+export type PreQualificationInput = Pick<ScorecardInput, "turnoverOption" | "teamSizeOption" | "timeFreedomOption" | "vintageOption">;
+
+const qualificationGroups = {
+  turnoverOption: SCORECARD_CONFIG.turnover,
+  teamSizeOption: SCORECARD_CONFIG.teamSize,
+  timeFreedomOption: SCORECARD_CONFIG.timeFreedom,
+  vintageOption: SCORECARD_CONFIG.vintage
+} as const;
+
+const questionAliases: Record<keyof typeof qualificationGroups, string[]> = {
+  turnoverOption: ["turnover", "annual turnover", "business turnover", "revenue", "annual revenue"],
+  teamSizeOption: ["team size", "number of employees", "employees", "staff size", "team members"],
+  timeFreedomOption: ["time freedom", "business without you", "run without you", "business dependency", "owner dependency"],
+  vintageOption: ["vintage", "business age", "years in business", "how old is your business", "business experience"]
+};
+
+function normalized(value: unknown) {
+  return String(value ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+function optionFromValue(config: Record<string, { label: string }>, value: unknown) {
+  const candidate = normalized(value);
+  if (!candidate) return null;
+  const legacyOptions: Record<string, string> = {
+    "rs 25 l se kam": "BELOW_25_L", "pata nahi": "UNKNOWN", "20 log": "20_PLUS", akela: "SOLO",
+    "haan aaram se chal jaata hai": "RUNS_EASILY", "chalega par roz call karna padta hai": "DAILY_CALLS",
+    "nahi mere bina ruk jaata hai": "STOPS_WITHOUT_ME", "main hi sab kuch hoon": "I_AM_EVERYTHING",
+    "10 saal": "10_PLUS", "5 10 saal": "5_TO_10", "3 5 saal": "3_TO_5", "1 3 saal": "1_TO_3", "1 saal se kam": "BELOW_1"
+  };
+  if (legacyOptions[candidate] && legacyOptions[candidate] in config) return legacyOptions[candidate];
+  const direct = Object.keys(config).find((key) => normalized(key) === candidate);
+  if (direct) return direct;
+  return Object.entries(config).find(([, item]) => {
+    const label = normalized(item.label);
+    return candidate === label || candidate.startsWith(`${label} `) || label.startsWith(`${candidate} `);
+  })?.[0] ?? null;
+}
+
+export function extractPreQualification(answers: unknown): PreQualificationInput | null {
+  if (!answers || typeof answers !== "object" || Array.isArray(answers)) return null;
+  const entries = Object.entries(answers as Record<string, unknown>);
+  const result: Partial<PreQualificationInput> = {};
+  (Object.keys(qualificationGroups) as Array<keyof typeof qualificationGroups>).forEach((group) => {
+    const match = entries.find(([question]) => {
+      const key = normalized(question);
+      return questionAliases[group].some((alias) => key === alias || key.includes(alias));
+    });
+    if (match) {
+      const option = optionFromValue(qualificationGroups[group], match[1]);
+      if (option) result[group] = option as never;
+    }
+  });
+  return result.turnoverOption && result.teamSizeOption && result.timeFreedomOption && result.vintageOption
+    ? result as PreQualificationInput
+    : null;
+}
+
 export type ScorecardInput = {
   turnoverOption: TurnoverOption;
   teamSizeOption: TeamSizeOption;

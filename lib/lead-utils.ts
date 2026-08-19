@@ -1,3 +1,4 @@
+import { extractPreQualification } from "./crm-scorecard.ts";
 import type { Lead, LeadActivity, LeadFollowUp, LeadPriority, LeadStage } from "@/lib/types";
 
 type SalesPersonLike = {
@@ -8,6 +9,7 @@ type SalesPersonLike = {
 };
 
 type RegistrationLeadInput = {
+  answers?: unknown;
   city?: unknown;
   createdAt?: unknown;
   email?: unknown;
@@ -77,6 +79,7 @@ export function normalizeLead(value: unknown): Lead {
     nextFollowUp: String(input.nextFollowUp ?? nextPendingFollowUp(followUps)?.dueAt ?? ""),
     notes: stringArray(legacy.notes),
     paymentHistory: stringArray(input.paymentHistory),
+    preQualification: input.preQualification,
     priority: isLeadPriority(input.priority) ? input.priority : "Warm",
     revenuePotential: Number(input.revenuePotential ?? 0) || 0,
     score: Number(input.score ?? 50) || 0,
@@ -106,6 +109,7 @@ export function upsertLeadFromRegistration(
   const source = registration.source === "landing_page" ? "Landing Page" : registration.source === "manual" ? "Manual" : "Registration Link";
   const sourceDetail = `${source}: ${workshop}`;
   const existingIndex = leads.findIndex((lead) => normalizeLeadMobile(lead.mobile) === mobile);
+  const preQualification = extractPreQualification(registration.answers);
 
   if (existingIndex >= 0) {
     const existing = leads[existingIndex];
@@ -118,6 +122,7 @@ export function upsertLeadFromRegistration(
       interest: workshop || existing.interest,
       lastActivityAt: now,
       name: existing.name === "Unnamed Lead" ? String(registration.fullName ?? existing.name) : existing.name,
+      preQualification: preQualification ?? existing.preQualification,
       sourceDetails: unique([sourceDetail, ...(existing.sourceDetails ?? [])]),
       updatedAt: now
     };
@@ -139,6 +144,7 @@ export function upsertLeadFromRegistration(
     lastActivityAt: now,
     mobile,
     name: String(registration.fullName ?? "Unnamed Lead"),
+    preQualification: preQualification ?? undefined,
     priority: "Warm",
     score: 60,
     source,

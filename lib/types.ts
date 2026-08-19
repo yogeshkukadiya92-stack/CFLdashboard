@@ -99,6 +99,12 @@ export interface Lead {
   activities?: LeadActivity[];
   followUps?: LeadFollowUp[];
   convertedClientId?: string;
+  preQualification?: {
+    turnoverOption: string;
+    teamSizeOption: string;
+    timeFreedomOption: string;
+    vintageOption: string;
+  };
 }
 
 export interface Workshop {

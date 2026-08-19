@@ -21,11 +21,22 @@ CREATE TABLE IF NOT EXISTS crm_session_participants (
   mobile text NOT NULL DEFAULT '',
   business text NOT NULL DEFAULT '',
   observer text NOT NULL DEFAULT '',
+  turnover_option text,
+  team_size_option text,
+  time_freedom_option text,
+  vintage_option text,
+  pre_score integer CHECK (pre_score IS NULL OR pre_score BETWEEN 0 AND 50),
   entry_sequence bigint GENERATED ALWAYS AS IDENTITY,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
   UNIQUE (session_id, lead_id)
 );
+
+ALTER TABLE crm_session_participants ADD COLUMN IF NOT EXISTS turnover_option text;
+ALTER TABLE crm_session_participants ADD COLUMN IF NOT EXISTS team_size_option text;
+ALTER TABLE crm_session_participants ADD COLUMN IF NOT EXISTS time_freedom_option text;
+ALTER TABLE crm_session_participants ADD COLUMN IF NOT EXISTS vintage_option text;
+ALTER TABLE crm_session_participants ADD COLUMN IF NOT EXISTS pre_score integer CHECK (pre_score IS NULL OR pre_score BETWEEN 0 AND 50);
 
 CREATE TABLE IF NOT EXISTS crm_session_scorecards (
   id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),

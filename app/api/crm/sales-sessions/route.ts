@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { addSessionParticipant, bookParticipantMeeting, createSalesSession, getLeadSalesHistory, listSalesSessions, saveParticipantScorecard } from "@/lib/crm-sales-db";
-import { SCORECARD_CONFIG, type ScorecardInput } from "@/lib/crm-scorecard";
+import { SCORECARD_CONFIG, type PreQualificationInput, type ScorecardInput } from "@/lib/crm-scorecard";
 
 const actor = "Admin";
 const has = (object: object, key: string) => Object.prototype.hasOwnProperty.call(object, key);
@@ -11,6 +11,13 @@ function validAnswers(value: unknown): value is ScorecardInput {
   return has(SCORECARD_CONFIG.turnover, String(item.turnoverOption)) && has(SCORECARD_CONFIG.teamSize, String(item.teamSizeOption)) &&
     has(SCORECARD_CONFIG.timeFreedom, String(item.timeFreedomOption)) && has(SCORECARD_CONFIG.vintage, String(item.vintageOption)) &&
     ["A", "C", "-"].includes(String(item.instantSignal)) && ["attended","onTime","notesTaken","askedQuestion","stayedUntilEnd","cameWithSomeone","metPersonally"].every((key) => typeof item[key] === "boolean");
+}
+
+function validPreQualification(value: unknown): value is PreQualificationInput {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const item = value as Record<string, unknown>;
+  return has(SCORECARD_CONFIG.turnover, String(item.turnoverOption)) && has(SCORECARD_CONFIG.teamSize, String(item.teamSizeOption)) &&
+    has(SCORECARD_CONFIG.timeFreedom, String(item.timeFreedomOption)) && has(SCORECARD_CONFIG.vintage, String(item.vintageOption));
 }
 
 export async function GET(request: Request) {
@@ -27,7 +34,7 @@ export async function POST(request: Request) {
     }
     if (body.action === "add_participant") {
       if (!body.sessionId || !body.leadId || !String(body.leadName || "").trim()) return NextResponse.json({ error: "Session, lead and name are required." }, { status: 400 });
-      return NextResponse.json({ participant: await addSessionParticipant({ sessionId: String(body.sessionId), leadId: String(body.leadId), leadName: String(body.leadName).trim(), mobile: String(body.mobile || ""), business: String(body.business || ""), observer: String(body.observer || ""), actor }) });
+      return NextResponse.json({ participant: await addSessionParticipant({ sessionId: String(body.sessionId), leadId: String(body.leadId), leadName: String(body.leadName).trim(), mobile: String(body.mobile || ""), business: String(body.business || ""), observer: String(body.observer || ""), preQualification: validPreQualification(body.preQualification) ? body.preQualification : undefined, actor }) });
     }
     if (body.action === "save_scorecard") {
       if (!body.participantId || !validAnswers(body.answers)) return NextResponse.json({ error: "A complete, valid scorecard is required." }, { status: 400 });

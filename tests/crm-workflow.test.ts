@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { detectLeadRisk, rankNextBestActions, taskBucket } from "../lib/crm-workflow.ts";
-import { normalizeLead } from "../lib/lead-utils.ts";
+import { normalizeLead, upsertLeadFromRegistration } from "../lib/lead-utils.ts";
 
 const now = new Date("2026-08-18T10:00:00.000Z");
 
@@ -25,4 +25,24 @@ test("task buckets are deterministic", () => {
   assert.equal(taskBucket({ id: "1", type: "Call", dueAt: "2026-08-18T09:00:00.000Z", note: "", completed: false, createdAt: "2026-08-17T00:00:00.000Z" }, now), "overdue");
   assert.equal(taskBucket({ id: "2", type: "Call", dueAt: "2026-08-18T11:00:00.000Z", note: "", completed: false, createdAt: "2026-08-17T00:00:00.000Z" }, now), "today");
   assert.equal(taskBucket({ id: "3", type: "Call", dueAt: "2026-08-19T11:00:00.000Z", note: "", completed: false, createdAt: "2026-08-17T00:00:00.000Z" }, now), "upcoming");
+});
+
+test("registration qualification is persisted on the CRM lead", () => {
+  const leads = upsertLeadFromRegistration([], {
+    fullName: "Qualified Lead",
+    mobile: "9876543214",
+    workshopTitle: "Intro Workshop",
+    answers: {
+      Turnover: "Rs 1 - 5 Cr",
+      "Team Size": "20+ people",
+      "Business without you": "It runs, but I need to make daily calls",
+      "Business Age": "5 - 10 years"
+    }
+  });
+  assert.deepEqual(leads[0].preQualification, {
+    turnoverOption: "1_TO_5_CR",
+    teamSizeOption: "20_PLUS",
+    timeFreedomOption: "DAILY_CALLS",
+    vintageOption: "5_TO_10"
+  });
 });

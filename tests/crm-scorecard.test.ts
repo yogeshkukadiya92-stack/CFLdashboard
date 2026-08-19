@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { calculateSessionScorecard, calculateTier, rankParticipants, SCORECARD_CONFIG } from "../lib/crm-scorecard.ts";
+import { calculateSessionScorecard, calculateTier, extractPreQualification, rankParticipants, SCORECARD_CONFIG } from "../lib/crm-scorecard.ts";
 
 const base = {
   turnoverOption: "BELOW_25_L" as const,
@@ -22,6 +22,20 @@ test("every qualification option returns its configured score", () => {
   for (const [teamSizeOption, rule] of Object.entries(SCORECARD_CONFIG.teamSize)) assert.equal(calculateSessionScorecard({ ...base, teamSizeOption: teamSizeOption as keyof typeof SCORECARD_CONFIG.teamSize }).teamSizeScore, rule.score);
   for (const [timeFreedomOption, rule] of Object.entries(SCORECARD_CONFIG.timeFreedom)) assert.equal(calculateSessionScorecard({ ...base, timeFreedomOption: timeFreedomOption as keyof typeof SCORECARD_CONFIG.timeFreedom }).timeFreedomScore, rule.score);
   for (const [vintageOption, rule] of Object.entries(SCORECARD_CONFIG.vintage)) assert.equal(calculateSessionScorecard({ ...base, vintageOption: vintageOption as keyof typeof SCORECARD_CONFIG.vintage }).vintageScore, rule.score);
+});
+
+test("registration answers map to CRM pre-qualification options", () => {
+  assert.deepEqual(extractPreQualification({
+    "Annual Turnover": "Rs 50 L - 1 Cr",
+    "Team Size": "10 - 19",
+    "Can your business run without you?": "Yes, it runs smoothly without me",
+    "Years in Business": "10+ years"
+  }), {
+    turnoverOption: "50_L_TO_1_CR",
+    teamSizeOption: "10_TO_19",
+    timeFreedomOption: "RUNS_EASILY",
+    vintageOption: "10_PLUS"
+  });
 });
 
 test("attendance gates session score and all yes totals 50", () => {
