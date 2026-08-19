@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { addSessionParticipant, bookParticipantMeeting, createSalesSession, getLeadSalesHistory, listSalesSessions, saveParticipantScorecard } from "@/lib/crm-sales-db";
-import { SCORECARD_CONFIG, type PreQualificationInput, type ScorecardInput } from "@/lib/crm-scorecard";
+import { extractPreQualification, SCORECARD_CONFIG, type PreQualificationInput, type ScorecardInput } from "@/lib/crm-scorecard";
+import { getAppState } from "@/lib/db";
 
 const actor = "Admin";
 const has = (object: object, key: string) => Object.prototype.hasOwnProperty.call(object, key);
@@ -34,7 +35,15 @@ export async function POST(request: Request) {
     }
     if (body.action === "add_participant") {
       if (!body.sessionId || !body.leadId || !String(body.leadName || "").trim()) return NextResponse.json({ error: "Session, lead and name are required." }, { status: 400 });
-      return NextResponse.json({ participant: await addSessionParticipant({ sessionId: String(body.sessionId), leadId: String(body.leadId), leadName: String(body.leadName).trim(), mobile: String(body.mobile || ""), business: String(body.business || ""), observer: String(body.observer || ""), preQualification: validPreQualification(body.preQualification) ? body.preQualification : undefined, actor }) });
+      let preQualification = validPreQualification(body.preQualification) ? body.preQualification : undefined;
+      if (!preQualification) {
+        const mobile = String(body.mobile || "").replace(/\D/g, "").slice(-10);
+        const state = await getAppState();
+        const registration = (Array.isArray(state?.registrations) ? state.registrations : [])
+          .find((entry: unknown) => entry && typeof entry === "object" && String((entry as Record<string, unknown>).mobile || "").replace(/\D/g, "").slice(-10) === mobile) as Record<string, unknown> | undefined;
+        preQualification = extractPreQualification(registration?.answers) ?? undefined;
+      }
+      return NextResponse.json({ participant: await addSessionParticipant({ sessionId: String(body.sessionId), leadId: String(body.leadId), leadName: String(body.leadName).trim(), mobile: String(body.mobile || ""), business: String(body.business || ""), observer: String(body.observer || ""), preQualification, actor }) });
     }
     if (body.action === "save_scorecard") {
       if (!body.participantId || !validAnswers(body.answers)) return NextResponse.json({ error: "A complete, valid scorecard is required." }, { status: 400 });
