@@ -6,37 +6,37 @@ export const SCORECARD_CONFIG = {
     "1_TO_5_CR": { label: "Rs 1 - 5 Cr", score: 12 },
     "50_L_TO_1_CR": { label: "Rs 50 L - 1 Cr", score: 8 },
     "25_TO_50_L": { label: "Rs 25 - 50 L", score: 4 },
-    "BELOW_25_L": { label: "Rs 25 L se kam", score: 0 },
-    "UNKNOWN": { label: "Pata nahi", score: 0 }
+    "BELOW_25_L": { label: "Below Rs 25 L", score: 0 },
+    "UNKNOWN": { label: "Not sure", score: 0 }
   },
   teamSize: {
-    "20_PLUS": { label: "20+ log", score: 10 },
+    "20_PLUS": { label: "20+ people", score: 10 },
     "10_TO_19": { label: "10 - 19", score: 8 },
     "5_TO_9": { label: "5 - 9", score: 6 },
     "2_TO_4": { label: "2 - 4", score: 3 },
-    "SOLO": { label: "Akela", score: 0 }
+    "SOLO": { label: "Solo", score: 0 }
   },
   timeFreedom: {
-    "RUNS_EASILY": { label: "Haan, aaram se chal jaata hai", score: 15 },
-    "DAILY_CALLS": { label: "Chalega par roz call karna padta hai", score: 10 },
-    "STOPS_WITHOUT_ME": { label: "Nahi, mere bina ruk jaata hai", score: 4 },
-    "I_AM_EVERYTHING": { label: "Main hi sab kuch hoon", score: 0 },
-    "UNKNOWN": { label: "Pata nahi", score: 0 }
+    "RUNS_EASILY": { label: "Yes, it runs smoothly without me", score: 15 },
+    "DAILY_CALLS": { label: "It runs, but I need to make daily calls", score: 10 },
+    "STOPS_WITHOUT_ME": { label: "No, it stops without me", score: 4 },
+    "I_AM_EVERYTHING": { label: "I handle everything", score: 0 },
+    "UNKNOWN": { label: "Not sure", score: 0 }
   },
   vintage: {
-    "10_PLUS": { label: "10+ saal", score: 10 },
-    "5_TO_10": { label: "5 - 10 saal", score: 8 },
-    "3_TO_5": { label: "3 - 5 saal", score: 6 },
-    "1_TO_3": { label: "1 - 3 saal", score: 3 },
-    "BELOW_1": { label: "1 saal se kam", score: 0 }
+    "10_PLUS": { label: "10+ years", score: 10 },
+    "5_TO_10": { label: "5 - 10 years", score: 8 },
+    "3_TO_5": { label: "3 - 5 years", score: 6 },
+    "1_TO_3": { label: "1 - 3 years", score: 3 },
+    "BELOW_1": { label: "Less than 1 year", score: 0 }
   },
   behaviour: {
-    onTime: { label: "Time pe", score: 5 },
-    notesTaken: { label: "Notes liye", score: 8 },
-    askedQuestion: { label: "Question", score: 10 },
-    stayedUntilEnd: { label: "End tak", score: 7 },
-    cameWithSomeone: { label: "Saath aaya", score: 8 },
-    metPersonally: { label: "KHUD mila", score: 12 }
+    onTime: { label: "Arrived on time", score: 5 },
+    notesTaken: { label: "Took notes", score: 8 },
+    askedQuestion: { label: "Asked a question", score: 10 },
+    stayedUntilEnd: { label: "Stayed until the end", score: 7 },
+    cameWithSomeone: { label: "Came with someone", score: 8 },
+    metPersonally: { label: "Met personally", score: 12 }
   }
 } as const;
 
