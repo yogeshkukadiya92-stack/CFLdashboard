@@ -30,7 +30,6 @@ import {
 } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import { ThemeToggle } from "@/components/theme-toggle";
 import { permissionForPath } from "@/lib/sales-permissions";
 import type { SalesPermission } from "@/lib/types";
 
@@ -370,7 +369,6 @@ export function AdminPlatformShell({
             >
               {mobileSearchOpen ? <X className="size-4" /> : <Search className="size-4" />}
             </button>
-            <ThemeToggle />
             <button
               aria-label="Logout"
               className="grid size-10 place-items-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700"

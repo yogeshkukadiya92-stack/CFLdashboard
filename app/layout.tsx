@@ -38,7 +38,7 @@ export default function RootLayout({
       <head>
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var t=localStorage.getItem('cfl-theme');if(t==='dark'||(!t&&window.matchMedia('(prefers-color-scheme: dark)').matches)){document.documentElement.classList.add('dark');}}catch(e){}})();`
+            __html: `(function(){document.documentElement.classList.remove('dark');try{localStorage.setItem('cfl-theme','light');}catch(e){}})();`
           }}
         />
       </head>
