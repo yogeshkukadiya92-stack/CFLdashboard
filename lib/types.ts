@@ -134,6 +134,39 @@ export interface Batch {
   attendanceRate: number;
 }
 
+export type WorkshopBatchStatus = "draft" | "open" | "completed" | "cancelled";
+export type IntroductionSessionStatus = "draft" | "published" | "completed" | "cancelled";
+
+export interface WorkshopIntroductionSession {
+  id: string;
+  title: string;
+  sessionDate: string;
+  startTime?: string;
+  endTime?: string;
+  venue?: string;
+  zoomJoinUrl?: string;
+  facilitator?: string;
+  capacity?: number;
+  status: IntroductionSessionStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WorkshopBatch {
+  id: string;
+  name: string;
+  code?: string;
+  startDate?: string;
+  endDate?: string;
+  venue?: string;
+  facilitator?: string;
+  capacity?: number;
+  status: WorkshopBatchStatus;
+  introductionSessions: WorkshopIntroductionSession[];
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Payment {
   id: string;
   clientName: string;
@@ -220,6 +253,8 @@ export interface RegistrationEntry {
   landingPageSlug?: string;
   createdAt: string;
   batch?: string;
+  batchId?: string;
+  introductionSessionId?: string;
   answers?: Record<string, string>;
   confirmationStatus?: RegistrationConfirmationStatus;
   confirmationNote?: string;
@@ -413,6 +448,8 @@ export interface BuilderForm {
   workshopName: string;
   workshopSlug: string;
   batch: string;
+  batchId?: string;
+  introductionSessionId?: string;
   title: string;
   tagline?: string;
   description: string;
@@ -448,6 +485,8 @@ export interface AttendanceSession {
   startTime?: string;
   endTime?: string;
   batch?: string;
+  batchId?: string;
+  introductionSessionId?: string;
   facilitator?: string;
   venue?: string;
   zoomJoinUrl?: string;
@@ -486,6 +525,8 @@ export interface AttendanceEntry {
   leftZoomAt?: string;
   durationMinutes?: number;
   batch?: string;
+  batchId?: string;
+  introductionSessionId?: string;
   source?: "attendance_form" | "manual" | "zoom_webhook";
 }
 

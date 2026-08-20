@@ -3,6 +3,7 @@ import { upsertLiveRegistration } from "@/lib/crm-db";
 import { upsertLeadFromRegistration } from "@/lib/lead-utils";
 import { assignRegistrationNumbers, sendRegistrationConfirmation } from "@/lib/registration-confirmation";
 import type { BuilderForm, RegistrationEntry } from "@/lib/types";
+import { isDuplicateWorkshopRegistration } from "@/lib/workshop-hierarchy";
 import { NextResponse } from "next/server";
 
 export async function GET() {
@@ -59,12 +60,14 @@ export async function POST(request: Request) {
       amountPaid,
       answers,
       batch: String(input.batch ?? "Main Batch").trim().slice(0, 200),
+      batchId: String(input.batchId ?? "").trim().slice(0, 300) || undefined,
       city: String(input.city ?? "").trim().slice(0, 150),
       createdAt,
       email: String(input.email ?? "").trim().slice(0, 254),
       facilitator: String(input.facilitator ?? "CFL Facilitator").trim().slice(0, 200),
       fullName,
       id: String(input.id ?? "").trim().slice(0, 300),
+      introductionSessionId: String(input.introductionSessionId ?? "").trim().slice(0, 300) || undefined,
       mobile: `+91 ${mobileDigits}`,
       landingPageSlug: String(input.landingPageSlug ?? "").trim().slice(0, 300) || undefined,
       paymentMode: input.paymentMode === "Part" ? "Part" : "Full",
@@ -91,25 +94,32 @@ export async function POST(request: Request) {
       const current = Array.isArray(state.registrations) ? state.registrations : [];
       const duplicate = current.find((value: unknown) => {
         if (!value || typeof value !== "object") return false;
-        const entry = value as Record<string, unknown>;
-        return String(entry.workshopId ?? "") === sanitizedRegistration.workshopId
-          && String(entry.mobile ?? "").replace(/\D/g, "").slice(-10) === mobileDigits;
+        return isDuplicateWorkshopRegistration(value as RegistrationEntry, sanitizedRegistration);
       });
       if (duplicate) {
         await client.query("ROLLBACK");
         return NextResponse.json({
           code: "ALREADY_REGISTERED",
           duplicate: true,
-          error: "This mobile number is already registered for this workshop."
+          error: "This mobile number is already registered for this batch and introduction session."
         }, { status: 409 });
       }
       const forms = Array.isArray(state.forms) ? state.forms as Array<Record<string, unknown>> : [];
       const form = forms.find((value) => String(value.workshopId ?? "") === sanitizedRegistration.workshopId || String(value.workshopSlug ?? "") === sanitizedRegistration.workshopSlug);
-      const capacity = Math.max(0, Number(form?.registrationCapacity ?? 0) || 0);
+      const workshopRecords = Array.isArray(state.workshops) ? state.workshops as Array<Record<string, unknown>> : [];
+      const workshop = workshopRecords.find((value) => String(value.id ?? "") === sanitizedRegistration.workshopId);
+      const workshopBatches = Array.isArray(workshop?.batches) ? workshop.batches as Array<Record<string, unknown>> : [];
+      const selectedBatch = workshopBatches.find((value) => sanitizedRegistration.batchId
+        ? String(value.id ?? "") === sanitizedRegistration.batchId
+        : String(value.name ?? "").trim().toLowerCase() === sanitizedRegistration.batch.trim().toLowerCase());
+      const capacity = Math.max(0, Number(selectedBatch?.capacity ?? form?.registrationCapacity ?? 0) || 0);
       const confirmedCount = current.filter((value: unknown) => {
         if (!value || typeof value !== "object") return false;
-        const entry = value as Record<string, unknown>;
-        return String(entry.workshopId ?? "") === sanitizedRegistration.workshopId && entry.registrationStatus !== "waiting" && String(entry.id ?? "") !== sanitizedRegistration.id;
+        const entry = value as RegistrationEntry;
+        const sameBatch = sanitizedRegistration.batchId
+          ? entry.batchId === sanitizedRegistration.batchId
+          : String(entry.batch ?? "").trim().toLowerCase() === sanitizedRegistration.batch.trim().toLowerCase();
+        return entry.workshopId === sanitizedRegistration.workshopId && sameBatch && entry.registrationStatus !== "waiting" && entry.id !== sanitizedRegistration.id;
       }).length;
       const isWaiting = form?.waitingMode === true || (capacity > 0 && confirmedCount >= capacity);
       const pendingRegistration = {

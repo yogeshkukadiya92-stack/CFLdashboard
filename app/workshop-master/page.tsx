@@ -7,20 +7,22 @@ import { DuplicateResponseFilter } from "@/components/duplicate-response-filter"
 import { AdvancedResponseFilters } from "@/components/advanced-response-filters";
 import { WorkshopCohortCompare } from "@/components/workshop-cohort-compare";
 import { MultiWorkshopOverlap } from "@/components/multi-workshop-overlap";
-import { AlertCircle, Archive, ArrowDown, ArrowUp, BarChart3, Bold, Check, CheckSquare, ChevronDown, Circle, Copy, Download, Edit3, ExternalLink, Eye, EyeOff, Files, Heading, Image, Italic, LayoutList, Link2, List, ListOrdered, Mail, MessageCircle, Monitor, Palette, PhoneCall, Plus, QrCode, RefreshCw, Route, Save, Search, Share2, Smartphone, Sparkles, Trash2, Type, Underline, Upload, UsersRound, X } from "lucide-react";
+import { AlertCircle, Archive, ArrowDown, ArrowUp, BarChart3, Bold, CalendarDays, Check, CheckSquare, ChevronDown, Circle, Copy, Download, Edit3, ExternalLink, Eye, EyeOff, Files, Heading, Image, Italic, LayoutList, Link2, List, ListOrdered, Mail, MessageCircle, Monitor, Palette, PhoneCall, Plus, QrCode, RefreshCw, Route, Save, Search, Share2, Smartphone, Sparkles, Trash2, Type, Underline, Upload, UsersRound, X } from "lucide-react";
 import { hydrateLiveState, readLocalArray, readLocalObject, saveLiveState } from "@/lib/live-state";
 import { buildRegistrationUrl, normalizeBaseUrl } from "@/lib/registration-url";
 import { publicFormSlug } from "@/lib/public-slug";
 import { sanitizeRichTextHtml } from "@/lib/rich-text";
 import { hideDuplicateResponses, partitionDuplicateResponses } from "@/lib/response-dedupe";
 import { activeResponseFilterCount, applyResponseFilters, emptyResponseFilters, responseQuestionOptions, type ResponseFilterState } from "@/lib/response-filters";
-import type { AttendanceEntry, AttendanceSession, BuilderField, BuilderFieldType, BuilderForm, BuilderFormMode, BuilderTheme, FormAnalyticsRecord, RegistrationEntry } from "@/lib/types";
+import type { AttendanceEntry, AttendanceSession, BuilderField, BuilderFieldType, BuilderForm, BuilderFormMode, BuilderTheme, FormAnalyticsRecord, RegistrationEntry, WorkshopBatch, WorkshopIntroductionSession } from "@/lib/types";
+import { registrationMatchesBatch } from "@/lib/workshop-hierarchy";
 import { generateId } from "@/lib/utils";
 import { type ClipboardEvent, type FormEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
 type WorkshopRecord = {
   archived?: boolean;
   batch?: string;
+  batches?: WorkshopBatch[];
   discountCodeEod?: string;
   discountDescription?: string;
   discountType?: DiscountType;
@@ -179,6 +181,7 @@ export default function WorkshopMasterPage() {
   const [recordScope, setRecordScope] = useState<"all" | "active" | "historical">("active");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedWorkshopId, setSelectedWorkshopId] = useState<string | null>(null);
+  const [selectedParticipantBatchId, setSelectedParticipantBatchId] = useState("all");
   const [showParticipants, setShowParticipants] = useState(false);
   const [registrations, setRegistrations] = useState<RegistrationEntry[]>([]);
   const [attendanceEntries, setAttendanceEntries] = useState<AttendanceEntry[]>([]);
@@ -289,13 +292,13 @@ export default function WorkshopMasterPage() {
   const selectedParticipants = useMemo(() => {
     if (!selectedWorkshop) return [];
     const exactMatches = registrations.filter((entry) => entry.workshopId === selectedWorkshop.id);
-    if (exactMatches.length) return exactMatches;
-
-    // Legacy imports sometimes stored only the workshop name as their link.
-    // Use that fallback only when this workshop has no records linked by its stable ID.
-    const selectedName = selectedWorkshop.name.trim().toLowerCase();
-    return registrations.filter((entry) => entry.workshopTitle.trim().toLowerCase() === selectedName);
-  }, [registrations, selectedWorkshop]);
+    const workshopMatches = exactMatches.length
+      ? exactMatches
+      : registrations.filter((entry) => entry.workshopTitle.trim().toLowerCase() === selectedWorkshop.name.trim().toLowerCase());
+    if (selectedParticipantBatchId === "all") return workshopMatches;
+    const selectedBatch = selectedWorkshop.batches?.find((item) => item.id === selectedParticipantBatchId);
+    return selectedBatch ? workshopMatches.filter((entry) => registrationMatchesBatch(entry, selectedBatch)) : workshopMatches;
+  }, [registrations, selectedParticipantBatchId, selectedWorkshop]);
   const waitingParticipants = useMemo(() => selectedParticipants
     .filter((entry) => entry.registrationStatus === "waiting")
     .sort((first, second) => (first.waitingPosition ?? Number.MAX_SAFE_INTEGER) - (second.waitingPosition ?? Number.MAX_SAFE_INTEGER)), [selectedParticipants]);
@@ -492,6 +495,7 @@ export default function WorkshopMasterPage() {
 
   async function openWorkshop(record: WorkshopRecord) {
     setRegistrations(readLocalArray<RegistrationEntry>(REGISTRATION_STORAGE_KEY));
+    setSelectedParticipantBatchId("all");
     setParticipantSearch("");
     setFollowUpScope("needs_follow_up");
     setSelectedParticipantIds([]);
@@ -641,8 +645,20 @@ export default function WorkshopMasterPage() {
   }
 
   function buildWorkshopRecord(id: string): WorkshopRecord {
+    const existing = records.find((record) => record.id === id);
+    const now = new Date().toISOString();
+    const batches = existing?.batches?.length ? existing.batches : [{
+      id: `batch-${id}-${generateId()}`,
+      name: batch.trim() || "Main Batch",
+      facilitator,
+      status: "open" as const,
+      introductionSessions: [],
+      createdAt: now,
+      updatedAt: now
+    }];
     return {
       batch: batch.trim() || "Main Batch",
+      batches,
       discountCodeEod,
       discountDescription,
       discountType,
@@ -980,6 +996,20 @@ export default function WorkshopMasterPage() {
           </div>
         ) : null}
 
+        <section className="mt-6 rounded-2xl border border-indigo-200 bg-indigo-50/50 p-4">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
+            <label className="min-w-0 flex-1">
+              <span className="mb-2 block text-sm font-black text-slate-700">Select existing workshop</span>
+              <select className={inputClass} onChange={(event) => { const record = records.find((item) => item.id === event.target.value); if (record) editRecord(record); }} value={editingId ?? ""}>
+                <option value="">Choose a saved workshop</option>
+                {records.filter((record) => !record.archived).map((record) => <option key={record.id} value={record.id}>{record.name} · {record.batches?.length || record.legacyBatchCount || 1} batches</option>)}
+              </select>
+            </label>
+            <button className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-xl bg-slate-950 px-5 text-sm font-black text-white" onClick={() => clearForm()} type="button"><Plus className="size-4" />Create new workshop</button>
+          </div>
+          <p className="mt-2 text-xs font-semibold text-slate-500">Create a workshop once, then manage every batch and introduction session below it.</p>
+        </section>
+
         <div className="mt-6">
           <label className="mb-2 block text-sm font-bold text-slate-600">Workshop/Product Name</label>
           <input className={inputClass} onChange={(event) => setName(event.target.value)} placeholder="Enter workshop or product name" value={name} />
@@ -1061,6 +1091,24 @@ export default function WorkshopMasterPage() {
             </label>
           </div>
         </div>
+
+        {editingId ? (
+          <WorkshopHierarchyManager
+            registrations={registrations}
+            workshop={records.find((record) => record.id === editingId)!}
+            onChange={async (batches) => {
+              const next = records.map((record) => record.id === editingId ? { ...record, batches, batch: batches[0]?.name || record.batch } : record);
+              await saveRecords(next);
+              setMessage("Batch and introduction session structure saved.");
+            }}
+          />
+        ) : (
+          <div className="mt-7 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5 text-center">
+            <CalendarDays className="mx-auto size-6 text-slate-400" />
+            <p className="mt-2 font-black text-slate-800">Save the workshop to create batches</p>
+            <p className="mt-1 text-sm font-semibold text-slate-500">After the workshop master is saved, add batch dates, capacity and introduction sessions without creating the workshop again.</p>
+          </div>
+        )}
 
         <div className="mt-7 rounded-3xl border border-emerald-100 bg-emerald-50/40 p-4 md:p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
@@ -1364,6 +1412,22 @@ export default function WorkshopMasterPage() {
                   <p className="mt-1 text-sm font-semibold text-slate-600">
                     {selectedWorkshop.type} | {selectedWorkshop.facilitator} | {selectedWorkshop.productGroup}
                   </p>
+                  {selectedWorkshop.batches?.length ? (
+                    <label className="mt-3 block text-xs font-black uppercase tracking-[0.16em] text-slate-500">
+                      Participant batch
+                      <select
+                        className="mt-1 block min-h-11 min-w-64 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold normal-case tracking-normal text-slate-800 outline-none focus:border-indigo-500"
+                        onChange={(event) => {
+                          setSelectedParticipantBatchId(event.target.value);
+                          setSelectedParticipantIds([]);
+                        }}
+                        value={selectedParticipantBatchId}
+                      >
+                        <option value="all">All batches</option>
+                        {selectedWorkshop.batches.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                      </select>
+                    </label>
+                  ) : null}
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <label className={`inline-flex min-h-11 cursor-pointer items-center gap-3 rounded-xl border px-4 py-2 text-sm font-black ${formWaitingMode ? "border-amber-300 bg-amber-100 text-amber-900" : "border-slate-200 bg-white text-slate-700"}`}>
@@ -1418,6 +1482,7 @@ export default function WorkshopMasterPage() {
                     className="grid size-11 place-items-center rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
                     onClick={() => {
                       setSelectedWorkshopId(null);
+                      setSelectedParticipantBatchId("all");
                       setShowParticipants(false);
                     }}
                     type="button"
@@ -2722,6 +2787,82 @@ function FieldEditor({
     </div>
   );
 }
+
+function WorkshopHierarchyManager({ workshop, registrations, onChange }: { workshop: WorkshopRecord; registrations: RegistrationEntry[]; onChange: (batches: WorkshopBatch[]) => Promise<void> }) {
+  const legacyBatch = useMemo<WorkshopBatch>(() => {
+    const now = new Date().toISOString();
+    return { id: `batch-${workshop.id}-main`, name: workshop.batch || "Main Batch", facilitator: workshop.facilitator, status: "open", introductionSessions: [], createdAt: now, updatedAt: now };
+  }, [workshop.batch, workshop.facilitator, workshop.id]);
+  const batches = workshop.batches?.length ? workshop.batches : [legacyBatch];
+  const [selectedId, setSelectedId] = useState(batches[0]?.id || "");
+  const [batchDraft, setBatchDraft] = useState({ name: "", code: "", startDate: "", endDate: "", venue: "", capacity: "" });
+  const [sessionDraft, setSessionDraft] = useState({ title: "Introduction Session", sessionDate: "", startTime: "", endTime: "", venue: "", capacity: "" });
+  const selected = batches.find((item) => item.id === selectedId) || batches[0];
+  const selectedRegistrations = selected ? registrations.filter((entry) => entry.workshopId === workshop.id && (entry.batchId ? entry.batchId === selected.id : entry.batch === selected.name)) : [];
+
+  useEffect(() => {
+    if (!batches.some((item) => item.id === selectedId)) setSelectedId(batches[0]?.id || "");
+  }, [batches, selectedId]);
+
+  async function addBatch() {
+    if (!batchDraft.name.trim()) return;
+    const now = new Date().toISOString();
+    const next: WorkshopBatch = {
+      id: `batch-${workshop.id}-${generateId()}`,
+      name: batchDraft.name.trim(), code: batchDraft.code.trim() || undefined,
+      startDate: batchDraft.startDate || undefined, endDate: batchDraft.endDate || undefined,
+      venue: batchDraft.venue.trim() || undefined, facilitator: workshop.facilitator,
+      capacity: Math.max(0, Number(batchDraft.capacity) || 0) || undefined,
+      status: "draft", introductionSessions: [], createdAt: now, updatedAt: now
+    };
+    await onChange([...batches, next]);
+    setSelectedId(next.id);
+    setBatchDraft({ name: "", code: "", startDate: "", endDate: "", venue: "", capacity: "" });
+  }
+
+  async function patchBatch(patch: Partial<WorkshopBatch>) {
+    if (!selected) return;
+    await onChange(batches.map((item) => item.id === selected.id ? { ...item, ...patch, updatedAt: new Date().toISOString() } : item));
+  }
+
+  async function addIntroductionSession() {
+    if (!selected || !sessionDraft.title.trim() || !sessionDraft.sessionDate) return;
+    const now = new Date().toISOString();
+    const session: WorkshopIntroductionSession = {
+      id: `intro-${selected.id}-${generateId()}`, title: sessionDraft.title.trim(), sessionDate: sessionDraft.sessionDate,
+      startTime: sessionDraft.startTime || undefined, endTime: sessionDraft.endTime || undefined,
+      venue: sessionDraft.venue.trim() || selected.venue, facilitator: selected.facilitator || workshop.facilitator,
+      capacity: Math.max(0, Number(sessionDraft.capacity) || 0) || selected.capacity,
+      status: "draft", createdAt: now, updatedAt: now
+    };
+    await patchBatch({ introductionSessions: [...selected.introductionSessions, session] });
+    setSessionDraft({ title: "Introduction Session", sessionDate: "", startTime: "", endTime: "", venue: "", capacity: "" });
+  }
+
+  function registrationUrl(session?: WorkshopIntroductionSession) {
+    const slug = workshopSlug(workshop.name) || workshop.id;
+    const params = new URLSearchParams({ wid: workshop.id, batch: selected?.name || "Main Batch", batchId: selected?.id || "" });
+    if (session) params.set("introSessionId", session.id);
+    return `/register/${slug}?${params.toString()}`;
+  }
+
+  return <section className="mt-7 rounded-3xl border border-violet-200 bg-violet-50/40 p-4 md:p-5">
+    <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-violet-700">Batch Workspace</p><h3 className="mt-1 text-xl font-black text-slate-950">{workshop.name} batches and introduction sessions</h3><p className="mt-1 text-sm font-semibold text-slate-500">Participants, attendance and CRM activity stay linked to the selected batch and intro session.</p></div><span className="rounded-full bg-white px-3 py-1 text-xs font-black text-violet-700">{batches.length} batches</span></div>
+    <div className="mt-5 grid gap-4 xl:grid-cols-[280px_minmax(0,1fr)]">
+      <div className="space-y-2">{batches.map((item) => { const count = registrations.filter((entry) => entry.workshopId === workshop.id && (entry.batchId ? entry.batchId === item.id : entry.batch === item.name)).length; return <button className={`w-full rounded-xl border p-3 text-left ${selected?.id === item.id ? "border-violet-500 bg-violet-600 text-white" : "border-slate-200 bg-white text-slate-700"}`} key={item.id} onClick={() => setSelectedId(item.id)} type="button"><span className="block font-black">{item.name}</span><span className={`mt-1 block text-xs font-bold ${selected?.id === item.id ? "text-violet-100" : "text-slate-500"}`}>{count} participants · {item.introductionSessions.length} intro sessions</span></button>; })}
+        <div className="rounded-xl border border-dashed border-violet-300 bg-white p-3"><p className="text-sm font-black text-slate-800">Create another batch</p><div className="mt-3 space-y-2"><input className={inputClass} onChange={(e) => setBatchDraft({ ...batchDraft, name: e.target.value })} placeholder="Batch name" value={batchDraft.name} /><input className={inputClass} onChange={(e) => setBatchDraft({ ...batchDraft, code: e.target.value })} placeholder="Batch code" value={batchDraft.code} /><div className="grid grid-cols-2 gap-2"><input className={inputClass} onChange={(e) => setBatchDraft({ ...batchDraft, startDate: e.target.value })} type="date" value={batchDraft.startDate} /><input className={inputClass} onChange={(e) => setBatchDraft({ ...batchDraft, endDate: e.target.value })} type="date" value={batchDraft.endDate} /></div><input className={inputClass} onChange={(e) => setBatchDraft({ ...batchDraft, venue: e.target.value })} placeholder="Venue / city" value={batchDraft.venue} /><input className={inputClass} inputMode="numeric" onChange={(e) => setBatchDraft({ ...batchDraft, capacity: e.target.value })} placeholder="Capacity" value={batchDraft.capacity} /><button className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-violet-600 px-3 py-3 text-sm font-black text-white disabled:opacity-50" disabled={!batchDraft.name.trim()} onClick={() => void addBatch()} type="button"><Plus className="size-4" />Add batch</button></div></div>
+      </div>
+      {selected ? <div className="rounded-2xl border border-slate-200 bg-white p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><h4 className="text-lg font-black text-slate-950">{selected.name}</h4><p className="text-xs font-bold text-slate-500">{selectedRegistrations.length} batch participants · stable ID {selected.id}</p></div><select className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-black" onChange={(e) => void patchBatch({ status: e.target.value as WorkshopBatch["status"] })} value={selected.status}><option value="draft">Draft</option><option value="open">Open</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option></select></div>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><SmallData label="Start" value={selected.startDate || "Not set"} /><SmallData label="End" value={selected.endDate || "Not set"} /><SmallData label="Venue" value={selected.venue || "Not set"} /><SmallData label="Capacity" value={selected.capacity || "Unlimited"} /></div>
+        <div className="mt-5 flex items-center justify-between"><div><p className="font-black text-slate-900">Introduction sessions</p><p className="text-xs font-semibold text-slate-500">Each session gets its own registration source and participant trail.</p></div><a className="text-xs font-black text-violet-700" href={registrationUrl()}>Open batch registration</a></div>
+        <div className="mt-3 space-y-2">{selected.introductionSessions.map((session) => <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 sm:flex-row sm:items-center" key={session.id}><span className="grid size-10 shrink-0 place-items-center rounded-lg bg-white text-violet-700"><CalendarDays className="size-4" /></span><div className="min-w-0 flex-1"><p className="font-black text-slate-900">{session.title}</p><p className="text-xs font-semibold text-slate-500">{session.sessionDate} {session.startTime ? `· ${session.startTime}` : ""} · {session.venue || selected.venue || "Venue not set"}</p></div><a className="rounded-lg border border-violet-200 bg-white px-3 py-2 text-xs font-black text-violet-700" href={registrationUrl(session)}>Registration link</a></div>)}{!selected.introductionSessions.length ? <p className="rounded-xl border border-dashed border-slate-300 p-5 text-center text-sm font-bold text-slate-500">No introduction sessions in this batch yet.</p> : null}</div>
+        <div className="mt-4 rounded-xl border border-violet-100 bg-violet-50/50 p-3"><p className="text-sm font-black text-slate-800">Add introduction session</p><div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3"><input className={inputClass} onChange={(e) => setSessionDraft({ ...sessionDraft, title: e.target.value })} placeholder="Session title" value={sessionDraft.title} /><input className={inputClass} onChange={(e) => setSessionDraft({ ...sessionDraft, sessionDate: e.target.value })} type="date" value={sessionDraft.sessionDate} /><input className={inputClass} onChange={(e) => setSessionDraft({ ...sessionDraft, venue: e.target.value })} placeholder="Venue / Zoom" value={sessionDraft.venue} /><input className={inputClass} onChange={(e) => setSessionDraft({ ...sessionDraft, startTime: e.target.value })} type="time" value={sessionDraft.startTime} /><input className={inputClass} onChange={(e) => setSessionDraft({ ...sessionDraft, endTime: e.target.value })} type="time" value={sessionDraft.endTime} /><button className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-3 text-sm font-black text-white disabled:opacity-50" disabled={!sessionDraft.title.trim() || !sessionDraft.sessionDate} onClick={() => void addIntroductionSession()} type="button"><Plus className="size-4" />Add intro session</button></div></div>
+      </div> : null}
+    </div>
+  </section>;
+}
+
+function SmallData({ label, value }: { label: string; value: ReactNode }) { return <div className="rounded-xl bg-slate-50 px-3 py-2.5"><p className="text-[10px] font-black uppercase tracking-wide text-slate-400">{label}</p><p className="mt-1 text-sm font-black text-slate-700">{value}</p></div>; }
 
 function IconButton({ children, disabled, onClick, title, tone }: { children: ReactNode; disabled?: boolean; onClick: () => void; title: string; tone?: "danger" }) {
   return (

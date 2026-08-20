@@ -201,6 +201,8 @@ export default function RegistrationPage() {
   const facilitatorParam = searchParams.get("facilitator");
   const venueParam = searchParams.get("venue");
   const batchParam = searchParams.get("batch");
+  const batchIdParam = searchParams.get("batchId");
+  const introductionSessionIdParam = searchParams.get("introSessionId");
   const paidEnabled = searchParams.get("paid") !== "0";
   const partEnabled = searchParams.get("part") === "1";
   const feeParam = Number(searchParams.get("fee") || 0);
@@ -736,7 +738,8 @@ export default function RegistrationPage() {
       if (value) extra[field.label] = value;
     });
 
-    const registrationId = `reg-${model.id}-${mobile || Date.now().toString(36)}`;
+    const registrationScope = [batchIdParam, introductionSessionIdParam].filter(Boolean).join("-") || "main";
+    const registrationId = `reg-${model.id}-${registrationScope}-${mobile || Date.now().toString(36)}`;
     const source = searchParams.get("source") === "landing-page" ? "landing_page" : "registration_link";
     const payload: RegistrationEntry = {
       id: registrationId,
@@ -757,6 +760,8 @@ export default function RegistrationPage() {
       landingPageSlug: source === "landing_page" ? searchParams.get("landing") ?? undefined : undefined,
       createdAt: new Date().toISOString(),
       batch: model.batch,
+      batchId: batchIdParam || undefined,
+      introductionSessionId: introductionSessionIdParam || undefined,
       answers: Object.keys(extra).length ? extra : undefined
     };
 
