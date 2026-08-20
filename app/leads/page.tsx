@@ -239,6 +239,15 @@ export default function LeadsPage() {
     download(csv, "lead-pipeline.csv");
   }
 
+  function downloadImportSample() {
+    const csv = [
+      ["Name", "Mobile", "Email", "City", "Country", "Source", "Workshop", "Stage", "Priority", "Assigned To"],
+      ["Sample Lead", "9876543210", "sample@example.com", "Surat", "India", "Referral", "Healthy Forever", "New", "Warm", ""]
+    ].map((row) => row.map((value) => `"${value.replace(/"/g, '""')}"`).join(",")).join("\n");
+    download(csv, "lead-import-sample.csv");
+    setMessage("Lead import sample downloaded.");
+  }
+
   async function importLeads(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -316,6 +325,7 @@ export default function LeadsPage() {
                 <ModeButton active={viewMode === "pipeline"} icon={KanbanSquare} label="Pipeline" onClick={() => setViewMode("pipeline")} />
               </div>
               <button className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-black text-slate-700 hover:bg-slate-50" onClick={exportCsv} type="button"><Download className="size-4" />Export</button>
+              <button className="inline-flex items-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-sm font-black text-indigo-700 hover:bg-indigo-100" onClick={downloadImportSample} type="button"><Download className="size-4" />Download Sample</button>
               <input accept=".csv,.xlsx,.xls" className="hidden" onChange={(event) => void importLeads(event)} ref={importRef} type="file" />
               <button className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-black text-slate-700 hover:bg-slate-50" onClick={() => importRef.current?.click()} type="button"><Upload className="size-4" />Import</button>
               <button className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-black text-white hover:bg-emerald-700" onClick={() => setCreateOpen(true)} type="button"><Plus className="size-4" />Add Lead</button>

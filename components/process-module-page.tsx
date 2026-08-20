@@ -23,7 +23,7 @@ import {
   Upload,
   X
 } from "lucide-react";
-import { type FormEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { type ChangeEvent, type FormEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
 const inputClass =
   "w-full rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-sm outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100";
@@ -42,6 +42,7 @@ type WorkshopMasterRecord = {
   isPaid: boolean;
   activeFields?: string[];
   batch?: string;
+  batches?: Array<{ id: string; name: string }>;
 };
 
 type ClientStorageRecord = {
@@ -56,6 +57,8 @@ type ManualRegistrationEntry = {
   amountDue: number;
   amountPaid: number;
   city: string;
+  batch?: string;
+  batchId?: string;
   createdAt: string;
   email: string;
   fullName: string;
@@ -63,6 +66,7 @@ type ManualRegistrationEntry = {
   mobile: string;
   paymentMode: "Full" | "Part";
   status: "Paid" | "Due";
+  source?: "registration_link" | "landing_page" | "manual";
   workshopId: string;
   workshopSlug: string;
   workshopTitle: string;
@@ -1801,6 +1805,7 @@ function ManualClientRegistrationWorkflow() {
   const [isError, setIsError] = useState(false);
   const [showClientList, setShowClientList] = useState(false);
   const clientBoxRef = useRef<HTMLDivElement>(null);
+  const importRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     function loadLocal() {
@@ -1840,6 +1845,70 @@ function ManualClientRegistrationWorkflow() {
     setShowClientList(false);
   }
 
+  const selectedWorkshop = workshops.find((item) => item.id === workshop || item.name === workshop);
+  const batchOptions = selectedWorkshop?.batches?.length
+    ? selectedWorkshop.batches.map((item) => ({ label: item.name, value: item.id }))
+    : [{ label: selectedWorkshop?.batch || "Main Batch", value: "main" }];
+
+  function downloadImportSample() {
+    downloadCsv("manual-registration-import-sample.csv", [
+      ["Client Name", "Mobile", "Email", "Workshop", "Batch", "Source"],
+      ["Sample Client", "9876543210", "sample@example.com", workshops[0]?.name || "Healthy Forever", workshops[0]?.batch || "Main Batch", "Offline Desk"]
+    ]);
+    setIsError(false);
+    setSuccess("Manual registration import sample downloaded.");
+  }
+
+  async function importRegistrations(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setIsError(false);
+    try {
+      const XLSX = await import("xlsx");
+      const workbook = XLSX.read(await file.arrayBuffer(), { type: "array" });
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "" }).slice(0, 10_000);
+      const valueOf = (row: Record<string, unknown>, aliases: string[]) => {
+        const normalizedAliases = aliases.map((value) => value.replace(/[^a-z0-9]/gi, "").toLowerCase());
+        const match = Object.entries(row).find(([key]) => normalizedAliases.includes(key.replace(/[^a-z0-9]/gi, "").toLowerCase()));
+        return String(match?.[1] ?? "").trim();
+      };
+      const current = readLocalStorageArray<ManualRegistrationEntry>(REGISTRATION_STORAGE_KEY);
+      const nextById = new Map(current.map((entry) => [entry.id, entry]));
+      const payloads: ManualRegistrationEntry[] = [];
+      rows.forEach((row) => {
+        const workshopValue = valueOf(row, ["Workshop", "Workshop Name"]);
+        const target = workshops.find((item) => item.id === workshopValue || item.name.trim().toLowerCase() === workshopValue.toLowerCase());
+        const fullName = valueOf(row, ["Client Name", "Full Name", "Name"]);
+        const mobileDigits = valueOf(row, ["Mobile", "Mobile No", "Phone"]).replace(/\D/g, "").slice(-10);
+        const emailValue = valueOf(row, ["Email", "Email ID"]);
+        if (!target || !fullName || mobileDigits.length !== 10 || !emailValue) return;
+        const batchValue = valueOf(row, ["Batch", "Batch Name"]) || target.batch || "Main Batch";
+        const targetBatch = target.batches?.find((item) => item.id === batchValue || item.name.trim().toLowerCase() === batchValue.toLowerCase());
+        const batchId = targetBatch?.id;
+        const id = `manual-${target.id}-${batchId || batchValue.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${mobileDigits}`;
+        const payload: ManualRegistrationEntry = {
+          amountDue: 0, amountPaid: 0, batch: targetBatch?.name || batchValue, batchId,
+          city: "", createdAt: new Date().toISOString(), email: emailValue, fullName, id,
+          mobile: `+91 ${mobileDigits}`, paymentMode: "Full", source: "manual", status: "Paid",
+          workshopId: target.id, workshopSlug: target.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, ""), workshopTitle: target.name
+        };
+        nextById.set(id, payload);
+        payloads.push(payload);
+      });
+      if (!payloads.length) throw new Error("No valid rows found. Use the sample columns and valid workshop names.");
+      const next = Array.from(nextById.values());
+      await saveLiveState({ registrations: next });
+      await Promise.all(payloads.map((payload) => fetch("/api/crm/registrations", { body: JSON.stringify(payload), headers: { "Content-Type": "application/json" }, method: "POST" })));
+      setSuccess(`${payloads.length} manual registrations imported successfully.`);
+    } catch (error) {
+      setIsError(true);
+      setSuccess(error instanceof Error ? error.message : "Manual registration import failed.");
+    } finally {
+      if (importRef.current) importRef.current.value = "";
+    }
+  }
+
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setIsError(false);
@@ -1859,10 +1928,14 @@ function ManualClientRegistrationWorkflow() {
     }
 
     const current = readLocalStorageArray<ManualRegistrationEntry>(REGISTRATION_STORAGE_KEY);
-    const registrationId = `manual-${selectedWorkshop.id}-${mobileDigits}`;
+    const selectedBatch = selectedWorkshop.batches?.find((item) => item.id === batch) ?? null;
+    const batchName = selectedBatch?.name || selectedWorkshop.batch || "Main Batch";
+    const registrationId = `manual-${selectedWorkshop.id}-${selectedBatch?.id || "main"}-${mobileDigits}`;
     const payload: ManualRegistrationEntry = {
       amountDue: 0,
       amountPaid: 0,
+      batch: batchName,
+      batchId: selectedBatch?.id,
       city: "",
       createdAt: new Date().toISOString().slice(0, 10),
       email: email.trim(),
@@ -1870,6 +1943,7 @@ function ManualClientRegistrationWorkflow() {
       id: registrationId,
       mobile: `+91 ${mobileDigits}`,
       paymentMode: "Full",
+      source: "manual",
       status: "Paid",
       workshopId: selectedWorkshop.id,
       workshopSlug: selectedWorkshop.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, ""),
@@ -1902,7 +1976,14 @@ function ManualClientRegistrationWorkflow() {
       title="Manage Manual Client Registration"
     >
       <section className="mx-auto mt-2 w-full max-w-4xl rounded-2xl bg-white p-6 shadow-sm">
-        <h3 className="mb-6 text-xl font-medium text-gray-800">Manage Manual Client Registration</h3>
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+          <h3 className="text-xl font-medium text-gray-800">Manage Manual Client Registration</h3>
+          <div className="flex flex-wrap gap-2">
+            <button className="inline-flex items-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-sm font-black text-indigo-700 hover:bg-indigo-100" onClick={downloadImportSample} type="button"><Download className="size-4" />Download Sample</button>
+            <input accept=".csv,.xlsx,.xls" className="hidden" onChange={(event) => void importRegistrations(event)} ref={importRef} type="file" />
+            <button className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-black text-slate-700 hover:bg-slate-50" onClick={() => importRef.current?.click()} type="button"><Upload className="size-4" />Import</button>
+          </div>
+        </div>
 
         {success ? (
           <p className={`mb-5 rounded-xl px-4 py-3 text-sm font-bold ${isError ? "bg-red-50 text-red-700" : "bg-emerald-50 text-emerald-700"}`}>
@@ -1919,7 +2000,7 @@ function ManualClientRegistrationWorkflow() {
               placeholder={workshops.length ? "SELECT WORKSHOP" : "No workshop added yet"}
               value={workshop}
             />
-            <ManualSelect label="Batch" onChange={setBatch} options={[{ label: "Main Batch", value: "main" }]} placeholder="SELECT BATCH" value={batch} />
+            <ManualSelect label="Batch" onChange={setBatch} options={batchOptions} placeholder="SELECT BATCH" value={batch} />
 
             <label className="block">
               <span className="mb-2 block text-sm font-semibold text-gray-600">Client Name</span>
