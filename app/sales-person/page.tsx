@@ -5,6 +5,7 @@ import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
 import { Check, Edit3, Eye, RefreshCw, Save, Trash2, UserPlus } from "lucide-react";
 import { hydrateLiveState, readLocalArray, saveLiveState } from "@/lib/live-state";
 import { generateId } from "@/lib/utils";
+import { salesPersonCodeFromId } from "@/lib/sales-person-code";
 import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
 
 type CommissionRow = {
@@ -24,6 +25,7 @@ type SalesPersonRecord = {
   isActive: boolean;
   mobile: string;
   name: string;
+  salesPersonCode?: string;
 };
 type WorkshopRecord = {
   name: string;
@@ -65,7 +67,10 @@ export default function SalesPersonPage() {
     function loadLocal() {
       const workshopRecords = readLocalArray<WorkshopRecord>(WORKSHOP_STORAGE_KEY);
       setWorkshops(workshopRecords.map((item) => item.name).filter(Boolean));
-      setRecords(readLocalArray<SalesPersonRecord>(SALES_STORAGE_KEY));
+      const stored = readLocalArray<SalesPersonRecord>(SALES_STORAGE_KEY);
+      const normalized = stored.map((record) => ({ ...record, salesPersonCode: record.salesPersonCode || salesPersonCodeFromId(record.id) }));
+      setRecords(normalized);
+      if (stored.some((record) => !record.salesPersonCode)) void saveLiveState({ salesPeople: normalized });
     }
 
     loadLocal();
@@ -141,6 +146,8 @@ export default function SalesPersonPage() {
       return;
     }
     setError("");
+    const personId = editingSalesId ?? generateId();
+    const existingRecord = records.find((record) => record.id === editingSalesId);
     const payload: SalesPersonRecord = {
       canViewOther,
       commissions,
@@ -148,10 +155,11 @@ export default function SalesPersonPage() {
       email,
       generalAssign,
       group,
-      id: editingSalesId ?? generateId(),
+      id: personId,
       isActive,
       mobile,
-      name: fullName
+      name: fullName,
+      salesPersonCode: existingRecord?.salesPersonCode || salesPersonCodeFromId(personId)
     };
     try {
       const response = await fetch("/api/admin/sales-people", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ salesPerson: payload, password }) });
@@ -218,6 +226,7 @@ export default function SalesPersonPage() {
           {saved ? <p className="mt-5 rounded-xl bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700">Sales person saved successfully.</p> : null}
 
           <div className="mt-6 grid gap-4 md:grid-cols-3">
+            <Field label="Sales Person Unique ID"><input className={`${inputClass} font-black tracking-wider text-indigo-700`} readOnly value={editingSalesId ? records.find((record) => record.id === editingSalesId)?.salesPersonCode || salesPersonCodeFromId(editingSalesId) : "Generated automatically on save"} /></Field>
             <Field label="First Name *"><input className={inputClass} onChange={(event) => setFirstName(event.target.value)} placeholder="First Name" value={firstName} /></Field>
             <Field label="Middle Name"><input className={inputClass} onChange={(event) => setMiddleName(event.target.value)} placeholder="Middle Name" value={middleName} /></Field>
             <Field label="Last Name *"><input className={inputClass} onChange={(event) => setLastName(event.target.value)} placeholder="Last Name" value={lastName} /></Field>
@@ -307,11 +316,12 @@ export default function SalesPersonPage() {
             <div className="overflow-x-auto rounded-xl border border-slate-200">
               <table className="min-w-[820px] w-full text-left text-sm">
                 <thead className="bg-slate-50 text-xs uppercase text-slate-500">
-                  <tr>{["Name", "Mobile", "Email", "Group", "Status", "Commissions", "Action"].map((head) => <th className="px-4 py-3" key={head}>{head}</th>)}</tr>
+                  <tr>{["Unique ID", "Name", "Mobile", "Email", "Group", "Status", "Commissions", "Action"].map((head) => <th className="px-4 py-3" key={head}>{head}</th>)}</tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {records.length ? records.map((record) => (
                     <tr className="hover:bg-emerald-50/40" key={record.id}>
+                      <td className="px-4 py-4 font-black tracking-wider text-indigo-700">{record.salesPersonCode || salesPersonCodeFromId(record.id)}</td>
                       <td className="px-4 py-4 font-black text-slate-950">{record.name}</td>
                       <td className="px-4 py-4">{record.mobile}</td>
                       <td className="px-4 py-4">{record.email}</td>
@@ -332,7 +342,7 @@ export default function SalesPersonPage() {
                       </td>
                     </tr>
                   )) : (
-                    <tr><td className="px-4 py-8 text-center text-slate-500" colSpan={7}>No salesperson records saved yet.</td></tr>
+                    <tr><td className="px-4 py-8 text-center text-slate-500" colSpan={8}>No salesperson records saved yet.</td></tr>
                   )}
                 </tbody>
               </table>

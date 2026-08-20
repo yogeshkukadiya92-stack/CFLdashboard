@@ -60,6 +60,8 @@ export function normalizeLead(value: unknown): Lead {
 
   return {
     assignedTo: String(input.assignedTo ?? ""),
+    assignedSalesPersonId: input.assignedSalesPersonId ? String(input.assignedSalesPersonId) : undefined,
+    assignedSalesPersonCode: input.assignedSalesPersonCode ? String(input.assignedSalesPersonCode) : undefined,
     activities,
     bestTime: String(input.bestTime ?? ""),
     callHistory: stringArray(input.callHistory),

@@ -77,6 +77,8 @@ export interface Lead {
   source: string;
   stage: LeadStage;
   assignedTo: string;
+  assignedSalesPersonId?: string;
+  assignedSalesPersonCode?: string;
   score: number;
   revenuePotential: number;
   notes: string[];
