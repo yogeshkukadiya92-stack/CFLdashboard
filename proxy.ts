@@ -13,6 +13,7 @@ const publicPrefixes = [
   "/response-view",
   "/api/auth",
   "/api/sales-auth",
+  "/api/callflow",
   "/api/otp",
   "/api/public-registration-state",
   "/api/public-profile-lookup",
