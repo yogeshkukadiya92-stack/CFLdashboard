@@ -32,6 +32,14 @@ function isPublicPath(pathname: string) {
   return publicPrefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
 }
 
+function nextWithFreshHtml(pathname: string) {
+  const response = NextResponse.next();
+  if (!pathname.startsWith("/_next/") && !pathname.includes(".")) {
+    response.headers.set("Cache-Control", "private, no-store, max-age=0, must-revalidate");
+  }
+  return response;
+}
+
 export async function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
   const signedIn = await verifyAuthToken(request.cookies.get(AUTH_COOKIE_NAME)?.value);
@@ -52,13 +60,13 @@ export async function proxy(request: NextRequest) {
   }
 
   if (isPublicPath(pathname)) {
-    return NextResponse.next();
+    return nextWithFreshHtml(pathname);
   }
 
   if (salesSession) {
     const permission = permissionForPath(pathname);
     const allowed = pathname === "/api/state" || Boolean(permission && salesSession.permissions.includes(permission));
-    if (allowed) return NextResponse.next();
+    if (allowed) return nextWithFreshHtml(pathname);
     if (pathname.startsWith("/api/")) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
     const fallback = salesHome || "/sales-login?access=none";
     return NextResponse.redirect(new URL(fallback, request.url));
@@ -74,7 +82,7 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  return NextResponse.next();
+  return nextWithFreshHtml(pathname);
 }
 
 export const config = {
