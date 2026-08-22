@@ -1,0 +1,127 @@
+import { createLeadActivity, normalizeLead } from "@/lib/lead-utils";
+import type { Lead } from "@/lib/types";
+
+type BundledLeadRow = [name: string, mobile: string, email: string, registeredAt: string, state: string, city: string, country: string];
+
+const SOURCE = "88 Leads.xlsx";
+const WORKSHOP = "Business Growth Blueprint - 3";
+
+const rows: BundledLeadRow[] = [
+  ["Rashi Jain","9374864482","rashijain87@yahoo.com","20-08-2026 15:09:15","Gujarat","Surat","India"],
+  ["Rishabh Jain","9898375358","rjgujarat2000@gmail.com","20-08-2026 14:53:45","Gujarat","Surat","India"],
+  ["Shahnwaz Pathan","9924082939","ahad.creation.85@gmail.com","20-08-2026 14:35:56","Gujarat","Ahmedabad","India"],
+  ["Hitesh Rathod","9723241205","hdrathod43000@gmail.com","20-08-2026 09:06:43","Gujarat","Valsad","India"],
+  ["Mayankkumar Prajapati","9601864630","mayank93.prajapati@gmail.com","20-08-2026 08:46:05","Gujarat","Ahmedabad","India"],
+  ["Rakesh Sadhu","8734093142","sadhurakesh1984@gmail.com","19-08-2026 21:49:46","Gujarat","Ahmedabad","India"],
+  ["Syed mansoor uddin","9390419453","engrsyedmansoor@gmail.com","19-08-2026 20:43:52","Telangana","Hyderabad","India"],
+  ["Ganesh Jakhar","9664902645","meghdootgm1@gmail.com","18-08-2026 13:30:22","Gujarat","Surat","India"],
+  ["Ganesh Jakhar","9725036490","jakharg251@gmail.com","18-08-2026 13:27:58","Gujarat","Surat","India"],
+  ["Devang Dodiya","9227193791","devang.d85@gmail.com","18-08-2026 09:19:16","Gujarat","Surat","India"],
+  ["Manoj S vishwakarma","8806685081","Manoj143208@gmail.com","18-08-2026 07:29:01","Gujarat","Surat","India"],
+  ["Khushal Bhagat","7777930271","khushalbhagat@gmail.com","18-08-2026 02:39:29","Gujarat","Amroli","India"],
+  ["Nikunj Patel","7567432471","info@varnienterprise.com","17-08-2026 22:04:25","Gujarat","Bharuch","India"],
+  ["Ankit mewada","9099736655","ankiitvmewada@gmail.com","17-08-2026 18:48:02","Gujarat","Ahmedabad","India"],
+  ["Chetan Ghoghari","8140548064","chetanghoghari1997@gmail.com","17-08-2026 12:51:25","Gujarat","Surat","India"],
+  ["Urvashi Haria","9769784774","urvashiharia@gmail.com","17-08-2026 00:50:32","Maharashtra","Mumbai","India"],
+  ["Jayesh Vasani","9974234446","jayeshvasani786@gmail.com","16-08-2026 21:15:55","Gujarat","Surat","India"],
+  ["Diptesh Mistry","9426353646","diptesh_mistry@yahoo.com","16-08-2026 18:53:38","Gujarat","Ahmedabad","India"],
+  ["Trishla Gems","9371550525","gemstrishla@gmail.com","16-08-2026 18:15:22","Maharashtra","Mumbai","India"],
+  ["Bhupendra Ramani","9924488997","ferrixforge@gmail.com","16-08-2026 12:26:25","Gujarat","Rajkot","India"],
+  ["Chandra pal jha","9140368650","chandrajha9999@gmail.com","16-08-2026 12:17:05","Gujarat","Ahmedabad","India"],
+  ["Jaydev Punjabi","9825652835","jaypunjabi76@gmail.com","16-08-2026 08:22:54","Gujarat","Surat","India"],
+  ["SAMIR SHAH","9909919895","samir.shah02011979@gmail.com","16-08-2026 00:24:53","Gujarat","Ahmedabad","India"],
+  ["Solanki Naresh","7622939261","Solankinaresh703@gmail.com","15-08-2026 22:59:36","Gujarat","Surat","India"],
+  ["Tehzib khalifa","9033884148","tehzibwritez@gmail.com","15-08-2026 22:34:31","Gujarat","Vadodara","India"],
+  ["Mayank samar","7874383969","samarmayank@yahoo.co.in","15-08-2026 12:06:45","Gujarat","Surat","India"],
+  ["Tina Patel","9054104875","tinapatel9557@gmail.com","15-08-2026 10:58:09","Gujarat","Ahmedabad","India"],
+  ["Kuldeep Virpura","9033961309","kuldeepvirpura7@gmail.com","15-08-2026 10:28:40","Gujarat","Vadodara","India"],
+  ["Golam Rabbani","8320727034","golamrabbanishaikh69@email.com","14-08-2026 23:55:21","Gujarat","Ahmedabad","India"],
+  ["Wasim Rizvi","8867744394","wasimraza@live.in","14-08-2026 23:23:59","Gujarat","Vapi","India"],
+  ["J Patel","9023328948","jpatel31071@gmail.com","14-08-2026 22:36:51","Gujarat","Mehsana","India"],
+  ["Keyur Patel","8160511214","keyurpatel26020@gmail.com","14-08-2026 21:44:36","Gujarat","Navsari","India"],
+  ["Tilotama nirbhay desai","9726219330","tilotamadesai21@gmail.com","14-08-2026 21:22:51","Gujarat","Surat","India"],
+  ["Nitin Nitin","7990761817","makwananitin150@gmail.com","14-08-2026 18:08:24","Gujarat","Surat","India"],
+  ["Parina sanghavi","7405428550","parinasanghavi3@email.com","14-08-2026 15:33:33","Gujarat","Surat","India"],
+  ["Kaushik Donda","7567516499","kaushikdonda25@gmail.com","12-08-2026 22:30:56","Gujarat","Surat","India"],
+  ["Neel Vaghani","8734984244","neelvaghani57@gmail.com","12-08-2026 15:52:12","Gujarat","Surat","India"],
+  ["Kamal Magnani Magnani","8530051000","kamlesmagnani1341@gmail.com","12-08-2026 11:23:28","Gujarat","Surendranagar","India"],
+  ["Shailesh Rupabhinda","9913841515","knlightssurat@gmail.com","12-08-2026 10:46:50","Gujarat","Surat","India"],
+  ["Sacchidanand Tiwari","8200089601","tiwarisacchidanand17@gmail.com","12-08-2026 10:21:53","Gujarat","Surat","India"],
+  ["Manishrathi Rathi","9979225495","manish.rathi95@gmail.com","12-08-2026 08:16:37","Gujarat","Surat","India"],
+  ["Ayush Sureka","9377777663","ayushsureka26@gmail.com","12-08-2026 01:04:37","Gujarat","Surat","India"],
+  ["Swati Jagani","7778885534","s6445076@gmail.com","11-08-2026 23:56:34","Gujarat","Surat","India"],
+  ["Ashish Kumar kumar","7009407562","ashish700940@gmail.com","11-08-2026 23:54:26","Gujarat","Surat","India"],
+  ["Paridhi Patel","9727966616","jalparidhi@gmail.com","11-08-2026 23:31:07","Gujarat","Vadodara","India"],
+  ["sunanda kumar vuram","9998962242","sunanda_20002003@yahoo.co.in","11-08-2026 22:25:18","Gujarat","Surat","India"],
+  ["Hiteesha K","7433077000","Hiteeshamkdholariya@gmail.com","11-08-2026 17:04:18","Gujarat","Abrama","India"],
+  ["Kartik Kareliya","7878002281","kareliyakartik@gmail.com","11-08-2026 08:40:11","Gujarat","Rajkot","India"],
+  ["Dipikaben Gohil","9714991732","suryavanshamgreenenergy@gmail.com","10-08-2026 23:08:02","Gujarat","Bharuch","India"],
+  ["chauhan shivshankar","7984808956","chauhanshivshankar88@gmail.com","10-08-2026 22:39:00","Gujarat","Ahmedabad","India"],
+  ["Parul Sharma","9090903790","Parul123@gmail.com","10-08-2026 20:35:16","Gujarat","Surat","India"],
+  ["Kapil n s","9429445500","kapilsanghvi2015@gmail.com","10-08-2026 12:48:18","Gujarat","Gandhidham","India"],
+  ["Shubham Sarawgi","8200661725","madhurimafashion26@gmail.com","10-08-2026 12:05:52","Gujarat","Surat","India"],
+  ["Bhavin prajapati","9624747789","bhavintakodarav@gmail.com","10-08-2026 10:06:52","Gujarat","Rajkot","India"],
+  ["NileshKumar Ishvarbhai Patel","7874494179","np395005@gmail.com","10-08-2026 09:31:51","Gujarat","Surat","India"],
+  ["Jayvadan Chapadia","9998334477","J.chapadia@gmail.com","10-08-2026 00:00:02","Gujarat","Surat","India"],
+  ["Aditya Chiraniya","8140995886","adityachiraniya8140@gmail.com","09-08-2026 23:41:16","Gujarat","Surat","India"],
+  ["Satyavrat Inani","7567431161","inanisatyvarth@gmail.com","09-08-2026 18:25:48","Gujarat","Abrama","India"],
+  ["Ayush Jain","9558086433","shahayush23021996@gmail.com","08-08-2026 10:48:04","Gujarat","Chalthan","India"],
+  ["Ashish Mishra","9198830492","mishraashish83620@gmail.com","08-08-2026 10:26:56","Gujarat","Surat","India"],
+  ["Mohan Gavit","7879472264","mohangavit012@gmail.com","08-08-2026 10:19:51","Maharashtra","Nandurbar","India"],
+  ["Asif Pipad","8401444264","asifpipad.ap@gmail.com","08-08-2026 01:17:34","Gujarat","Ahmedabad","India"],
+  ["Yogesh Kwadia","9979712014","yogesh1092@gmail.com","07-08-2026 20:59:56","Gujarat","Surat","India"],
+  ["Satish More","9423491622","morecomputer@gmail.com","07-08-2026 20:50:04","Maharashtra","Jalgaon","India"],
+  ["Bhagvansinh Gohil","8140695568","bhagvansinhgohil1@gmail.com","07-08-2026 19:05:53","Gujarat","Bharuch","India"],
+  ["Bhavesh Bhut","9429283937","bhavesh.7873@gmail.com","07-08-2026 18:25:50","Gujarat","Ankleshwar","India"],
+  ["patel Amitkumar Hasmukhbhai","9909148043","amitpatel177790@gmail.com","07-08-2026 13:26:11","Gujarat","Anand","India"],
+  ["ARasikbhai Popatbhai Garsondiya","9375740080","tulshitwisters@gmail.com","07-08-2026 08:26:25","Gujarat","Abrama","India"],
+  ["Sunil Panchal","9725726850","sunilpanchal15@gmail.com","07-08-2026 07:32:58","Gujarat","Surat","India"],
+  ["Ashok Kumar","9558517855","aks.soni1001@gmail.com","07-08-2026 07:30:11","Gujarat","Surat","India"],
+  ["Vinay Lohiya","9414128760","Vinaygopal29@gmail.com","06-08-2026 22:26:07","Gujarat","Surat","India"],
+  ["Mansukh Chauhan","9825149978","mnc49978@gmail.com","06-08-2026 20:23:05","Gujarat","Surat","India"],
+  ["Harshaben Gautambhai Borad","8488921659","H.g.borad@gmail.com","06-08-2026 06:14:33","Gujarat","Abrama","India"],
+  ["Vikas Kumar","9986871441","vikas1441bng@gmail.com","05-08-2026 23:25:17","Karnataka","Bengaluru","India"],
+  ["Mohan Dhobi","8469287077","mohandhobi7077@gmail.com","04-08-2026 22:58:28","Gujarat","Surat","India"],
+  ["nikul dholiya","8200258266","ndpatel599@gmail.com","04-08-2026 18:58:11","Gujarat","Abrama","India"],
+  ["Malek Harun","9712929484","harun_guj@yahoo.co.in","04-08-2026 07:20:13","Gujarat","Anand","India"],
+  ["Sanjay n poshiya","8866272886","sanjay.posiya@gmail.com","03-08-2026 21:17:16","Gujarat","Junagadh","India"],
+  ["Pavan Panwala","7228864435","pavan.panwala@hotmail.com","02-08-2026 22:54:04","Gujarat","Surat","India"],
+  ["Rajesh Khatik","9409163955","rajeshkhatik03@gmail.com","02-08-2026 21:19:28","Gujarat","Surat","India"],
+  ["Mohmed Rajwani","9825073617","qc.m617@gmail.com","02-08-2026 18:15:42","Gujarat","Surat","India"],
+  ["Chintan Chauhan","9879070828","chintanchauhan22@gmail.com","02-08-2026 09:28:53","Gujarat","Surat","India"],
+  ["YOGESH CHHIMPA","9979933365","chhimpayogesh@gmail.com","01-08-2026 17:16:04","Gujarat","Surat","India"],
+  ["Krishna Patel","9067872672","krishnapatel2375@gmail.com","01-08-2026 15:02:49","Gujarat","Surat","India"],
+  ["nilesh viradiya","9427122807","nnviradiya94@gmail.com","01-08-2026 15:00:27","Gujarat","Surat","India"],
+  ["Kartik patel Jethabhai","8401647611","kartikpatel91284@gmail.com","01-08-2026 08:52:31","Gujarat","Ahmedabad","India"],
+  ["Sanjay Mahadik","9824367513","Indiapestcontrol7713@gmil.com","01-08-2026 07:53:43","Gujarat","Surat","India"],
+  ["Dr_S.R. kartikkumar","9638266784","drkartikkumarpoojari@gmail.com","01-08-2026 07:52:26","Gujarat","Surat","India"],
+];
+
+function parseRegistrationDate(value: string) {
+  const match = /^(\d{2})-(\d{2})-(\d{4}) (\d{2}):(\d{2}):(\d{2})$/.exec(value);
+  if (!match) return new Date().toISOString();
+  const [, day, month, year, hour, minute, second] = match;
+  return new Date(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute), Number(second)).toISOString();
+}
+
+export const bundledLeads: Lead[] = rows.map(([name, mobile, email, registeredAt, state, city, country], index) => {
+  const createdAt = parseRegistrationDate(registeredAt);
+  return normalizeLead({
+    activities: [createLeadActivity("created", "Lead imported from " + SOURCE + ".", "Admin", createdAt)],
+    assignedTo: "",
+    city,
+    country,
+    createdAt,
+    email,
+    id: "lead-bgb3-" + String(index + 1).padStart(3, "0"),
+    interest: WORKSHOP,
+    mobile,
+    name,
+    priority: "Warm",
+    source: "Spreadsheet Import",
+    sourceDetails: [SOURCE, WORKSHOP],
+    stage: "New Leads",
+    state,
+    updatedAt: createdAt
+  });
+});

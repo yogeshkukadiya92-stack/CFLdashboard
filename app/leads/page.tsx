@@ -2,6 +2,7 @@
 
 import { AdminPlatformShell } from "@/components/admin-platform-shell";
 import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
+import { bundledLeads } from "@/lib/bundled-leads";
 import { createLeadActivity, createLeadId, nextPendingFollowUp, normalizeLead, normalizeLeadMobile } from "@/lib/lead-utils";
 import { hydrateLiveState, LIVE_STATE_STORAGE_KEYS, readLocalArray, saveLiveState } from "@/lib/live-state";
 import type { Lead, LeadFollowUp, LeadPriority, LeadStage } from "@/lib/types";
@@ -65,6 +66,7 @@ const stageStyle: Record<LeadStage, string> = {
   Qualified: "bg-indigo-50 text-indigo-700",
   Won: "bg-emerald-50 text-emerald-700"
 };
+const BUNDLED_LEADS_IMPORT_KEY = "cfl_bundled_leads_88_v1";
 
 export default function LeadsPage() {
   const importRef = useRef<HTMLInputElement>(null);
@@ -93,8 +95,17 @@ export default function LeadsPage() {
       setWorkshops(readLocalArray<Workshop>(LIVE_STATE_STORAGE_KEYS.workshops));
       setClients(readLocalArray<ClientRecord>(LIVE_STATE_STORAGE_KEYS.clients));
     }
-    load();
-    void hydrateLiveState().then(load);
+    void hydrateLiveState().then(async () => {
+      if (window.localStorage.getItem(BUNDLED_LEADS_IMPORT_KEY) !== "complete") {
+        const current = readLocalArray<unknown>(LIVE_STATE_STORAGE_KEYS.leads).map(normalizeLead);
+        const existingMobiles = new Set(current.map((lead) => normalizeLeadMobile(lead.mobile)));
+        const missing = bundledLeads.filter((lead) => !existingMobiles.has(normalizeLeadMobile(lead.mobile)));
+        const next = [...missing, ...current];
+        window.localStorage.setItem(BUNDLED_LEADS_IMPORT_KEY, "complete");
+        await saveLiveState({ leads: next });
+      }
+      load();
+    });
   }, []);
 
   const selectedLead = leads.find((lead) => lead.id === selectedId) ?? null;
