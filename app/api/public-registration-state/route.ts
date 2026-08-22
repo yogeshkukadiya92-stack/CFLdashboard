@@ -1,7 +1,7 @@
 import { ensurePersistenceTable, getAppState, getDbPool, isDbEnabled } from "@/lib/db";
 import { upsertLiveRegistration } from "@/lib/crm-db";
 import { upsertLeadFromRegistration } from "@/lib/lead-utils";
-import { assignRegistrationNumbers, sendRegistrationConfirmation } from "@/lib/registration-confirmation";
+import { assignRegistrationNumbers } from "@/lib/registration-confirmation";
 import type { BuilderForm, RegistrationEntry } from "@/lib/types";
 import { isDuplicateWorkshopRegistration } from "@/lib/workshop-hierarchy";
 import { NextResponse } from "next/server";
@@ -162,13 +162,7 @@ export async function POST(request: Request) {
       await client.query(`UPDATE app_state SET leads = $1::jsonb, registrations = $2::jsonb, updated_at = NOW() WHERE id = 1`, [JSON.stringify(leads), JSON.stringify(next.slice(0, 5000))]);
       await client.query("COMMIT");
       const savedRegistration = next.find((entry) => entry.id === sanitizedRegistration.id) as RegistrationEntry;
-      const whatsapp = await sendRegistrationConfirmation(savedRegistration, form as Partial<BuilderForm>).catch(() => ({ configured: true, sent: false }));
-      if (whatsapp.sent) {
-        savedRegistration.confirmationWhatsappSentAt = new Date().toISOString();
-        const sentState = next.map((entry) => entry.id === savedRegistration.id ? savedRegistration : entry);
-        await client.query(`UPDATE app_state SET registrations = $1::jsonb, updated_at = NOW() WHERE id = 1`, [JSON.stringify(sentState.slice(0, 5000))]);
-      }
-      return NextResponse.json({ ok: true, dbEnabled: true, registration: savedRegistration, whatsapp });
+      return NextResponse.json({ ok: true, dbEnabled: true, registration: savedRegistration, whatsapp: { configured: false, sent: false } });
     } catch (error) {
       await client.query("ROLLBACK").catch(() => undefined);
       throw error;

@@ -3,6 +3,7 @@
 import { AdminPlatformShell } from "@/components/admin-platform-shell";
 import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
 import { hydrateLiveState, readLocalArray, saveLiveState } from "@/lib/live-state";
+import { upsertLeadFromRegistration } from "@/lib/lead-utils";
 import { processPageConfigs, type ProcessField } from "@/lib/process-pages";
 import { generateId } from "@/lib/utils";
 import {
@@ -1898,9 +1899,13 @@ function ManualClientRegistrationWorkflow() {
       });
       if (!payloads.length) throw new Error("No valid rows found. Use the sample columns and valid workshop names.");
       const next = Array.from(nextById.values());
-      await saveLiveState({ registrations: next });
+      const leads = payloads.reduce(
+        (currentLeads, payload) => upsertLeadFromRegistration(currentLeads, payload),
+        readLocalArray<unknown>("cfl_leads_v1")
+      );
+      await saveLiveState({ leads, registrations: next });
       await Promise.all(payloads.map((payload) => fetch("/api/crm/registrations", { body: JSON.stringify(payload), headers: { "Content-Type": "application/json" }, method: "POST" })));
-      setSuccess(`${payloads.length} manual registrations imported successfully.`);
+      setSuccess(`${payloads.length} manual registrations imported and added to the unassigned lead queue.`);
     } catch (error) {
       setIsError(true);
       setSuccess(error instanceof Error ? error.message : "Manual registration import failed.");
@@ -1954,13 +1959,14 @@ function ManualClientRegistrationWorkflow() {
       ? current.map((item, index) => index === existingIndex ? payload : item)
       : [payload, ...current];
 
-    void saveLiveState({ registrations: next });
+    const leads = upsertLeadFromRegistration(readLocalArray<unknown>("cfl_leads_v1"), payload);
+    void saveLiveState({ leads, registrations: next });
     void fetch("/api/crm/registrations", {
       body: JSON.stringify(payload),
       headers: { "Content-Type": "application/json" },
       method: "POST"
     });
-    setSuccess(`${payload.fullName} registered in ${selectedWorkshop.name}. The registration will also appear in Workshop Master view data.`);
+    setSuccess(`${payload.fullName} registered in ${selectedWorkshop.name} and added to the unassigned lead queue.`);
     setWorkshop("");
     setBatch("");
     setName("");

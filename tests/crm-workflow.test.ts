@@ -46,3 +46,29 @@ test("registration qualification is persisted on the CRM lead", () => {
     vintageOption: "5_TO_10"
   });
 });
+
+test("registration leads remain unassigned for manual Phase 1 routing", () => {
+  const leads = upsertLeadFromRegistration([], {
+    fullName: "Manual Queue Lead",
+    mobile: "9876543215",
+    workshopTitle: "Intro Workshop"
+  }, [{ id: "sales-1", isActive: true, name: "Sales One" }]);
+  assert.equal(leads[0].assignedTo, "");
+  assert.equal(leads[0].assignedSalesPersonId, undefined);
+  assert.equal((leads[0].activities ?? []).some((activity) => activity.message.includes("Automatically assigned")), false);
+});
+
+test("lead block metadata survives normalization", () => {
+  const lead = normalizeLead({
+    id: "blocked",
+    name: "Blocked Lead",
+    mobile: "9876543216",
+    blocked: true,
+    blockedAt: "2026-08-18T10:00:00.000Z",
+    blockedBy: "Admin",
+    blockReason: "Duplicate enquiry"
+  });
+  assert.equal(lead.blocked, true);
+  assert.equal(lead.blockReason, "Duplicate enquiry");
+  assert.equal(lead.blockedBy, "Admin");
+});

@@ -22,7 +22,7 @@ export type LeadStage =
 
 export type LeadPriority = "Hot" | "Warm" | "Cold";
 
-export type LeadActivityType = "created" | "note" | "call" | "whatsapp" | "assignment" | "stage" | "follow_up" | "meeting" | "scorecard" | "conversion";
+export type LeadActivityType = "created" | "note" | "call" | "whatsapp" | "assignment" | "stage" | "follow_up" | "meeting" | "scorecard" | "conversion" | "block";
 
 export interface LeadActivity {
   id: string;
@@ -79,6 +79,10 @@ export interface Lead {
   assignedTo: string;
   assignedSalesPersonId?: string;
   assignedSalesPersonCode?: string;
+  blocked?: boolean;
+  blockedAt?: string;
+  blockedBy?: string;
+  blockReason?: string;
   score: number;
   revenuePotential: number;
   notes: string[];

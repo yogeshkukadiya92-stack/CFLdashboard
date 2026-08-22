@@ -1,13 +1,6 @@
 import { extractPreQualification } from "./crm-scorecard.ts";
 import type { Lead, LeadActivity, LeadFollowUp, LeadPriority, LeadStage } from "@/lib/types";
 
-type SalesPersonLike = {
-  generalAssign?: string;
-  id?: string;
-  isActive?: boolean;
-  name?: string;
-};
-
 type RegistrationLeadInput = {
   answers?: unknown;
   city?: unknown;
@@ -64,6 +57,10 @@ export function normalizeLead(value: unknown): Lead {
     assignedSalesPersonCode: input.assignedSalesPersonCode ? String(input.assignedSalesPersonCode) : undefined,
     activities,
     bestTime: String(input.bestTime ?? ""),
+    blocked: input.blocked === true,
+    blockedAt: validIso(input.blockedAt) ?? undefined,
+    blockedBy: input.blockedBy ? String(input.blockedBy) : undefined,
+    blockReason: input.blockReason ? String(input.blockReason) : undefined,
     callHistory: stringArray(input.callHistory),
     certificates: stringArray(input.certificates),
     city: String(input.city ?? ""),
@@ -100,7 +97,7 @@ export function normalizeLead(value: unknown): Lead {
 export function upsertLeadFromRegistration(
   currentLeads: unknown[],
   registration: RegistrationLeadInput,
-  salesPeople: unknown[] = []
+  _salesPeople: unknown[] = []
 ) {
   const leads = currentLeads.map(normalizeLead);
   const mobile = normalizeLeadMobile(registration.mobile);
@@ -131,12 +128,10 @@ export function upsertLeadFromRegistration(
     return leads;
   }
 
-  const assignedTo = chooseAssignee(salesPeople, workshop, leads);
   const created = createLeadActivity("created", `Lead captured from ${source.toLowerCase()} for ${workshop}.`, "System", now);
-  const assignment = assignedTo ? createLeadActivity("assignment", `Automatically assigned to ${assignedTo}.`, "System", now) : null;
   const lead = normalizeLead({
-    activities: assignment ? [assignment, created] : [created],
-    assignedTo,
+    activities: [created],
+    assignedTo: "",
     city: String(registration.city ?? ""),
     country: "India",
     createdAt: now,
@@ -161,18 +156,6 @@ export function nextPendingFollowUp(followUps: LeadFollowUp[]) {
   return [...followUps]
     .filter((item) => !item.completed && validIso(item.dueAt))
     .sort((a, b) => new Date(a.dueAt).getTime() - new Date(b.dueAt).getTime())[0];
-}
-
-function chooseAssignee(salesPeople: unknown[], workshop: string, leads: Lead[]) {
-  const candidates = salesPeople
-    .filter((value): value is SalesPersonLike => Boolean(value) && typeof value === "object" && !Array.isArray(value))
-    .filter((person) => person.isActive !== false && person.name)
-    .filter((person) => !person.generalAssign || person.generalAssign.trim().toLowerCase() === workshop.toLowerCase());
-  if (!candidates.length) return "";
-
-  const counts = new Map<string, number>();
-  leads.forEach((lead) => counts.set(lead.assignedTo, (counts.get(lead.assignedTo) ?? 0) + 1));
-  return [...candidates].sort((a, b) => (counts.get(String(a.name)) ?? 0) - (counts.get(String(b.name)) ?? 0))[0]?.name ?? "";
 }
 
 function stringArray(value: unknown) {

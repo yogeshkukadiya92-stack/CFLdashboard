@@ -2,7 +2,6 @@
 
 import { AdminPlatformShell } from "@/components/admin-platform-shell";
 import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
-import { bundledLeads } from "@/lib/bundled-leads";
 import { createLeadActivity, createLeadId, nextPendingFollowUp, normalizeLead, normalizeLeadMobile } from "@/lib/lead-utils";
 import { hydrateLiveState, LIVE_STATE_STORAGE_KEYS, readLocalArray, saveLiveState } from "@/lib/live-state";
 import type { Lead, LeadFollowUp, LeadPriority, LeadStage } from "@/lib/types";
@@ -10,6 +9,7 @@ import { findSalesPersonByCode, salesPersonCodeFromId } from "@/lib/sales-person
 import {
   ArrowLeft,
   ArrowRight,
+  Ban,
   CalendarClock,
   Check,
   CircleDollarSign,
@@ -17,7 +17,6 @@ import {
   Flame,
   KanbanSquare,
   List,
-  MessageCircle,
   Phone,
   Plus,
   Search,
@@ -47,7 +46,7 @@ type ClientRecord = {
   state: string;
   status: "Active";
 };
-type QueueScope = "all" | "today" | "overdue" | "unassigned";
+type QueueScope = "all" | "today" | "overdue" | "unassigned" | "blocked";
 type ViewMode = "list" | "pipeline";
 
 const stages: LeadStage[] = ["New Leads", "Contacted", "Qualified", "Proposal", "Won", "Lost"];
@@ -66,8 +65,6 @@ const stageStyle: Record<LeadStage, string> = {
   Qualified: "bg-indigo-50 text-indigo-700",
   Won: "bg-emerald-50 text-emerald-700"
 };
-const BUNDLED_LEADS_IMPORT_KEY = "cfl_bundled_leads_88_v1";
-
 export default function LeadsPage() {
   const importRef = useRef<HTMLInputElement>(null);
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -82,6 +79,8 @@ export default function LeadsPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Lead | null>(null);
+  const [selectedLeadIds, setSelectedLeadIds] = useState<string[]>([]);
+  const [bulkOwnerId, setBulkOwnerId] = useState("");
   const [message, setMessage] = useState("");
   const [note, setNote] = useState("");
   const [followUpType, setFollowUpType] = useState<LeadFollowUp["type"]>("Call");
@@ -95,23 +94,14 @@ export default function LeadsPage() {
       setWorkshops(readLocalArray<Workshop>(LIVE_STATE_STORAGE_KEYS.workshops));
       setClients(readLocalArray<ClientRecord>(LIVE_STATE_STORAGE_KEYS.clients));
     }
-    void hydrateLiveState().then(async () => {
-      if (window.localStorage.getItem(BUNDLED_LEADS_IMPORT_KEY) !== "complete") {
-        const current = readLocalArray<unknown>(LIVE_STATE_STORAGE_KEYS.leads).map(normalizeLead);
-        const existingMobiles = new Set(current.map((lead) => normalizeLeadMobile(lead.mobile)));
-        const missing = bundledLeads.filter((lead) => !existingMobiles.has(normalizeLeadMobile(lead.mobile)));
-        const next = [...missing, ...current];
-        window.localStorage.setItem(BUNDLED_LEADS_IMPORT_KEY, "complete");
-        await saveLiveState({ leads: next });
-      }
-      load();
-    });
+    void hydrateLiveState().then(load);
   }, []);
 
   const selectedLead = leads.find((lead) => lead.id === selectedId) ?? null;
   const todayCount = leads.filter((lead) => isToday(lead.createdAt)).length;
   const overdueCount = leads.filter(hasOverdueFollowUp).length;
   const unassignedCount = leads.filter((lead) => !lead.assignedTo && !["Won", "Lost"].includes(lead.stage)).length;
+  const blockedCount = leads.filter((lead) => lead.blocked).length;
   const openPipelineValue = leads.filter((lead) => activeStages.includes(lead.stage)).reduce((sum, lead) => sum + lead.revenuePotential, 0);
 
   const filteredLeads = useMemo(() => {
@@ -122,6 +112,7 @@ export default function LeadsPage() {
       if (scope === "today" && !isToday(lead.createdAt)) return false;
       if (scope === "overdue" && !hasOverdueFollowUp(lead)) return false;
       if (scope === "unassigned" && (lead.assignedTo || ["Won", "Lost"].includes(lead.stage))) return false;
+      if (scope === "blocked" && !lead.blocked) return false;
       if (!query) return true;
       return [lead.name, lead.mobile, lead.email, lead.city, lead.source, lead.interest, lead.assignedTo, ...(lead.tags ?? [])]
         .some((value) => String(value ?? "").toLowerCase().includes(query));
@@ -148,7 +139,64 @@ export default function LeadsPage() {
     }));
   }
 
+  function assignmentPatch(ownerId: string) {
+    const owner = salesPeople.find((person) => person.id === ownerId);
+    return {
+      assignedSalesPersonCode: owner ? owner.salesPersonCode || salesPersonCodeFromId(owner.id) : undefined,
+      assignedSalesPersonId: owner?.id,
+      assignedTo: owner?.name || ""
+    };
+  }
+
+  function bulkAssign() {
+    if (!selectedLeadIds.length) return;
+    const patch = assignmentPatch(bulkOwnerId);
+    const selected = new Set(selectedLeadIds);
+    const now = new Date().toISOString();
+    const next = leads.map((lead) => selected.has(lead.id) ? normalizeLead({
+      ...lead,
+      ...patch,
+      activities: [createLeadActivity("assignment", patch.assignedTo ? `Bulk transferred to ${patch.assignedTo}.` : "Bulk transfer cleared the owner."), ...(lead.activities ?? [])],
+      lastActivityAt: now,
+      updatedAt: now
+    }) : lead);
+    void persist(next, `${selectedLeadIds.length} leads ${patch.assignedTo ? `transferred to ${patch.assignedTo}` : "moved to Unassigned"}.`);
+    setSelectedLeadIds([]);
+    setBulkOwnerId("");
+  }
+
+  function bulkBlock() {
+    if (!selectedLeadIds.length) return;
+    const selected = new Set(selectedLeadIds);
+    const now = new Date().toISOString();
+    const next = leads.map((lead) => selected.has(lead.id) ? normalizeLead({
+      ...lead,
+      blocked: true,
+      blockedAt: now,
+      blockedBy: "Admin",
+      blockReason: lead.blockReason || "Blocked through bulk action",
+      activities: [createLeadActivity("block", "Lead blocked through bulk action."), ...(lead.activities ?? [])],
+      updatedAt: now
+    }) : lead);
+    void persist(next, `${selectedLeadIds.length} leads blocked.`);
+    setSelectedLeadIds([]);
+  }
+
+  function toggleLeadBlock(lead: Lead, reason: string) {
+    const blocked = !lead.blocked;
+    updateLead(lead.id, {
+      blocked,
+      blockedAt: blocked ? new Date().toISOString() : undefined,
+      blockedBy: blocked ? "Admin" : undefined,
+      blockReason: blocked ? reason.trim() || "Blocked by admin" : undefined
+    }, { message: blocked ? `Lead blocked: ${reason.trim() || "Blocked by admin"}.` : "Lead unblocked.", type: "block" });
+  }
+
   function changeStage(lead: Lead, nextStage: LeadStage) {
+    if (lead.blocked) {
+      setMessage("Unblock this lead before changing its stage.");
+      return;
+    }
     if (nextStage === "Lost" && !lead.lostReason) {
       setSelectedId(lead.id);
       setMessage("Add a lost reason in lead details before moving this lead to Lost.");
@@ -171,6 +219,10 @@ export default function LeadsPage() {
   }
 
   function addFollowUp() {
+    if (selectedLead?.blocked) {
+      setMessage("Unblock this lead before scheduling a follow-up.");
+      return;
+    }
     if (!selectedLead || !followUpAt) {
       setMessage("Select a follow-up date and time.");
       return;
@@ -323,11 +375,12 @@ export default function LeadsPage() {
 
   return (
     <AdminPlatformShell activeLabel="Leads" description="Capture, assign, follow up and convert every enquiry from one sales pipeline." title="Lead Management">
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
         <Metric icon={UsersRound} label="Total Leads" value={leads.length} />
         <Metric icon={Plus} label="New Today" value={todayCount} tone="emerald" />
         <Metric icon={CalendarClock} label="Overdue" value={overdueCount} tone={overdueCount ? "rose" : "slate"} />
         <Metric icon={UserRound} label="Unassigned" value={unassignedCount} tone="amber" />
+        <Metric icon={Ban} label="Blocked" value={blockedCount} tone="rose" />
         <Metric icon={CircleDollarSign} label="Open Value" value={formatInr(openPipelineValue)} tone="indigo" />
       </section>
 
@@ -363,16 +416,18 @@ export default function LeadsPage() {
               ["all", "All Leads", leads.length],
               ["today", "New Today", todayCount],
               ["overdue", "Overdue", overdueCount],
-              ["unassigned", "Unassigned", unassignedCount]
+              ["unassigned", "Unassigned", unassignedCount],
+              ["blocked", "Blocked", blockedCount]
             ] as Array<[QueueScope, string, number]>).map(([value, label, count]) => (
               <button className={`whitespace-nowrap rounded-lg px-3 py-2 text-xs font-black ${scope === value ? "bg-slate-950 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`} key={value} onClick={() => setScope(value)} type="button">{label} ({count})</button>
             ))}
           </div>
           {message ? <div className="mt-3 flex items-center justify-between gap-3 rounded-lg bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700"><span>{message}</span><button aria-label="Dismiss message" onClick={() => setMessage("")} type="button"><X className="size-4" /></button></div> : null}
+          {selectedLeadIds.length ? <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50 p-3"><span className="mr-auto text-sm font-black text-indigo-900">{selectedLeadIds.length} selected</span><select className="rounded-lg border border-indigo-200 bg-white px-3 py-2 text-sm font-bold" onChange={(event) => setBulkOwnerId(event.target.value)} value={bulkOwnerId}><option value="">Move to Unassigned</option>{salesPeople.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}</select><button className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-black text-white" onClick={bulkAssign} type="button">Assign / Transfer</button><button className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-black text-white" onClick={bulkBlock} type="button">Block selected</button><button className="rounded-lg px-3 py-2 text-sm font-black text-slate-600" onClick={() => setSelectedLeadIds([])} type="button">Clear</button></div> : null}
         </header>
 
         {viewMode === "list" ? (
-          <LeadTable leads={filteredLeads} onDelete={setDeleteTarget} onOpen={setSelectedId} onQuickStage={changeStage} />
+          <LeadTable leads={filteredLeads} onDelete={setDeleteTarget} onOpen={setSelectedId} onQuickStage={changeStage} onSelectionChange={setSelectedLeadIds} selectedIds={selectedLeadIds} />
         ) : (
           <Pipeline leads={filteredLeads} onMove={moveStage} onOpen={setSelectedId} />
         )}
@@ -387,6 +442,7 @@ export default function LeadsPage() {
           onClose={() => setSelectedId(null)}
           onCompleteFollowUp={(id) => completeFollowUp(selectedLead, id)}
           onConvert={() => void convertToClient(selectedLead)}
+          onToggleBlock={(reason) => toggleLeadBlock(selectedLead, reason)}
           note={note}
           setNote={setNote}
           salesPeople={salesPeople}
@@ -405,24 +461,45 @@ export default function LeadsPage() {
   );
 }
 
-function LeadTable({ leads, onDelete, onOpen, onQuickStage }: { leads: Lead[]; onDelete: (lead: Lead) => void; onOpen: (id: string) => void; onQuickStage: (lead: Lead, stage: LeadStage) => void }) {
-  return <div className="overflow-x-auto"><table className="w-full min-w-[1080px] text-left text-sm"><thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr>{["Lead", "Contact", "Interest / Source", "Stage", "Priority", "Owner", "Next Follow-up", "Actions"].map((heading) => <th className="px-4 py-3" key={heading}>{heading}</th>)}</tr></thead><tbody className="divide-y divide-slate-100">{leads.length ? leads.map((lead) => { const next = nextPendingFollowUp(lead.followUps ?? []); return <tr className="hover:bg-emerald-50/30" key={lead.id}><td className="px-4 py-4"><button className="font-black text-slate-950 hover:text-emerald-700" onClick={() => onOpen(lead.id)} type="button">{lead.name}</button><p className="mt-1 text-xs font-semibold text-slate-400">{formatDateTime(lead.createdAt)}</p></td><td className="px-4 py-4"><p className="font-bold">{formatMobile(lead.mobile)}</p><p className="mt-1 text-xs text-slate-500">{lead.city || lead.email || "No details"}</p></td><td className="max-w-[220px] px-4 py-4"><p className="truncate font-bold text-slate-700">{lead.interest || "General enquiry"}</p><p className="mt-1 text-xs font-semibold text-slate-500">{lead.source}</p></td><td className="px-4 py-4"><select className={`rounded-full border-0 px-3 py-1.5 text-xs font-black outline-none ${stageStyle[lead.stage]}`} onChange={(event) => onQuickStage(lead, event.target.value as LeadStage)} value={lead.stage}>{stages.map((stage) => <option key={stage}>{stage}</option>)}</select></td><td className="px-4 py-4"><span className={`rounded-full px-3 py-1 text-xs font-black ${priorityStyle[lead.priority ?? "Warm"]}`}>{lead.priority ?? "Warm"}</span></td><td className="px-4 py-4 font-bold text-slate-600">{lead.assignedTo || "Unassigned"}</td><td className={`px-4 py-4 text-xs font-bold ${next && new Date(next.dueAt) < new Date() ? "text-rose-600" : "text-slate-600"}`}>{next ? formatDateTime(next.dueAt) : "Not scheduled"}</td><td className="px-4 py-4"><div className="flex gap-2"><a aria-label={`Call ${lead.name}`} className="grid size-9 place-items-center rounded-lg bg-sky-50 text-sky-700" href={`tel:+91${normalizeLeadMobile(lead.mobile)}`}><Phone className="size-4" /></a><a aria-label={`WhatsApp ${lead.name}`} className="grid size-9 place-items-center rounded-lg bg-emerald-50 text-emerald-700" href={whatsappUrl(lead)} target="_blank"><MessageCircle className="size-4" /></a><button aria-label={`Delete ${lead.name}`} className="grid size-9 place-items-center rounded-lg bg-rose-50 text-rose-600" onClick={() => onDelete(lead)} type="button"><Trash2 className="size-4" /></button></div></td></tr>; }) : <tr><td className="px-5 py-16 text-center" colSpan={8}><UsersRound className="mx-auto size-8 text-slate-300" /><p className="mt-3 font-black text-slate-700">No leads found</p><p className="mt-1 text-xs font-semibold text-slate-400">Change filters or add a new lead.</p></td></tr>}</tbody></table></div>;
+function LeadTable({ leads, onDelete, onOpen, onQuickStage, onSelectionChange, selectedIds }: { leads: Lead[]; onDelete: (lead: Lead) => void; onOpen: (id: string) => void; onQuickStage: (lead: Lead, stage: LeadStage) => void; onSelectionChange: (ids: string[]) => void; selectedIds: string[] }) {
+  const selectAllRef = useRef<HTMLInputElement>(null);
+  const selected = new Set(selectedIds);
+  const visibleSelectedCount = leads.filter((lead) => selected.has(lead.id)).length;
+  const allSelected = leads.length > 0 && visibleSelectedCount === leads.length;
+
+  useEffect(() => {
+    if (selectAllRef.current) {
+      selectAllRef.current.indeterminate = visibleSelectedCount > 0 && !allSelected;
+    }
+  }, [allSelected, visibleSelectedCount]);
+
+  function toggleAll(checked: boolean) {
+    if (checked) onSelectionChange([...new Set([...selectedIds, ...leads.map((lead) => lead.id)])]);
+    else onSelectionChange(selectedIds.filter((id) => !leads.some((lead) => lead.id === id)));
+  }
+  function toggleOne(id: string, checked: boolean) {
+    onSelectionChange(checked ? [...new Set([...selectedIds, id])] : selectedIds.filter((value) => value !== id));
+  }
+  const checkboxClass = "size-4 cursor-pointer rounded border-slate-300 accent-emerald-600 focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2";
+
+  return <div className="overflow-x-auto"><table className="w-full min-w-[1120px] text-left text-sm"><thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="w-12 px-4 py-3"><input aria-label="Select all visible leads" checked={allSelected} className={checkboxClass} disabled={!leads.length} onChange={(event) => toggleAll(event.target.checked)} ref={selectAllRef} title="Select all visible leads" type="checkbox" /></th>{["Lead", "Contact", "Interest / Source", "Stage", "Priority", "Owner", "Next Follow-up", "Actions"].map((heading) => <th className="px-4 py-3" key={heading}>{heading}</th>)}</tr></thead><tbody className="divide-y divide-slate-100">{leads.length ? leads.map((lead) => { const next = nextPendingFollowUp(lead.followUps ?? []); const isSelected = selected.has(lead.id); return <tr className={isSelected ? "bg-emerald-50/80" : lead.blocked ? "bg-rose-50/60" : "hover:bg-emerald-50/30"} key={lead.id}><td className="w-12 px-4 py-4"><input aria-label={`Select ${lead.name}`} checked={isSelected} className={checkboxClass} onChange={(event) => toggleOne(lead.id, event.target.checked)} type="checkbox" /></td><td className="px-4 py-4"><button className="font-black text-slate-950 hover:text-emerald-700" onClick={() => onOpen(lead.id)} type="button">{lead.name}</button>{lead.blocked ? <span className="ml-2 rounded-full bg-rose-100 px-2 py-1 text-[10px] font-black text-rose-700">Blocked</span> : null}<p className="mt-1 text-xs font-semibold text-slate-400">{formatDateTime(lead.createdAt)}</p></td><td className="px-4 py-4"><p className="font-bold">{formatMobile(lead.mobile)}</p><p className="mt-1 text-xs text-slate-500">{lead.city || lead.email || "No details"}</p></td><td className="max-w-[220px] px-4 py-4"><p className="truncate font-bold text-slate-700">{lead.interest || "General enquiry"}</p><p className="mt-1 text-xs font-semibold text-slate-500">{lead.source}</p></td><td className="px-4 py-4"><select className={`rounded-full border-0 px-3 py-1.5 text-xs font-black outline-none ${stageStyle[lead.stage]}`} disabled={lead.blocked} onChange={(event) => onQuickStage(lead, event.target.value as LeadStage)} value={lead.stage}>{stages.map((stage) => <option key={stage}>{stage}</option>)}</select></td><td className="px-4 py-4"><span className={`rounded-full px-3 py-1 text-xs font-black ${priorityStyle[lead.priority ?? "Warm"]}`}>{lead.priority ?? "Warm"}</span></td><td className="px-4 py-4 font-bold text-slate-600">{lead.assignedTo || "Unassigned"}</td><td className={`px-4 py-4 text-xs font-bold ${next && new Date(next.dueAt) < new Date() ? "text-rose-600" : "text-slate-600"}`}>{next ? formatDateTime(next.dueAt) : "Not scheduled"}</td><td className="px-4 py-4"><div className="flex gap-2"><a aria-label={`Call ${lead.name}`} className={`grid size-9 place-items-center rounded-lg ${lead.blocked ? "pointer-events-none bg-slate-100 text-slate-300" : "bg-sky-50 text-sky-700"}`} href={lead.blocked ? undefined : `tel:+91${normalizeLeadMobile(lead.mobile)}`}><Phone className="size-4" /></a><button aria-label={`Delete ${lead.name}`} className="grid size-9 place-items-center rounded-lg bg-rose-50 text-rose-600" onClick={() => onDelete(lead)} type="button"><Trash2 className="size-4" /></button></div></td></tr>; }) : <tr><td className="px-5 py-16 text-center" colSpan={9}><UsersRound className="mx-auto size-8 text-slate-300" /><p className="mt-3 font-black text-slate-700">No leads found</p><p className="mt-1 text-xs font-semibold text-slate-400">Change filters or add a new lead.</p></td></tr>}</tbody></table></div>;
 }
 
 function Pipeline({ leads, onMove, onOpen }: { leads: Lead[]; onMove: (lead: Lead, direction: -1 | 1) => void; onOpen: (id: string) => void }) {
   return <div className="overflow-x-auto bg-slate-50/70 p-4"><div className="grid min-w-[1380px] grid-cols-6 gap-3">{stages.map((stage) => { const rows = leads.filter((lead) => lead.stage === stage); return <section className="min-w-0 rounded-xl border border-slate-200 bg-white" key={stage}><header className="flex items-center justify-between border-b border-slate-200 px-3 py-3"><span className={`rounded-full px-3 py-1 text-xs font-black ${stageStyle[stage]}`}>{stage}</span><span className="text-xs font-black text-slate-400">{rows.length}</span></header><div className="max-h-[620px] space-y-2 overflow-y-auto p-2">{rows.map((lead) => <article className="rounded-lg border border-slate-200 p-3 shadow-sm" key={lead.id}><button className="block w-full text-left" onClick={() => onOpen(lead.id)} type="button"><p className="truncate font-black text-slate-950">{lead.name}</p><p className="mt-1 truncate text-xs font-semibold text-slate-500">{lead.interest || lead.source}</p><div className="mt-3 flex items-center justify-between"><span className={`rounded-full px-2 py-1 text-[10px] font-black ${priorityStyle[lead.priority ?? "Warm"]}`}>{lead.priority ?? "Warm"}</span><span className="max-w-[100px] truncate text-[10px] font-bold text-slate-400">{lead.assignedTo || "Unassigned"}</span></div></button><div className="mt-3 flex justify-between border-t border-slate-100 pt-2"><button aria-label="Move stage left" className="grid size-8 place-items-center rounded-lg text-slate-500 hover:bg-slate-100 disabled:opacity-25" disabled={stage === stages[0]} onClick={() => onMove(lead, -1)} type="button"><ArrowLeft className="size-3.5" /></button><button aria-label="Move stage right" className="grid size-8 place-items-center rounded-lg text-slate-500 hover:bg-slate-100 disabled:opacity-25" disabled={stage === stages[stages.length - 1]} onClick={() => onMove(lead, 1)} type="button"><ArrowRight className="size-3.5" /></button></div></article>)}{!rows.length ? <p className="py-8 text-center text-xs font-bold text-slate-400">No leads</p> : null}</div></section>; })}</div></div>;
 }
 
-function LeadDrawer(props: { lead: Lead; note: string; setNote: (value: string) => void; salesPeople: SalesPerson[]; followUpAt: string; followUpNote: string; followUpType: LeadFollowUp["type"]; setFollowUpAt: (value: string) => void; setFollowUpNote: (value: string) => void; setFollowUpType: (value: LeadFollowUp["type"]) => void; onAddFollowUp: () => void; onAddNote: () => void; onChange: (patch: Partial<Lead>, activity?: { message: string; type: Parameters<typeof createLeadActivity>[0] }) => void; onClose: () => void; onCompleteFollowUp: (id: string) => void; onConvert: () => void }) {
+function LeadDrawer(props: { lead: Lead; note: string; setNote: (value: string) => void; salesPeople: SalesPerson[]; followUpAt: string; followUpNote: string; followUpType: LeadFollowUp["type"]; setFollowUpAt: (value: string) => void; setFollowUpNote: (value: string) => void; setFollowUpType: (value: LeadFollowUp["type"]) => void; onAddFollowUp: () => void; onAddNote: () => void; onChange: (patch: Partial<Lead>, activity?: { message: string; type: Parameters<typeof createLeadActivity>[0] }) => void; onClose: () => void; onCompleteFollowUp: (id: string) => void; onConvert: () => void; onToggleBlock: (reason: string) => void }) {
   const { lead } = props;
-  return <div aria-modal="true" className="fixed inset-0 z-50 flex justify-end bg-slate-950/45 backdrop-blur-sm" role="dialog"><button aria-label="Close lead details" className="min-w-0 flex-1 cursor-default" onClick={props.onClose} type="button" /><aside className="h-full w-full max-w-2xl overflow-y-auto bg-white shadow-2xl"><header className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-slate-200 bg-white p-5"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><span className={`rounded-full px-3 py-1 text-xs font-black ${priorityStyle[lead.priority ?? "Warm"]}`}>{lead.priority ?? "Warm"}</span><span className={`rounded-full px-3 py-1 text-xs font-black ${stageStyle[lead.stage]}`}>{lead.stage}</span></div><h2 className="mt-3 truncate text-2xl font-black text-slate-950">{lead.name}</h2><p className="mt-1 text-sm font-semibold text-slate-500">{formatMobile(lead.mobile)} · {lead.source}</p></div><button aria-label="Close" className="grid size-10 shrink-0 place-items-center rounded-lg border border-slate-200 text-slate-500" onClick={props.onClose} type="button"><X className="size-4" /></button></header><div className="space-y-6 p-5"><div className="grid grid-cols-3 gap-2"><a className="inline-flex items-center justify-center gap-2 rounded-lg bg-sky-600 px-3 py-3 text-sm font-black text-white" href={`tel:+91${normalizeLeadMobile(lead.mobile)}`}><Phone className="size-4" />Call</a><a className="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-3 py-3 text-sm font-black text-white" href={whatsappUrl(lead)} target="_blank"><MessageCircle className="size-4" />WhatsApp</a><button className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-950 px-3 py-3 text-sm font-black text-white disabled:opacity-50" disabled={Boolean(lead.convertedClientId)} onClick={props.onConvert} type="button"><UserCheck className="size-4" />{lead.convertedClientId ? "Converted" : "Convert"}</button></div><section><h3 className="text-xs font-black uppercase text-slate-500">Lead Qualification</h3><div className="mt-3 grid gap-3 sm:grid-cols-2"><Field label="Stage"><select className={inputClass} onChange={(event) => props.onChange({ stage: event.target.value as LeadStage }, { message: `Stage changed to ${event.target.value}.`, type: "stage" })} value={lead.stage}>{stages.map((stage) => <option key={stage}>{stage}</option>)}</select></Field><Field label="Priority"><select className={inputClass} onChange={(event) => props.onChange({ priority: event.target.value as LeadPriority })} value={lead.priority ?? "Warm"}><option>Hot</option><option>Warm</option><option>Cold</option></select></Field><Field label="Assigned Sales Person"><select className={inputClass} onChange={(event) => props.onChange({ assignedTo: event.target.value }, { message: event.target.value ? `Assigned to ${event.target.value}.` : "Lead unassigned.", type: "assignment" })} value={lead.assignedTo}><option value="">Unassigned</option>{props.salesPeople.map((person) => <option key={person.id} value={person.name}>{person.name}</option>)}</select></Field><Field label="Revenue Potential"><input className={inputClass} min="0" onChange={(event) => props.onChange({ revenuePotential: Number(event.target.value) || 0 })} type="number" value={lead.revenuePotential} /></Field><Field label="Workshop / Interest"><input className={inputClass} onChange={(event) => props.onChange({ interest: event.target.value })} value={lead.interest ?? ""} /></Field><Field label="Best Contact Time"><input className={inputClass} onChange={(event) => props.onChange({ bestTime: event.target.value })} placeholder="e.g. 5:00 PM to 7:00 PM" value={lead.bestTime} /></Field>{lead.stage === "Lost" ? <div className="sm:col-span-2"><Field label="Lost Reason *"><select className={inputClass} onChange={(event) => props.onChange({ lostReason: event.target.value })} value={lead.lostReason ?? ""}><option value="">Select reason</option>{["Not interested", "Price issue", "No response", "Wrong number", "Timing issue", "Joined competitor", "Duplicate", "Other"].map((reason) => <option key={reason}>{reason}</option>)}</select></Field></div> : null}</div></section><section className="border-t border-slate-200 pt-5"><h3 className="text-xs font-black uppercase text-slate-500">Schedule Follow-up</h3><div className="mt-3 grid gap-3 sm:grid-cols-[140px_1fr]"><select className={inputClass} onChange={(event) => props.setFollowUpType(event.target.value as LeadFollowUp["type"])} value={props.followUpType}><option>Call</option><option>WhatsApp</option><option>Meeting</option></select><input className={inputClass} min={toLocalInputValue(new Date())} onChange={(event) => props.setFollowUpAt(event.target.value)} type="datetime-local" value={props.followUpAt} /><input className={`${inputClass} sm:col-span-2`} onChange={(event) => props.setFollowUpNote(event.target.value)} placeholder="Follow-up purpose or context" value={props.followUpNote} /><button className="inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-3 text-sm font-black text-white sm:col-span-2" onClick={props.onAddFollowUp} type="button"><CalendarClock className="size-4" />Schedule Follow-up</button></div><div className="mt-3 divide-y divide-slate-100 rounded-lg border border-slate-200">{(lead.followUps ?? []).length ? (lead.followUps ?? []).map((followUp) => <div className="flex items-start justify-between gap-3 p-3" key={followUp.id}><div><p className={`text-sm font-black ${followUp.completed ? "text-slate-400 line-through" : new Date(followUp.dueAt) < new Date() ? "text-rose-600" : "text-slate-800"}`}>{followUp.type} · {formatDateTime(followUp.dueAt)}</p>{followUp.note ? <p className="mt-1 text-xs font-semibold text-slate-500">{followUp.note}</p> : null}</div>{!followUp.completed ? <button aria-label="Complete follow-up" className="grid size-9 shrink-0 place-items-center rounded-lg bg-emerald-50 text-emerald-700" onClick={() => props.onCompleteFollowUp(followUp.id)} type="button"><Check className="size-4" /></button> : <span className="text-xs font-black text-emerald-600">Done</span>}</div>) : <p className="p-4 text-center text-xs font-bold text-slate-400">No follow-ups scheduled.</p>}</div></section><section className="border-t border-slate-200 pt-5"><h3 className="text-xs font-black uppercase text-slate-500">Add Note</h3><textarea className={`${inputClass} mt-3 min-h-24 resize-y`} onChange={(event) => props.setNote(event.target.value)} placeholder="Add call outcome, customer context or next step..." value={props.note} /><button className="mt-2 inline-flex items-center gap-2 rounded-lg bg-slate-950 px-4 py-2.5 text-sm font-black text-white" onClick={props.onAddNote} type="button"><Send className="size-4" />Save Note</button></section><section className="border-t border-slate-200 pt-5"><h3 className="text-xs font-black uppercase text-slate-500">Activity Timeline</h3><div className="mt-4 space-y-4">{(lead.activities ?? []).length ? (lead.activities ?? []).map((activity) => <div className="relative border-l-2 border-slate-200 pl-5" key={activity.id}><span className="absolute -left-[5px] top-1 size-2 rounded-full bg-emerald-500" /><p className="text-sm font-bold text-slate-700">{activity.message}</p><p className="mt-1 text-xs font-semibold text-slate-400">{formatDateTime(activity.createdAt)} · {activity.createdBy || "Admin"}</p></div>) : <p className="text-sm font-semibold text-slate-400">No activity recorded.</p>}</div></section></div></aside></div>;
+  const [blockReason, setBlockReason] = useState(lead.blockReason ?? "");
+  return <div aria-modal="true" className="fixed inset-0 z-50 flex justify-end bg-slate-950/45 backdrop-blur-sm" role="dialog"><button aria-label="Close lead details" className="min-w-0 flex-1 cursor-default" onClick={props.onClose} type="button" /><aside className="h-full w-full max-w-2xl overflow-y-auto bg-white shadow-2xl"><header className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-slate-200 bg-white p-5"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><span className={`rounded-full px-3 py-1 text-xs font-black ${priorityStyle[lead.priority ?? "Warm"]}`}>{lead.priority ?? "Warm"}</span><span className={`rounded-full px-3 py-1 text-xs font-black ${stageStyle[lead.stage]}`}>{lead.stage}</span>{lead.blocked ? <span className="rounded-full bg-rose-100 px-3 py-1 text-xs font-black text-rose-700">Blocked</span> : null}</div><h2 className="mt-3 truncate text-2xl font-black text-slate-950">{lead.name}</h2><p className="mt-1 text-sm font-semibold text-slate-500">{formatMobile(lead.mobile)} · {lead.source}</p></div><button aria-label="Close" className="grid size-10 shrink-0 place-items-center rounded-lg border border-slate-200 text-slate-500" onClick={props.onClose} type="button"><X className="size-4" /></button></header><div className="space-y-6 p-5"><div className="grid grid-cols-2 gap-2"><a className={`inline-flex items-center justify-center gap-2 rounded-lg px-3 py-3 text-sm font-black ${lead.blocked ? "pointer-events-none bg-slate-100 text-slate-400" : "bg-sky-600 text-white"}`} href={lead.blocked ? undefined : `tel:+91${normalizeLeadMobile(lead.mobile)}`}><Phone className="size-4" />Call</a><button className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-950 px-3 py-3 text-sm font-black text-white disabled:opacity-50" disabled={Boolean(lead.convertedClientId)} onClick={props.onConvert} type="button"><UserCheck className="size-4" />{lead.convertedClientId ? "Converted" : "Convert"}</button></div><section><h3 className="text-xs font-black uppercase text-slate-500">Lead Qualification</h3><div className="mt-3 grid gap-3 sm:grid-cols-2"><Field label="Stage"><select className={inputClass} onChange={(event) => props.onChange({ stage: event.target.value as LeadStage }, { message: `Stage changed to ${event.target.value}.`, type: "stage" })} value={lead.stage}>{stages.map((stage) => <option key={stage}>{stage}</option>)}</select></Field><Field label="Priority"><select className={inputClass} onChange={(event) => props.onChange({ priority: event.target.value as LeadPriority })} value={lead.priority ?? "Warm"}><option>Hot</option><option>Warm</option><option>Cold</option></select></Field><Field label="Assigned Sales Person"><select className={inputClass} onChange={(event) => { const person = props.salesPeople.find((item) => item.id === event.target.value); props.onChange({ assignedSalesPersonCode: person ? person.salesPersonCode || salesPersonCodeFromId(person.id) : undefined, assignedSalesPersonId: person?.id, assignedTo: person?.name || "" }, { message: person ? `Assigned to ${person.name}.` : "Lead unassigned.", type: "assignment" }); }} value={lead.assignedSalesPersonId || props.salesPeople.find((person) => person.name === lead.assignedTo)?.id || ""}><option value="">Unassigned</option>{props.salesPeople.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}</select></Field><Field label="Revenue Potential"><input className={inputClass} min="0" onChange={(event) => props.onChange({ revenuePotential: Number(event.target.value) || 0 })} type="number" value={lead.revenuePotential} /></Field><Field label="Workshop / Interest"><input className={inputClass} onChange={(event) => props.onChange({ interest: event.target.value })} value={lead.interest ?? ""} /></Field><Field label="Best Contact Time"><input className={inputClass} onChange={(event) => props.onChange({ bestTime: event.target.value })} placeholder="e.g. 5:00 PM to 7:00 PM" value={lead.bestTime} /></Field>{lead.stage === "Lost" ? <div className="sm:col-span-2"><Field label="Lost Reason *"><select className={inputClass} onChange={(event) => props.onChange({ lostReason: event.target.value })} value={lead.lostReason ?? ""}><option value="">Select reason</option>{["Not interested", "Price issue", "No response", "Wrong number", "Timing issue", "Joined competitor", "Duplicate", "Other"].map((reason) => <option key={reason}>{reason}</option>)}</select></Field></div> : null}</div></section><section className="border-t border-slate-200 pt-5"><h3 className="text-xs font-black uppercase text-slate-500">Schedule Follow-up</h3><div className="mt-3 grid gap-3 sm:grid-cols-[140px_1fr]"><select className={inputClass} disabled={lead.blocked} onChange={(event) => props.setFollowUpType(event.target.value as LeadFollowUp["type"])} value={props.followUpType === "WhatsApp" ? "Call" : props.followUpType}><option>Call</option><option>Meeting</option></select><input className={inputClass} min={toLocalInputValue(new Date())} onChange={(event) => props.setFollowUpAt(event.target.value)} type="datetime-local" value={props.followUpAt} /><input className={`${inputClass} sm:col-span-2`} onChange={(event) => props.setFollowUpNote(event.target.value)} placeholder="Follow-up purpose or context" value={props.followUpNote} /><button className="inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-3 text-sm font-black text-white sm:col-span-2" onClick={props.onAddFollowUp} type="button"><CalendarClock className="size-4" />Schedule Follow-up</button></div><div className="mt-3 divide-y divide-slate-100 rounded-lg border border-slate-200">{(lead.followUps ?? []).length ? (lead.followUps ?? []).map((followUp) => <div className="flex items-start justify-between gap-3 p-3" key={followUp.id}><div><p className={`text-sm font-black ${followUp.completed ? "text-slate-400 line-through" : new Date(followUp.dueAt) < new Date() ? "text-rose-600" : "text-slate-800"}`}>{followUp.type} · {formatDateTime(followUp.dueAt)}</p>{followUp.note ? <p className="mt-1 text-xs font-semibold text-slate-500">{followUp.note}</p> : null}</div>{!followUp.completed ? <button aria-label="Complete follow-up" className="grid size-9 shrink-0 place-items-center rounded-lg bg-emerald-50 text-emerald-700" onClick={() => props.onCompleteFollowUp(followUp.id)} type="button"><Check className="size-4" /></button> : <span className="text-xs font-black text-emerald-600">Done</span>}</div>) : <p className="p-4 text-center text-xs font-bold text-slate-400">No follow-ups scheduled.</p>}</div></section><section className="border-t border-slate-200 pt-5"><h3 className="text-xs font-black uppercase text-slate-500">Lead Access</h3><p className="mt-2 text-sm font-semibold text-slate-500">{lead.blocked ? `Blocked${lead.blockReason ? `: ${lead.blockReason}` : ""}` : "Blocking prevents calls, stage changes and follow-ups."}</p>{!lead.blocked ? <input className={`${inputClass} mt-3`} onChange={(event) => setBlockReason(event.target.value)} placeholder="Reason for blocking" value={blockReason} /> : null}<button className={`mt-3 inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-black text-white ${lead.blocked ? "bg-emerald-600" : "bg-rose-600"}`} onClick={() => props.onToggleBlock(blockReason)} type="button"><Ban className="size-4" />{lead.blocked ? "Unblock Lead" : "Block Lead"}</button></section><section className="border-t border-slate-200 pt-5"><h3 className="text-xs font-black uppercase text-slate-500">Add Note</h3><textarea className={`${inputClass} mt-3 min-h-24 resize-y`} onChange={(event) => props.setNote(event.target.value)} placeholder="Add call outcome, customer context or next step..." value={props.note} /><button className="mt-2 inline-flex items-center gap-2 rounded-lg bg-slate-950 px-4 py-2.5 text-sm font-black text-white" onClick={props.onAddNote} type="button"><Send className="size-4" />Save Note</button></section><section className="border-t border-slate-200 pt-5"><h3 className="text-xs font-black uppercase text-slate-500">Activity Timeline</h3><div className="mt-4 space-y-4">{(lead.activities ?? []).length ? (lead.activities ?? []).map((activity) => <div className="relative border-l-2 border-slate-200 pl-5" key={activity.id}><span className="absolute -left-[5px] top-1 size-2 rounded-full bg-emerald-500" /><p className="text-sm font-bold text-slate-700">{activity.message}</p><p className="mt-1 text-xs font-semibold text-slate-400">{formatDateTime(activity.createdAt)} · {activity.createdBy || "Admin"}</p></div>) : <p className="text-sm font-semibold text-slate-400">No activity recorded.</p>}</div></section></div></aside></div>;
 }
 
 function CreateLeadModal({ leads, onClose, onSave, salesPeople, workshops }: { leads: Lead[]; onClose: () => void; onSave: (lead: Lead) => void; salesPeople: SalesPerson[]; workshops: Workshop[] }) {
   const [name, setName] = useState(""); const [mobile, setMobile] = useState(""); const [email, setEmail] = useState(""); const [city, setCity] = useState(""); const [source, setSource] = useState("Manual"); const [interest, setInterest] = useState(""); const [assignedTo, setAssignedTo] = useState(""); const [salespersonCode, setSalespersonCode] = useState(""); const [priority, setPriority] = useState<LeadPriority>("Warm"); const [error, setError] = useState("");
   const codeOwner = findSalesPersonByCode(salesPeople, salespersonCode);
   function submit(event: FormEvent) { event.preventDefault(); const digits = normalizeLeadMobile(mobile); if (!name.trim() || digits.length !== 10) { setError("Name and valid 10-digit mobile are required."); return; } if (salespersonCode.trim() && !codeOwner) { setError("Salesperson Unique ID was not found or is inactive."); return; } if (leads.some((lead) => normalizeLeadMobile(lead.mobile) === digits)) { setError("This mobile already exists in the lead pipeline."); return; } const now = new Date().toISOString(); const ownerName = codeOwner?.name || assignedTo; onSave(normalizeLead({ activities: [createLeadActivity("created", "Lead added manually."), ...(ownerName ? [createLeadActivity("assignment", `Assigned to ${ownerName} using salesperson ID.`)] : [])], assignedSalesPersonCode: codeOwner?.salesPersonCode || (codeOwner ? salesPersonCodeFromId(codeOwner.id) : undefined), assignedSalesPersonId: codeOwner?.id, assignedTo: ownerName, city, country: "India", createdAt: now, email, id: createLeadId(), interest, mobile: digits, name: name.trim(), priority, score: priority === "Hot" ? 80 : priority === "Cold" ? 30 : 55, source, sourceDetails: [`${source}: ${interest || "General enquiry"}`], stage: "New Leads", updatedAt: now })); }
-  return <div aria-modal="true" className="fixed inset-0 z-50 grid place-items-end bg-slate-950/50 backdrop-blur-sm sm:place-items-center sm:p-4" role="dialog"><form className="max-h-[92vh] w-full overflow-y-auto bg-white p-5 shadow-2xl sm:max-w-xl sm:rounded-xl" onSubmit={submit}><div className="flex items-start justify-between"><div><h2 className="text-2xl font-black">Add Lead</h2><p className="mt-1 text-sm font-semibold text-slate-500">Enter a salesperson ID for instant assignment.</p></div><button aria-label="Close" className="grid size-10 place-items-center rounded-lg border border-slate-200" onClick={onClose} type="button"><X className="size-4" /></button></div>{error ? <p className="mt-4 rounded-lg bg-rose-50 px-4 py-3 text-sm font-bold text-rose-700">{error}</p> : null}<div className="mt-5 grid gap-4 sm:grid-cols-2"><Field label="Full Name *"><input autoFocus className={inputClass} onChange={(event) => setName(event.target.value)} value={name} /></Field><Field label="Mobile *"><input className={inputClass} inputMode="numeric" onChange={(event) => setMobile(event.target.value)} value={mobile} /></Field><Field label="Email"><input className={inputClass} onChange={(event) => setEmail(event.target.value)} type="email" value={email} /></Field><Field label="City"><input className={inputClass} onChange={(event) => setCity(event.target.value)} value={city} /></Field><Field label="Source"><select className={inputClass} onChange={(event) => setSource(event.target.value)} value={source}>{["Manual", "Registration Link", "Landing Page", "WhatsApp", "Referral", "CSV Import", "Website"].map((value) => <option key={value}>{value}</option>)}</select></Field><Field label="Workshop / Interest"><select className={inputClass} onChange={(event) => setInterest(event.target.value)} value={interest}><option value="">General enquiry</option>{workshops.map((workshop) => <option key={workshop.id}>{workshop.name}</option>)}</select></Field><Field label="Priority"><select className={inputClass} onChange={(event) => setPriority(event.target.value as LeadPriority)} value={priority}><option>Hot</option><option>Warm</option><option>Cold</option></select></Field><Field label="Salesperson Unique ID"><input className={inputClass} onChange={(event) => setSalespersonCode(event.target.value.toUpperCase())} placeholder="SP-XXXXXXXX" value={salespersonCode} />{salespersonCode ? <span className={`mt-1 block text-xs font-bold ${codeOwner ? "text-emerald-600" : "text-rose-600"}`}>{codeOwner ? `Will assign to ${codeOwner.name}` : "No active salesperson found"}</span> : null}</Field><Field label="Assign To (optional fallback)"><select className={inputClass} disabled={Boolean(codeOwner)} onChange={(event) => setAssignedTo(event.target.value)} value={codeOwner?.name || assignedTo}><option value="">Unassigned</option>{salesPeople.map((person) => <option key={person.id} value={person.name}>{person.name} · {person.salesPersonCode || salesPersonCodeFromId(person.id)}</option>)}</select></Field></div><div className="mt-6 flex justify-end gap-2"><button className="rounded-lg border border-slate-200 px-5 py-3 text-sm font-black text-slate-700" onClick={onClose} type="button">Cancel</button><button className="rounded-lg bg-emerald-600 px-5 py-3 text-sm font-black text-white" type="submit">Create Lead</button></div></form></div>;
+  return <div aria-modal="true" className="fixed inset-0 z-50 grid place-items-end bg-slate-950/50 backdrop-blur-sm sm:place-items-center sm:p-4" role="dialog"><form className="max-h-[92vh] w-full overflow-y-auto bg-white p-5 shadow-2xl sm:max-w-xl sm:rounded-xl" onSubmit={submit}><div className="flex items-start justify-between"><div><h2 className="text-2xl font-black">Add Lead</h2><p className="mt-1 text-sm font-semibold text-slate-500">Enter a salesperson ID for instant assignment.</p></div><button aria-label="Close" className="grid size-10 place-items-center rounded-lg border border-slate-200" onClick={onClose} type="button"><X className="size-4" /></button></div>{error ? <p className="mt-4 rounded-lg bg-rose-50 px-4 py-3 text-sm font-bold text-rose-700">{error}</p> : null}<div className="mt-5 grid gap-4 sm:grid-cols-2"><Field label="Full Name *"><input autoFocus className={inputClass} onChange={(event) => setName(event.target.value)} value={name} /></Field><Field label="Mobile *"><input className={inputClass} inputMode="numeric" onChange={(event) => setMobile(event.target.value)} value={mobile} /></Field><Field label="Email"><input className={inputClass} onChange={(event) => setEmail(event.target.value)} type="email" value={email} /></Field><Field label="City"><input className={inputClass} onChange={(event) => setCity(event.target.value)} value={city} /></Field><Field label="Source"><select className={inputClass} onChange={(event) => setSource(event.target.value)} value={source}>{["Manual", "Registration Link", "Landing Page", "Referral", "CSV Import", "Website"].map((value) => <option key={value}>{value}</option>)}</select></Field><Field label="Workshop / Interest"><select className={inputClass} onChange={(event) => setInterest(event.target.value)} value={interest}><option value="">General enquiry</option>{workshops.map((workshop) => <option key={workshop.id}>{workshop.name}</option>)}</select></Field><Field label="Priority"><select className={inputClass} onChange={(event) => setPriority(event.target.value as LeadPriority)} value={priority}><option>Hot</option><option>Warm</option><option>Cold</option></select></Field><Field label="Salesperson Unique ID"><input className={inputClass} onChange={(event) => setSalespersonCode(event.target.value.toUpperCase())} placeholder="SP-XXXXXXXX" value={salespersonCode} />{salespersonCode ? <span className={`mt-1 block text-xs font-bold ${codeOwner ? "text-emerald-600" : "text-rose-600"}`}>{codeOwner ? `Will assign to ${codeOwner.name}` : "No active salesperson found"}</span> : null}</Field><Field label="Assign To (optional fallback)"><select className={inputClass} disabled={Boolean(codeOwner)} onChange={(event) => setAssignedTo(event.target.value)} value={codeOwner?.name || assignedTo}><option value="">Unassigned</option>{salesPeople.map((person) => <option key={person.id} value={person.name}>{person.name} · {person.salesPersonCode || salesPersonCodeFromId(person.id)}</option>)}</select></Field></div><div className="mt-6 flex justify-end gap-2"><button className="rounded-lg border border-slate-200 px-5 py-3 text-sm font-black text-slate-700" onClick={onClose} type="button">Cancel</button><button className="rounded-lg bg-emerald-600 px-5 py-3 text-sm font-black text-white" type="submit">Create Lead</button></div></form></div>;
 }
 
 function Metric({ icon: Icon, label, tone = "slate", value }: { icon: typeof UsersRound; label: string; tone?: "slate" | "emerald" | "rose" | "amber" | "indigo"; value: number | string }) { const styles = { amber: "bg-amber-50 text-amber-700", emerald: "bg-emerald-50 text-emerald-700", indigo: "bg-indigo-50 text-indigo-700", rose: "bg-rose-50 text-rose-700", slate: "bg-slate-100 text-slate-700" }; return <div className="flex min-w-0 items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><span className={`grid size-10 shrink-0 place-items-center rounded-lg ${styles[tone]}`}><Icon className="size-5" /></span><div className="min-w-0"><p className="truncate text-xs font-black uppercase text-slate-500">{label}</p><p className="mt-1 truncate text-xl font-black text-slate-950">{value}</p></div></div>; }
@@ -433,7 +510,6 @@ function formatInr(value: number) { return `INR ${value.toLocaleString("en-IN")}
 function formatDateTime(value: string) { const date = new Date(value); return Number.isNaN(date.getTime()) ? "-" : date.toLocaleString("en-IN", { day: "2-digit", hour: "2-digit", hour12: true, minute: "2-digit", month: "short", year: "numeric" }); }
 function isToday(value: string) { const date = new Date(value); const now = new Date(); return !Number.isNaN(date.getTime()) && date.toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" }) === now.toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" }); }
 function hasOverdueFollowUp(lead: Lead) { const followUp = nextPendingFollowUp(lead.followUps ?? []); return Boolean(followUp && new Date(followUp.dueAt).getTime() < Date.now() && !["Won", "Lost"].includes(lead.stage)); }
-function whatsappUrl(lead: Lead) { return `https://wa.me/91${normalizeLeadMobile(lead.mobile)}?text=${encodeURIComponent(`Hello ${lead.name}, this is Coach For Life regarding ${lead.interest || "your enquiry"}.`)}`; }
 function toLocalInputValue(date: Date) { const offset = date.getTimezoneOffset(); return new Date(date.getTime() - offset * 60_000).toISOString().slice(0, 16); }
 function download(content: string, filename: string) { const url = URL.createObjectURL(new Blob([content], { type: "text/csv;charset=utf-8" })); const anchor = document.createElement("a"); anchor.href = url; anchor.download = filename; anchor.click(); URL.revokeObjectURL(url); }
 function normalizeHeader(value: string) { return value.toLowerCase().replace(/[^a-z0-9]/g, ""); }
