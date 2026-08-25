@@ -23,7 +23,7 @@ function stageId(stage: string) { return stage.trim().toLowerCase().replace(/\s+
 function stageName(id: string) { return callFlowStages.find(([code]) => code === id)?.[1] || "Contacted"; }
 function phone(value: string) { const digits = value.replace(/\D/g, ""); return digits.length > 10 ? digits.slice(-10) : digits; }
 
-export function leadToCallFlow(lead: Lead, userId: string) {
+export function leadToCallFlow(lead: Lead, userId: string, duplicateCount = 1) {
   const updatedAt = Math.max(time(lead.updatedAt), time(lead.lastActivityAt), time(lead.createdAt), 1);
   const normalizedPhone = phone(lead.mobile);
   return {
@@ -31,11 +31,29 @@ export function leadToCallFlow(lead: Lead, userId: string) {
     normalizedPhone, displayPhone: lead.mobile || normalizedPhone, stageId: stageId(lead.stage),
     assignedUserId: lead.assignedSalesPersonId || lead.assignedSalesPersonCode || userId,
     campaignId: lead.source || null, nextFollowUpAt: time(lead.nextFollowUp) || null,
-    updatedAt, updatedBy: "cfl-dashboard", version: updatedAt
+    updatedAt, updatedBy: "cfl-dashboard", version: updatedAt, doNotCall: lead.doNotCall === true || lead.tags?.some((tag) => tag.toLowerCase() === "do not call"), duplicateCount: Math.max(1, duplicateCount)
   };
 }
 
 export type CallFlowEvent = { eventUuid: string; entityType: string; entityId: string; operation: string; payload?: Record<string, unknown> };
+
+export type CallFlowCallRecord = {
+  id: string;
+  eventUuid: string;
+  leadId: string;
+  leadName: string;
+  salespersonId: string;
+  salespersonName: string;
+  campaign: string;
+  phone: string;
+  direction: "INCOMING" | "OUTGOING";
+  startedAt: string;
+  endedAt: string;
+  durationSeconds: number;
+  connected: boolean;
+  outcome: string;
+  source: string;
+};
 
 export function parseEventPayload(event: CallFlowEvent) {
   const raw = event.payload?.raw;
@@ -52,9 +70,14 @@ export function applyCallFlowEvent(lead: Lead, event: CallFlowEvent, actor: stri
   const followUps = [...(lead.followUps || [])];
   let stage = lead.stage;
   let nextFollowUp = lead.nextFollowUp;
+  let doNotCall = lead.doNotCall === true;
 
   if (event.entityType === "CALL") {
-    const message = `Call initiated from CallFlow${payload.callId ? ` (${String(payload.callId).slice(0, 8)})` : ""}`;
+    const duration = Math.max(0, Number(payload.durationSeconds) || 0);
+    const direction = String(payload.direction || "OUTGOING").toLowerCase();
+    const message = payload.endedAt
+      ? `${direction === "incoming" ? "Incoming" : "Outgoing"} call · ${duration}s · ${duration > 0 ? "Connected" : "Not connected"}`
+      : `Call initiated from CallFlow${payload.callId ? ` (${String(payload.callId).slice(0, 8)})` : ""}`;
     callHistory.push(message);
     activities.push({ id: event.eventUuid, type: "call", message, createdAt: at, createdBy: actor });
   } else if (event.entityType === "CALL_DISPOSITION") {
@@ -64,11 +87,33 @@ export function applyCallFlowEvent(lead: Lead, event: CallFlowEvent, actor: stri
     callHistory.push(message);
     activities.push({ id: event.eventUuid, type: "call", message, createdAt: at, createdBy: actor });
     if (note && !notes.includes(note)) notes.push(note);
+    if (String(payload.dispositionCode || "").toUpperCase() === "WRONG_NUMBER") { doNotCall = true; stage = "Lost"; if (!lead.tags?.includes("Do Not Call")) lead = { ...lead, tags: [...(lead.tags || []), "Do Not Call"] }; }
   } else if (event.entityType === "NOTE") {
     const note = String(payload.body || payload.note || "").trim();
     if (note && !notes.includes(note)) notes.push(note);
     if (note) activities.push({ id: event.eventUuid, type: "note", message: note, createdAt: at, createdBy: actor });
   } else if (event.entityType === "FOLLOW_UP") {
+    if (event.operation === "COMPLETE") {
+      const completedAt = iso(payload.completedAt, now);
+      const updated = followUps.map((item) => item.id === event.entityId ? { ...item, completed: true, completedAt } : item);
+      const nextPending = updated.filter((item) => !item.completed).sort((a, b) => time(a.dueAt) - time(b.dueAt))[0];
+      activities.push({ id: event.eventUuid, type: "follow_up", message: "Call follow-up completed", createdAt: completedAt, createdBy: actor });
+      return { ...lead, followUps: updated as LeadFollowUp[], nextFollowUp: nextPending?.dueAt || "", activities: activities as LeadActivity[], updatedAt: completedAt, lastActivityAt: completedAt };
+    }
+    if (event.operation === "CANCEL") {
+      const cancelledAt = iso(payload.cancelledAt, now);
+      const updated = followUps.map((item) => item.id === event.entityId ? { ...item, completed: true, completedAt: cancelledAt } : item);
+      const nextPending = updated.filter((item) => !item.completed).sort((a, b) => time(a.dueAt) - time(b.dueAt))[0];
+      activities.push({ id: event.eventUuid, type: "follow_up", message: "Call follow-up cancelled", createdAt: cancelledAt, createdBy: actor });
+      return { ...lead, followUps: updated as LeadFollowUp[], nextFollowUp: nextPending?.dueAt || "", activities: activities as LeadActivity[], updatedAt: cancelledAt, lastActivityAt: cancelledAt };
+    }
+    if (event.operation === "UPDATE") {
+      const dueAt = iso(payload.scheduledAt, now); const note = String(payload.note || "").trim();
+      const updated = followUps.map((item) => item.id === event.entityId ? { ...item, dueAt, note, completed: false } : item);
+      const nextPending = updated.filter((item) => !item.completed).sort((a, b) => time(a.dueAt) - time(b.dueAt))[0];
+      activities.push({ id: event.eventUuid, type: "follow_up", message: `Call follow-up rescheduled${note ? ` — ${note}` : ""}`, createdAt: at, createdBy: actor });
+      return { ...lead, followUps: updated as LeadFollowUp[], nextFollowUp: nextPending?.dueAt || dueAt, activities: activities as LeadActivity[], updatedAt: at, lastActivityAt: at };
+    }
     const dueAt = iso(payload.scheduledAt, now);
     const note = String(payload.note || "").trim();
     if (!followUps.some((item) => item.id === event.entityId)) followUps.push({ id: event.entityId, dueAt, type: "Call", note, completed: false, createdAt: at });
@@ -80,5 +125,5 @@ export function applyCallFlowEvent(lead: Lead, event: CallFlowEvent, actor: stri
     if (payload.followUpAt) nextFollowUp = iso(payload.followUpAt, now);
     activities.push({ id: event.eventUuid, type: "stage", message: `Stage updated to ${stage}`, createdAt: at, createdBy: actor });
   }
-  return { ...lead, stage, nextFollowUp, notes, callHistory, activities: activities as LeadActivity[], followUps: followUps as LeadFollowUp[], updatedAt: at, lastActivityAt: at };
+  return { ...lead, stage, doNotCall, nextFollowUp, notes, callHistory, activities: activities as LeadActivity[], followUps: followUps as LeadFollowUp[], updatedAt: at, lastActivityAt: at };
 }

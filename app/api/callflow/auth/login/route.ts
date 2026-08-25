@@ -18,6 +18,6 @@ export async function POST(request: NextRequest) {
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
     const updated = { ...user, lastLoginAt: new Date().toISOString(), loginCount: user.loginCount + 1 };
     await saveAppState({ salesTeamUsers: [updated, ...users.filter((item) => item.id !== user.id)] });
-    return NextResponse.json({ accessToken: createCallFlowToken(tokenIdentity, "access", 3600), refreshToken: createCallFlowToken(tokenIdentity, "refresh", 60 * 60 * 24 * 30), expiresAt });
+    return NextResponse.json({ accessToken: createCallFlowToken(tokenIdentity, "access", 3600), refreshToken: createCallFlowToken(tokenIdentity, "refresh", 60 * 60 * 24 * 30), expiresAt, employeeName: user.name, mobile: user.mobile });
   } catch { return NextResponse.json({ error: "Could not sign in." }, { status: 500 }); }
 }

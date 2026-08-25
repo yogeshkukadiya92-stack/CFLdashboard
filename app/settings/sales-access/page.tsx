@@ -1,6 +1,7 @@
 "use client";
 
 import { AdminPlatformShell } from "@/components/admin-platform-shell";
+import { SettingsMenu } from "@/components/settings-menu";
 import { permissionsForRoles, salesPermissionOptions } from "@/lib/sales-permissions";
 import type { CrmTeamRole, SalesPermission } from "@/lib/types";
 import { BriefcaseBusiness, Check, Eye, LockKeyhole, Save, ShieldCheck, UserRound } from "lucide-react";
@@ -46,6 +47,7 @@ export default function SalesAccessPage() {
 
   const allowedPermissions = permissionsForRoles(roles);
   return <AdminPlatformShell activeLabel="CRM Team Access" title="CRM Team Access Management" description="Set each account as Sales, Observer, or both, then choose the CRM screens they can open.">
+    <SettingsMenu />
     <div className="grid gap-4 xl:grid-cols-[340px_minmax(0,1fr)]">
       <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="flex items-center gap-3 border-b border-slate-100 px-1 pb-4"><span className="grid size-10 place-items-center rounded-xl bg-slate-950 text-white"><UserRound className="size-5" /></span><div><h3 className="font-black text-slate-950">CRM team</h3><p className="text-xs font-semibold text-slate-500">{users.length} login accounts</p></div></div>

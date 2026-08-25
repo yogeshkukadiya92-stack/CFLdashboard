@@ -1,0 +1,6 @@
+{
+  "crons": [
+    { "path": "/api/callflow/reports/daily?period=daily", "schedule": "0 13 * * *" },
+    { "path": "/api/callflow/reports/daily?period=weekly", "schedule": "5 13 * * 6" }
+  ]
+}

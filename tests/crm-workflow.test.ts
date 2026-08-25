@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { detectLeadRisk, rankNextBestActions, taskBucket } from "../lib/crm-workflow.ts";
-import { normalizeLead, upsertLeadFromRegistration } from "../lib/lead-utils.ts";
+import { chooseAssignee, normalizeLead, upsertLeadFromRegistration } from "../lib/lead-utils.ts";
 
 const now = new Date("2026-08-18T10:00:00.000Z");
 
@@ -71,4 +71,17 @@ test("lead block metadata survives normalization", () => {
   assert.equal(lead.blocked, true);
   assert.equal(lead.blockReason, "Duplicate enquiry");
   assert.equal(lead.blockedBy, "Admin");
+});
+
+test("auto-assignment excludes salespeople who ended their shift", () => {
+  const people = [
+    { id: "paused", name: "On Leave", isActive: true, acceptingLeads: false },
+    { id: "ready", name: "On Duty", isActive: true, acceptingLeads: true }
+  ];
+  assert.equal(chooseAssignee(people, "Workshop", []), "On Duty");
+});
+
+test("existing salesperson records remain assignable and all-paused teams stay unassigned", () => {
+  assert.equal(chooseAssignee([{ id: "legacy", name: "Legacy User", isActive: true }], "Workshop", []), "Legacy User");
+  assert.equal(chooseAssignee([{ id: "paused", name: "On Leave", isActive: true, acceptingLeads: false }], "Workshop", []), "");
 });

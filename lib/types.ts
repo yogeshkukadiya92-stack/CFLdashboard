@@ -99,6 +99,7 @@ export interface Lead {
   priority?: LeadPriority;
   interest?: string;
   lostReason?: string;
+  doNotCall?: boolean;
   updatedAt?: string;
   lastActivityAt?: string;
   sourceDetails?: string[];

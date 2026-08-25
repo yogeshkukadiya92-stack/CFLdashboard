@@ -1,6 +1,13 @@
 import { extractPreQualification } from "./crm-scorecard.ts";
 import type { Lead, LeadActivity, LeadFollowUp, LeadPriority, LeadStage } from "@/lib/types";
 
+type SalesPersonLike = {
+  acceptingLeads?: boolean;
+  generalAssign?: string;
+  id?: string;
+  isActive?: boolean;
+  name?: string;
+};
 type RegistrationLeadInput = {
   answers?: unknown;
   city?: unknown;
@@ -73,6 +80,7 @@ export function normalizeLead(value: unknown): Lead {
     interest: String(input.interest ?? legacyInterest),
     lastActivityAt: validIso(input.lastActivityAt) ?? activities[0]?.createdAt ?? createdAt,
     lostReason: String(input.lostReason ?? ""),
+    doNotCall: Boolean(input.doNotCall) || stringArray(input.tags).some((tag) => tag.toLowerCase() === "do not call"),
     mobile: normalizeLeadMobile(input.mobile),
     name: String(input.name ?? "Unnamed Lead"),
     nextFollowUp: String(input.nextFollowUp ?? nextPendingFollowUp(followUps)?.dueAt ?? ""),
@@ -158,6 +166,17 @@ export function nextPendingFollowUp(followUps: LeadFollowUp[]) {
     .sort((a, b) => new Date(a.dueAt).getTime() - new Date(b.dueAt).getTime())[0];
 }
 
+export function chooseAssignee(salesPeople: unknown[], workshop: string, leads: Lead[]) {
+  const candidates = salesPeople
+    .filter((value): value is SalesPersonLike => Boolean(value) && typeof value === "object" && !Array.isArray(value))
+    .filter((person) => person.isActive !== false && person.acceptingLeads !== false && person.name)
+    .filter((person) => !person.generalAssign || person.generalAssign.trim().toLowerCase() === workshop.toLowerCase());
+  if (!candidates.length) return "";
+
+  const counts = new Map<string, number>();
+  leads.forEach((lead) => counts.set(lead.assignedTo, (counts.get(lead.assignedTo) ?? 0) + 1));
+  return [...candidates].sort((a, b) => (counts.get(String(a.name)) ?? 0) - (counts.get(String(b.name)) ?? 0))[0]?.name ?? "";
+}
 function stringArray(value: unknown) {
   if (typeof value === "string") return value.trim() ? [value.trim()] : [];
   return Array.isArray(value) ? value.map((item) => String(item)).filter(Boolean) : [];

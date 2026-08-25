@@ -22,6 +22,14 @@ export function getAdminEmail() {
   return requiredEnv("ADMIN_EMAIL", DEV_ADMIN_EMAIL);
 }
 
+export function getAdminName() {
+  return process.env.ADMIN_NAME?.trim() || "Admin User";
+}
+
+export function getAdminMobile() {
+  return process.env.ADMIN_MOBILE?.trim() || "";
+}
+
 export function getAdminPassword() {
   return requiredEnv("ADMIN_PASSWORD", DEV_ADMIN_PASSWORD);
 }

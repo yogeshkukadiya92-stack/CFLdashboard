@@ -15,6 +15,12 @@ type CommissionRow = {
   directPercent: string;
 };
 type SalesPersonRecord = {
+  acceptingLeads?: boolean;
+  assignmentPausedAt?: string;
+  assignmentAvailabilityUpdatedAt?: string;
+  dailyCallTarget?: number;
+  dailyConnectedTarget?: number;
+  whatsappTemplate?: string;
   canViewOther: boolean;
   commissions: CommissionRow[];
   directClient?: string;
@@ -51,6 +57,9 @@ export default function SalesPersonPage() {
   const [isActive, setIsActive] = useState(true);
   const [generalAssign, setGeneralAssign] = useState("");
   const [directClient, setDirectClient] = useState("");
+  const [dailyCallTarget, setDailyCallTarget] = useState("50");
+  const [dailyConnectedTarget, setDailyConnectedTarget] = useState("20");
+  const [whatsappTemplate, setWhatsappTemplate] = useState("Hi {{leadName}}, thank you for speaking with Coach For Life. Please reply here if you need any help.");
   const [commissionWorkshop, setCommissionWorkshop] = useState("");
   const [leadPercent, setLeadPercent] = useState("15");
   const [directPercent, setDirectPercent] = useState("5");
@@ -94,6 +103,9 @@ export default function SalesPersonPage() {
     setIsActive(true);
     setGeneralAssign("");
     setDirectClient("");
+    setDailyCallTarget("50");
+    setDailyConnectedTarget("20");
+    setWhatsappTemplate("Hi {{leadName}}, thank you for speaking with Coach For Life. Please reply here if you need any help.");
     setCommissionWorkshop("");
     setLeadPercent("15");
     setDirectPercent("5");
@@ -145,10 +157,20 @@ export default function SalesPersonPage() {
       setError("Please fill all required salesperson fields.");
       return;
     }
+    if ((Number(dailyConnectedTarget) || 0) > (Number(dailyCallTarget) || 0)) {
+      setError("Daily connected target cannot be higher than the daily call target.");
+      return;
+    }
     setError("");
     const personId = editingSalesId ?? generateId();
     const existingRecord = records.find((record) => record.id === editingSalesId);
     const payload: SalesPersonRecord = {
+      acceptingLeads: existingRecord?.acceptingLeads,
+      assignmentPausedAt: existingRecord?.assignmentPausedAt,
+      assignmentAvailabilityUpdatedAt: existingRecord?.assignmentAvailabilityUpdatedAt,
+      dailyCallTarget: Math.max(1, Number(dailyCallTarget) || 50),
+      dailyConnectedTarget: Math.max(1, Number(dailyConnectedTarget) || 20),
+      whatsappTemplate: whatsappTemplate.trim(),
       canViewOther,
       commissions,
       directClient,
@@ -189,6 +211,9 @@ export default function SalesPersonPage() {
     setIsActive(record.isActive);
     setGeneralAssign(record.generalAssign ?? "");
     setDirectClient(record.directClient ?? "");
+    setDailyCallTarget(String(record.dailyCallTarget || 50));
+    setDailyConnectedTarget(String(record.dailyConnectedTarget || 20));
+    setWhatsappTemplate(record.whatsappTemplate || "Hi {{leadName}}, thank you for speaking with Coach For Life. Please reply here if you need any help.");
     setCommissions(record.commissions ?? []);
     setEditingSalesId(record.id);
     setEditingId(null);
@@ -252,7 +277,10 @@ export default function SalesPersonPage() {
             </label>
           </div>
 
-          <div className="mt-5 grid gap-4">
+          <div className="mt-5 grid gap-4 md:grid-cols-2">
+            <Field label="Daily Call Target"><input className={inputClass} min="1" onChange={(event) => setDailyCallTarget(event.target.value)} type="number" value={dailyCallTarget} /></Field>
+            <Field label="Daily Connected Target"><input className={inputClass} min="1" onChange={(event) => setDailyConnectedTarget(event.target.value)} type="number" value={dailyConnectedTarget} /></Field>
+            <label className="block md:col-span-2"><span className="mb-2 block text-sm font-bold text-slate-600">WhatsApp Template</span><textarea className={inputClass} maxLength={500} onChange={(event) => setWhatsappTemplate(event.target.value)} rows={3} value={whatsappTemplate} /><span className="mt-1 block text-xs font-semibold text-slate-500">Use {"{{leadName}}"}, {"{{company}}"} and {"{{salespersonName}}"} placeholders.</span></label>
             <Field label="Select Workshop Conversation For General Lead Assign">
               <select className={inputClass} onChange={(event) => setGeneralAssign(event.target.value)} value={generalAssign}>
                 <option value="">Select workshop conversations</option>
@@ -327,7 +355,10 @@ export default function SalesPersonPage() {
                       <td className="px-4 py-4">{record.email}</td>
                       <td className="px-4 py-4">{record.group}</td>
                       <td className="px-4 py-4">
-                        <span className={`rounded-full px-3 py-1 text-xs font-black ${record.isActive ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-700"}`}>{record.isActive ? "Active" : "Inactive"}</span>
+                        <div className="flex flex-col items-start gap-1.5">
+                          <span className={`rounded-full px-3 py-1 text-xs font-black ${record.isActive ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-700"}`}>{record.isActive ? "Active" : "Inactive"}</span>
+                          {record.isActive ? <span className={`rounded-full px-3 py-1 text-xs font-black ${record.acceptingLeads === false ? "bg-amber-50 text-amber-700" : "bg-indigo-50 text-indigo-700"}`}>{record.acceptingLeads === false ? "Assignments paused" : "On duty"}</span> : null}
+                        </div>
                       </td>
                       <td className="px-4 py-4">{record.commissions.length}</td>
                       <td className="px-4 py-4">

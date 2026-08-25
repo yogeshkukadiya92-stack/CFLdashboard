@@ -143,7 +143,8 @@ const navGroups: NavGroup[] = [
         items: [
           { href: "/reports/sales-person-milestone", icon: Activity, label: "Sales Person Milestone" },
           { href: "/reports/sales-person-payment", icon: Activity, label: "Sales Person Payment" },
-          { href: "/reports/sales-person-lead-assign", icon: Activity, label: "Sales Person Lead Assign" }
+          { href: "/reports/sales-person-lead-assign", icon: Activity, label: "Sales Person Lead Assign" },
+          { href: "/reports/callflow-locations", icon: Target, label: "Shift & Meeting Locations" }
         ]
       }
     ]
