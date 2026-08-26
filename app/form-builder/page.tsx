@@ -138,6 +138,9 @@ export default function FormBuilderPage() {
   const [tagline, setTagline] = useState("");
   const [description, setDescription] = useState("Please fill in your details to confirm your seat.");
   const [submitButtonText, setSubmitButtonText] = useState("Confirm Registration");
+  const [allowDuplicate, setAllowDuplicate] = useState(false);
+  const [responseLimit, setResponseLimit] = useState("");
+  const [closedMessage, setClosedMessage] = useState("This registration form is no longer accepting responses.");
   const [registrationCapacity, setRegistrationCapacity] = useState("");
   const [waitingMode, setWaitingMode] = useState(false);
   const [waitingTitle, setWaitingTitle] = useState("Waiting List Registration");
@@ -190,6 +193,9 @@ export default function FormBuilderPage() {
     if (!workshopId) return;
     const savedForm = readLocalArray<BuilderForm>(FORMS_STORAGE_KEY).find((item) => item.workshopId === workshopId);
     setRegistrationCapacity(savedForm?.registrationCapacity ? String(savedForm.registrationCapacity) : "");
+    setAllowDuplicate(Boolean(savedForm?.allowDuplicate));
+    setResponseLimit(savedForm?.responseLimit ? String(savedForm.responseLimit) : "");
+    setClosedMessage(savedForm?.closedMessage || "This registration form is no longer accepting responses.");
     setWaitingMode(Boolean(savedForm?.waitingMode));
     setWaitingTitle(savedForm?.waitingTitle || "Waiting List Registration");
     setWaitingMessage(savedForm?.waitingMessage || "Seats are currently full. Your registration will be added to the waiting list.");
@@ -223,6 +229,9 @@ export default function FormBuilderPage() {
       highlights: highlights.filter(Boolean).length > 0 ? highlights.filter(Boolean) : undefined,
       whatsappGroupUrl: whatsappGroupUrl.trim() || undefined,
       submitButtonText: submitButtonText.trim() || undefined,
+      allowDuplicate,
+      responseLimit: Math.max(0, Number(responseLimit) || 0) || undefined,
+      closedMessage: closedMessage.trim() || undefined,
       registrationCapacity: Math.max(0, Number(registrationCapacity) || 0) || undefined,
       waitingMode,
       waitingTitle: waitingTitle.trim() || undefined,
@@ -230,7 +239,7 @@ export default function FormBuilderPage() {
       fields,
       updatedAt: new Date().toISOString()
     };
-  }, [accent, align, bannerUrl, batch, description, fee, fields, fontFamily, fontSize, highlights, logoUrl, otpRequired, paid, partPayment, registrationCapacity, submitButtonText, tagline, tiers, title, titleBold, titleItalic, waitingMessage, waitingMode, waitingTitle, whatsappGroupUrl, workshop, workshopId]);
+  }, [accent, align, allowDuplicate, bannerUrl, batch, closedMessage, description, fee, fields, fontFamily, fontSize, highlights, logoUrl, otpRequired, paid, partPayment, registrationCapacity, responseLimit, submitButtonText, tagline, tiers, title, titleBold, titleItalic, waitingMessage, waitingMode, waitingTitle, whatsappGroupUrl, workshop, workshopId]);
 
   const link = useMemo(() => {
     if (typeof window === "undefined" || !workshopId) return "";
@@ -435,6 +444,15 @@ export default function FormBuilderPage() {
                 </span>
                 <input checked={otpRequired} className="size-5 shrink-0 accent-emerald-600" onChange={(event) => setOtpRequired(event.target.checked)} type="checkbox" />
               </label>
+
+              <div className="rounded-xl border border-indigo-200 bg-indigo-50/60 p-4">
+                <p className="text-sm font-black text-slate-800">Response Controls</p>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <label className="flex min-h-[52px] items-center justify-between gap-3 rounded-lg bg-white px-3 py-2 sm:col-span-2"><span><span className="block text-sm font-black text-slate-700">Allow multiple submissions</span><span className="block text-xs font-semibold text-slate-400">The same mobile can register more than once.</span></span><input checked={allowDuplicate} className="size-5 accent-indigo-600" onChange={(event) => setAllowDuplicate(event.target.checked)} type="checkbox" /></label>
+                  <label><span className="mb-2 block text-xs font-black text-slate-600">Response limit</span><input className="w-full rounded-xl border border-indigo-200 bg-white px-3.5 py-3 text-sm font-semibold outline-none" inputMode="numeric" onChange={(event) => setResponseLimit(event.target.value.replace(/\D/g, ""))} placeholder="Unlimited" value={responseLimit} /></label>
+                  <label><span className="mb-2 block text-xs font-black text-slate-600">Limit reached message</span><input className="w-full rounded-xl border border-indigo-200 bg-white px-3.5 py-3 text-sm font-semibold outline-none" maxLength={300} onChange={(event) => setClosedMessage(event.target.value)} value={closedMessage} /></label>
+                </div>
+              </div>
 
               <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-4">
                 <label className="flex min-h-[48px] items-center justify-between gap-4">

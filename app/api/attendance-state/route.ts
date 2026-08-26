@@ -98,6 +98,13 @@ export async function POST(request: Request) {
     const session = sessions.find((item) => item.id === sessionId && item.slug === sessionSlug && item.published !== false);
     if (!session) return NextResponse.json({ error: "Attendance session is not active." }, { status: 404 });
 
+    const currentEntries = (Array.isArray(state?.attendanceEntries) ? state.attendanceEntries : []) as AttendanceEntry[];
+    const sessionEntries = currentEntries.filter((entry) => entry.sessionId === session.id);
+    const responseLimit = cleanNumber(session.responseLimit, 0, 0, 20_000);
+    if (responseLimit > 0 && sessionEntries.length >= responseLimit) {
+      return NextResponse.json({ error: cleanText(session.closedMessage, 300) || "This attendance form is no longer accepting responses." }, { status: 403 });
+    }
+
     const windowStatus = attendanceWindow(session);
     if (!windowStatus.allowed) return NextResponse.json({ error: windowStatus.reason }, { status: 403 });
 
@@ -112,7 +119,9 @@ export async function POST(request: Request) {
     if (missingField) return NextResponse.json({ error: `${missingField.label} is required.` }, { status: 400 });
     if (email && !/^\S+@\S+\.\S+$/.test(email)) return NextResponse.json({ error: "Enter a valid email address." }, { status: 400 });
 
-    const stableId = `att-${session.id}-${mobileDigits}`;
+    const stableId = session.allowDuplicate
+      ? `att-${session.id}-${mobileDigits}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+      : `att-${session.id}-${mobileDigits}`;
     const zoomJoinUrl = validZoomUrl(session.zoomJoinUrl);
     const responseMeta = {
       joinUrl: zoomJoinUrl,
@@ -139,7 +148,7 @@ export async function POST(request: Request) {
     };
     const saved = await mutateAttendanceEntries((rawEntries) => {
       const entries = rawEntries as AttendanceEntry[];
-      const existing = entries.find((entry) => entry.id === stableId);
+      const existing = session.allowDuplicate ? undefined : entries.find((entry) => entry.id === stableId);
       if (existing) return { entries, result: { duplicate: true, entry: existing } };
       return { entries: [proposedEntry, ...entries].slice(0, 20_000), result: { duplicate: false, entry: proposedEntry } };
     });

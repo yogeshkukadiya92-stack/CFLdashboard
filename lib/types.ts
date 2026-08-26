@@ -472,6 +472,9 @@ export interface BuilderForm {
   whatsappConfirmationEnabled?: boolean;
   whatsappConfirmationTemplate?: string;
   submitButtonText?: string;
+  allowDuplicate?: boolean;
+  responseLimit?: number;
+  closedMessage?: string;
   registrationCapacity?: number;
   waitingMode?: boolean;
   waitingTitle?: string;
@@ -503,6 +506,8 @@ export interface AttendanceSession {
   closeMinutesAfter?: number;
   redirectDelaySeconds?: number;
   allowDuplicate?: boolean;
+  responseLimit?: number;
+  closedMessage?: string;
   successMessage?: string;
   noZoomMessage?: string;
   submitButtonText?: string;

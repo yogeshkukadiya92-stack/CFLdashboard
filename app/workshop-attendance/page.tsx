@@ -270,6 +270,8 @@ export default function WorkshopAttendancePage() {
       createdAt: now,
       description: "Please mark your attendance for this workshop session.",
       allowDuplicate: false,
+      responseLimit: undefined,
+      closedMessage: "This attendance form is no longer accepting responses.",
       batch: workshop.batch || "",
       closeMinutesAfter: 120,
       facilitator: workshop.facilitator || "CFL Facilitator",
@@ -360,6 +362,17 @@ export default function WorkshopAttendancePage() {
   function updateField(id: string, patch: Partial<BuilderField>) {
     if (!selectedSession) return;
     updateSession({ fields: selectedSession.fields.map((field) => (field.id === id ? { ...field, ...patch } : field)) });
+  }
+
+  function duplicateField(id: string) {
+    if (!selectedSession) return;
+    const index = selectedSession.fields.findIndex((field) => field.id === id);
+    if (index < 0) return;
+    const source = selectedSession.fields[index];
+    const copy: BuilderField = { ...source, id: generateId(), label: `${source.label} Copy`, role: undefined };
+    const fields = [...selectedSession.fields];
+    fields.splice(index + 1, 0, copy);
+    updateSession({ fields });
   }
 
   function updateThemeImage(kind: "bannerUrl" | "logoUrl", file?: File) {
@@ -745,6 +758,14 @@ export default function WorkshopAttendancePage() {
                       <span className="mb-2 block text-sm font-bold text-slate-600">Success Message</span>
                       <input className={inputClass} onChange={(event) => updateSession({ successMessage: event.target.value })} value={selectedSession.successMessage || ""} />
                     </label>
+                    <div className="grid gap-3 rounded-xl border border-indigo-100 bg-indigo-50/60 p-4 md:col-span-2 sm:grid-cols-2">
+                      <label className="flex min-h-[52px] items-center justify-between gap-4 rounded-lg bg-white px-3 py-2">
+                        <span><span className="block text-sm font-black text-slate-700">Allow multiple submissions</span><span className="block text-xs font-semibold text-slate-400">The same mobile number may submit more than once.</span></span>
+                        <input checked={Boolean(selectedSession.allowDuplicate)} className="size-5 accent-indigo-600" onChange={(event) => updateSession({ allowDuplicate: event.target.checked })} type="checkbox" />
+                      </label>
+                      <NumberSetting label="Response limit" max={20000} onChange={(value) => updateSession({ responseLimit: value || undefined })} suffix="max" value={selectedSession.responseLimit ?? 0} />
+                      <label className="sm:col-span-2"><span className="mb-2 block text-xs font-black text-slate-600">Closed / limit reached message</span><input className={inputClass} maxLength={300} onChange={(event) => updateSession({ closedMessage: event.target.value })} value={selectedSession.closedMessage ?? "This attendance form is no longer accepting responses."} /></label>
+                    </div>
                     <label className="md:col-span-2">
                       <span className="mb-2 block text-sm font-bold text-slate-600">Message when Zoom link is not configured</span>
                       <textarea className={inputClass} onChange={(event) => updateSession({ noZoomMessage: event.target.value })} placeholder="Attendance is saved. The Zoom link has not been configured for this session." rows={2} value={selectedSession.noZoomMessage ?? "Attendance is saved. The Zoom link has not been configured for this session."} />
@@ -792,6 +813,7 @@ export default function WorkshopAttendancePage() {
                         key={field.id}
                         logicMode={builderTab === "logic"}
                         onChange={(patch) => updateField(field.id, patch)}
+                        onDuplicate={() => duplicateField(field.id)}
                         onMove={moveField}
                         onRemove={() => removeField(field.id)}
                         total={selectedSession.fields.length}
@@ -1200,6 +1222,7 @@ function FieldEditor({
   index,
   logicMode,
   onChange,
+  onDuplicate,
   onMove,
   onRemove,
   total
@@ -1209,6 +1232,7 @@ function FieldEditor({
   index: number;
   logicMode: boolean;
   onChange: (patch: Partial<BuilderField>) => void;
+  onDuplicate: () => void;
   onMove: (index: number, direction: -1 | 1) => void;
   onRemove: () => void;
   total: number;
@@ -1247,6 +1271,7 @@ function FieldEditor({
           ) : null}
           <button className="grid size-9 place-items-center rounded-lg bg-white text-slate-500 hover:text-slate-900 disabled:opacity-30" disabled={index === 0} onClick={() => onMove(index, -1)} type="button"><ArrowUp className="size-4" /></button>
           <button className="grid size-9 place-items-center rounded-lg bg-white text-slate-500 hover:text-slate-900 disabled:opacity-30" disabled={index === total - 1} onClick={() => onMove(index, 1)} type="button"><ArrowDown className="size-4" /></button>
+          <button aria-label="Duplicate field" className="grid size-9 place-items-center rounded-lg bg-white text-slate-500 hover:text-slate-900" onClick={onDuplicate} title="Duplicate field" type="button"><Copy className="size-4" /></button>
           <button className="grid size-9 place-items-center rounded-lg bg-white text-rose-400 hover:text-rose-600 disabled:opacity-30" disabled={locked} onClick={onRemove} type="button"><Trash2 className="size-4" /></button>
         </div>
       </div>

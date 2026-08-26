@@ -59,6 +59,9 @@ type FormModel = {
   waitingMode?: boolean;
   waitingTitle?: string;
   waitingMessage?: string;
+  allowDuplicate?: boolean;
+  responseLimit?: number;
+  closedMessage?: string;
   theme: BuilderTheme;
   fields: BuilderField[];
 };
@@ -150,14 +153,18 @@ function buildPublicPages(fields: BuilderField[], mode: BuilderFormMode) {
 }
 
 function hasValidAnswer(field: BuilderField, answers: Record<string, string>) {
-  if (field.type === "heading" || !field.required || !isFieldVisible(field, answers)) return true;
+  if (field.type === "heading" || field.type === "divider" || !isFieldVisible(field, answers)) return true;
   const value = (answers[field.id] ?? "").trim();
-  if (!value) return false;
+  if (!value) return !field.required;
   if (field.role === "mobile") {
     const digits = cleanMobile(value);
-    return digits.length === 10 && /^[6-9]/.test(digits);
+    if (digits.length !== 10 || !/^[6-9]/.test(digits)) return false;
   }
-  if (field.type === "email") return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+  if (field.type === "email" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return false;
+  if (field.minLength && value.length < field.minLength) return false;
+  if (field.maxLength && value.length > field.maxLength) return false;
+  if ((field.type === "number" || field.type === "rating") && field.min !== undefined && Number(value) < field.min) return false;
+  if ((field.type === "number" || field.type === "rating") && field.max !== undefined && Number(value) > field.max) return false;
   return true;
 }
 
@@ -185,6 +192,9 @@ function modelFromBuilderForm(form: BuilderForm, overrides?: Partial<Pick<FormMo
     waitingMode: Boolean(form.waitingMode),
     waitingTitle: form.waitingTitle,
     waitingMessage: form.waitingMessage,
+    allowDuplicate: Boolean(form.allowDuplicate),
+    responseLimit: form.responseLimit,
+    closedMessage: form.closedMessage,
     theme: { ...defaultTheme, ...form.theme },
     fields: form.fields?.length ? normalizeCoreFieldRequirements(form.fields) : simpleFields()
   };
@@ -739,7 +749,8 @@ export default function RegistrationPage() {
     });
 
     const registrationScope = [batchIdParam, introductionSessionIdParam].filter(Boolean).join("-") || "main";
-    const registrationId = `reg-${model.id}-${registrationScope}-${mobile || Date.now().toString(36)}`;
+    const responseSuffix = model.allowDuplicate ? `-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}` : "";
+    const registrationId = `reg-${model.id}-${registrationScope}-${mobile || Date.now().toString(36)}${responseSuffix}`;
     const source = searchParams.get("source") === "landing-page" ? "landing_page" : "registration_link";
     const payload: RegistrationEntry = {
       id: registrationId,
@@ -806,6 +817,21 @@ export default function RegistrationPage() {
     setOtpModalOpen(false);
     setOtpVerifiedMobile("");
     setPartAmount("");
+  }
+
+  function submitAnotherResponse() {
+    setSuccess(false);
+    setMessage("");
+    setWaitingPosition(null);
+    setRegistrationNumber("");
+    setCurrentPage(0);
+    setAnswers({});
+    setPaymentMode("Full");
+    setPartAmount("");
+    setOtpVerifiedMobile("");
+    analyticsCompletedRef.current = false;
+    analyticsStartedRef.current = false;
+    window.scrollTo({ behavior: "smooth", top: 0 });
   }
 
   if (!ready) {
@@ -1159,6 +1185,12 @@ export default function RegistrationPage() {
                 Join WhatsApp Group Now
               </a>
             ) : null}
+            {model.allowDuplicate ? (
+              <button className="mt-3 min-h-[48px] w-full rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-black text-slate-700 hover:bg-slate-50" onClick={submitAnotherResponse} type="button">
+                Submit another response
+              </button>
+            ) : null}
+            <p className="mt-3 text-xs font-semibold text-slate-400">{model.allowDuplicate ? "Multiple responses are enabled for this form." : "One response is allowed per mobile number for this workshop batch."}</p>
           </div>
         </div>
       ) : null}

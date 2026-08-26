@@ -92,11 +92,13 @@ export async function POST(request: Request) {
       const selected = await client.query(`SELECT registrations, forms, workshops, leads, sales_people FROM app_state WHERE id = 1 FOR UPDATE`);
       const state = selected.rows[0] ?? {};
       const current = Array.isArray(state.registrations) ? state.registrations : [];
+      const forms = Array.isArray(state.forms) ? state.forms as Array<Record<string, unknown>> : [];
+      const form = forms.find((value) => String(value.workshopId ?? "") === sanitizedRegistration.workshopId || String(value.workshopSlug ?? "") === sanitizedRegistration.workshopSlug);
       const duplicate = current.find((value: unknown) => {
         if (!value || typeof value !== "object") return false;
         return isDuplicateWorkshopRegistration(value as RegistrationEntry, sanitizedRegistration);
       });
-      if (duplicate) {
+      if (duplicate && form?.allowDuplicate !== true) {
         await client.query("ROLLBACK");
         return NextResponse.json({
           code: "ALREADY_REGISTERED",
@@ -104,8 +106,22 @@ export async function POST(request: Request) {
           error: "This mobile number is already registered for this batch and introduction session."
         }, { status: 409 });
       }
-      const forms = Array.isArray(state.forms) ? state.forms as Array<Record<string, unknown>> : [];
-      const form = forms.find((value) => String(value.workshopId ?? "") === sanitizedRegistration.workshopId || String(value.workshopSlug ?? "") === sanitizedRegistration.workshopSlug);
+      const responseLimit = Math.max(0, Number(form?.responseLimit ?? 0) || 0);
+      const formResponseCount = current.filter((value: unknown) => {
+        if (!value || typeof value !== "object") return false;
+        const entry = value as RegistrationEntry;
+        const sameBatch = sanitizedRegistration.batchId
+          ? entry.batchId === sanitizedRegistration.batchId
+          : String(entry.batch ?? "").trim().toLowerCase() === sanitizedRegistration.batch.trim().toLowerCase();
+        const sameIntroduction = sanitizedRegistration.introductionSessionId
+          ? entry.introductionSessionId === sanitizedRegistration.introductionSessionId
+          : !entry.introductionSessionId;
+        return entry.workshopId === sanitizedRegistration.workshopId && sameBatch && sameIntroduction;
+      }).length;
+      if (responseLimit > 0 && formResponseCount >= responseLimit) {
+        await client.query("ROLLBACK");
+        return NextResponse.json({ error: String(form?.closedMessage ?? "This registration form is no longer accepting responses.").slice(0, 300) }, { status: 403 });
+      }
       const workshopRecords = Array.isArray(state.workshops) ? state.workshops as Array<Record<string, unknown>> : [];
       const workshop = workshopRecords.find((value) => String(value.id ?? "") === sanitizedRegistration.workshopId);
       const workshopBatches = Array.isArray(workshop?.batches) ? workshop.batches as Array<Record<string, unknown>> : [];
