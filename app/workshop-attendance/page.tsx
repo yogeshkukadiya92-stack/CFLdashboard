@@ -277,6 +277,7 @@ export default function WorkshopAttendancePage() {
       id,
       lateAfterMinutes: 15,
       minimumDurationMinutes: 30,
+      openDaysBefore: 0,
       openMinutesBefore: 60,
       published: true,
       redirectDelaySeconds: 3,
@@ -733,7 +734,8 @@ export default function WorkshopAttendancePage() {
                       <span className="mt-1.5 block text-xs font-semibold text-slate-400">Supports secure Zoom links and zoom.tagmango.com redirect links.</span>
                     </label>
                     <div className="grid gap-3 md:col-span-2 sm:grid-cols-2 lg:grid-cols-3">
-                      <NumberSetting label="Open before" onChange={(value) => updateSession({ openMinutesBefore: value })} suffix="min" value={selectedSession.openMinutesBefore ?? 60} />
+                      <NumberSetting label="Open before" max={30} onChange={(value) => updateSession({ openDaysBefore: value })} suffix="days" value={selectedSession.openDaysBefore ?? 0} />
+                      <NumberSetting label="Open before" max={1440} onChange={(value) => updateSession({ openMinutesBefore: value })} suffix="min" value={selectedSession.openMinutesBefore ?? 60} />
                       <NumberSetting label="Late after" onChange={(value) => updateSession({ lateAfterMinutes: value })} suffix="min" value={selectedSession.lateAfterMinutes ?? 15} />
                       <NumberSetting label="Close after" onChange={(value) => updateSession({ closeMinutesAfter: value })} suffix="min" value={selectedSession.closeMinutesAfter ?? 120} />
                       <NumberSetting label="Zoom redirect" onChange={(value) => updateSession({ redirectDelaySeconds: value })} suffix="sec" value={selectedSession.redirectDelaySeconds ?? 3} />
@@ -1066,8 +1068,8 @@ function ContactActions({ message, mobile, name }: { message: string; mobile: st
   );
 }
 
-function NumberSetting({ label, onChange, suffix, value }: { label: string; onChange: (value: number) => void; suffix: string; value: number }) {
-  return <label><span className="mb-2 block text-xs font-black text-slate-500">{label}</span><div className="flex border border-slate-200 bg-white"><input className="min-w-0 flex-1 px-3 py-2.5 text-sm font-bold outline-none" min={0} onChange={(event) => onChange(Math.max(0, Number(event.target.value) || 0))} type="number" value={value} /><span className="grid place-items-center border-l border-slate-200 px-2 text-[10px] font-black uppercase text-slate-400">{suffix}</span></div></label>;
+function NumberSetting({ label, max, onChange, suffix, value }: { label: string; max?: number; onChange: (value: number) => void; suffix: string; value: number }) {
+  return <label><span className="mb-2 block text-xs font-black text-slate-500">{label}</span><div className="flex border border-slate-200 bg-white"><input className="min-w-0 flex-1 px-3 py-2.5 text-sm font-bold outline-none" max={max} min={0} onChange={(event) => onChange(Math.min(max ?? Number.POSITIVE_INFINITY, Math.max(0, Number(event.target.value) || 0)))} type="number" value={value} /><span className="grid place-items-center border-l border-slate-200 px-2 text-[10px] font-black uppercase text-slate-400">{suffix}</span></div></label>;
 }
 
 function EntryDetailDialog({ entry, onClose }: { entry: AttendanceEntry; onClose: () => void }) {

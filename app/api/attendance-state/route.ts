@@ -1,4 +1,5 @@
 import { getAppState, isDbEnabled, mutateAttendanceEntries } from "@/lib/db";
+import { attendanceWindow } from "@/lib/attendance-window";
 import type { AttendanceEntry, AttendanceSession, BuilderField } from "@/lib/types";
 import { NextResponse } from "next/server";
 
@@ -25,24 +26,6 @@ function validZoomUrl(value?: string) {
   } catch {
     return "";
   }
-}
-
-function sessionTimestamp(session: AttendanceSession, time?: string) {
-  if (!session.sessionDate || !time) return null;
-  const timestamp = new Date(`${session.sessionDate}T${time}:00+05:30`).getTime();
-  return Number.isNaN(timestamp) ? null : timestamp;
-}
-
-function attendanceWindow(session: AttendanceSession, now = Date.now()) {
-  const start = sessionTimestamp(session, session.startTime);
-  const end = sessionTimestamp(session, session.endTime);
-  const openMinutes = cleanNumber(session.openMinutesBefore, 60, 0, 1440);
-  const lateMinutes = cleanNumber(session.lateAfterMinutes, 15, 0, 1440);
-  const closeMinutes = cleanNumber(session.closeMinutesAfter, 120, 0, 2880);
-  if (start && now < start - openMinutes * 60_000) return { allowed: false, reason: "Attendance has not opened yet.", late: false };
-  const closeAt = (end ?? (start ? start + 4 * 60 * 60_000 : null));
-  if (closeAt && now > closeAt + closeMinutes * 60_000) return { allowed: false, reason: "Attendance for this session is closed.", late: false };
-  return { allowed: true, reason: "", late: Boolean(start && now > start + lateMinutes * 60_000) };
 }
 
 function publicSession(session: AttendanceSession) {

@@ -497,6 +497,7 @@ export interface AttendanceSession {
   facilitator?: string;
   venue?: string;
   zoomJoinUrl?: string;
+  openDaysBefore?: number;
   openMinutesBefore?: number;
   lateAfterMinutes?: number;
   closeMinutesAfter?: number;
