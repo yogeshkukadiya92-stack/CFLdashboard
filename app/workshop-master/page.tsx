@@ -732,7 +732,8 @@ export default function WorkshopMasterPage() {
   async function saveBuilderForm(record: WorkshopRecord) {
     try {
       const forms = readLocalArray<BuilderForm>(FORMS_STORAGE_KEY);
-      const form = buildRegistrationForm(record);
+      const existing = forms.find((item) => item.workshopId === record.id);
+      const form = { ...buildRegistrationForm(record), requireAttendanceForConfirmation: existing?.requireAttendanceForConfirmation, requiredAttendanceSessionId: existing?.requiredAttendanceSessionId, allowReferralConfirmation: existing?.allowReferralConfirmation, referralCodes: existing?.referralCodes, eligibilityWaitingMessage: existing?.eligibilityWaitingMessage };
       const next = [form, ...forms.filter((item) => item.id !== form.id && item.workshopId !== record.id)];
       return saveLiveState({ forms: next });
     } catch {
@@ -1642,8 +1643,9 @@ export default function WorkshopMasterPage() {
                           </td>
 	                          <td className="px-4 py-4 font-black text-slate-950">
                               {entry.fullName}
-                              {entry.registrationStatus === "waiting" ? <span className="mt-1 block w-fit rounded-full bg-amber-100 px-2 py-1 text-[11px] font-black text-amber-800">Waiting WL-{entry.waitingPosition ?? "-"}</span> : null}
+                              {entry.registrationStatus === "waiting" ? <span className="mt-1 block w-fit rounded-full bg-amber-100 px-2 py-1 text-[11px] font-black text-amber-800">Waiting WL-{entry.waitingPosition ?? "-"} · {entry.waitingReason === "attendance_pending" ? "Attendance pending" : entry.waitingReason === "eligibility_pending" ? "Eligibility pending" : entry.waitingReason === "session_mismatch" ? "Session mismatch" : entry.waitingReason === "invalid_referral" ? "Invalid referral" : entry.waitingReason === "capacity" ? "Capacity full" : "Manual"}</span> : null}
                               {entry.registrationStatus !== "waiting" && entry.registrationNumber ? <span className="mt-1 block w-fit rounded-full bg-emerald-100 px-2 py-1 text-[11px] font-black text-emerald-800">{entry.registrationNumber}</span> : null}
+                              {entry.registrationStatus !== "waiting" && entry.confirmationSource ? <span className="mt-1 block text-[11px] font-bold text-emerald-700">Confirmed via {entry.confirmationSource.replaceAll("_", " + ")}</span> : null}
                             </td>
 	                          <td className="px-4 py-4">{entry.mobile}</td>
 	                          <td className="px-4 py-4">{entry.email}</td>

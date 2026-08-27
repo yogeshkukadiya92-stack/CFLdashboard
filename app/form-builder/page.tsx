@@ -6,7 +6,7 @@ import { hydrateLiveState, readLocalArray, saveLiveState } from "@/lib/live-stat
 import { buildRegistrationUrl, normalizeBaseUrl } from "@/lib/registration-url";
 import { publicFormSlug } from "@/lib/public-slug";
 import { sanitizeRichTextHtml } from "@/lib/rich-text";
-import type { BuilderField, BuilderFieldType, BuilderForm, PaymentTier } from "@/lib/types";
+import type { AttendanceSession, BuilderField, BuilderFieldType, BuilderForm, PaymentTier, ReferralCodeConfig } from "@/lib/types";
 import { generateId } from "@/lib/utils";
 import {
   AlignCenter,
@@ -34,6 +34,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 const WORKSHOP_MASTER_STORAGE_KEY = "cfl_workshop_master_records_v1";
 const FORMS_STORAGE_KEY = "cfl_forms_v1";
+const ATTENDANCE_SESSIONS_STORAGE_KEY = "cfl_attendance_sessions_v1";
 const BRAND_LOGO_SRC = "/brand/coach-for-life-logo-horizontal.png";
 const MAX_IMAGE_WIDTH = 800;
 const IMAGE_QUALITY = 0.7;
@@ -141,6 +142,12 @@ export default function FormBuilderPage() {
   const [allowDuplicate, setAllowDuplicate] = useState(false);
   const [responseLimit, setResponseLimit] = useState("");
   const [closedMessage, setClosedMessage] = useState("This registration form is no longer accepting responses.");
+  const [attendanceSessions, setAttendanceSessions] = useState<AttendanceSession[]>([]);
+  const [requireAttendanceForConfirmation, setRequireAttendanceForConfirmation] = useState(false);
+  const [requiredAttendanceSessionId, setRequiredAttendanceSessionId] = useState("");
+  const [allowReferralConfirmation, setAllowReferralConfirmation] = useState(false);
+  const [referralCodes, setReferralCodes] = useState<ReferralCodeConfig[]>([]);
+  const [eligibilityWaitingMessage, setEligibilityWaitingMessage] = useState("Your registration is saved in the waiting list. We will confirm it after eligibility verification.");
   const [registrationCapacity, setRegistrationCapacity] = useState("");
   const [waitingMode, setWaitingMode] = useState(false);
   const [waitingTitle, setWaitingTitle] = useState("Waiting List Registration");
@@ -169,6 +176,7 @@ export default function FormBuilderPage() {
   useEffect(() => {
     function loadLocal() {
       setWorkshops(readLocalArray<WorkshopMasterRecord>(WORKSHOP_MASTER_STORAGE_KEY));
+      setAttendanceSessions(readLocalArray<AttendanceSession>(ATTENDANCE_SESSIONS_STORAGE_KEY));
     }
 
     loadLocal();
@@ -196,6 +204,11 @@ export default function FormBuilderPage() {
     setAllowDuplicate(Boolean(savedForm?.allowDuplicate));
     setResponseLimit(savedForm?.responseLimit ? String(savedForm.responseLimit) : "");
     setClosedMessage(savedForm?.closedMessage || "This registration form is no longer accepting responses.");
+    setRequireAttendanceForConfirmation(Boolean(savedForm?.requireAttendanceForConfirmation));
+    setRequiredAttendanceSessionId(savedForm?.requiredAttendanceSessionId || "");
+    setAllowReferralConfirmation(Boolean(savedForm?.allowReferralConfirmation));
+    setReferralCodes(savedForm?.referralCodes || []);
+    setEligibilityWaitingMessage(savedForm?.eligibilityWaitingMessage || "Your registration is saved in the waiting list. We will confirm it after eligibility verification.");
     setWaitingMode(Boolean(savedForm?.waitingMode));
     setWaitingTitle(savedForm?.waitingTitle || "Waiting List Registration");
     setWaitingMessage(savedForm?.waitingMessage || "Seats are currently full. Your registration will be added to the waiting list.");
@@ -232,6 +245,11 @@ export default function FormBuilderPage() {
       allowDuplicate,
       responseLimit: Math.max(0, Number(responseLimit) || 0) || undefined,
       closedMessage: closedMessage.trim() || undefined,
+      requireAttendanceForConfirmation,
+      requiredAttendanceSessionId: requireAttendanceForConfirmation ? requiredAttendanceSessionId || undefined : undefined,
+      allowReferralConfirmation,
+      referralCodes: allowReferralConfirmation ? referralCodes : undefined,
+      eligibilityWaitingMessage: eligibilityWaitingMessage.trim() || undefined,
       registrationCapacity: Math.max(0, Number(registrationCapacity) || 0) || undefined,
       waitingMode,
       waitingTitle: waitingTitle.trim() || undefined,
@@ -239,7 +257,7 @@ export default function FormBuilderPage() {
       fields,
       updatedAt: new Date().toISOString()
     };
-  }, [accent, align, allowDuplicate, bannerUrl, batch, closedMessage, description, fee, fields, fontFamily, fontSize, highlights, logoUrl, otpRequired, paid, partPayment, registrationCapacity, responseLimit, submitButtonText, tagline, tiers, title, titleBold, titleItalic, waitingMessage, waitingMode, waitingTitle, whatsappGroupUrl, workshop, workshopId]);
+  }, [accent, align, allowDuplicate, allowReferralConfirmation, bannerUrl, batch, closedMessage, description, eligibilityWaitingMessage, fee, fields, fontFamily, fontSize, highlights, logoUrl, otpRequired, paid, partPayment, referralCodes, registrationCapacity, requireAttendanceForConfirmation, requiredAttendanceSessionId, responseLimit, submitButtonText, tagline, tiers, title, titleBold, titleItalic, waitingMessage, waitingMode, waitingTitle, whatsappGroupUrl, workshop, workshopId]);
 
   const link = useMemo(() => {
     if (typeof window === "undefined" || !workshopId) return "";
@@ -295,9 +313,30 @@ export default function FormBuilderPage() {
     setFields((current) => current.filter((field) => field.id !== id));
   }
 
+  function addReferralCode() {
+    setReferralCodes((current) => [...current, { active: true, code: "", id: generateId(), maxUsesPerMobile: 1, referrerName: "" }]);
+  }
+
+  function updateReferralCode(id: string, patch: Partial<ReferralCodeConfig>) {
+    setReferralCodes((current) => current.map((item) => item.id === id ? { ...item, ...patch } : item));
+  }
+
+  function removeReferralCode(id: string) {
+    setReferralCodes((current) => current.filter((item) => item.id !== id));
+  }
+
   function saveForm() {
     if (!workshopId) {
       setSaved("Please select a workshop first.");
+      return;
+    }
+    if (requireAttendanceForConfirmation && !requiredAttendanceSessionId) {
+      setSaved("Please select the required introduction attendance session.");
+      return;
+    }
+    const normalizedCodes = referralCodes.map((item) => item.code.trim().toUpperCase().replace(/\s+/g, "")).filter(Boolean);
+    if (allowReferralConfirmation && (normalizedCodes.length !== referralCodes.length || new Set(normalizedCodes).size !== normalizedCodes.length)) {
+      setSaved("Every referral code must be filled and unique.");
       return;
     }
     try {
@@ -452,6 +491,34 @@ export default function FormBuilderPage() {
                   <label><span className="mb-2 block text-xs font-black text-slate-600">Response limit</span><input className="w-full rounded-xl border border-indigo-200 bg-white px-3.5 py-3 text-sm font-semibold outline-none" inputMode="numeric" onChange={(event) => setResponseLimit(event.target.value.replace(/\D/g, ""))} placeholder="Unlimited" value={responseLimit} /></label>
                   <label><span className="mb-2 block text-xs font-black text-slate-600">Limit reached message</span><input className="w-full rounded-xl border border-indigo-200 bg-white px-3.5 py-3 text-sm font-semibold outline-none" maxLength={300} onChange={(event) => setClosedMessage(event.target.value)} value={closedMessage} /></label>
                 </div>
+              </div>
+
+              <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-4">
+                <p className="text-sm font-black text-slate-800">Final Workshop Eligibility</p>
+                <label className="mt-3 flex min-h-[52px] items-center justify-between gap-4 rounded-lg bg-white px-3 py-2">
+                  <span><span className="block text-sm font-black text-slate-700">Confirm from attendance</span><span className="block text-xs font-semibold text-slate-400">Same mobile must have attended the selected introduction session.</span></span>
+                  <input checked={requireAttendanceForConfirmation} className="size-5 accent-amber-600" onChange={(event) => setRequireAttendanceForConfirmation(event.target.checked)} type="checkbox" />
+                </label>
+                {requireAttendanceForConfirmation ? <label className="mt-3 block"><span className="mb-2 block text-xs font-black text-slate-600">Required Introduction Attendance Session</span><select className="w-full rounded-xl border border-amber-200 bg-white px-3.5 py-3 text-sm font-semibold outline-none" onChange={(event) => setRequiredAttendanceSessionId(event.target.value)} value={requiredAttendanceSessionId}><option value="">Select attendance session</option>{attendanceSessions.map((session) => <option key={session.id} value={session.id}>{session.workshopName} — {session.title} ({session.sessionDate})</option>)}</select></label> : null}
+
+                <label className="mt-3 flex min-h-[52px] items-center justify-between gap-4 rounded-lg bg-white px-3 py-2">
+                  <span><span className="block text-sm font-black text-slate-700">Confirm from referral code</span><span className="block text-xs font-semibold text-slate-400">A valid code can confirm registration even when attendance is missing.</span></span>
+                  <input checked={allowReferralConfirmation} className="size-5 accent-amber-600" onChange={(event) => setAllowReferralConfirmation(event.target.checked)} type="checkbox" />
+                </label>
+                {allowReferralConfirmation ? <div className="mt-3 space-y-3">
+                  {referralCodes.map((code) => <div className="grid gap-2 rounded-xl border border-amber-200 bg-white p-3 sm:grid-cols-2" key={code.id}>
+                    <input className="rounded-lg border border-slate-200 px-3 py-2.5 text-sm font-bold uppercase outline-none" maxLength={80} onChange={(event) => updateReferralCode(code.id, { code: event.target.value.toUpperCase().replace(/\s+/g, "") })} placeholder="REFERRAL CODE" value={code.code} />
+                    <input className="rounded-lg border border-slate-200 px-3 py-2.5 text-sm font-semibold outline-none" maxLength={120} onChange={(event) => updateReferralCode(code.id, { referrerName: event.target.value })} placeholder="Referrer name" value={code.referrerName} />
+                    <label className="text-xs font-black text-slate-500">Valid from<input className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" onChange={(event) => updateReferralCode(code.id, { validFrom: event.target.value || undefined })} type="date" value={code.validFrom || ""} /></label>
+                    <label className="text-xs font-black text-slate-500">Expires on<input className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" onChange={(event) => updateReferralCode(code.id, { expiresAt: event.target.value || undefined })} type="date" value={code.expiresAt || ""} /></label>
+                    <input className="rounded-lg border border-slate-200 px-3 py-2.5 text-sm font-semibold" inputMode="numeric" onChange={(event) => updateReferralCode(code.id, { maxUses: Number(event.target.value) || undefined })} placeholder="Total usage limit" value={code.maxUses || ""} />
+                    <input className="rounded-lg border border-slate-200 px-3 py-2.5 text-sm font-semibold" inputMode="numeric" onChange={(event) => updateReferralCode(code.id, { maxUsesPerMobile: Number(event.target.value) || undefined })} placeholder="Per-mobile limit" value={code.maxUsesPerMobile || ""} />
+                    <label className="inline-flex items-center gap-2 text-xs font-black text-slate-600"><input checked={code.active !== false} className="size-4 accent-emerald-600" onChange={(event) => updateReferralCode(code.id, { active: event.target.checked })} type="checkbox" />Active</label>
+                    <button className="justify-self-end text-xs font-black text-rose-600" onClick={() => removeReferralCode(code.id)} type="button">Remove code</button>
+                  </div>)}
+                  <button className="min-h-10 rounded-lg border border-dashed border-amber-400 px-3 text-xs font-black text-amber-800" onClick={addReferralCode} type="button">+ Add referral code</button>
+                </div> : null}
+                <label className="mt-3 block"><span className="mb-2 block text-xs font-black text-slate-600">Eligibility waiting message</span><textarea className="w-full rounded-xl border border-amber-200 bg-white px-3.5 py-3 text-sm font-semibold outline-none" maxLength={300} onChange={(event) => setEligibilityWaitingMessage(event.target.value)} rows={2} value={eligibilityWaitingMessage} /></label>
               </div>
 
               <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-4">

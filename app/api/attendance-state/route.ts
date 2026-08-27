@@ -1,6 +1,7 @@
-import { getAppState, isDbEnabled, mutateAttendanceEntries } from "@/lib/db";
+import { ensurePersistenceTable, getAppState, getDbPool, isDbEnabled, mutateAttendanceEntries } from "@/lib/db";
 import { attendanceWindow } from "@/lib/attendance-window";
-import type { AttendanceEntry, AttendanceSession, BuilderField } from "@/lib/types";
+import { assignRegistrationNumbers } from "@/lib/registration-confirmation";
+import type { AttendanceEntry, AttendanceSession, BuilderField, BuilderForm, RegistrationEntry } from "@/lib/types";
 import { NextResponse } from "next/server";
 
 function cleanText(value: unknown, max = 300) {
@@ -59,6 +60,46 @@ function fieldIsVisible(field: BuilderField, fields: BuilderField[], answers: Re
 
 function requiredCustomFields(fields: BuilderField[], answers: Record<string, string>) {
   return fields.filter((field) => field.required && field.type !== "heading" && field.type !== "divider" && !field.role && fieldIsVisible(field, fields, answers));
+}
+
+async function promoteAttendanceWaitingRegistrations(attendance: AttendanceEntry) {
+  const database = getDbPool();
+  if (!database) return 0;
+  await ensurePersistenceTable();
+  const client = await database.connect();
+  try {
+    await client.query("BEGIN");
+    const selected = await client.query(`SELECT registrations, forms FROM app_state WHERE id = 1 FOR UPDATE`);
+    const registrations = (Array.isArray(selected.rows[0]?.registrations) ? selected.rows[0].registrations : []) as RegistrationEntry[];
+    const forms = (Array.isArray(selected.rows[0]?.forms) ? selected.rows[0].forms : []) as BuilderForm[];
+    const mobile = attendance.mobile.replace(/\D/g, "").slice(-10);
+    const affectedWorkshops = new Set<string>();
+    const promotedByWorkshop = new Map<string, number>();
+    let promoted = 0;
+    let next = registrations.map((registration) => {
+      if (registration.registrationStatus !== "waiting" || !["eligibility_pending", "attendance_pending", "session_mismatch"].includes(registration.waitingReason || "")) return registration;
+      if (registration.mobile.replace(/\D/g, "").slice(-10) !== mobile) return registration;
+      const form = forms.find((item) => item.workshopId === registration.workshopId);
+      if (!form?.requireAttendanceForConfirmation || form.requiredAttendanceSessionId !== attendance.sessionId) return registration;
+      const capacity = Math.max(0, Number(form.registrationCapacity ?? 0) || 0);
+      const confirmedCount = registrations.filter((item) => item.workshopId === registration.workshopId && item.registrationStatus !== "waiting" && item.id !== registration.id).length;
+      const workshopPromotions = promotedByWorkshop.get(registration.workshopId) ?? 0;
+      if (capacity > 0 && confirmedCount + workshopPromotions >= capacity) return { ...registration, attendanceMatched: true, waitingReason: "capacity" as const };
+      promoted += 1;
+      promotedByWorkshop.set(registration.workshopId, workshopPromotions + 1);
+      affectedWorkshops.add(registration.workshopId);
+      return { ...registration, attendanceMatched: true, confirmationSource: "attendance" as const, registrationStatus: "confirmed" as const, waitingPosition: undefined, waitingReason: undefined };
+    });
+    affectedWorkshops.forEach((workshopId) => { next = assignRegistrationNumbers(next, workshopId); });
+    if (promoted > 0) await client.query(`UPDATE app_state SET registrations = $1::jsonb, updated_at = NOW() WHERE id = 1`, [JSON.stringify(next)]);
+    await client.query("COMMIT");
+    return promoted;
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 export async function GET(request: Request) {
@@ -159,7 +200,8 @@ export async function POST(request: Request) {
         error: "This mobile number is already registered for this attendance session."
       }, { status: 409 });
     }
-    return NextResponse.json({ ...saved, ok: true, ...responseMeta });
+    const promotedRegistrations = await promoteAttendanceWaitingRegistrations(saved.entry).catch(() => 0);
+    return NextResponse.json({ ...saved, ok: true, promotedRegistrations, ...responseMeta });
   } catch {
     return NextResponse.json({ error: "Failed to save attendance." }, { status: 500 });
   }

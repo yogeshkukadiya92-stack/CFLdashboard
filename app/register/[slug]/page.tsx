@@ -62,6 +62,10 @@ type FormModel = {
   allowDuplicate?: boolean;
   responseLimit?: number;
   closedMessage?: string;
+  requireAttendanceForConfirmation?: boolean;
+  requiredAttendanceSessionId?: string;
+  allowReferralConfirmation?: boolean;
+  eligibilityWaitingMessage?: string;
   theme: BuilderTheme;
   fields: BuilderField[];
 };
@@ -195,6 +199,10 @@ function modelFromBuilderForm(form: BuilderForm, overrides?: Partial<Pick<FormMo
     allowDuplicate: Boolean(form.allowDuplicate),
     responseLimit: form.responseLimit,
     closedMessage: form.closedMessage,
+    requireAttendanceForConfirmation: Boolean(form.requireAttendanceForConfirmation),
+    requiredAttendanceSessionId: form.requiredAttendanceSessionId,
+    allowReferralConfirmation: Boolean(form.allowReferralConfirmation),
+    eligibilityWaitingMessage: form.eligibilityWaitingMessage,
     theme: { ...defaultTheme, ...form.theme },
     fields: form.fields?.length ? normalizeCoreFieldRequirements(form.fields) : simpleFields()
   };
@@ -236,6 +244,8 @@ export default function RegistrationPage() {
   const [success, setSuccess] = useState(false);
   const [waitingPosition, setWaitingPosition] = useState<number | null>(null);
   const [registrationNumber, setRegistrationNumber] = useState("");
+  const [referralCode, setReferralCode] = useState("");
+  const [waitingReason, setWaitingReason] = useState<RegistrationEntry["waitingReason"]>();
   const [submitting, setSubmitting] = useState(false);
   const [redirectCountdown, setRedirectCountdown] = useState(5);
   const [currentPage, setCurrentPage] = useState(0);
@@ -560,13 +570,14 @@ export default function RegistrationPage() {
     try {
       const raw = window.localStorage.getItem(`cfl_registration_draft_${model.formId}`);
       if (!raw) return;
-      const draft = JSON.parse(raw) as { answers?: Record<string, string>; currentPage?: number; partAmount?: string; paymentMode?: "Full" | "Part"; selectedTierId?: string };
+      const draft = JSON.parse(raw) as { answers?: Record<string, string>; currentPage?: number; partAmount?: string; paymentMode?: "Full" | "Part"; referralCode?: string; selectedTierId?: string };
       if (draft.answers && Object.keys(draft.answers).length) {
         setAnswers(draft.answers);
         setCurrentPage(Math.max(0, Number(draft.currentPage || 0)));
         setPartAmount(draft.partAmount ?? "");
         setPaymentMode(draft.paymentMode === "Part" ? "Part" : "Full");
         setSelectedTierId(draft.selectedTierId ?? "");
+        setReferralCode(draft.referralCode ?? "");
         setDraftRestored(true);
         analyticsStartedRef.current = true;
       }
@@ -579,9 +590,9 @@ export default function RegistrationPage() {
     if (!model || success || !Object.keys(answers).length) return;
     window.localStorage.setItem(
       `cfl_registration_draft_${model.formId}`,
-      JSON.stringify({ answers, currentPage: activePageIndex, partAmount, paymentMode, selectedTierId })
+      JSON.stringify({ answers, currentPage: activePageIndex, partAmount, paymentMode, referralCode, selectedTierId })
     );
-  }, [activePageIndex, answers, model, partAmount, paymentMode, selectedTierId, success]);
+  }, [activePageIndex, answers, model, partAmount, paymentMode, referralCode, selectedTierId, success]);
 
   useEffect(() => {
     if (!model) return;
@@ -773,6 +784,7 @@ export default function RegistrationPage() {
       batch: model.batch,
       batchId: batchIdParam || undefined,
       introductionSessionId: introductionSessionIdParam || undefined,
+      referralCode: referralCode.trim().toUpperCase().replace(/\s+/g, "") || undefined,
       answers: Object.keys(extra).length ? extra : undefined
     };
 
@@ -797,6 +809,7 @@ export default function RegistrationPage() {
       if (savedIndex >= 0) current[savedIndex] = saved;
       writeLiveStateToLocalStorage({ registrations: current });
       setWaitingPosition(saved.registrationStatus === "waiting" ? saved.waitingPosition ?? 1 : null);
+      setWaitingReason(saved.waitingReason);
       setRegistrationNumber(saved.registrationNumber ?? "");
     } catch (reason) {
       setMessage(reason instanceof Error ? reason.message : "Could not complete registration. Please try again.");
@@ -824,6 +837,8 @@ export default function RegistrationPage() {
     setMessage("");
     setWaitingPosition(null);
     setRegistrationNumber("");
+    setWaitingReason(undefined);
+    setReferralCode("");
     setCurrentPage(0);
     setAnswers({});
     setPaymentMode("Full");
@@ -1071,6 +1086,14 @@ export default function RegistrationPage() {
                 </div>
               ) : null}
 
+              {isLastPage && model.allowReferralConfirmation ? (
+                <label className="mt-5 block rounded-2xl border border-indigo-100 bg-indigo-50/50 p-4">
+                  <span className="block text-sm font-black text-slate-700">Referral Code <span className="font-semibold text-slate-400">(optional)</span></span>
+                  <span className="mt-1 block text-xs font-semibold leading-5 text-slate-500">A valid referral code can confirm your registration even if introduction-session attendance is not found.</span>
+                  <input className={`mt-3 w-full border border-slate-200 bg-white px-4 py-3 text-base font-semibold uppercase outline-none transition-all focus:ring-4 focus:ring-slate-100 sm:text-sm ${fieldRadiusClass}`} maxLength={80} onChange={(event) => setReferralCode(event.target.value.toUpperCase().replace(/\s+/g, ""))} placeholder="Enter referral code" value={referralCode} />
+                </label>
+              ) : null}
+
               {message ? <p className="mt-5 rounded-xl bg-rose-50 px-4 py-3 text-sm font-black text-rose-700">{message}</p> : null}
 
               <div className="mt-6 flex gap-3">
@@ -1167,7 +1190,15 @@ export default function RegistrationPage() {
             </span>
             <h2 className="mt-5 text-2xl font-black text-slate-950">{waitingPosition ? "Added to Waiting List" : "Registration Confirmed"}</h2>
             <p className="mt-2 text-sm font-bold leading-6 text-slate-500">
-              {waitingPosition ? `Your waiting list number is WL-${waitingPosition}. We will contact you when a seat becomes available.` : (message || "Your registration has been saved successfully.")}
+              {waitingPosition
+                ? waitingReason === "capacity"
+                  ? `Your eligibility is verified, but seats are full. You are on the waiting list as WL-${waitingPosition}.`
+                  : waitingReason === "invalid_referral"
+                    ? `Your registration is saved as WL-${waitingPosition}. The referral code could not be verified; attendance can still confirm eligibility.`
+                    : waitingReason === "session_mismatch"
+                      ? `Your registration is saved as WL-${waitingPosition}. Attendance for the required introduction session was not found.`
+                      : model.eligibilityWaitingMessage || `Your registration is saved in the waiting list as WL-${waitingPosition}. We will confirm it after eligibility verification.`
+                : (message || "Your registration has been saved successfully.")}
             </p>
             {!waitingPosition && registrationNumber ? <p className="mt-3 text-lg font-black text-emerald-700">Registration No. {registrationNumber}</p> : null}
             {model.whatsappGroupUrl && !waitingPosition ? (

@@ -273,6 +273,13 @@ export interface RegistrationEntry {
   carriedForwardToWorkshopTitle?: string;
   confirmationHistory?: RegistrationConfirmationActivity[];
   registrationStatus?: "confirmed" | "waiting";
+  waitingReason?: "eligibility_pending" | "attendance_pending" | "session_mismatch" | "invalid_referral" | "capacity" | "manual";
+  confirmationSource?: "attendance" | "referral" | "attendance_and_referral" | "manual";
+  requiredAttendanceSessionId?: string;
+  attendanceMatched?: boolean;
+  referralCode?: string;
+  referralCodeId?: string;
+  referrerName?: string;
   registrationNumber?: string;
   waitingPosition?: number;
   confirmationWhatsappSentAt?: string;
@@ -449,6 +456,18 @@ export interface PaymentTier {
   fee: number;
 }
 
+export interface ReferralCodeConfig {
+  id: string;
+  code: string;
+  referrerName: string;
+  active: boolean;
+  validFrom?: string;
+  expiresAt?: string;
+  maxUses?: number;
+  maxUsesPerMobile?: number;
+  notes?: string;
+}
+
 export interface BuilderForm {
   id: string;
   workshopId: string;
@@ -475,6 +494,11 @@ export interface BuilderForm {
   allowDuplicate?: boolean;
   responseLimit?: number;
   closedMessage?: string;
+  requireAttendanceForConfirmation?: boolean;
+  requiredAttendanceSessionId?: string;
+  allowReferralConfirmation?: boolean;
+  referralCodes?: ReferralCodeConfig[];
+  eligibilityWaitingMessage?: string;
   registrationCapacity?: number;
   waitingMode?: boolean;
   waitingTitle?: string;

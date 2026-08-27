@@ -1,4 +1,4 @@
-import type { RegistrationEntry, WorkshopBatch } from "@/lib/types";
+import type { AttendanceEntry, RegistrationEntry, WorkshopBatch } from "@/lib/types";
 
 function normalized(value: unknown) {
   return String(value ?? "").trim().toLowerCase();
@@ -22,4 +22,14 @@ export function isDuplicateWorkshopRegistration(
     ? Boolean(existing.batchId && incoming.batchId && existing.batchId === incoming.batchId)
     : normalized(existing.batch) === normalized(incoming.batch);
   return sameBatch && normalized(existing.introductionSessionId) === normalized(incoming.introductionSessionId);
+}
+
+export function attendanceMatchesFinalRegistration(
+  attendance: Pick<AttendanceEntry, "sessionId" | "mobile">,
+  registration: Pick<RegistrationEntry, "mobile">,
+  requiredSessionId: string
+) {
+  return Boolean(requiredSessionId)
+    && attendance.sessionId === requiredSessionId
+    && mobileDigits(attendance.mobile) === mobileDigits(registration.mobile);
 }

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { isDuplicateWorkshopRegistration, registrationMatchesBatch } from "../lib/workshop-hierarchy.ts";
+import { attendanceMatchesFinalRegistration, isDuplicateWorkshopRegistration, registrationMatchesBatch } from "../lib/workshop-hierarchy.ts";
 
 const base = {
   workshopId: "workshop-growth",
@@ -21,4 +21,11 @@ test("keeps legacy batch-name registrations visible in their matching batch", ()
   assert.equal(registrationMatchesBatch({ batch: "August 2026" }, { id: "batch-aug", name: "August 2026" }), true);
   assert.equal(registrationMatchesBatch({ batch: "August 2026" }, { id: "batch-sep", name: "September 2026" }), false);
   assert.equal(registrationMatchesBatch({ batch: "Old", batchId: "batch-aug" }, { id: "batch-aug", name: "August 2026" }), true);
+});
+
+test("final registration eligibility matches the exact attendance session and mobile", () => {
+  const registration = { mobile: "+91 98765 43210" };
+  assert.equal(attendanceMatchesFinalRegistration({ mobile: "9876543210", sessionId: "intro-1" }, registration, "intro-1"), true);
+  assert.equal(attendanceMatchesFinalRegistration({ mobile: "9999999999", sessionId: "intro-1" }, registration, "intro-1"), false);
+  assert.equal(attendanceMatchesFinalRegistration({ mobile: "9876543210", sessionId: "intro-2" }, registration, "intro-1"), false);
 });

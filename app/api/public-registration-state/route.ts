@@ -2,8 +2,8 @@ import { ensurePersistenceTable, getAppState, getDbPool, isDbEnabled } from "@/l
 import { upsertLiveRegistration } from "@/lib/crm-db";
 import { upsertLeadFromRegistration } from "@/lib/lead-utils";
 import { assignRegistrationNumbers } from "@/lib/registration-confirmation";
-import type { BuilderForm, RegistrationEntry } from "@/lib/types";
-import { isDuplicateWorkshopRegistration } from "@/lib/workshop-hierarchy";
+import type { AttendanceEntry, BuilderForm, ReferralCodeConfig, RegistrationEntry } from "@/lib/types";
+import { attendanceMatchesFinalRegistration, isDuplicateWorkshopRegistration } from "@/lib/workshop-hierarchy";
 import { NextResponse } from "next/server";
 
 export async function GET() {
@@ -13,9 +13,14 @@ export async function GET() {
 
   try {
     const state = await getAppState();
+    const publicForms = (Array.isArray(state?.forms) ? state.forms : []).map((value: unknown) => {
+      if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+      const { referralCodes: _privateReferralCodes, ...publicForm } = value as Record<string, unknown>;
+      return publicForm;
+    });
     return NextResponse.json({
       dbEnabled: true,
-      forms: state?.forms ?? [],
+      forms: publicForms,
       landingPages: state?.landingPages ?? [],
       registrationLinks: state?.registrationLinks ?? {},
       workshops: state?.workshops ?? []
@@ -68,6 +73,7 @@ export async function POST(request: Request) {
       fullName,
       id: String(input.id ?? "").trim().slice(0, 300),
       introductionSessionId: String(input.introductionSessionId ?? "").trim().slice(0, 300) || undefined,
+      referralCode: String(input.referralCode ?? "").trim().toUpperCase().replace(/\s+/g, "").slice(0, 80) || undefined,
       mobile: `+91 ${mobileDigits}`,
       landingPageSlug: String(input.landingPageSlug ?? "").trim().slice(0, 300) || undefined,
       paymentMode: input.paymentMode === "Part" ? "Part" : "Full",
@@ -89,16 +95,20 @@ export async function POST(request: Request) {
     const client = await database.connect();
     try {
       await client.query("BEGIN");
-      const selected = await client.query(`SELECT registrations, forms, workshops, leads, sales_people FROM app_state WHERE id = 1 FOR UPDATE`);
+      const selected = await client.query(`SELECT registrations, forms, workshops, leads, sales_people, attendance_entries FROM app_state WHERE id = 1 FOR UPDATE`);
       const state = selected.rows[0] ?? {};
       const current = Array.isArray(state.registrations) ? state.registrations : [];
       const forms = Array.isArray(state.forms) ? state.forms as Array<Record<string, unknown>> : [];
-      const form = forms.find((value) => String(value.workshopId ?? "") === sanitizedRegistration.workshopId || String(value.workshopSlug ?? "") === sanitizedRegistration.workshopSlug);
+      const form = forms.find((value) => {
+        const sameWorkshop = String(value.workshopId ?? "") === sanitizedRegistration.workshopId || String(value.workshopSlug ?? "") === sanitizedRegistration.workshopSlug;
+        const formBatch = String(value.batch ?? "").trim().toLowerCase();
+        return sameWorkshop && (!formBatch || formBatch === sanitizedRegistration.batch.trim().toLowerCase());
+      }) ?? forms.find((value) => String(value.workshopId ?? "") === sanitizedRegistration.workshopId || String(value.workshopSlug ?? "") === sanitizedRegistration.workshopSlug);
       const duplicate = current.find((value: unknown) => {
         if (!value || typeof value !== "object") return false;
         return isDuplicateWorkshopRegistration(value as RegistrationEntry, sanitizedRegistration);
       });
-      if (duplicate && form?.allowDuplicate !== true) {
+      if (duplicate && duplicate.registrationStatus !== "waiting" && form?.allowDuplicate !== true) {
         await client.query("ROLLBACK");
         return NextResponse.json({
           code: "ALREADY_REGISTERED",
@@ -129,6 +139,30 @@ export async function POST(request: Request) {
         ? String(value.id ?? "") === sanitizedRegistration.batchId
         : String(value.name ?? "").trim().toLowerCase() === sanitizedRegistration.batch.trim().toLowerCase());
       const capacity = Math.max(0, Number(selectedBatch?.capacity ?? form?.registrationCapacity ?? 0) || 0);
+      const requiredSessionId = String(form?.requiredAttendanceSessionId ?? "").trim();
+      const attendanceRequired = form?.requireAttendanceForConfirmation === true && Boolean(requiredSessionId);
+      const attendanceEntries = (Array.isArray(state.attendance_entries) ? state.attendance_entries : []) as AttendanceEntry[];
+      const attendanceMatched = attendanceRequired
+        ? attendanceEntries.some((entry) => attendanceMatchesFinalRegistration(entry, sanitizedRegistration, requiredSessionId))
+        : false;
+      const hasAttendanceForAnotherSession = attendanceRequired && !attendanceMatched && attendanceEntries.some((entry) => {
+        const incomingMobile = sanitizedRegistration.mobile.replace(/\D/g, "").slice(-10);
+        return entry.mobile.replace(/\D/g, "").slice(-10) === incomingMobile;
+      });
+      const referralCodes = (Array.isArray(form?.referralCodes) ? form.referralCodes : []) as ReferralCodeConfig[];
+      const submittedReferral = sanitizedRegistration.referralCode;
+      const now = Date.now();
+      const referralEnabled = form?.allowReferralConfirmation === true;
+      const referral = submittedReferral && referralEnabled
+        ? referralCodes.find((item) => item.active !== false && item.code.trim().toUpperCase().replace(/\s+/g, "") === submittedReferral)
+        : undefined;
+      const referralUseCount = referral ? current.filter((entry: RegistrationEntry) => entry.id !== sanitizedRegistration.id && entry.referralCodeId === referral.id).length : 0;
+      const referralMobileUseCount = referral ? current.filter((entry: RegistrationEntry) => entry.id !== sanitizedRegistration.id && entry.referralCodeId === referral.id && entry.mobile.replace(/\D/g, "").slice(-10) === mobileDigits).length : 0;
+      const referralValid = Boolean(referral)
+        && (!referral?.validFrom || new Date(referral.validFrom).getTime() <= now)
+        && (!referral?.expiresAt || new Date(referral.expiresAt).getTime() >= now)
+        && (!referral?.maxUses || referralUseCount < referral.maxUses)
+        && (!referral?.maxUsesPerMobile || referralMobileUseCount < referral.maxUsesPerMobile);
       const confirmedCount = current.filter((value: unknown) => {
         if (!value || typeof value !== "object") return false;
         const entry = value as RegistrationEntry;
@@ -137,10 +171,41 @@ export async function POST(request: Request) {
           : String(entry.batch ?? "").trim().toLowerCase() === sanitizedRegistration.batch.trim().toLowerCase();
         return entry.workshopId === sanitizedRegistration.workshopId && sameBatch && entry.registrationStatus !== "waiting" && entry.id !== sanitizedRegistration.id;
       }).length;
-      const isWaiting = form?.waitingMode === true || (capacity > 0 && confirmedCount >= capacity);
+      const eligibilityConfigured = attendanceRequired || referralEnabled;
+      const eligible = !eligibilityConfigured || attendanceMatched || referralValid;
+      const capacityFull = capacity > 0 && confirmedCount >= capacity;
+      const waitingReason = form?.waitingMode === true
+        ? "manual"
+        : capacityFull && eligible
+          ? "capacity"
+          : !eligible && submittedReferral
+            ? "invalid_referral"
+            : !eligible && hasAttendanceForAnotherSession
+              ? "session_mismatch"
+              : !eligible && attendanceRequired
+                ? "attendance_pending"
+                : !eligible
+                  ? "eligibility_pending"
+                : undefined;
+      const isWaiting = Boolean(waitingReason);
+      const confirmationSource = !isWaiting
+        ? attendanceMatched && referralValid
+          ? "attendance_and_referral"
+          : referralValid
+            ? "referral"
+            : attendanceMatched
+              ? "attendance"
+              : undefined
+        : undefined;
       const pendingRegistration = {
         ...sanitizedRegistration,
+        attendanceMatched,
+        confirmationSource,
+        referralCodeId: referralValid ? referral?.id : undefined,
+        referrerName: referralValid ? referral?.referrerName : undefined,
+        requiredAttendanceSessionId: requiredSessionId || undefined,
         registrationStatus: isWaiting ? "waiting" : "confirmed",
+        waitingReason,
         waitingPosition: undefined
       };
       const unnumbered = [
