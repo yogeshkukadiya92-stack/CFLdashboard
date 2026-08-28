@@ -374,7 +374,7 @@ export default function LeadsPage() {
   }
 
   return (
-    <AdminPlatformShell activeLabel="Leads" description="Capture, assign, follow up and convert every enquiry from one sales pipeline." title="Lead Management">
+    <AdminPlatformShell activeLabel="Lead Management" description="Capture, assign, follow up and convert every enquiry from one sales pipeline." title="Lead Management">
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
         <Metric icon={UsersRound} label="Total Leads" value={leads.length} />
         <Metric icon={Plus} label="New Today" value={todayCount} tone="emerald" />

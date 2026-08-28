@@ -575,7 +575,7 @@ export default function WorkshopAttendancePage() {
           <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-700">Session Setup</p>
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-700">1 · Select Session</p>
                 <h2 className="mt-1 text-2xl font-black text-slate-950">{selectedWorkshop?.name || "Select workshop"}</h2>
                 <p className="mt-1 text-sm font-semibold text-slate-500">Add sessions, build attendance forms, share links, and view attendance data.</p>
               </div>
@@ -619,7 +619,7 @@ export default function WorkshopAttendancePage() {
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
-                  <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-700">Session Responses</p>
+                  <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-700">2 · Attendance & Follow-up</p>
                   <h3 className="mt-1 text-2xl font-black text-slate-950">{selectedSession.title}</h3>
                   <p className="mt-1 text-sm font-semibold text-slate-500">{formatDate(selectedSession.sessionDate)} · {selectedSession.facilitator || "Facilitator not set"} · {selectedSession.batch || "Main Batch"}</p>
                 </div>
@@ -704,7 +704,7 @@ export default function WorkshopAttendancePage() {
                 <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
                   <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
                     <div>
-                      <p className="text-sm font-black text-slate-800">Attendance Form</p>
+                      <p className="text-sm font-black text-slate-800">2 · Session Settings</p>
                       <p className="mt-0.5 text-xs font-bold text-slate-500">{saveMessage || "Edit details, fields, and share link settings."}</p>
                     </div>
                     <button className="inline-flex min-h-[40px] items-center gap-2 rounded-lg bg-slate-950 px-4 py-2 text-sm font-black text-white hover:bg-slate-800 disabled:cursor-wait disabled:opacity-70" disabled={savingForm} onClick={saveSelectedForm} type="button">
@@ -781,7 +781,7 @@ export default function WorkshopAttendancePage() {
                 <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
-                      <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-700">Form Builder</p>
+                      <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-700">3 · Attendance Form Fields</p>
                       <h3 className="mt-1 text-xl font-black text-slate-950">{selectedSession.fields.length} fields</h3>
                     </div>
                     <label className="inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-slate-50 px-4 py-2.5 text-sm font-black text-slate-700">

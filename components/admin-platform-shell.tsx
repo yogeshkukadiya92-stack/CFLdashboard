@@ -70,11 +70,9 @@ const navGroups: NavGroup[] = [
       { href: "/workshop-master", icon: Layers3, label: "Workshop Master" },
       { href: "/workshop-setup", icon: Tags, label: "Workshop Setup" },
       { href: "/process/import-data-workshop-wise", icon: Import, label: "Import Workshop Data" },
-      { href: "/form-builder", icon: FileText, label: "Form Builder" },
+      { href: "/form-builder", icon: FileText, label: "Registration Forms" },
       { href: "/landing-pages", icon: LayoutTemplate, label: "Landing Pages" },
-      { href: "/response-access", icon: ShieldCheck, label: "Response Access" },
-      { href: "/workshop-attendance", icon: ClipboardCheck, label: "Workshop Attendance" },
-      { href: "/attendance-team-access", icon: UsersRound, label: "Attendance Team" }
+      { href: "/workshop-attendance", icon: ClipboardCheck, label: "Workshop Attendance" }
     ]
   },
   {
@@ -86,10 +84,8 @@ const navGroups: NavGroup[] = [
       { href: "/lead-management", icon: Target, label: "Lead Management" },
       { href: "/crm/sessions", icon: CalendarRange, label: "Sales Sessions" },
       { href: "/crm/follow-ups", icon: ListTodo, label: "Follow-ups" },
-      { href: "/crm/analytics", icon: BarChart3, label: "CRM Analytics" },
+      { href: "/crm/analytics", icon: BarChart3, label: "Call Analytics" },
       { href: "/historical-data", icon: Archive, label: "Historical Data" },
-      { href: "/sales-person", icon: Target, label: "Sales Person" },
-      { href: "/process/manual-client-registration", icon: UserPlus, label: "Manual Registration" },
       { href: "/process/merge-client", icon: Merge, label: "Merge Client" }
     ]
   },
@@ -101,7 +97,17 @@ const navGroups: NavGroup[] = [
       { href: "/process/refund", icon: TicketCheck, label: "Refund" },
       { href: "/process/apply-coupon", icon: Tags, label: "Apply Coupon" },
       { href: "/process/re-check-failed-payment", icon: Activity, label: "Failed Payment Check" },
-      { href: "/process/manual-client-part-payment", icon: Activity, label: "Part Payment" }
+      { href: "/process/manual-client-part-payment", icon: Activity, label: "Part Payment" },
+      { href: "/process/manual-client-registration", icon: UserPlus, label: "Manual Registration" }
+    ]
+  },
+  {
+    icon: ShieldCheck,
+    label: "Team & Access",
+    items: [
+      { href: "/sales-person", icon: Target, label: "Sales Person" },
+      { href: "/response-access", icon: ShieldCheck, label: "Response Access" },
+      { href: "/attendance-team-access", icon: UsersRound, label: "Attendance Team" }
     ]
   },
   {
@@ -151,15 +157,6 @@ const navGroups: NavGroup[] = [
   }
 ];
 
-const allNavItems = [
-  ...quickItems,
-  ...navGroups.flatMap((group) => [
-    ...group.items,
-    ...(group.sections?.flatMap((section) => section.items) ?? [])
-  ]),
-  ...footerItems
-];
-
 export function AdminPlatformShell({
   activeLabel,
   children,
@@ -178,16 +175,24 @@ export function AdminPlatformShell({
   const [searchQuery, setSearchQuery] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
+  const [desktopSidebar, setDesktopSidebar] = useState(false);
   const [viewer, setViewer] = useState<{ role: "admin" | "sales" | "none"; name: string; permissions: SalesPermission[] }>({ role: "none", name: "", permissions: [] });
   const searchInputRef = useRef<HTMLInputElement>(null);
   const searchBoxRef = useRef<HTMLDivElement>(null);
-  const activeGroup = useMemo(() => navGroups.find((group) => isGroupActive(group, pathname))?.label ?? "Workshop", [pathname]);
-  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({ [activeGroup]: true });
+  const activeGroup = useMemo(() => navGroups.find((group) => isGroupActive(group, pathname))?.label ?? "", [pathname]);
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() => activeGroup ? { [activeGroup]: true } : {});
   const [openReportSections, setOpenReportSections] = useState<Record<string, boolean>>({ Workshop: true });
   const visibleQuickItems = viewer.role === "admin" ? quickItems : [];
   const visibleNavGroups = viewer.role === "admin" ? navGroups : viewer.role === "sales" ? navGroups.filter((group) => group.label === "CRM / Clients").map((group) => ({ ...group, items: group.items.filter((item) => { const permission = permissionForPath(item.href); return permission ? viewer.permissions.includes(permission) : false; }) })) : [];
   const visibleFooterItems = viewer.role === "admin" ? footerItems : [];
-  const visibleAllNavItems = [...visibleQuickItems, ...visibleNavGroups.flatMap((group) => group.items), ...visibleFooterItems];
+  const visibleAllNavItems = [
+    ...visibleQuickItems,
+    ...visibleNavGroups.flatMap((group) => [
+      ...group.items,
+      ...(group.sections?.flatMap((section) => section.items) ?? [])
+    ]),
+    ...visibleFooterItems
+  ];
   const searchMatches = useMemo(() => {
     const value = searchQuery.trim().toLowerCase();
     if (!value) return [];
@@ -209,7 +214,16 @@ export function AdminPlatformShell({
   useEffect(() => {
     setSidebarOpen(false);
     setMobileSearchOpen(false);
-  }, [pathname]);
+    setOpenGroups(activeGroup ? { [activeGroup]: true } : {});
+  }, [activeGroup, pathname]);
+
+  useEffect(() => {
+    const media = window.matchMedia("(min-width: 1024px)");
+    const update = () => setDesktopSidebar(media.matches);
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
 
   useEffect(() => {
     if (!sidebarOpen) return;
@@ -304,7 +318,7 @@ export function AdminPlatformShell({
                 className="h-9 w-auto max-w-[210px] object-contain"
                 src={BRAND_LOGO_SRC}
               />
-              <h1 className="truncate text-lg font-black text-slate-950">{activeLabel}</h1>
+              <p aria-label="Current page" className="truncate text-lg font-black text-slate-950">{activeLabel}</p>
             </div>
           </div>
 
@@ -428,8 +442,10 @@ export function AdminPlatformShell({
 
       <div className="mx-auto grid min-w-0 max-w-[1540px] gap-4 px-3 py-4 sm:px-4 lg:grid-cols-[286px_minmax(0,1fr)] lg:px-6 lg:py-5">
         <aside
+          aria-hidden={!desktopSidebar && !sidebarOpen}
           className={`${sidebarOpen ? "left-3 translate-x-0" : "left-0 -translate-x-full"} fixed bottom-3 top-3 z-50 w-[min(286px,calc(100vw-24px))] overflow-y-auto rounded-2xl border border-white/10 bg-slate-950 p-3 shadow-2xl transition-transform duration-200 lg:sticky lg:top-[84px] lg:z-20 lg:block lg:h-[calc(100vh-104px)] lg:w-auto lg:translate-x-0 lg:shadow-panel`}
           data-open={sidebarOpen}
+          inert={!desktopSidebar && !sidebarOpen ? true : undefined}
         >
           <div className="mb-2 flex items-center justify-end lg:hidden">
             <button
@@ -586,15 +602,17 @@ export function AdminPlatformShell({
             <div className="flex flex-wrap items-end justify-between gap-4">
               <div>
                 <p className="text-[11px] font-black uppercase tracking-[0.18em] text-emerald-700">Admin Platform</p>
-                <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-950 md:text-[30px]">{title}</h2>
+                <h1 className="mt-2 text-2xl font-black tracking-tight text-slate-950 md:text-[30px]">{title}</h1>
                 {description ? <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">{description}</p> : null}
               </div>
               {viewer.role === "admin" ? <div className="flex shrink-0 items-center gap-2">
-                <a aria-label="Import / Export" className="grid size-10 place-items-center rounded-lg bg-slate-950 text-white shadow-lg shadow-slate-950/15 hover:bg-slate-800" href="/manage-client" title="Import / Export">
+                <a aria-label="Client import and export" className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-slate-950 px-3 text-white shadow-lg shadow-slate-950/15 hover:bg-slate-800" href="/manage-client" title="Client import and export">
                   <Import className="size-4" />
+                  <span className="hidden text-xs font-black xl:inline">Clients & Import</span>
                 </a>
-                <a aria-label="Integrations" className="grid size-10 place-items-center rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100" href="/settings" title="Integrations">
+                <a aria-label="Integration settings" className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 text-emerald-800 hover:bg-emerald-100" href="/settings" title="Integration settings">
                   <Settings className="size-4" />
+                  <span className="hidden text-xs font-black xl:inline">Integrations</span>
                 </a>
               </div> : null}
             </div>

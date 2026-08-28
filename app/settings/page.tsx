@@ -3,7 +3,7 @@
 import { AdminPlatformShell } from "@/components/admin-platform-shell";
 import { IntegrationHubPanel } from "@/components/integration-hub-panel";
 import { SettingsMenu } from "@/components/settings-menu";
-import { CheckCircle2, Copy, CreditCard, Eye, EyeOff, Globe2, KeyRound, Mail, MessageCircle, Plug, Plus, Save, ShieldCheck, Smartphone, Trash2, Webhook, type LucideIcon } from "lucide-react";
+import { CheckCircle2, Copy, CreditCard, Eye, EyeOff, Globe2, Mail, MessageCircle, Plug, Plus, Save, ShieldCheck, Smartphone, Trash2, Webhook, type LucideIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 
 type IntegrationSettings = {
@@ -69,7 +69,7 @@ export default function SettingsPage() {
         return;
       }
       setSettings({ ...defaultSettings, ...data.settings });
-      setMessage(`Plugin settings saved in ${data.persisted === "database" ? "database" : "server storage"}.`);
+      setMessage(`Integration settings saved in ${data.persisted === "database" ? "database" : "server storage"}.`);
     } catch {
       setMessage("Could not save plugin settings.");
     }
@@ -116,9 +116,6 @@ export default function SettingsPage() {
       title="Plugin Manager"
     >
       <SettingsMenu />
-      <a className="flex items-center justify-between gap-4 rounded-3xl border border-emerald-200 bg-emerald-50 p-5 shadow-sm transition hover:border-emerald-300 hover:bg-emerald-100" href="/settings/sales-access">
-        <span className="flex items-center gap-4"><span className="grid size-12 shrink-0 place-items-center rounded-2xl bg-emerald-600 text-white"><KeyRound className="size-5" /></span><span><strong className="block text-lg font-black text-slate-950">CRM Team Access</strong><span className="mt-1 block text-sm font-semibold text-slate-600">Assign Sales, Observer, or both roles with page-wise permissions.</span></span></span><span className="rounded-xl bg-white px-4 py-2 text-sm font-black text-emerald-700">Manage access</span>
-      </a>
       <section className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
         <IntegrationHubPanel appUrl={settings.appUrl} />
         <div className="space-y-4">
@@ -131,7 +128,7 @@ export default function SettingsPage() {
               </div>
               <button className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-bold text-white hover:bg-indigo-700" disabled={loading} onClick={save} type="button">
                 <Save className="size-4" />
-                Save Plugins
+                Save Integration Settings
               </button>
             </div>
 
@@ -210,6 +207,13 @@ export default function SettingsPage() {
                   </button>
                 </div>
               ))}
+            </div>
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4">
+              <p aria-live="polite" className="text-xs font-semibold text-slate-500">{message || "Domain changes are saved with the integration settings."}</p>
+              <button className="inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-black text-white hover:bg-emerald-700 disabled:opacity-50" disabled={loading} onClick={save} type="button">
+                <Save className="size-4" />
+                Save Domains
+              </button>
             </div>
             <p className="mt-3 text-xs font-semibold text-slate-400">DNS and Coolify must point each subdomain to this dashboard app before links can open.</p>
           </div>

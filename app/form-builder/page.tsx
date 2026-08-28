@@ -362,7 +362,7 @@ export default function FormBuilderPage() {
 
   return (
     <AdminPlatformShell
-      activeLabel="Form Builder"
+      activeLabel="Registration Forms"
       description="Design a custom registration form for a workshop batch, then share a self-contained link."
       title="Registration Form Builder"
     >

@@ -20,20 +20,30 @@ export function IntegrationHubPanel({ appUrl }: { appUrl: string }) {
   const [newToken, setNewToken] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
+  const [browserOrigin, setBrowserOrigin] = useState("https://your-domain.com");
+  const [loadFailed, setLoadFailed] = useState(false);
 
-  const customerEndpoint = useMemo(() => `${appUrl || (typeof window !== "undefined" ? window.location.origin : "https://your-domain.com")}/api/v1/customers`, [appUrl]);
+  const customerEndpoint = useMemo(() => `${appUrl || browserOrigin}/api/v1/customers`, [appUrl, browserOrigin]);
+
+  useEffect(() => {
+    setBrowserOrigin(window.location.origin);
+  }, []);
 
   const load = useCallback(async () => {
     const response = await fetch(endpoint, { cache: "no-store" });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "Could not load Integration Hub.");
+    setLoadFailed(false);
     setKeys(data.apiKeys ?? []);
     setWebhooks(data.webhooks ?? []);
     setDeliveries(data.deliveries ?? []);
   }, []);
 
   useEffect(() => {
-    load().catch((error) => setMessage(error.message));
+    load().catch((error) => {
+      setLoadFailed(true);
+      setMessage(error.message);
+    });
   }, [load]);
 
   async function action(payload: Record<string, unknown>) {
@@ -98,12 +108,12 @@ export function IntegrationHubPanel({ appUrl }: { appUrl: string }) {
           <h2 className="mt-1 text-2xl font-black text-slate-950">Customer API & Webhooks</h2>
           <p className="mt-1 max-w-3xl text-sm text-slate-500">Connect CRM, forms, automation tools, mobile apps or any custom software to the same CFL customer database.</p>
         </div>
-        <button aria-label="Refresh integrations" className="grid size-11 place-items-center rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50" disabled={busy} onClick={() => load()} title="Refresh" type="button">
+        <button aria-label="Refresh integrations" className="grid size-11 place-items-center rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50" disabled={busy} onClick={() => load().catch((error) => { setLoadFailed(true); setMessage(error.message); })} title="Refresh" type="button">
           <RotateCw className={`size-4 ${busy ? "animate-spin" : ""}`} />
         </button>
       </div>
 
-      {message ? <p className="mt-4 rounded-xl bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-800">{message}</p> : null}
+      {message ? <p className="mt-4 rounded-xl bg-amber-50 px-4 py-3 text-sm font-bold text-amber-900" role="status">{message}</p> : null}
 
       <div className="mt-5 grid gap-5 xl:grid-cols-2">
         <div className="rounded-2xl border border-slate-200 p-4">
@@ -113,11 +123,11 @@ export function IntegrationHubPanel({ appUrl }: { appUrl: string }) {
           </div>
           <div className="mt-4 flex gap-2">
             <input className="min-w-0 flex-1 rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm font-semibold outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100" onChange={(event) => setKeyName(event.target.value)} placeholder="Example: n8n production" value={keyName} />
-            <button className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-slate-950 px-4 text-sm font-bold text-white disabled:opacity-50" disabled={busy} onClick={createKey} type="button"><Plus className="size-4" /> Create</button>
+            <button className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-slate-950 px-4 text-sm font-bold text-white disabled:opacity-50" disabled={busy || loadFailed} onClick={createKey} type="button"><Plus className="size-4" /> Create</button>
           </div>
           {newToken ? <Reveal label="New API key" onCopy={() => copy(newToken)} value={newToken} /> : null}
           <div className="mt-4 space-y-2">
-            {keys.length === 0 ? <Empty text="No API keys created yet." /> : keys.map((key) => (
+            {keys.length === 0 ? <Empty text={loadFailed ? "Integration Hub is unavailable until the database connection is restored." : "No API keys created yet."} /> : keys.map((key) => (
               <div className="flex items-center gap-3 rounded-xl bg-slate-50 p-3" key={key.id}>
                 <div className="min-w-0 flex-1"><p className="truncate text-sm font-black text-slate-900">{key.name}</p><p className="mt-0.5 text-xs font-semibold text-slate-500">{key.prefix}... · {key.lastUsedAt ? `Used ${new Date(key.lastUsedAt).toLocaleDateString()}` : "Never used"}</p></div>
                 <button aria-label={`Revoke ${key.name}`} className="grid size-9 place-items-center rounded-lg text-rose-600 hover:bg-rose-50" onClick={() => remove("api_key", key.id)} title="Revoke key" type="button"><Trash2 className="size-4" /></button>
@@ -134,11 +144,11 @@ export function IntegrationHubPanel({ appUrl }: { appUrl: string }) {
           <div className="mt-4 grid gap-2 sm:grid-cols-2">
             <input className="rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm font-semibold outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100" onChange={(event) => setWebhookName(event.target.value)} placeholder="Example: n8n customer sync" value={webhookName} />
             <input className="rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm font-semibold outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100" onChange={(event) => setWebhookUrl(event.target.value)} placeholder="https://app.com/webhook" type="url" value={webhookUrl} />
-            <button className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 text-sm font-bold text-white disabled:opacity-50 sm:col-span-2" disabled={busy} onClick={createHook} type="button"><Plus className="size-4" /> Connect Webhook</button>
+            <button className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 text-sm font-bold text-white disabled:opacity-50 sm:col-span-2" disabled={busy || loadFailed} onClick={createHook} type="button"><Plus className="size-4" /> Connect Webhook</button>
           </div>
           {newSecret ? <Reveal label="Signing secret" onCopy={() => copy(newSecret)} value={newSecret} /> : null}
           <div className="mt-4 space-y-2">
-            {webhooks.length === 0 ? <Empty text="No customer webhooks connected yet." /> : webhooks.map((hook) => {
+            {webhooks.length === 0 ? <Empty text={loadFailed ? "Webhooks are unavailable until the database connection is restored." : "No customer webhooks connected yet."} /> : webhooks.map((hook) => {
               const latest = deliveries.find((delivery) => delivery.webhookId === hook.id);
               return <div className="flex items-center gap-3 rounded-xl bg-slate-50 p-3" key={hook.id}>
                 <div className="min-w-0 flex-1"><p className="truncate text-sm font-black text-slate-900">{hook.name}</p><p className="truncate text-xs font-semibold text-slate-500">{hook.url}</p>{latest ? <p className={`mt-1 text-xs font-bold ${latest.success ? "text-emerald-700" : "text-rose-600"}`}>{latest.success ? `Delivered · HTTP ${latest.responseStatus}` : latest.error || "Delivery failed"}</p> : null}</div>
