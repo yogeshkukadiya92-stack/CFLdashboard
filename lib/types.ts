@@ -283,6 +283,14 @@ export interface RegistrationEntry {
   registrationNumber?: string;
   waitingPosition?: number;
   confirmationWhatsappSentAt?: string;
+  confirmationWhatsappStatus?: "sent" | "failed" | "not_configured";
+  confirmationWhatsappError?: string;
+  waitingWhatsappSentAt?: string;
+  waitingWhatsappStatus?: "sent" | "failed" | "not_configured";
+  waitingWhatsappError?: string;
+  referrerWaitingWhatsappSentAt?: string;
+  referrerWaitingWhatsappStatus?: "sent" | "failed" | "not_configured";
+  referrerWaitingWhatsappError?: string;
   mfwSyncStatus?: "not_required" | "pending" | "synced" | "failed";
   mfwSyncError?: string;
   mfwSyncedAt?: string;
@@ -491,6 +499,8 @@ export interface BuilderForm {
   whatsappGroupUrl?: string;
   whatsappConfirmationEnabled?: boolean;
   whatsappConfirmationTemplate?: string;
+  whatsappWaitingTemplate?: string;
+  whatsappReferrerWaitingTemplate?: string;
   submitButtonText?: string;
   allowDuplicate?: boolean;
   responseLimit?: number;

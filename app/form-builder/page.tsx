@@ -159,6 +159,10 @@ export default function FormBuilderPage() {
   const [tiers, setTiers] = useState<PaymentTier[]>([]);
   const [highlights, setHighlights] = useState<string[]>([]);
   const [whatsappGroupUrl, setWhatsappGroupUrl] = useState("");
+  const [whatsappConfirmationEnabled, setWhatsappConfirmationEnabled] = useState(false);
+  const [whatsappConfirmationTemplate, setWhatsappConfirmationTemplate] = useState("");
+  const [whatsappWaitingTemplate, setWhatsappWaitingTemplate] = useState("");
+  const [whatsappReferrerWaitingTemplate, setWhatsappReferrerWaitingTemplate] = useState("");
   const [fields, setFields] = useState<BuilderField[]>(defaultFields);
   const [fontFamily, setFontFamily] = useState(fontOptions[0].value);
   const [fontSize, setFontSize] = useState(16);
@@ -212,6 +216,10 @@ export default function FormBuilderPage() {
     setWaitingMode(Boolean(savedForm?.waitingMode));
     setWaitingTitle(savedForm?.waitingTitle || "Waiting List Registration");
     setWaitingMessage(savedForm?.waitingMessage || "Seats are currently full. Your registration will be added to the waiting list.");
+    setWhatsappConfirmationEnabled(Boolean(savedForm?.whatsappConfirmationEnabled));
+    setWhatsappConfirmationTemplate(savedForm?.whatsappConfirmationTemplate || "");
+    setWhatsappWaitingTemplate(savedForm?.whatsappWaitingTemplate || "");
+    setWhatsappReferrerWaitingTemplate(savedForm?.whatsappReferrerWaitingTemplate || "");
   }, [workshopId]);
 
   const workshop = workshops.find((item) => item.id === workshopId) ?? null;
@@ -241,6 +249,10 @@ export default function FormBuilderPage() {
       tiers: tiers.length > 0 ? tiers : undefined,
       highlights: highlights.filter(Boolean).length > 0 ? highlights.filter(Boolean) : undefined,
       whatsappGroupUrl: whatsappGroupUrl.trim() || undefined,
+      whatsappConfirmationEnabled,
+      whatsappConfirmationTemplate: whatsappConfirmationTemplate.trim() || undefined,
+      whatsappWaitingTemplate: whatsappWaitingTemplate.trim() || undefined,
+      whatsappReferrerWaitingTemplate: whatsappReferrerWaitingTemplate.trim() || undefined,
       submitButtonText: submitButtonText.trim() || undefined,
       allowDuplicate,
       responseLimit: Math.max(0, Number(responseLimit) || 0) || undefined,
@@ -257,7 +269,7 @@ export default function FormBuilderPage() {
       fields,
       updatedAt: new Date().toISOString()
     };
-  }, [accent, align, allowDuplicate, allowReferralConfirmation, bannerUrl, batch, closedMessage, description, eligibilityWaitingMessage, fee, fields, fontFamily, fontSize, highlights, logoUrl, otpRequired, paid, partPayment, referralCodes, registrationCapacity, requireAttendanceForConfirmation, requiredAttendanceSessionId, responseLimit, submitButtonText, tagline, tiers, title, titleBold, titleItalic, waitingMessage, waitingMode, waitingTitle, whatsappGroupUrl, workshop, workshopId]);
+  }, [accent, align, allowDuplicate, allowReferralConfirmation, bannerUrl, batch, closedMessage, description, eligibilityWaitingMessage, fee, fields, fontFamily, fontSize, highlights, logoUrl, otpRequired, paid, partPayment, referralCodes, registrationCapacity, requireAttendanceForConfirmation, requiredAttendanceSessionId, responseLimit, submitButtonText, tagline, tiers, title, titleBold, titleItalic, waitingMessage, waitingMode, waitingTitle, whatsappConfirmationEnabled, whatsappConfirmationTemplate, whatsappGroupUrl, whatsappReferrerWaitingTemplate, whatsappWaitingTemplate, workshop, workshopId]);
 
   const link = useMemo(() => {
     if (typeof window === "undefined" || !workshopId) return "";
@@ -334,9 +346,13 @@ export default function FormBuilderPage() {
       setSaved("Please select the required introduction attendance session.");
       return;
     }
-    const normalizedCodes = referralCodes.map((item) => item.code.trim().toUpperCase().replace(/\s+/g, "")).filter(Boolean);
-    if (allowReferralConfirmation && (normalizedCodes.length !== referralCodes.length || new Set(normalizedCodes).size !== normalizedCodes.length)) {
-      setSaved("Every referral code must be filled and unique.");
+    const normalizedCodes = referralCodes.map((item) => item.code.replace(/\D/g, "").slice(-10)).filter(Boolean);
+    if (allowReferralConfirmation && (normalizedCodes.length !== referralCodes.length || normalizedCodes.some((code) => !/^[6-9]\d{9}$/.test(code)) || new Set(normalizedCodes).size !== normalizedCodes.length)) {
+      setSaved("Every reference WhatsApp number must be a unique valid 10-digit Indian mobile.");
+      return;
+    }
+    if (whatsappConfirmationEnabled && (!whatsappConfirmationTemplate.trim() || !whatsappWaitingTemplate.trim() || !whatsappReferrerWaitingTemplate.trim())) {
+      setSaved("Add all three WhatsApp template names before enabling registration notifications.");
       return;
     }
     try {
@@ -476,6 +492,17 @@ export default function FormBuilderPage() {
                 />
                 <span className="mt-1 block text-xs font-semibold text-slate-400">After registration, the thank-you page can redirect to this group link after 5 seconds.</span>
               </label>
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-4 sm:col-span-2">
+                <label className="flex min-h-[52px] items-center justify-between gap-4 rounded-lg bg-white px-3 py-2">
+                  <span><span className="block text-sm font-black text-slate-700">Send registration status on WhatsApp</span><span className="block text-xs font-semibold text-slate-400">Confirmed and waiting participants receive different templates. Only a valid waiting referrer is notified.</span></span>
+                  <input checked={whatsappConfirmationEnabled} className="size-5 accent-emerald-600" onChange={(event) => setWhatsappConfirmationEnabled(event.target.checked)} type="checkbox" />
+                </label>
+                {whatsappConfirmationEnabled ? <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                  <label><span className="mb-2 block text-xs font-black text-slate-600">Participant Confirmation Template</span><input className="w-full rounded-xl border border-emerald-200 bg-white px-3.5 py-3 text-sm font-semibold outline-none" onChange={(event) => setWhatsappConfirmationTemplate(event.target.value)} placeholder="registration_confirmed" value={whatsappConfirmationTemplate} /></label>
+                  <label><span className="mb-2 block text-xs font-black text-slate-600">Participant Waiting Template</span><input className="w-full rounded-xl border border-emerald-200 bg-white px-3.5 py-3 text-sm font-semibold outline-none" onChange={(event) => setWhatsappWaitingTemplate(event.target.value)} placeholder="registration_waiting" value={whatsappWaitingTemplate} /></label>
+                  <label><span className="mb-2 block text-xs font-black text-slate-600">Referrer Waiting Template</span><input className="w-full rounded-xl border border-emerald-200 bg-white px-3.5 py-3 text-sm font-semibold outline-none" onChange={(event) => setWhatsappReferrerWaitingTemplate(event.target.value)} placeholder="referrer_registration_waiting" value={whatsappReferrerWaitingTemplate} /></label>
+                </div> : null}
+              </div>
               <label className="flex min-h-[58px] items-center justify-between gap-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
                 <span>
                   <span className="block text-sm font-black text-slate-700">WhatsApp OTP Verification</span>
@@ -502,12 +529,12 @@ export default function FormBuilderPage() {
                 {requireAttendanceForConfirmation ? <label className="mt-3 block"><span className="mb-2 block text-xs font-black text-slate-600">Required Introduction Attendance Session</span><select className="w-full rounded-xl border border-amber-200 bg-white px-3.5 py-3 text-sm font-semibold outline-none" onChange={(event) => setRequiredAttendanceSessionId(event.target.value)} value={requiredAttendanceSessionId}><option value="">Select attendance session</option>{attendanceSessions.map((session) => <option key={session.id} value={session.id}>{session.workshopName} — {session.title} ({session.sessionDate})</option>)}</select></label> : null}
 
                 <label className="mt-3 flex min-h-[52px] items-center justify-between gap-4 rounded-lg bg-white px-3 py-2">
-                  <span><span className="block text-sm font-black text-slate-700">Confirm from referral code</span><span className="block text-xs font-semibold text-slate-400">A valid code can confirm registration even when attendance is missing.</span></span>
+                  <span><span className="block text-sm font-black text-slate-700">Confirm from reference number</span><span className="block text-xs font-semibold text-slate-400">An exact active backend reference number can confirm registration when attendance is missing.</span></span>
                   <input checked={allowReferralConfirmation} className="size-5 accent-amber-600" onChange={(event) => setAllowReferralConfirmation(event.target.checked)} type="checkbox" />
                 </label>
                 {allowReferralConfirmation ? <div className="mt-3 space-y-3">
                   {referralCodes.map((code) => <div className="grid gap-2 rounded-xl border border-amber-200 bg-white p-3 sm:grid-cols-2" key={code.id}>
-                    <input className="rounded-lg border border-slate-200 px-3 py-2.5 text-sm font-bold uppercase outline-none" maxLength={80} onChange={(event) => updateReferralCode(code.id, { code: event.target.value.toUpperCase().replace(/\s+/g, "") })} placeholder="REFERRAL CODE" value={code.code} />
+                    <input className="rounded-lg border border-slate-200 px-3 py-2.5 text-sm font-bold outline-none" inputMode="numeric" maxLength={10} onChange={(event) => updateReferralCode(code.id, { code: event.target.value.replace(/\D/g, "").slice(0, 10) })} placeholder="Reference WhatsApp number" value={code.code} />
                     <input className="rounded-lg border border-slate-200 px-3 py-2.5 text-sm font-semibold outline-none" maxLength={120} onChange={(event) => updateReferralCode(code.id, { referrerName: event.target.value })} placeholder="Referrer name" value={code.referrerName} />
                     <label className="text-xs font-black text-slate-500">Valid from<input className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" onChange={(event) => updateReferralCode(code.id, { validFrom: event.target.value || undefined })} type="date" value={code.validFrom || ""} /></label>
                     <label className="text-xs font-black text-slate-500">Expires on<input className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" onChange={(event) => updateReferralCode(code.id, { expiresAt: event.target.value || undefined })} type="date" value={code.expiresAt || ""} /></label>
@@ -516,7 +543,7 @@ export default function FormBuilderPage() {
                     <label className="inline-flex items-center gap-2 text-xs font-black text-slate-600"><input checked={code.active !== false} className="size-4 accent-emerald-600" onChange={(event) => updateReferralCode(code.id, { active: event.target.checked })} type="checkbox" />Active</label>
                     <button className="justify-self-end text-xs font-black text-rose-600" onClick={() => removeReferralCode(code.id)} type="button">Remove code</button>
                   </div>)}
-                  <button className="min-h-10 rounded-lg border border-dashed border-amber-400 px-3 text-xs font-black text-amber-800" onClick={addReferralCode} type="button">+ Add referral code</button>
+                  <button className="min-h-10 rounded-lg border border-dashed border-amber-400 px-3 text-xs font-black text-amber-800" onClick={addReferralCode} type="button">+ Add reference number</button>
                 </div> : null}
                 <label className="mt-3 block"><span className="mb-2 block text-xs font-black text-slate-600">Eligibility waiting message</span><textarea className="w-full rounded-xl border border-amber-200 bg-white px-3.5 py-3 text-sm font-semibold outline-none" maxLength={300} onChange={(event) => setEligibilityWaitingMessage(event.target.value)} rows={2} value={eligibilityWaitingMessage} /></label>
               </div>

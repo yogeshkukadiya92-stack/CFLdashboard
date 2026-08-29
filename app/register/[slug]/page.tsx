@@ -784,7 +784,7 @@ export default function RegistrationPage() {
       batch: model.batch,
       batchId: batchIdParam || undefined,
       introductionSessionId: introductionSessionIdParam || undefined,
-      referralCode: referralCode.trim().toUpperCase().replace(/\s+/g, "") || undefined,
+      referralCode: referralCode.replace(/\D/g, "").slice(0, 10) || undefined,
       answers: Object.keys(extra).length ? extra : undefined
     };
 
@@ -1088,9 +1088,9 @@ export default function RegistrationPage() {
 
               {isLastPage && model.allowReferralConfirmation ? (
                 <label className="mt-5 block rounded-2xl border border-indigo-100 bg-indigo-50/50 p-4">
-                  <span className="block text-sm font-black text-slate-700">Referral Code <span className="font-semibold text-slate-400">(optional)</span></span>
-                  <span className="mt-1 block text-xs font-semibold leading-5 text-slate-500">A valid referral code can confirm your registration even if introduction-session attendance is not found.</span>
-                  <input className={`mt-3 w-full border border-slate-200 bg-white px-4 py-3 text-base font-semibold uppercase outline-none transition-all focus:ring-4 focus:ring-slate-100 sm:text-sm ${fieldRadiusClass}`} maxLength={80} onChange={(event) => setReferralCode(event.target.value.toUpperCase().replace(/\s+/g, ""))} placeholder="Enter referral code" value={referralCode} />
+                  <span className="block text-sm font-black text-slate-700">Reference Number <span className="font-semibold text-slate-400">(optional)</span></span>
+                  <span className="mt-1 block text-xs font-semibold leading-5 text-slate-500">Enter the exact 10-digit reference WhatsApp number shared with you.</span>
+                  <input className={`mt-3 w-full border border-slate-200 bg-white px-4 py-3 text-base font-semibold outline-none transition-all focus:ring-4 focus:ring-slate-100 sm:text-sm ${fieldRadiusClass}`} inputMode="numeric" maxLength={10} onChange={(event) => setReferralCode(event.target.value.replace(/\D/g, "").slice(0, 10))} placeholder="10-digit reference number" value={referralCode} />
                 </label>
               ) : null}
 
@@ -1194,7 +1194,7 @@ export default function RegistrationPage() {
                 ? waitingReason === "capacity"
                   ? `Your eligibility is verified, but seats are full. You are on the waiting list as WL-${waitingPosition}.`
                   : waitingReason === "invalid_referral"
-                    ? `Your registration is saved as WL-${waitingPosition}. The referral code could not be verified; attendance can still confirm eligibility.`
+                    ? `Your registration is saved as WL-${waitingPosition}. The reference number could not be verified.`
                     : waitingReason === "session_mismatch"
                       ? `Your registration is saved as WL-${waitingPosition}. Attendance for the required introduction session was not found.`
                       : model.eligibilityWaitingMessage || `Your registration is saved in the waiting list as WL-${waitingPosition}. We will confirm it after eligibility verification.`

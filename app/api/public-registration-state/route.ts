@@ -1,7 +1,7 @@
 import { ensurePersistenceTable, getAppState, getDbPool, isDbEnabled } from "@/lib/db";
 import { upsertLiveRegistration } from "@/lib/crm-db";
 import { upsertLeadFromRegistration } from "@/lib/lead-utils";
-import { assignRegistrationNumbers } from "@/lib/registration-confirmation";
+import { assignRegistrationNumbers, sendRegistrationStatusNotifications } from "@/lib/registration-confirmation";
 import { syncConfirmedRegistrationToMfw } from "@/lib/mfw-registration";
 import type { AttendanceEntry, BuilderForm, ReferralCodeConfig, RegistrationEntry } from "@/lib/types";
 import { attendanceMatchesFinalRegistration, isDuplicateWorkshopRegistration } from "@/lib/workshop-hierarchy";
@@ -74,7 +74,7 @@ export async function POST(request: Request) {
       fullName,
       id: String(input.id ?? "").trim().slice(0, 300),
       introductionSessionId: String(input.introductionSessionId ?? "").trim().slice(0, 300) || undefined,
-      referralCode: String(input.referralCode ?? "").trim().toUpperCase().replace(/\s+/g, "").slice(0, 80) || undefined,
+      referralCode: String(input.referralCode ?? "").replace(/\D/g, "").slice(-10) || undefined,
       mobile: `+91 ${mobileDigits}`,
       landingPageSlug: String(input.landingPageSlug ?? "").trim().slice(0, 300) || undefined,
       paymentMode: input.paymentMode === "Part" ? "Part" : "Full",
@@ -99,6 +99,7 @@ export async function POST(request: Request) {
       const selected = await client.query(`SELECT registrations, forms, workshops, leads, sales_people, attendance_entries FROM app_state WHERE id = 1 FOR UPDATE`);
       const state = selected.rows[0] ?? {};
       const current = Array.isArray(state.registrations) ? state.registrations : [];
+      const previousRegistration = current.find((value: unknown) => value && typeof value === "object" && (value as RegistrationEntry).id === sanitizedRegistration.id) as RegistrationEntry | undefined;
       const forms = Array.isArray(state.forms) ? state.forms as Array<Record<string, unknown>> : [];
       const form = forms.find((value) => {
         const sameWorkshop = String(value.workshopId ?? "") === sanitizedRegistration.workshopId || String(value.workshopSlug ?? "") === sanitizedRegistration.workshopSlug;
@@ -154,8 +155,8 @@ export async function POST(request: Request) {
       const submittedReferral = sanitizedRegistration.referralCode;
       const now = Date.now();
       const referralEnabled = form?.allowReferralConfirmation === true;
-      const referral = submittedReferral && referralEnabled
-        ? referralCodes.find((item) => item.active !== false && item.code.trim().toUpperCase().replace(/\s+/g, "") === submittedReferral)
+      const referral = submittedReferral && referralEnabled && /^[6-9]\d{9}$/.test(submittedReferral)
+        ? referralCodes.find((item) => item.active !== false && item.code.replace(/\D/g, "").slice(-10) === submittedReferral)
         : undefined;
       const referralUseCount = referral ? current.filter((entry: RegistrationEntry) => entry.id !== sanitizedRegistration.id && entry.referralCodeId === referral.id).length : 0;
       const referralMobileUseCount = referral ? current.filter((entry: RegistrationEntry) => entry.id !== sanitizedRegistration.id && entry.referralCodeId === referral.id && entry.mobile.replace(/\D/g, "").slice(-10) === mobileDigits).length : 0;
@@ -179,7 +180,7 @@ export async function POST(request: Request) {
         ? "manual"
         : capacityFull && eligible
           ? "capacity"
-          : !eligible && submittedReferral
+          : !eligible && referralEnabled && !referralValid
             ? "invalid_referral"
             : !eligible && hasAttendanceForAnotherSession
               ? "session_mismatch"
@@ -207,6 +208,15 @@ export async function POST(request: Request) {
         confirmationSource,
         referralCodeId: referralValid ? referral?.id : undefined,
         referrerName: referralValid ? referral?.referrerName : undefined,
+        confirmationWhatsappSentAt: previousRegistration?.confirmationWhatsappSentAt,
+        confirmationWhatsappStatus: previousRegistration?.confirmationWhatsappStatus,
+        confirmationWhatsappError: previousRegistration?.confirmationWhatsappError,
+        waitingWhatsappSentAt: previousRegistration?.waitingWhatsappSentAt,
+        waitingWhatsappStatus: previousRegistration?.waitingWhatsappStatus,
+        waitingWhatsappError: previousRegistration?.waitingWhatsappError,
+        referrerWaitingWhatsappSentAt: previousRegistration?.referrerWaitingWhatsappSentAt,
+        referrerWaitingWhatsappStatus: previousRegistration?.referrerWaitingWhatsappStatus,
+        referrerWaitingWhatsappError: previousRegistration?.referrerWaitingWhatsappError,
         requiredAttendanceSessionId: requiredSessionId || undefined,
         registrationStatus: isWaiting ? "waiting" : "confirmed",
         waitingReason,
@@ -250,8 +260,27 @@ export async function POST(request: Request) {
       await upsertLiveRegistration(finalRegistration as unknown as Record<string, unknown>);
       await client.query(`UPDATE app_state SET leads = $1::jsonb, registrations = $2::jsonb, updated_at = NOW() WHERE id = 1`, [JSON.stringify(leads), JSON.stringify(next.slice(0, 5000))]);
       await client.query("COMMIT");
-      const savedRegistration = next.find((entry) => entry.id === sanitizedRegistration.id) as RegistrationEntry;
-      return NextResponse.json({ ok: true, dbEnabled: true, registration: savedRegistration, whatsapp: { configured: false, sent: false } });
+      let savedRegistration = next.find((entry) => entry.id === sanitizedRegistration.id) as RegistrationEntry;
+      try {
+        const notificationPatch = await sendRegistrationStatusNotifications(savedRegistration, form as Partial<BuilderForm>);
+        if (Object.keys(notificationPatch).length) {
+          savedRegistration = { ...savedRegistration, ...notificationPatch };
+          next = next.map((entry) => entry.id === savedRegistration.id ? savedRegistration : entry);
+          await upsertLiveRegistration(savedRegistration as unknown as Record<string, unknown>);
+          await client.query(`UPDATE app_state SET registrations = $1::jsonb, updated_at = NOW() WHERE id = 1`, [JSON.stringify(next.slice(0, 5000))]);
+        }
+      } catch {
+        // Registration is already committed; notification failures never roll it back.
+      }
+      return NextResponse.json({
+        ok: true,
+        dbEnabled: true,
+        registration: savedRegistration,
+        whatsapp: {
+          participant: savedRegistration.registrationStatus === "waiting" ? savedRegistration.waitingWhatsappStatus : savedRegistration.confirmationWhatsappStatus,
+          referrer: savedRegistration.referrerWaitingWhatsappStatus
+        }
+      });
     } catch (error) {
       await client.query("ROLLBACK").catch(() => undefined);
       throw error;

@@ -47,6 +47,16 @@ type WorkshopRecord = {
   paymentUnknown?: boolean;
   transferLeadToCrm?: boolean;
 };
+
+function registrationWhatsAppStatus(entry: RegistrationEntry) {
+  if (entry.registrationStatus !== "waiting") return entry.confirmationWhatsappStatus ?? (entry.confirmationWhatsappSentAt ? "sent" : "not sent");
+  const participantStatus = entry.waitingWhatsappStatus ?? (entry.waitingWhatsappSentAt ? "sent" : "not sent");
+  if (!entry.referralCodeId) return participantStatus;
+  const referrerStatus = entry.referrerWaitingWhatsappStatus ?? (entry.referrerWaitingWhatsappSentAt ? "sent" : "not sent");
+  if (participantStatus === "sent" && referrerStatus === "sent") return "sent";
+  if (participantStatus === "failed" || referrerStatus === "failed") return "failed";
+  return participantStatus === "not_configured" || referrerStatus === "not_configured" ? "not_configured" : "not sent";
+}
 type DiscountType = "percent" | "flat";
 type RegistrationLinkConfig = {
   batch?: string;
@@ -185,6 +195,8 @@ export default function WorkshopMasterPage() {
   const [whatsappGroupUrl, setWhatsappGroupUrl] = useState("");
   const [whatsappConfirmationEnabled, setWhatsappConfirmationEnabled] = useState(false);
   const [whatsappConfirmationTemplate, setWhatsappConfirmationTemplate] = useState("");
+  const [whatsappWaitingTemplate, setWhatsappWaitingTemplate] = useState("");
+  const [whatsappReferrerWaitingTemplate, setWhatsappReferrerWaitingTemplate] = useState("");
   const [message, setMessage] = useState("");
   const [search, setSearch] = useState("");
   const [recordScope, setRecordScope] = useState<"all" | "active" | "historical">("active");
@@ -690,6 +702,22 @@ export default function WorkshopMasterPage() {
     }
   }
 
+  async function retryRegistrationWhatsApp(registrationId: string) {
+    try {
+      const response = await fetch("/api/admin/registration-whatsapp", {
+        body: JSON.stringify({ registrationId }),
+        headers: { "Content-Type": "application/json" },
+        method: "POST"
+      });
+      const result = await response.json() as { error?: string; registration?: RegistrationEntry };
+      if (!response.ok || !result.registration) throw new Error(result.error || "WhatsApp retry failed.");
+      setRegistrations((current) => current.map((entry) => entry.id === registrationId ? result.registration as RegistrationEntry : entry));
+      setMessage("WhatsApp delivery checked and updated.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "WhatsApp delivery could not be retried.");
+    }
+  }
+
   function sendResponseSummaryOnWhatsApp() {
     if (!selectedWorkshop) return;
 
@@ -763,6 +791,8 @@ export default function WorkshopMasterPage() {
     setWhatsappGroupUrl("");
     setWhatsappConfirmationEnabled(false);
     setWhatsappConfirmationTemplate("");
+    setWhatsappWaitingTemplate("");
+    setWhatsappReferrerWaitingTemplate("");
   }
 
   function buildRegistrationForm(record: WorkshopRecord): BuilderForm {
@@ -789,6 +819,8 @@ export default function WorkshopMasterPage() {
       whatsappGroupUrl: whatsappGroupUrl.trim() || undefined,
       whatsappConfirmationEnabled,
       whatsappConfirmationTemplate: whatsappConfirmationTemplate.trim() || undefined,
+      whatsappWaitingTemplate: whatsappWaitingTemplate.trim() || undefined,
+      whatsappReferrerWaitingTemplate: whatsappReferrerWaitingTemplate.trim() || undefined,
       submitButtonText: formSubmitButtonText.trim() || undefined,
       fields: normalizeCoreFieldRequirements(formFields),
       updatedAt: new Date().toISOString()
@@ -830,6 +862,8 @@ export default function WorkshopMasterPage() {
         setWhatsappGroupUrl("");
         setWhatsappConfirmationEnabled(false);
         setWhatsappConfirmationTemplate("");
+        setWhatsappWaitingTemplate("");
+        setWhatsappReferrerWaitingTemplate("");
         return;
       }
       setFormTitle(savedForm.title || `${record.name} Registration`);
@@ -849,6 +883,8 @@ export default function WorkshopMasterPage() {
       setWhatsappGroupUrl(savedForm.whatsappGroupUrl ?? "");
       setWhatsappConfirmationEnabled(Boolean(savedForm.whatsappConfirmationEnabled));
       setWhatsappConfirmationTemplate(savedForm.whatsappConfirmationTemplate ?? "");
+      setWhatsappWaitingTemplate(savedForm.whatsappWaitingTemplate ?? "");
+      setWhatsappReferrerWaitingTemplate(savedForm.whatsappReferrerWaitingTemplate ?? "");
     } catch {
       resetBuilderForm();
     }
@@ -1279,16 +1315,17 @@ export default function WorkshopMasterPage() {
             <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4 md:col-span-2">
               <label className="flex min-h-[48px] items-center justify-between gap-4">
                 <span>
-                  <span className="block text-sm font-black text-slate-700">Send confirmation on WhatsApp</span>
-                  <span className="mt-0.5 block text-xs font-semibold text-slate-500">Uses the configured 11za connection after a seat is confirmed.</span>
+                  <span className="block text-sm font-black text-slate-700">Send registration status on WhatsApp</span>
+                  <span className="mt-0.5 block text-xs font-semibold text-slate-500">Uses separate templates for confirmed participants, waiting participants and valid waiting referrers.</span>
                 </span>
                 <input checked={whatsappConfirmationEnabled} className="size-5 shrink-0 accent-emerald-600" onChange={(event) => setWhatsappConfirmationEnabled(event.target.checked)} type="checkbox" />
               </label>
               {whatsappConfirmationEnabled ? (
-                <label className="mt-3 block">
-                  <span className="mb-2 block text-sm font-bold text-slate-600">11za Template Name</span>
-                  <input className={inputClass} onChange={(event) => setWhatsappConfirmationTemplate(event.target.value)} placeholder="registration_confirmed" value={whatsappConfirmationTemplate} />
-                </label>
+                <div className="mt-3 grid gap-3 md:grid-cols-3">
+                  <label className="block"><span className="mb-2 block text-xs font-bold text-slate-600">Participant Confirmation Template</span><input className={inputClass} onChange={(event) => setWhatsappConfirmationTemplate(event.target.value)} placeholder="registration_confirmed" value={whatsappConfirmationTemplate} /></label>
+                  <label className="block"><span className="mb-2 block text-xs font-bold text-slate-600">Participant Waiting Template</span><input className={inputClass} onChange={(event) => setWhatsappWaitingTemplate(event.target.value)} placeholder="registration_waiting" value={whatsappWaitingTemplate} /></label>
+                  <label className="block"><span className="mb-2 block text-xs font-bold text-slate-600">Referrer Waiting Template</span><input className={inputClass} onChange={(event) => setWhatsappReferrerWaitingTemplate(event.target.value)} placeholder="referrer_registration_waiting" value={whatsappReferrerWaitingTemplate} /></label>
+                </div>
               ) : null}
             </div>
             <label className="flex min-h-[58px] items-center justify-between gap-4 rounded-xl border border-emerald-100 bg-white px-4 py-3 md:col-span-2">
@@ -1779,7 +1816,15 @@ export default function WorkshopMasterPage() {
 	                          <td className="px-4 py-4">{entry.email}</td>
                           <td className="px-4 py-4">{entry.city}</td>
                           <td className="px-4 py-4"><RegistrationSourceBadge source={entry.source} /></td>
-                          <td className="px-4 py-4"><WhatsAppVerificationBadge status={entry.whatsappVerificationStatus} /></td>
+                          <td className="px-4 py-4">
+                            <WhatsAppVerificationBadge status={entry.whatsappVerificationStatus} />
+                            <div className="mt-2 flex items-center gap-2">
+                              <span className={`text-[11px] font-black ${registrationWhatsAppStatus(entry) === "sent" ? "text-emerald-700" : registrationWhatsAppStatus(entry) === "failed" ? "text-rose-700" : "text-slate-500"}`}>
+                                Status: {registrationWhatsAppStatus(entry)}
+                              </span>
+                              {registrationWhatsAppStatus(entry) !== "sent" ? <button aria-label={`Retry WhatsApp for ${entry.fullName}`} className="grid size-8 place-items-center rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100" onClick={() => void retryRegistrationWhatsApp(entry.id)} title="Retry registration WhatsApp" type="button"><MessageCircle className="size-4" /></button> : null}
+                            </div>
+                          </td>
                           <td className="px-4 py-4">
                             <RegistrationConfirmationBadge status={entry.confirmationStatus} />
                             {entry.confirmationUpdatedBy ? <p className="mt-1 text-xs text-slate-500">{entry.confirmationUpdatedBy}{entry.confirmationUpdatedAt ? ` · ${formatSubmittedAt(entry.confirmationUpdatedAt)}` : ""}</p> : null}

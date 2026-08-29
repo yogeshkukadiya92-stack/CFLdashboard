@@ -74,3 +74,120 @@ export async function sendRegistrationConfirmation(registration: RegistrationEnt
   }
   return { configured: true, sent };
 }
+
+type WhatsAppDeliveryResult = { configured: boolean; error?: string; sent: boolean };
+
+async function sendTemplateMessage(input: {
+  mobile: string;
+  name: string;
+  templateName?: string;
+  values: string[];
+}): Promise<WhatsAppDeliveryResult> {
+  const apiUrl = process.env.WHATSAPP_CONFIRMATION_API_URL || process.env.WHATSAPP_OTP_API_URL;
+  const authToken = process.env.WHATSAPP_CONFIRMATION_AUTH_TOKEN || process.env.WHATSAPP_OTP_AUTH_TOKEN;
+  const mobileDigits = input.mobile.replace(/\D/g, "").slice(-10);
+  if (!apiUrl || !authToken || !input.templateName || mobileDigits.length !== 10) {
+    return { configured: false, sent: false };
+  }
+
+  const mobile = `91${mobileDigits}`;
+  try {
+    const response = await fetch(apiUrl, {
+      body: JSON.stringify({
+        authToken,
+        data: input.values,
+        language: process.env.WHATSAPP_CONFIRMATION_LANGUAGE || "en",
+        name: input.name,
+        originWebsite: process.env.WHATSAPP_OTP_ORIGIN_WEBSITE || "https://coachforlife.in/",
+        sendto: mobile,
+        templateName: input.templateName,
+        BodyDynamicData: input.values,
+        Name: input.name,
+        PhoneNumber: mobile,
+        TemplateName: input.templateName,
+        mobile,
+        parameters: input.values,
+        templateId: input.templateName,
+        to: mobile,
+        variables: input.values
+      }),
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${authToken}`,
+        authtoken: authToken
+      },
+      method: "POST"
+    });
+    let sent = response.ok;
+    try {
+      const result = await response.clone().json();
+      if (typeof result?.IsSuccess === "boolean") sent = result.IsSuccess;
+      if (typeof result?.Status === "number") sent = sent && result.Status >= 200 && result.Status < 300;
+    } catch {
+      // Successful provider responses are not guaranteed to be JSON.
+    }
+    return { configured: true, error: sent ? undefined : `WhatsApp provider returned ${response.status}.`, sent };
+  } catch (error) {
+    return { configured: true, error: error instanceof Error ? error.message : "WhatsApp delivery failed.", sent: false };
+  }
+}
+
+export async function sendRegistrationStatusNotifications(registration: RegistrationEntry, form?: Partial<BuilderForm>) {
+  const patch: Partial<RegistrationEntry> = {};
+  if (!form?.whatsappConfirmationEnabled) return patch;
+  const now = new Date().toISOString();
+
+  if (registration.registrationStatus !== "waiting") {
+    if (registration.confirmationWhatsappSentAt) return patch;
+    const result = await sendRegistrationConfirmation(registration, form);
+    patch.confirmationWhatsappStatus = result.sent ? "sent" : result.configured ? "failed" : "not_configured";
+    patch.confirmationWhatsappError = result.sent ? undefined : result.configured ? "WhatsApp confirmation delivery failed." : "Confirmation template or provider is not configured.";
+    if (result.sent) patch.confirmationWhatsappSentAt = now;
+    return patch;
+  }
+
+  if (!registration.waitingWhatsappSentAt) {
+    const participantTemplate = form.whatsappWaitingTemplate
+      || process.env.WHATSAPP_WAITING_TEMPLATE_NAME
+      || process.env.WHATSAPP_WAITING_TEMPLATE_ID;
+    const participantResult = await sendTemplateMessage({
+      mobile: registration.mobile,
+      name: registration.fullName,
+      templateName: participantTemplate,
+      values: [
+        registration.fullName,
+        registration.workshopTitle,
+        registration.batch || "Main Batch",
+        `WL-${registration.waitingPosition || "-"}`,
+        registration.waitingReason || "waiting"
+      ]
+    });
+    patch.waitingWhatsappStatus = participantResult.sent ? "sent" : participantResult.configured ? "failed" : "not_configured";
+    patch.waitingWhatsappError = participantResult.sent ? undefined : participantResult.error || "Waiting template or provider is not configured.";
+    if (participantResult.sent) patch.waitingWhatsappSentAt = now;
+  }
+
+  const referenceDigits = registration.referralCode?.replace(/\D/g, "").slice(-10) || "";
+  if (registration.referralCodeId && referenceDigits.length === 10 && !registration.referrerWaitingWhatsappSentAt) {
+    const referrerTemplate = form.whatsappReferrerWaitingTemplate
+      || process.env.WHATSAPP_REFERRER_WAITING_TEMPLATE_NAME
+      || process.env.WHATSAPP_REFERRER_WAITING_TEMPLATE_ID;
+    const referrerResult = await sendTemplateMessage({
+      mobile: referenceDigits,
+      name: registration.referrerName || "Referrer",
+      templateName: referrerTemplate,
+      values: [
+        registration.referrerName || "Referrer",
+        registration.fullName,
+        registration.workshopTitle,
+        registration.batch || "Main Batch",
+        `WL-${registration.waitingPosition || "-"}`
+      ]
+    });
+    patch.referrerWaitingWhatsappStatus = referrerResult.sent ? "sent" : referrerResult.configured ? "failed" : "not_configured";
+    patch.referrerWaitingWhatsappError = referrerResult.sent ? undefined : referrerResult.error || "Referrer waiting template or provider is not configured.";
+    if (referrerResult.sent) patch.referrerWaitingWhatsappSentAt = now;
+  }
+
+  return patch;
+}
