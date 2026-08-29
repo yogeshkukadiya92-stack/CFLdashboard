@@ -1,6 +1,11 @@
 import type { RegistrationEntry } from "@/lib/types";
 import { getAppState } from "@/lib/db";
-import { selectMfwWorkshopMapping, type MfwWorkshopMapping } from "@/lib/mfw-workshop-mapping";
+import {
+  normalizeMfwWorkshops,
+  selectMfwWorkshopMapping,
+  type MfwWorkshopListResponse,
+  type MfwWorkshopMapping
+} from "@/lib/mfw-workshop-mapping";
 
 export type MfwWorkshop = { id: string; title: string };
 type MfwCustomerResponse = {
@@ -34,11 +39,9 @@ export async function listMfwWorkshops() {
     cache: "no-store",
     headers: { "x-mfw-api-key": apiKey }
   });
-  const result = await response.json().catch(() => ({})) as { data?: MfwWorkshop[]; message?: string };
+  const result = await response.json().catch(() => ({})) as MfwWorkshopListResponse;
   if (!response.ok) throw new Error(result.message || "Could not load MFW workshops.");
-  return (Array.isArray(result.data) ? result.data : [])
-    .map((workshop) => ({ id: String(workshop.id ?? "").trim(), title: String(workshop.title ?? "").trim() }))
-    .filter((workshop) => workshop.id && workshop.title);
+  return normalizeMfwWorkshops(result);
 }
 
 async function resolveWorkshopMapping(registration: RegistrationEntry) {
