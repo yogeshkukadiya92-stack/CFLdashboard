@@ -32,6 +32,9 @@ type WorkshopRecord = {
   isPartPaymentAllow?: boolean;
   name: string;
   maxOrderQty?: string;
+  mfwEnrollmentEnabled?: boolean;
+  mfwWorkshopEventId?: string;
+  mfwWorkshopTitle?: string;
   minOrderQty?: string;
   minimumPartPayment?: string;
   orderQtyTitle?: string;
@@ -156,6 +159,12 @@ export default function WorkshopMasterPage() {
   const [minOrderQty, setMinOrderQty] = useState("");
   const [maxOrderQty, setMaxOrderQty] = useState("");
   const [transferLeadToCrm, setTransferLeadToCrm] = useState(false);
+  const [mfwEnrollmentEnabled, setMfwEnrollmentEnabled] = useState(false);
+  const [mfwWorkshopEventId, setMfwWorkshopEventId] = useState("");
+  const [mfwWorkshopTitle, setMfwWorkshopTitle] = useState("");
+  const [mfwWorkshops, setMfwWorkshops] = useState<Array<{ id: string; title: string }>>([]);
+  const [mfwLoading, setMfwLoading] = useState(false);
+  const [mfwError, setMfwError] = useState("");
   const [records, setRecords] = useState<WorkshopRecord[]>([]);
   const [workshopTypes, setWorkshopTypes] = useState<string[]>(defaultWorkshopTypes);
   const [facilitators, setFacilitators] = useState<string[]>(defaultFacilitators);
@@ -385,6 +394,25 @@ export default function WorkshopMasterPage() {
     return saveLiveState({ workshops: next });
   }
 
+  async function loadMfwWorkshops() {
+    setMfwLoading(true);
+    setMfwError("");
+    try {
+      const response = await fetch("/api/integrations/mfw/workshops", { cache: "no-store" });
+      const result = await response.json().catch(() => ({})) as { error?: string; workshops?: Array<{ id: string; title: string }> };
+      if (!response.ok) throw new Error(result.error || "Could not load MFW workshops.");
+      setMfwWorkshops(Array.isArray(result.workshops) ? result.workshops : []);
+    } catch (error) {
+      setMfwError(error instanceof Error ? error.message : "Could not load MFW workshops.");
+    } finally {
+      setMfwLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (mfwEnrollmentEnabled) void loadMfwWorkshops();
+  }, [mfwEnrollmentEnabled]);
+
   function clearForm(clearMessage = true) {
     setName("");
     setType("");
@@ -403,6 +431,10 @@ export default function WorkshopMasterPage() {
     setMinOrderQty("");
     setMaxOrderQty("");
     setTransferLeadToCrm(false);
+    setMfwEnrollmentEnabled(false);
+    setMfwWorkshopEventId("");
+    setMfwWorkshopTitle("");
+    setMfwError("");
     resetBuilderForm();
     if (clearMessage) setMessage("");
     setEditingId(null);
@@ -412,6 +444,10 @@ export default function WorkshopMasterPage() {
     event.preventDefault();
     if (!name || !type || !facilitator || !group) {
       setMessage("Please fill Workshop Name, Type, Facilitator and Product Group.");
+      return;
+    }
+    if (mfwEnrollmentEnabled && !mfwWorkshopEventId) {
+      setMessage("Please select an MFW workshop or turn off MFW enrollment.");
       return;
     }
     if (editingId) {
@@ -448,6 +484,9 @@ export default function WorkshopMasterPage() {
     setMinOrderQty(record.minOrderQty ?? "");
     setMaxOrderQty(record.maxOrderQty ?? "");
     setTransferLeadToCrm(Boolean(record.transferLeadToCrm));
+    setMfwEnrollmentEnabled(Boolean(record.mfwEnrollmentEnabled));
+    setMfwWorkshopEventId(record.mfwWorkshopEventId ?? "");
+    setMfwWorkshopTitle(record.mfwWorkshopTitle ?? "");
     setEditingId(record.id);
     loadBuilderForm(record);
     setShowData(false);
@@ -476,6 +515,9 @@ export default function WorkshopMasterPage() {
       setMinOrderQty(record.minOrderQty ?? "");
       setMaxOrderQty(record.maxOrderQty ?? "");
       setTransferLeadToCrm(Boolean(record.transferLeadToCrm));
+      setMfwEnrollmentEnabled(false);
+      setMfwWorkshopEventId("");
+      setMfwWorkshopTitle("");
     }
     loadBuilderForm(record);
     setEditingId(null);
@@ -571,7 +613,11 @@ export default function WorkshopMasterPage() {
     setRegistrations(next);
     window.localStorage.setItem(REGISTRATION_STORAGE_KEY, JSON.stringify(next));
     setFollowUpTarget(null);
-    setMessage("Confirmation and call note updated.");
+    setMessage(result.registration.mfwSyncStatus === "synced"
+      ? "Confirmation updated and participant enrolled in MFW."
+      : result.registration.mfwSyncStatus === "failed"
+        ? `Confirmation updated. MFW enrollment needs retry: ${result.registration.mfwSyncError || "Sync failed."}`
+        : "Confirmation and call note updated.");
   }
 
   async function removeDuplicateRegistrationResponses() {
@@ -669,6 +715,9 @@ export default function WorkshopMasterPage() {
       isPaid,
       isPartPaymentAllow,
       maxOrderQty,
+      mfwEnrollmentEnabled,
+      mfwWorkshopEventId: mfwEnrollmentEnabled ? mfwWorkshopEventId : undefined,
+      mfwWorkshopTitle: mfwEnrollmentEnabled ? mfwWorkshopTitle : undefined,
       minOrderQty,
       minimumPartPayment,
       name,
@@ -1025,6 +1074,55 @@ export default function WorkshopMasterPage() {
             Is Paid?
           </label>
         </div>
+
+        <section className={`mt-6 rounded-2xl border p-4 md:p-5 ${mfwEnrollmentEnabled ? "border-emerald-200 bg-emerald-50/60" : "border-slate-200 bg-slate-50"}`}>
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="max-w-2xl">
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-700">MFW Integration · Optional</p>
+              <h3 className="mt-1 text-lg font-black text-slate-950">Enroll confirmed registrations in My Fitness World</h3>
+              <p className="mt-1 text-sm font-semibold leading-6 text-slate-500">When a registration is marked Confirmed, the user will be assigned to the selected MFW workshop. CFL confirmation continues even if MFW is temporarily unavailable.</p>
+            </div>
+            <label className="inline-flex min-h-[44px] items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-700">
+              <input
+                checked={mfwEnrollmentEnabled}
+                className="size-5 accent-emerald-600"
+                onChange={(event) => {
+                  setMfwEnrollmentEnabled(event.target.checked);
+                  if (!event.target.checked) setMfwError("");
+                }}
+                type="checkbox"
+              />
+              Enable MFW enrollment
+            </label>
+          </div>
+          {mfwEnrollmentEnabled ? (
+            <div className="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+              <label className="block">
+                <span className="mb-2 block text-sm font-black text-slate-700">MFW Workshop</span>
+                <select
+                  className={inputClass}
+                  disabled={mfwLoading}
+                  onChange={(event) => {
+                    const selected = mfwWorkshops.find((workshop) => workshop.id === event.target.value);
+                    setMfwWorkshopEventId(event.target.value);
+                    setMfwWorkshopTitle(selected?.title ?? (event.target.value === mfwWorkshopEventId ? mfwWorkshopTitle : ""));
+                  }}
+                  value={mfwWorkshopEventId}
+                >
+                  <option value="">{mfwLoading ? "Loading MFW workshops..." : "Select MFW workshop"}</option>
+                  {mfwWorkshopEventId && !mfwWorkshops.some((workshop) => workshop.id === mfwWorkshopEventId) ? <option value={mfwWorkshopEventId}>{mfwWorkshopTitle || mfwWorkshopEventId} · Saved mapping</option> : null}
+                  {mfwWorkshops.map((workshop) => <option key={workshop.id} value={workshop.id}>{workshop.title}</option>)}
+                </select>
+              </label>
+              <button className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-xl border border-emerald-300 bg-white px-4 text-sm font-black text-emerald-700 hover:bg-emerald-50 disabled:opacity-60" disabled={mfwLoading} onClick={() => void loadMfwWorkshops()} type="button">
+                <RefreshCw className={`size-4 ${mfwLoading ? "animate-spin" : ""}`} />
+                Refresh MFW
+              </button>
+              {mfwError ? <p className="text-sm font-bold text-rose-700 md:col-span-2" role="alert">{mfwError}</p> : null}
+              {!mfwError && mfwWorkshopEventId ? <p className="text-xs font-bold text-emerald-700 md:col-span-2">Mapped to: {mfwWorkshopTitle || mfwWorkshopEventId}</p> : null}
+            </div>
+          ) : null}
+        </section>
 
         <div className="mt-7 rounded-3xl border border-slate-200 bg-slate-50/60 p-4 md:p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
@@ -1618,7 +1716,7 @@ export default function WorkshopMasterPage() {
                             type="checkbox"
                           />
                         </th>
-                        {["Action", "User", "Mobile", "Email", "City", "Source", "WhatsApp", "Confirmation", "Call Note", "Payment", "Paid", "Due", "Submitted"].map((head) => <th className="px-4 py-3" key={head}>{head}</th>)}
+                        {["Action", "User", "Mobile", "Email", "City", "Source", "WhatsApp", "Confirmation", "MFW", "Call Note", "Payment", "Paid", "Due", "Submitted"].map((head) => <th className="px-4 py-3" key={head}>{head}</th>)}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -1656,6 +1754,7 @@ export default function WorkshopMasterPage() {
                             <RegistrationConfirmationBadge status={entry.confirmationStatus} />
                             {entry.confirmationUpdatedBy ? <p className="mt-1 text-xs text-slate-500">{entry.confirmationUpdatedBy}{entry.confirmationUpdatedAt ? ` · ${formatSubmittedAt(entry.confirmationUpdatedAt)}` : ""}</p> : null}
                           </td>
+                          <td className="px-4 py-4"><MfwSyncBadge entry={entry} /></td>
                           <td className="max-w-[240px] px-4 py-4 text-xs leading-5 text-slate-600">{entry.confirmationNote || "-"}</td>
                           <td className="px-4 py-4">
                             <span className={`rounded-full px-3 py-1 text-xs font-black ${entry.status === "Paid" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
@@ -1668,7 +1767,7 @@ export default function WorkshopMasterPage() {
                         </tr>
 	                      )) : (
 	                        <tr>
-	                          <td className="px-4 py-8 text-center text-slate-500" colSpan={14}>
+	                          <td className="px-4 py-8 text-center text-slate-500" colSpan={15}>
 	                            {participantSearch ? "No response found for this name or mobile number." : "No users registered in this workshop yet."}
 	                          </td>
 	                        </tr>
@@ -2935,6 +3034,19 @@ function WhatsAppVerificationBadge({ status }: { status?: RegistrationEntry["wha
     return <span className="rounded-full bg-rose-50 px-3 py-1 text-xs font-black text-rose-700">Not Verified</span>;
   }
   return <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-500">Not Required</span>;
+}
+
+function MfwSyncBadge({ entry }: { entry: RegistrationEntry }) {
+  if (entry.mfwSyncStatus === "synced") {
+    return <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700" title={entry.mfwWorkshopEventId}>Enrolled</span>;
+  }
+  if (entry.mfwSyncStatus === "failed") {
+    return <span className="rounded-full bg-rose-50 px-3 py-1 text-xs font-black text-rose-700" title={entry.mfwSyncError}>Failed · confirm again to retry</span>;
+  }
+  if (entry.confirmationStatus === "confirmed") {
+    return <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-500">Not enabled</span>;
+  }
+  return <span className="text-xs font-bold text-slate-400">After confirmation</span>;
 }
 
 function RegistrationConfirmationBadge({ status = "pending" }: { status?: RegistrationEntry["confirmationStatus"] }) {

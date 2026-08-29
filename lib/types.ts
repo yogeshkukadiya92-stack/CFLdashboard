@@ -283,7 +283,8 @@ export interface RegistrationEntry {
   registrationNumber?: string;
   waitingPosition?: number;
   confirmationWhatsappSentAt?: string;
-  mfwSyncStatus?: "synced" | "failed";
+  mfwSyncStatus?: "not_required" | "pending" | "synced" | "failed";
+  mfwSyncError?: string;
   mfwSyncedAt?: string;
   mfwUserId?: string;
   mfwParticipantId?: string;

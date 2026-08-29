@@ -1,6 +1,8 @@
 import type { RegistrationEntry } from "@/lib/types";
+import { getAppState } from "@/lib/db";
+import { selectMfwWorkshopMapping, type MfwWorkshopMapping } from "@/lib/mfw-workshop-mapping";
 
-type MfwWorkshop = { id: string; title: string };
+export type MfwWorkshop = { id: string; title: string };
 type MfwCustomerResponse = {
   success?: boolean;
   message?: string;
@@ -22,13 +24,11 @@ function workshopMap() {
   try {
     return JSON.parse(process.env.MFW_WORKSHOP_MAP || "{}") as Record<string, string>;
   } catch {
-    throw new Error("MFW_WORKSHOP_MAP must be valid JSON.");
+    return {};
   }
 }
 
-async function resolveWorkshopEventId(registration: RegistrationEntry) {
-  const mapped = workshopMap()[registration.workshopId];
-  if (mapped) return mapped;
+export async function listMfwWorkshops() {
   const { apiKey, baseUrl } = config();
   const response = await fetch(`${baseUrl}/integrations/v1/workshops`, {
     cache: "no-store",
@@ -36,41 +36,73 @@ async function resolveWorkshopEventId(registration: RegistrationEntry) {
   });
   const result = await response.json().catch(() => ({})) as { data?: MfwWorkshop[]; message?: string };
   if (!response.ok) throw new Error(result.message || "Could not load MFW workshops.");
-  const title = registration.workshopTitle.trim().toLocaleLowerCase();
-  const matches = (result.data || []).filter((workshop) => workshop.title.trim().toLocaleLowerCase() === title);
-  if (matches.length !== 1) {
-    throw new Error(`Map CFL workshop '${registration.workshopTitle}' to its MFW workshop ID in MFW_WORKSHOP_MAP.`);
-  }
-  return matches[0].id;
+  return (Array.isArray(result.data) ? result.data : [])
+    .map((workshop) => ({ id: String(workshop.id ?? "").trim(), title: String(workshop.title ?? "").trim() }))
+    .filter((workshop) => workshop.id && workshop.title);
+}
+
+async function resolveWorkshopMapping(registration: RegistrationEntry) {
+  const state = await getAppState();
+  const workshops = Array.isArray(state?.workshops) ? state.workshops : [];
+  const workshop = workshops.find((entry: unknown) => {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) return false;
+    const record = entry as { id?: unknown; name?: unknown };
+    return String(record.id ?? "") === registration.workshopId
+      || String(record.name ?? "").trim().toLocaleLowerCase() === registration.workshopTitle.trim().toLocaleLowerCase();
+  }) as MfwWorkshopMapping | undefined;
+  return selectMfwWorkshopMapping(workshop, workshopMap()[registration.workshopId]);
 }
 
 export async function syncConfirmedRegistrationToMfw(registration: RegistrationEntry) {
-  if (!registration.mobile.trim()) throw new Error("Mobile number is required before confirming this registration.");
-  const workshopEventId = await resolveWorkshopEventId(registration);
-  const { apiKey, baseUrl } = config();
-  const response = await fetch(`${baseUrl}/integrations/v1/customers`, {
-    body: JSON.stringify({
-      email: registration.email || undefined,
-      mobile: registration.mobile,
-      name: registration.fullName,
-      notes: `Confirmed in CFL dashboard for ${registration.workshopTitle}`,
-      participantStatus: "ACTIVE",
-      sourceRegistrationId: registration.id,
-      workshopEventId
-    }),
-    headers: { "Content-Type": "application/json", "x-mfw-api-key": apiKey },
-    method: "POST"
-  });
-  const result = await response.json().catch(() => ({})) as MfwCustomerResponse;
-  const participant = result.data?.participant;
-  if (!response.ok || !result.data?.workshopAssigned || participant?.eventId !== workshopEventId) {
-    throw new Error(result.message || "MFW user was not assigned to the selected workshop.");
+  let workshopEventId = "";
+  try {
+    const mapping = await resolveWorkshopMapping(registration);
+    if (!mapping) return { mfwSyncError: undefined, mfwSyncStatus: "not_required" as const };
+    workshopEventId = mapping.workshopEventId;
+    if (!workshopEventId) throw new Error(`Select an MFW workshop for '${registration.workshopTitle}' before retrying enrollment.`);
+    if (registration.mfwSyncStatus === "synced" && registration.mfwWorkshopEventId === workshopEventId) {
+      return {
+        mfwParticipantId: registration.mfwParticipantId,
+        mfwSyncError: undefined,
+        mfwSyncStatus: "synced" as const,
+        mfwSyncedAt: registration.mfwSyncedAt,
+        mfwUserId: registration.mfwUserId,
+        mfwWorkshopEventId: workshopEventId
+      };
+    }
+    if (!registration.mobile.trim()) throw new Error("Mobile number is required before confirming this registration.");
+    const { apiKey, baseUrl } = config();
+    const response = await fetch(`${baseUrl}/integrations/v1/customers`, {
+      body: JSON.stringify({
+        email: registration.email || undefined,
+        mobile: registration.mobile,
+        name: registration.fullName,
+        notes: `Confirmed in CFL dashboard for ${registration.workshopTitle}`,
+        participantStatus: "ACTIVE",
+        sourceRegistrationId: registration.id,
+        workshopEventId
+      }),
+      headers: { "Content-Type": "application/json", "x-mfw-api-key": apiKey },
+      method: "POST"
+    });
+    const result = await response.json().catch(() => ({})) as MfwCustomerResponse;
+    const participant = result.data?.participant;
+    if (!response.ok || !result.data?.workshopAssigned || participant?.eventId !== workshopEventId) {
+      throw new Error(result.message || "MFW user was not assigned to the selected workshop.");
+    }
+    return {
+      mfwParticipantId: participant.id,
+      mfwSyncError: undefined,
+      mfwSyncStatus: "synced" as const,
+      mfwSyncedAt: new Date().toISOString(),
+      mfwUserId: result.data.id,
+      mfwWorkshopEventId: workshopEventId
+    };
+  } catch (error) {
+    return {
+      mfwSyncError: error instanceof Error ? error.message.slice(0, 500) : "MFW enrollment failed.",
+      mfwSyncStatus: "failed" as const,
+      mfwWorkshopEventId: workshopEventId || undefined
+    };
   }
-  return {
-    mfwParticipantId: participant.id,
-    mfwSyncStatus: "synced" as const,
-    mfwSyncedAt: new Date().toISOString(),
-    mfwUserId: result.data.id,
-    mfwWorkshopEventId: workshopEventId
-  };
 }
