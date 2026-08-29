@@ -990,7 +990,7 @@ export default function WorkshopMasterPage() {
       displayedParticipants.flatMap((entry) => Object.keys((entry.answers ?? {}) as Record<string, unknown>))
     )).filter((key) => !coreAnswerKeys.has(key));
     const headers = [
-      "Registration Number",
+      "Registration / Unique ID",
       "Name",
       "Mobile",
       "Email",
@@ -1809,7 +1809,7 @@ export default function WorkshopMasterPage() {
 	                          <td className="px-4 py-4 font-black text-slate-950">
                               {entry.fullName}
                               {entry.registrationStatus === "waiting" ? <span className="mt-1 block w-fit rounded-full bg-amber-100 px-2 py-1 text-[11px] font-black text-amber-800">Waiting WL-{entry.waitingPosition ?? "-"} · {entry.waitingReason === "attendance_pending" ? "Attendance pending" : entry.waitingReason === "eligibility_pending" ? "Eligibility pending" : entry.waitingReason === "session_mismatch" ? "Session mismatch" : entry.waitingReason === "invalid_referral" ? "Invalid referral" : entry.waitingReason === "capacity" ? "Capacity full" : "Manual"}</span> : null}
-                              {entry.registrationStatus !== "waiting" && entry.registrationNumber ? <span className="mt-1 block w-fit rounded-full bg-emerald-100 px-2 py-1 text-[11px] font-black text-emerald-800">{entry.registrationNumber}</span> : null}
+                              {entry.registrationStatus !== "waiting" && entry.registrationNumber ? <span className="mt-1 block w-fit rounded-full bg-emerald-100 px-2 py-1 text-[11px] font-black text-emerald-800" title="Registration / Unique ID">{entry.registrationNumber}</span> : null}
                               {entry.registrationStatus !== "waiting" && entry.confirmationSource ? <span className="mt-1 block text-[11px] font-bold text-emerald-700">Confirmed via {entry.confirmationSource.replaceAll("_", " + ")}</span> : null}
                             </td>
 	                          <td className="px-4 py-4">{entry.mobile}</td>

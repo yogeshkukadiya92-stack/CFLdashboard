@@ -12,6 +12,7 @@ import {
 } from "@/lib/response-access";
 import type { RegistrationConfirmationActivity, RegistrationConfirmationStatus, RegistrationEntry, ResponseAccessGrant } from "@/lib/types";
 import { syncConfirmedRegistrationToMfw } from "@/lib/mfw-registration";
+import { assignRegistrationNumbers } from "@/lib/registration-confirmation";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -237,6 +238,8 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ t
       }
     }
 
+    const numberedRegistrations = assignRegistrationNumbers(registrations, current.workshopId);
+    const numberedCurrent = numberedRegistrations.find((entry) => entry.id === current.id) as RegistrationEntry;
     const now = new Date().toISOString();
     const activity: RegistrationConfirmationActivity = {
       id: crypto.randomUUID(),
@@ -249,9 +252,9 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ t
       actorName: grant.recipientName,
       createdAt: now
     };
-    const mfwSync = action === "status" && status === "confirmed" ? await syncConfirmedRegistrationToMfw(current) : {};
+    const mfwSync = action === "status" && status === "confirmed" ? await syncConfirmedRegistrationToMfw(numberedCurrent) : {};
     const updated: RegistrationEntry = {
-      ...current,
+      ...numberedCurrent,
       ...mfwSync,
       confirmationStatus: action === "note" ? current.confirmationStatus ?? "pending" : status,
       confirmationNote: note || current.confirmationNote,
@@ -262,7 +265,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ t
       carriedForwardToWorkshopTitle: targetWorkshopTitle ?? current.carriedForwardToWorkshopTitle,
       confirmationHistory: [activity, ...(current.confirmationHistory ?? [])].slice(0, 200)
     };
-    const next = registrations.map((entry) => entry.id === current.id ? updated : entry);
+    const next = numberedRegistrations.map((entry) => entry.id === current.id ? updated : entry);
     if (forwardedRegistration) next.unshift(forwardedRegistration);
     await saveAppState({ registrations: next });
     const nextState = { ...state, registrations: next };

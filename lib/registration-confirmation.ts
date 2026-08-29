@@ -4,7 +4,6 @@ const REGISTRATION_NUMBER_PATTERN = /^REG-(\d+)$/i;
 
 export function assignRegistrationNumbers(registrations: RegistrationEntry[], workshopId: string) {
   let nextNumber = registrations.reduce((highest, entry) => {
-    if (entry.workshopId !== workshopId) return highest;
     const match = entry.registrationNumber?.match(REGISTRATION_NUMBER_PATTERN);
     return match ? Math.max(highest, Number(match[1])) : highest;
   }, 0) + 1;

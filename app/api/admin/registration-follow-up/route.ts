@@ -39,6 +39,8 @@ export async function PATCH(request: Request) {
     const current = registrations.find((entry) => entry.id === registrationId);
     if (!current) return NextResponse.json({ error: "Registration not found." }, { status: 404 });
 
+    const numberedRegistrations = assignRegistrationNumbers(registrations, current.workshopId);
+    const numberedCurrent = numberedRegistrations.find((entry) => entry.id === registrationId) as RegistrationEntry;
     const now = new Date().toISOString();
     const activity: RegistrationConfirmationActivity = {
       id: crypto.randomUUID(),
@@ -49,9 +51,9 @@ export async function PATCH(request: Request) {
       actorName: "Admin User",
       createdAt: now
     };
-    const mfwSync = status === "confirmed" ? await syncConfirmedRegistrationToMfw(current) : {};
+    const mfwSync = status === "confirmed" ? await syncConfirmedRegistrationToMfw(numberedCurrent) : {};
     const updated: RegistrationEntry = {
-      ...current,
+      ...numberedCurrent,
       ...mfwSync,
       confirmationStatus: status,
       confirmationNote: note,
@@ -59,7 +61,7 @@ export async function PATCH(request: Request) {
       confirmationUpdatedBy: "Admin User",
       confirmationHistory: [activity, ...(current.confirmationHistory ?? [])].slice(0, 200)
     };
-    let next = assignRegistrationNumbers(registrations.map((entry) => entry.id === registrationId ? updated : entry), current.workshopId);
+    let next = numberedRegistrations.map((entry) => entry.id === registrationId ? updated : entry);
     let saved = next.find((entry) => entry.id === registrationId) as RegistrationEntry;
     if (status === "confirmed") {
       const form = (Array.isArray(state?.forms) ? state.forms : [])

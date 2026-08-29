@@ -14,7 +14,7 @@ type MfwCustomerResponse = {
   data?: {
     id?: string;
     workshopAssigned?: boolean;
-    participant?: { id?: string; eventId?: string } | null;
+    participant?: { id?: string; eventId?: string; uniqueId?: string } | null;
   };
 };
 
@@ -66,17 +66,8 @@ export async function syncConfirmedRegistrationToMfw(registration: RegistrationE
     if (!mapping) return { mfwSyncError: undefined, mfwSyncStatus: "not_required" as const };
     workshopEventId = mapping.workshopEventId;
     if (!workshopEventId) throw new Error(`Select an MFW workshop for '${registration.workshopTitle}' before retrying enrollment.`);
-    if (registration.mfwSyncStatus === "synced" && registration.mfwWorkshopEventId === workshopEventId) {
-      return {
-        mfwParticipantId: registration.mfwParticipantId,
-        mfwSyncError: undefined,
-        mfwSyncStatus: "synced" as const,
-        mfwSyncedAt: registration.mfwSyncedAt,
-        mfwUserId: registration.mfwUserId,
-        mfwWorkshopEventId: workshopEventId
-      };
-    }
     if (!registration.mobile.trim()) throw new Error("Mobile number is required before confirming this registration.");
+    if (!registration.registrationNumber) throw new Error("Registration number is required before syncing this registration to MFW.");
     const { apiKey, baseUrl } = config();
     const response = await fetch(`${baseUrl}/integrations/v1/customers`, {
       body: JSON.stringify({
@@ -85,6 +76,7 @@ export async function syncConfirmedRegistrationToMfw(registration: RegistrationE
         name: registration.fullName,
         notes: `Confirmed in CFL dashboard for ${registration.workshopTitle}`,
         participantStatus: "ACTIVE",
+        registrationNumber: registration.registrationNumber,
         sourceRegistrationId: registration.id,
         workshopEventId
       }),
@@ -93,7 +85,7 @@ export async function syncConfirmedRegistrationToMfw(registration: RegistrationE
     });
     const result = await response.json().catch(() => ({})) as MfwCustomerResponse;
     const participant = result.data?.participant;
-    if (!response.ok || !result.data?.workshopAssigned || participant?.eventId !== workshopEventId) {
+    if (!response.ok || !result.data?.workshopAssigned || participant?.eventId !== workshopEventId || participant.uniqueId !== registration.registrationNumber) {
       throw new Error(result.message || "MFW user was not assigned to the selected workshop.");
     }
     return {
