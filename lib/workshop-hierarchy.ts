@@ -33,3 +33,13 @@ export function attendanceMatchesFinalRegistration(
     && attendance.sessionId === requiredSessionId
     && mobileDigits(attendance.mobile) === mobileDigits(registration.mobile);
 }
+
+export function shouldAutoConfirmFromAttendance(registration: {
+  attendanceMatched?: boolean;
+  confirmationStatus?: string;
+  registrationStatus?: string;
+}) {
+  return registration.attendanceMatched === true
+    && registration.registrationStatus === "confirmed"
+    && registration.confirmationStatus !== "confirmed";
+}

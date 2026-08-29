@@ -2,6 +2,7 @@ import { ensurePersistenceTable, getAppState, getDbPool, isDbEnabled } from "@/l
 import { upsertLiveRegistration } from "@/lib/crm-db";
 import { upsertLeadFromRegistration } from "@/lib/lead-utils";
 import { assignRegistrationNumbers } from "@/lib/registration-confirmation";
+import { syncConfirmedRegistrationToMfw } from "@/lib/mfw-registration";
 import type { AttendanceEntry, BuilderForm, ReferralCodeConfig, RegistrationEntry } from "@/lib/types";
 import { attendanceMatchesFinalRegistration, isDuplicateWorkshopRegistration } from "@/lib/workshop-hierarchy";
 import { NextResponse } from "next/server";
@@ -200,6 +201,9 @@ export async function POST(request: Request) {
       const pendingRegistration = {
         ...sanitizedRegistration,
         attendanceMatched,
+        confirmationStatus: !isWaiting && attendanceMatched ? "confirmed" as const : undefined,
+        confirmationUpdatedAt: !isWaiting && attendanceMatched ? new Date().toISOString() : undefined,
+        confirmationUpdatedBy: !isWaiting && attendanceMatched ? "Intro session attendance" : undefined,
         confirmationSource,
         referralCodeId: referralValid ? referral?.id : undefined,
         referrerName: referralValid ? referral?.referrerName : undefined,
@@ -222,8 +226,12 @@ export async function POST(request: Request) {
         const position = positions.get(String(entry.id ?? ""));
         return position ? { ...entry, waitingPosition: position } : entry;
       });
-      const next = assignRegistrationNumbers(positioned as RegistrationEntry[], sanitizedRegistration.workshopId);
-      const finalRegistration = next.find((item: unknown) => item && typeof item === "object" && String((item as Record<string, unknown>).id ?? "") === sanitizedRegistration.id) as typeof pendingRegistration & { waitingPosition?: number };
+      let next = assignRegistrationNumbers(positioned as RegistrationEntry[], sanitizedRegistration.workshopId);
+      let finalRegistration = next.find((item: unknown) => item && typeof item === "object" && String((item as Record<string, unknown>).id ?? "") === sanitizedRegistration.id) as RegistrationEntry;
+      if (attendanceMatched && !isWaiting) {
+        finalRegistration = { ...finalRegistration, ...(await syncConfirmedRegistrationToMfw(finalRegistration)) };
+        next = next.map((entry) => entry.id === finalRegistration.id ? finalRegistration : entry);
+      }
       const workshops = Array.isArray(state.workshops) ? state.workshops : [];
       const linkedWorkshop = workshops.find((value: unknown) => {
         if (!value || typeof value !== "object" || Array.isArray(value)) return false;
@@ -239,7 +247,7 @@ export async function POST(request: Request) {
           )
         : Array.isArray(state.leads) ? state.leads : [];
 
-      await upsertLiveRegistration(finalRegistration);
+      await upsertLiveRegistration(finalRegistration as unknown as Record<string, unknown>);
       await client.query(`UPDATE app_state SET leads = $1::jsonb, registrations = $2::jsonb, updated_at = NOW() WHERE id = 1`, [JSON.stringify(leads), JSON.stringify(next.slice(0, 5000))]);
       await client.query("COMMIT");
       const savedRegistration = next.find((entry) => entry.id === sanitizedRegistration.id) as RegistrationEntry;

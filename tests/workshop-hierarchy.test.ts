@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { attendanceMatchesFinalRegistration, isDuplicateWorkshopRegistration, registrationMatchesBatch } from "../lib/workshop-hierarchy.ts";
+import { attendanceMatchesFinalRegistration, isDuplicateWorkshopRegistration, registrationMatchesBatch, shouldAutoConfirmFromAttendance } from "../lib/workshop-hierarchy.ts";
 
 const base = {
   workshopId: "workshop-growth",
@@ -28,4 +28,11 @@ test("final registration eligibility matches the exact attendance session and mo
   assert.equal(attendanceMatchesFinalRegistration({ mobile: "9876543210", sessionId: "intro-1" }, registration, "intro-1"), true);
   assert.equal(attendanceMatchesFinalRegistration({ mobile: "9999999999", sessionId: "intro-1" }, registration, "intro-1"), false);
   assert.equal(attendanceMatchesFinalRegistration({ mobile: "9876543210", sessionId: "intro-2" }, registration, "intro-1"), false);
+});
+
+test("attendance-confirmed registration triggers follow-up confirmation", () => {
+  assert.equal(shouldAutoConfirmFromAttendance({ attendanceMatched: true, confirmationStatus: "pending", registrationStatus: "confirmed" }), true);
+  assert.equal(shouldAutoConfirmFromAttendance({ attendanceMatched: false, confirmationStatus: "pending", registrationStatus: "confirmed" }), false);
+  assert.equal(shouldAutoConfirmFromAttendance({ attendanceMatched: true, confirmationStatus: "confirmed", registrationStatus: "confirmed" }), false);
+  assert.equal(shouldAutoConfirmFromAttendance({ attendanceMatched: true, confirmationStatus: "pending", registrationStatus: "waiting" }), false);
 });

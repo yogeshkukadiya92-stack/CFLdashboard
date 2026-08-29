@@ -1,6 +1,7 @@
 import { ensurePersistenceTable, getAppState, getDbPool, isDbEnabled, mutateAttendanceEntries } from "@/lib/db";
 import { attendanceWindow } from "@/lib/attendance-window";
 import { assignRegistrationNumbers } from "@/lib/registration-confirmation";
+import { syncConfirmedRegistrationToMfw } from "@/lib/mfw-registration";
 import type { AttendanceEntry, AttendanceSession, BuilderField, BuilderForm, RegistrationEntry } from "@/lib/types";
 import { NextResponse } from "next/server";
 
@@ -74,6 +75,7 @@ async function promoteAttendanceWaitingRegistrations(attendance: AttendanceEntry
     const forms = (Array.isArray(selected.rows[0]?.forms) ? selected.rows[0].forms : []) as BuilderForm[];
     const mobile = attendance.mobile.replace(/\D/g, "").slice(-10);
     const affectedWorkshops = new Set<string>();
+    const promotedRegistrationIds = new Set<string>();
     const promotedByWorkshop = new Map<string, number>();
     let promoted = 0;
     let next = registrations.map((registration) => {
@@ -86,11 +88,26 @@ async function promoteAttendanceWaitingRegistrations(attendance: AttendanceEntry
       const workshopPromotions = promotedByWorkshop.get(registration.workshopId) ?? 0;
       if (capacity > 0 && confirmedCount + workshopPromotions >= capacity) return { ...registration, attendanceMatched: true, waitingReason: "capacity" as const };
       promoted += 1;
+      promotedRegistrationIds.add(registration.id);
       promotedByWorkshop.set(registration.workshopId, workshopPromotions + 1);
       affectedWorkshops.add(registration.workshopId);
-      return { ...registration, attendanceMatched: true, confirmationSource: "attendance" as const, registrationStatus: "confirmed" as const, waitingPosition: undefined, waitingReason: undefined };
+      return {
+        ...registration,
+        attendanceMatched: true,
+        confirmationSource: "attendance" as const,
+        confirmationStatus: "confirmed" as const,
+        confirmationUpdatedAt: new Date().toISOString(),
+        confirmationUpdatedBy: "Intro session attendance",
+        registrationStatus: "confirmed" as const,
+        waitingPosition: undefined,
+        waitingReason: undefined
+      };
     });
     affectedWorkshops.forEach((workshopId) => { next = assignRegistrationNumbers(next, workshopId); });
+    for (const registration of next.filter((entry) => promotedRegistrationIds.has(entry.id))) {
+      const mfwSync = await syncConfirmedRegistrationToMfw(registration);
+      next = next.map((entry) => entry.id === registration.id ? { ...entry, ...mfwSync } : entry);
+    }
     if (promoted > 0) await client.query(`UPDATE app_state SET registrations = $1::jsonb, updated_at = NOW() WHERE id = 1`, [JSON.stringify(next)]);
     await client.query("COMMIT");
     return promoted;
