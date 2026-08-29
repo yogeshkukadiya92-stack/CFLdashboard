@@ -389,6 +389,23 @@ export default function WorkshopMasterPage() {
     }
   }, [hideDuplicateParticipants, hideWaitingParticipants, responseFilters, selectedWorkshopId, showParticipants]);
 
+  useEffect(() => {
+    if (!selectedWorkshop) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setSelectedWorkshopId(null);
+      setSelectedParticipantBatchId("all");
+      setShowParticipants(false);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [selectedWorkshopId]);
+
   async function saveRecords(next: WorkshopRecord[]) {
     setRecords(next);
     return saveLiveState({ workshops: next });
@@ -549,12 +566,12 @@ export default function WorkshopMasterPage() {
       setHideDuplicateParticipants(Boolean(workshopState?.hideDuplicates));
       setHideWaitingParticipants(hideWaiting);
       setFollowUpScope(hideWaiting ? "all" : "needs_follow_up");
-      setShowParticipants(Boolean(workshopState?.showParticipants));
+      setShowParticipants(true);
     } catch {
       setResponseFilters({ ...emptyResponseFilters });
       setHideDuplicateParticipants(false);
       setHideWaitingParticipants(false);
-      setShowParticipants(false);
+      setShowParticipants(true);
     }
     setSelectedWorkshopId(record.id);
     try {
@@ -1503,11 +1520,23 @@ export default function WorkshopMasterPage() {
           />
 
           {selectedWorkshop ? (
-            <section className="mt-5 rounded-3xl border border-indigo-100 bg-indigo-50/50 p-5">
+            <div
+              aria-labelledby="opened-workshop-title"
+              aria-modal="true"
+              className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-2 backdrop-blur-sm sm:p-5"
+              onMouseDown={(event) => {
+                if (event.target !== event.currentTarget) return;
+                setSelectedWorkshopId(null);
+                setSelectedParticipantBatchId("all");
+                setShowParticipants(false);
+              }}
+              role="dialog"
+            >
+              <section className="max-h-[calc(100dvh-1rem)] w-full max-w-[1600px] overflow-y-auto overscroll-contain rounded-2xl border border-indigo-100 bg-indigo-50 p-4 shadow-2xl sm:max-h-[calc(100dvh-2.5rem)] sm:rounded-3xl sm:p-5">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <p className="text-xs font-black uppercase tracking-[0.2em] text-indigo-600">Workshop Opened</p>
-                  <h4 className="mt-2 text-2xl font-black text-slate-950">{selectedWorkshop.name}</h4>
+                  <h4 className="mt-2 text-2xl font-black text-slate-950" id="opened-workshop-title">{selectedWorkshop.name}</h4>
                   <p className="mt-1 text-sm font-semibold text-slate-600">
                     {selectedWorkshop.type} | {selectedWorkshop.facilitator} | {selectedWorkshop.productGroup}
                   </p>
@@ -1578,6 +1607,7 @@ export default function WorkshopMasterPage() {
                     {showParticipants ? "Hide Data" : `View Data (${selectedParticipants.length})`}
                   </button>
                   <button
+                    aria-label="Close workshop details"
                     className="grid size-11 place-items-center rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
                     onClick={() => {
                       setSelectedWorkshopId(null);
@@ -1776,7 +1806,8 @@ export default function WorkshopMasterPage() {
                   </table></div>
                 </div>
               ) : null}
-            </section>
+              </section>
+            </div>
           ) : null}
         </section>
       ) : null}
