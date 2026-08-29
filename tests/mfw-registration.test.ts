@@ -14,6 +14,18 @@ test("normalizes top-level MFW workshop name fields", () => {
   }), [{ id: "hf-38", title: "Healthy Forever 38" }]);
 });
 
+test("normalizes a direct MFW array response", () => {
+  assert.deepEqual(normalizeMfwWorkshops([
+    { workshopEventId: "hf-1", workshopName: "Healthy Forever 1" }
+  ]), [{ id: "hf-1", title: "Healthy Forever 1" }]);
+});
+
+test("normalizes nested items with snake case fields", () => {
+  assert.deepEqual(normalizeMfwWorkshops({
+    data: { results: { items: [{ event_id: "hf-37", event_name: "Healthy Forever 37" }] } }
+  }), [{ id: "hf-37", title: "Healthy Forever 37" }]);
+});
+
 test("uses an enabled workshop-specific MFW mapping", () => {
   assert.deepEqual(selectMfwWorkshopMapping({
     mfwEnrollmentEnabled: true,

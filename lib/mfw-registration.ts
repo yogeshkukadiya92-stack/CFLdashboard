@@ -40,7 +40,10 @@ export async function listMfwWorkshops() {
     headers: { "x-mfw-api-key": apiKey }
   });
   const result = await response.json().catch(() => ({})) as MfwWorkshopListResponse;
-  if (!response.ok) throw new Error(result.message || "Could not load MFW workshops.");
+  const message = result && typeof result === "object" && !Array.isArray(result) && "message" in result
+    ? String((result as { message?: unknown }).message ?? "")
+    : "";
+  if (!response.ok) throw new Error(message || "Could not load MFW workshops.");
   return normalizeMfwWorkshops(result);
 }
 
