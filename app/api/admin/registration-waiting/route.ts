@@ -1,7 +1,9 @@
 import { ensurePersistenceTable, getDbPool, isDbEnabled } from "@/lib/db";
+import { upsertLiveRegistration } from "@/lib/crm-db";
 import type { RegistrationEntry } from "@/lib/types";
 import type { BuilderForm } from "@/lib/types";
 import { assignRegistrationNumbers, sendRegistrationConfirmation } from "@/lib/registration-confirmation";
+import { syncConfirmedRegistrationToMfw } from "@/lib/mfw-registration";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
@@ -43,11 +45,21 @@ export async function PATCH(request: Request) {
       const selected = await client.query(`SELECT registrations, forms FROM app_state WHERE id = 1 FOR UPDATE`);
       const registrations = (Array.isArray(selected.rows[0]?.registrations) ? selected.rows[0].registrations : []) as RegistrationEntry[];
       const requestedIds = new Set(registrationIds);
+      const confirmedAt = new Date().toISOString();
       let promoted = 0;
       const promotedRegistrations = registrations.map((entry) => {
         if (entry.workshopId !== workshopId || entry.registrationStatus !== "waiting" || !requestedIds.has(entry.id)) return entry;
         promoted += 1;
-        return { ...entry, registrationStatus: "confirmed" as const, waitingPosition: undefined };
+        return {
+          ...entry,
+          confirmationStatus: "confirmed" as const,
+          confirmationSource: "manual" as const,
+          confirmationUpdatedAt: confirmedAt,
+          confirmationUpdatedBy: "Workshop Master Admin",
+          registrationStatus: "confirmed" as const,
+          waitingPosition: undefined,
+          waitingReason: undefined
+        };
       });
       if (!promoted) {
         await client.query("ROLLBACK");
@@ -55,11 +67,18 @@ export async function PATCH(request: Request) {
       }
 
       let next = assignRegistrationNumbers(renumberWaitingList(promotedRegistrations, workshopId), workshopId);
+      for (const registration of next.filter((entry) => requestedIds.has(entry.id) && entry.registrationStatus === "confirmed")) {
+        const mfwSync = await syncConfirmedRegistrationToMfw(registration);
+        next = next.map((entry) => entry.id === registration.id ? { ...entry, ...mfwSync } : entry);
+      }
       await client.query(`UPDATE app_state SET registrations = $1::jsonb, updated_at = NOW() WHERE id = 1`, [JSON.stringify(next)]);
       await client.query("COMMIT");
       const form = (Array.isArray(selected.rows[0]?.forms) ? selected.rows[0].forms : [])
         .find((item: BuilderForm) => item.workshopId === workshopId) as BuilderForm | undefined;
       const promotedEntries = next.filter((entry) => requestedIds.has(entry.id) && entry.registrationStatus === "confirmed");
+      for (const entry of promotedEntries) {
+        await upsertLiveRegistration(entry as unknown as Record<string, unknown>);
+      }
       const sentIds = new Set<string>();
       for (const entry of promotedEntries) {
         const result = await sendRegistrationConfirmation(entry, form).catch(() => ({ configured: true, sent: false }));

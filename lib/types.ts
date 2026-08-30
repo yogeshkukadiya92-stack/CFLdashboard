@@ -268,12 +268,16 @@ export interface RegistrationEntry {
   confirmationUpdatedAt?: string;
   confirmationUpdatedBy?: string;
   isRepeater?: boolean;
+  repeaterDetectedAt?: string;
+  repeaterSourceRegistrationId?: string;
+  repeaterSourceWorkshopId?: string;
+  repeaterSourceWorkshopTitle?: string;
   carriedForwardFromRegistrationId?: string;
   carriedForwardToWorkshopId?: string;
   carriedForwardToWorkshopTitle?: string;
   confirmationHistory?: RegistrationConfirmationActivity[];
   registrationStatus?: "confirmed" | "waiting";
-  waitingReason?: "eligibility_pending" | "attendance_pending" | "session_mismatch" | "invalid_referral" | "capacity" | "manual";
+  waitingReason?: "eligibility_pending" | "attendance_pending" | "session_mismatch" | "invalid_referral" | "capacity" | "manual" | "repeater_review";
   confirmationSource?: "attendance" | "referral" | "attendance_and_referral" | "manual";
   requiredAttendanceSessionId?: string;
   attendanceMatched?: boolean;

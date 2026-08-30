@@ -1761,7 +1761,7 @@ export default function WorkshopMasterPage() {
                         {selectedWaitingParticipants.length ? (
                           <button className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-amber-600 px-3 text-xs font-black text-white hover:bg-amber-700" onClick={() => setPromoteWaitingOpen(true)} type="button">
                             <CheckSquare className="size-4" />
-                            Convert to Registration ({selectedWaitingParticipants.length})
+                            Confirm selected ({selectedWaitingParticipants.length})
                           </button>
                         ) : null}
                         <button className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-emerald-700 px-3 text-xs font-black text-white hover:bg-emerald-800" onClick={() => setShareSelectedOpen(true)} type="button"><Share2 className="size-4" />Share Selected</button>
@@ -1808,7 +1808,8 @@ export default function WorkshopMasterPage() {
                           </td>
 	                          <td className="px-4 py-4 font-black text-slate-950">
                               {entry.fullName}
-                              {entry.registrationStatus === "waiting" ? <span className="mt-1 block w-fit rounded-full bg-amber-100 px-2 py-1 text-[11px] font-black text-amber-800">Waiting WL-{entry.waitingPosition ?? "-"} · {entry.waitingReason === "attendance_pending" ? "Attendance pending" : entry.waitingReason === "eligibility_pending" ? "Eligibility pending" : entry.waitingReason === "session_mismatch" ? "Session mismatch" : entry.waitingReason === "invalid_referral" ? "Invalid referral" : entry.waitingReason === "capacity" ? "Capacity full" : "Manual"}</span> : null}
+                              {entry.registrationStatus === "waiting" ? <span className={`mt-1 block w-fit rounded-full px-2 py-1 text-[11px] font-black ${entry.waitingReason === "repeater_review" ? "bg-indigo-100 text-indigo-800" : "bg-amber-100 text-amber-800"}`}>Waiting WL-{entry.waitingPosition ?? "-"} · {entry.waitingReason === "repeater_review" ? "Repeater review" : entry.waitingReason === "attendance_pending" ? "Attendance pending" : entry.waitingReason === "eligibility_pending" ? "Eligibility pending" : entry.waitingReason === "session_mismatch" ? "Session mismatch" : entry.waitingReason === "invalid_referral" ? "Invalid referral" : entry.waitingReason === "capacity" ? "Capacity full" : "Manual"}</span> : null}
+                              {entry.isRepeater ? <span className="mt-1 block w-fit rounded-full bg-violet-100 px-2 py-1 text-[11px] font-black text-violet-800">Repeater{entry.repeaterSourceWorkshopTitle ? ` · ${entry.repeaterSourceWorkshopTitle}` : ""}</span> : null}
                               {entry.registrationStatus !== "waiting" && entry.registrationNumber ? <span className="mt-1 block w-fit rounded-full bg-emerald-100 px-2 py-1 text-[11px] font-black text-emerald-800" title="Registration / Unique ID">{entry.registrationNumber}</span> : null}
                               {entry.registrationStatus !== "waiting" && entry.confirmationSource ? <span className="mt-1 block text-[11px] font-bold text-emerald-700">Confirmed via {entry.confirmationSource.replaceAll("_", " + ")}</span> : null}
                             </td>
@@ -1872,13 +1873,13 @@ export default function WorkshopMasterPage() {
       ) : null}
       <ConfirmDialog
         confirmLabel={promotingWaiting ? "Converting..." : `Convert ${selectedWaitingParticipants.length} to Registration`}
-        description="Selected people will leave the waiting list and become confirmed registrations. Remaining waiting numbers will be reordered automatically."
+        description="Selected people, including repeaters under review, will leave the waiting list and become confirmed registrations. MFW enrollment and confirmation WhatsApp will run after confirmation."
         onCancel={() => {
           if (!promotingWaiting) setPromoteWaitingOpen(false);
         }}
         onConfirm={() => void promoteSelectedWaitingRegistrations()}
         open={promoteWaitingOpen}
-        title="Convert waiting list to registration?"
+        title="Confirm selected waiting registrations?"
       >
         {selectedWaitingParticipants.length} selected waiting participant{selectedWaitingParticipants.length === 1 ? "" : "s"} will be confirmed.
       </ConfirmDialog>

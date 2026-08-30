@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { attendanceMatchesFinalRegistration, isDuplicateWorkshopRegistration, registrationMatchesBatch, shouldAutoConfirmFromAttendance } from "../lib/workshop-hierarchy.ts";
+import { attendanceMatchesFinalRegistration, findRepeaterSource, isDuplicateWorkshopRegistration, registrationMatchesBatch, shouldAutoConfirmFromAttendance } from "../lib/workshop-hierarchy.ts";
 
 const base = {
   workshopId: "workshop-growth",
@@ -35,4 +35,25 @@ test("attendance-confirmed registration triggers follow-up confirmation", () => 
   assert.equal(shouldAutoConfirmFromAttendance({ attendanceMatched: false, confirmationStatus: "pending", registrationStatus: "confirmed" }), false);
   assert.equal(shouldAutoConfirmFromAttendance({ attendanceMatched: true, confirmationStatus: "confirmed", registrationStatus: "confirmed" }), false);
   assert.equal(shouldAutoConfirmFromAttendance({ attendanceMatched: true, confirmationStatus: "pending", registrationStatus: "waiting" }), false);
+});
+
+test("finds a repeater from a paid or confirmed past workshop registration", () => {
+  const source = findRepeaterSource([
+    { id: "old", workshopId: "w-old", workshopSlug: "old", workshopTitle: "Old Workshop", fullName: "A", mobile: "+91 98765 43210", email: "", city: "", paymentMode: "Full", amountPaid: 100, amountDue: 0, status: "Paid", createdAt: "2026-01-01T00:00:00.000Z" }
+  ], [], { mobile: "9876543210", workshopId: "w-new" });
+  assert.deepEqual(source, { registrationId: "old", workshopId: "w-old", workshopTitle: "Old Workshop" });
+});
+
+test("does not mark due-only history in another workshop as a repeater", () => {
+  const source = findRepeaterSource([
+    { id: "old", workshopId: "w-old", workshopSlug: "old", workshopTitle: "Old Workshop", fullName: "A", mobile: "9876543210", email: "", city: "", paymentMode: "Part", amountPaid: 0, amountDue: 100, status: "Due", createdAt: "2026-01-01T00:00:00.000Z" }
+  ], [], { mobile: "9876543210", workshopId: "w-new" });
+  assert.equal(source, undefined);
+});
+
+test("finds a repeater from past workshop attendance", () => {
+  const source = findRepeaterSource([], [
+    { id: "attendance-old", sessionId: "session-old", sessionSlug: "old", workshopId: "w-old", workshopName: "Old Workshop", attendeeName: "A", mobile: "9876543210", submittedAt: "2026-01-02T00:00:00.000Z" }
+  ], { mobile: "+91 98765 43210", workshopId: "w-new" });
+  assert.deepEqual(source, { workshopId: "w-old", workshopTitle: "Old Workshop" });
 });

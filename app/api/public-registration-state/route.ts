@@ -4,7 +4,7 @@ import { upsertLeadFromRegistration } from "@/lib/lead-utils";
 import { assignRegistrationNumbers, sendRegistrationStatusNotifications } from "@/lib/registration-confirmation";
 import { syncConfirmedRegistrationToMfw } from "@/lib/mfw-registration";
 import type { AttendanceEntry, BuilderForm, ReferralCodeConfig, RegistrationEntry } from "@/lib/types";
-import { attendanceMatchesFinalRegistration, isDuplicateWorkshopRegistration } from "@/lib/workshop-hierarchy";
+import { attendanceMatchesFinalRegistration, findRepeaterSource, isDuplicateWorkshopRegistration } from "@/lib/workshop-hierarchy";
 import { NextResponse } from "next/server";
 
 export async function GET() {
@@ -144,6 +144,7 @@ export async function POST(request: Request) {
       const requiredSessionId = String(form?.requiredAttendanceSessionId ?? "").trim();
       const attendanceRequired = form?.requireAttendanceForConfirmation === true && Boolean(requiredSessionId);
       const attendanceEntries = (Array.isArray(state.attendance_entries) ? state.attendance_entries : []) as AttendanceEntry[];
+      const repeaterSource = findRepeaterSource(current as RegistrationEntry[], attendanceEntries, sanitizedRegistration);
       const attendanceMatched = attendanceRequired
         ? attendanceEntries.some((entry) => attendanceMatchesFinalRegistration(entry, sanitizedRegistration, requiredSessionId))
         : false;
@@ -176,8 +177,10 @@ export async function POST(request: Request) {
       const eligibilityConfigured = attendanceRequired || referralEnabled;
       const eligible = !eligibilityConfigured || attendanceMatched || referralValid;
       const capacityFull = capacity > 0 && confirmedCount >= capacity;
-      const waitingReason = form?.waitingMode === true
-        ? "manual"
+      const waitingReason = repeaterSource
+        ? "repeater_review"
+        : form?.waitingMode === true
+          ? "manual"
         : capacityFull && eligible
           ? "capacity"
           : !eligible && referralEnabled && !referralValid
@@ -202,7 +205,7 @@ export async function POST(request: Request) {
       const pendingRegistration = {
         ...sanitizedRegistration,
         attendanceMatched,
-        confirmationStatus: !isWaiting && attendanceMatched ? "confirmed" as const : undefined,
+        confirmationStatus: repeaterSource ? "pending" as const : !isWaiting && attendanceMatched ? "confirmed" as const : undefined,
         confirmationUpdatedAt: !isWaiting && attendanceMatched ? new Date().toISOString() : undefined,
         confirmationUpdatedBy: !isWaiting && attendanceMatched ? "Intro session attendance" : undefined,
         confirmationSource,
@@ -218,6 +221,11 @@ export async function POST(request: Request) {
         referrerWaitingWhatsappStatus: previousRegistration?.referrerWaitingWhatsappStatus,
         referrerWaitingWhatsappError: previousRegistration?.referrerWaitingWhatsappError,
         requiredAttendanceSessionId: requiredSessionId || undefined,
+        isRepeater: Boolean(repeaterSource),
+        repeaterDetectedAt: repeaterSource ? new Date().toISOString() : undefined,
+        repeaterSourceRegistrationId: repeaterSource?.registrationId,
+        repeaterSourceWorkshopId: repeaterSource?.workshopId,
+        repeaterSourceWorkshopTitle: repeaterSource?.workshopTitle,
         registrationStatus: isWaiting ? "waiting" : "confirmed",
         waitingReason,
         waitingPosition: undefined
