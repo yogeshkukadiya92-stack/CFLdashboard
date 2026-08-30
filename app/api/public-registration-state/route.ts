@@ -1,7 +1,7 @@
-import { ensureRegistrationRecordsTable, getAppState, getDbPool, isDbEnabled, readRegistrationRecords, upsertRegistrationRecord } from "@/lib/db";
+import { ensureRegistrationRecordsTable, getAppState, getDbPool, isDbEnabled, readRegistrationRecords, reserveRegistrationNumber, upsertRegistrationRecord } from "@/lib/db";
 import { upsertLiveRegistration } from "@/lib/crm-db";
 import { upsertLeadFromRegistration } from "@/lib/lead-utils";
-import { assignRegistrationNumbers, sendRegistrationStatusNotifications } from "@/lib/registration-confirmation";
+import { sendRegistrationStatusNotifications } from "@/lib/registration-confirmation";
 import { syncConfirmedRegistrationToMfw } from "@/lib/mfw-registration";
 import type { AttendanceEntry, BuilderForm, ReferralCodeConfig, RegistrationEntry } from "@/lib/types";
 import { attendanceMatchesFinalRegistration, findRepeaterSource, isDuplicateWorkshopRegistration } from "@/lib/workshop-hierarchy";
@@ -96,17 +96,27 @@ export async function POST(request: Request) {
     const client = await database.connect();
     try {
       await client.query("BEGIN");
-      await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`${sanitizedRegistration.workshopId}:${sanitizedRegistration.batchId ?? sanitizedRegistration.batch}:${sanitizedRegistration.introductionSessionId ?? ""}`]);
       const selected = await client.query(`SELECT forms, workshops, leads, sales_people, attendance_entries FROM app_state WHERE id = 1`);
       const state = selected.rows[0] ?? {};
-      const current = await readRegistrationRecords(client) as RegistrationEntry[];
-      const previousRegistration = current.find((value: unknown) => value && typeof value === "object" && (value as RegistrationEntry).id === sanitizedRegistration.id) as RegistrationEntry | undefined;
       const forms = Array.isArray(state.forms) ? state.forms as Array<Record<string, unknown>> : [];
       const form = forms.find((value) => {
         const sameWorkshop = String(value.workshopId ?? "") === sanitizedRegistration.workshopId || String(value.workshopSlug ?? "") === sanitizedRegistration.workshopSlug;
         const formBatch = String(value.batch ?? "").trim().toLowerCase();
         return sameWorkshop && (!formBatch || formBatch === sanitizedRegistration.batch.trim().toLowerCase());
       }) ?? forms.find((value) => String(value.workshopId ?? "") === sanitizedRegistration.workshopId || String(value.workshopSlug ?? "") === sanitizedRegistration.workshopSlug);
+      const workshopRecords = Array.isArray(state.workshops) ? state.workshops as Array<Record<string, unknown>> : [];
+      const workshop = workshopRecords.find((value) => String(value.id ?? "") === sanitizedRegistration.workshopId);
+      const workshopBatches = Array.isArray(workshop?.batches) ? workshop.batches as Array<Record<string, unknown>> : [];
+      const selectedBatch = workshopBatches.find((value) => sanitizedRegistration.batchId
+        ? String(value.id ?? "") === sanitizedRegistration.batchId
+        : String(value.name ?? "").trim().toLowerCase() === sanitizedRegistration.batch.trim().toLowerCase());
+      const capacity = Math.max(0, Number(selectedBatch?.capacity ?? form?.registrationCapacity ?? 0) || 0);
+      const needsCohortLock = Boolean(form?.waitingMode || form?.requireAttendanceForConfirmation || form?.allowReferralConfirmation
+        || Number(form?.responseLimit ?? 0) > 0 || capacity > 0 || (Array.isArray(form?.repeaterSourceWorkshopIds) && form.repeaterSourceWorkshopIds.length));
+      const cohortKey = `${sanitizedRegistration.workshopId}:${sanitizedRegistration.batchId ?? sanitizedRegistration.batch}:${sanitizedRegistration.introductionSessionId ?? ""}`;
+      await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [needsCohortLock ? cohortKey : `${cohortKey}:${mobileDigits}`]);
+      const current = await readRegistrationRecords(client) as RegistrationEntry[];
+      const previousRegistration = current.find((value: unknown) => value && typeof value === "object" && (value as RegistrationEntry).id === sanitizedRegistration.id) as RegistrationEntry | undefined;
       const duplicate = current.find((value: unknown) => {
         if (!value || typeof value !== "object") return false;
         return isDuplicateWorkshopRegistration(value as RegistrationEntry, sanitizedRegistration);
@@ -135,13 +145,6 @@ export async function POST(request: Request) {
         await client.query("ROLLBACK");
         return NextResponse.json({ error: String(form?.closedMessage ?? "This registration form is no longer accepting responses.").slice(0, 300) }, { status: 403 });
       }
-      const workshopRecords = Array.isArray(state.workshops) ? state.workshops as Array<Record<string, unknown>> : [];
-      const workshop = workshopRecords.find((value) => String(value.id ?? "") === sanitizedRegistration.workshopId);
-      const workshopBatches = Array.isArray(workshop?.batches) ? workshop.batches as Array<Record<string, unknown>> : [];
-      const selectedBatch = workshopBatches.find((value) => sanitizedRegistration.batchId
-        ? String(value.id ?? "") === sanitizedRegistration.batchId
-        : String(value.name ?? "").trim().toLowerCase() === sanitizedRegistration.batch.trim().toLowerCase());
-      const capacity = Math.max(0, Number(selectedBatch?.capacity ?? form?.registrationCapacity ?? 0) || 0);
       const requiredSessionId = String(form?.requiredAttendanceSessionId ?? "").trim();
       const attendanceRequired = form?.requireAttendanceForConfirmation === true && Boolean(requiredSessionId);
       const attendanceOnlyConfirmation = attendanceRequired && form?.attendanceOnlyConfirmation === true;
@@ -255,8 +258,12 @@ export async function POST(request: Request) {
         const position = positions.get(String(entry.id ?? ""));
         return position ? { ...entry, waitingPosition: position } : entry;
       });
-      let next = assignRegistrationNumbers(positioned as RegistrationEntry[], sanitizedRegistration.workshopId);
+      let next = positioned as RegistrationEntry[];
       let finalRegistration = next.find((item: unknown) => item && typeof item === "object" && String((item as Record<string, unknown>).id ?? "") === sanitizedRegistration.id) as RegistrationEntry;
+      if (!isWaiting && !finalRegistration.registrationNumber) {
+        finalRegistration = { ...finalRegistration, registrationNumber: await reserveRegistrationNumber(client) };
+        next = next.map((entry) => entry.id === finalRegistration.id ? finalRegistration : entry);
+      }
       if (attendanceMatched && !isWaiting) {
         finalRegistration = { ...finalRegistration, ...(await syncConfirmedRegistrationToMfw(finalRegistration)) };
         next = next.map((entry) => entry.id === finalRegistration.id ? finalRegistration : entry);

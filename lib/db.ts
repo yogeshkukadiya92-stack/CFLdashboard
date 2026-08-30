@@ -164,6 +164,10 @@ export async function ensureRegistrationRecordsTable() {
       );
       CREATE INDEX IF NOT EXISTS cfl_registration_workshop_batch_idx ON cfl_registration_records (workshop_id, batch_key, created_at);
       CREATE INDEX IF NOT EXISTS cfl_registration_mobile_idx ON cfl_registration_records (mobile_normalized, workshop_id, batch_key);
+      CREATE TABLE IF NOT EXISTS cfl_registration_counters (
+        scope TEXT PRIMARY KEY,
+        value BIGINT NOT NULL
+      );
       INSERT INTO cfl_registration_records (external_id, workshop_id, batch_key, mobile_normalized, created_at, payload)
       SELECT
         item->>'id',
@@ -175,6 +179,10 @@ export async function ensureRegistrationRecordsTable() {
       FROM app_state, LATERAL jsonb_array_elements(registrations) AS item
       WHERE app_state.id = 1 AND COALESCE(item->>'id', '') <> ''
       ON CONFLICT (external_id) DO NOTHING;
+      INSERT INTO cfl_registration_counters (scope, value)
+      SELECT 'global', COALESCE(MAX((REGEXP_MATCH(payload->>'registrationNumber', '^REG-([0-9]+)$', 'i'))[1]::BIGINT), 0)
+      FROM cfl_registration_records
+      ON CONFLICT (scope) DO NOTHING;
     `).then(() => true).catch((error) => {
       registrationRecordsPromise = null;
       throw error;
@@ -188,6 +196,17 @@ export async function readRegistrationRecords(client?: Pick<PoolClient, "query">
   if (!database) return [] as unknown[];
   const result = await database.query<{ payload: unknown }>(`SELECT payload FROM cfl_registration_records ORDER BY created_at DESC, external_id DESC`);
   return result.rows.map((row) => row.payload);
+}
+
+export async function reserveRegistrationNumber(client: Pick<PoolClient, "query">) {
+  const result = await client.query<{ value: string }>(`
+    INSERT INTO cfl_registration_counters (scope, value)
+    VALUES ('global', 1)
+    ON CONFLICT (scope) DO UPDATE
+      SET value = cfl_registration_counters.value + 1
+    RETURNING value
+  `);
+  return `REG-${String(result.rows[0].value).padStart(4, "0")}`;
 }
 
 export async function upsertRegistrationRecord(client: Pick<PoolClient, "query">, registration: Record<string, unknown>) {

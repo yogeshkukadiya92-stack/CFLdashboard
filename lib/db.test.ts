@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { beginPersistenceTransaction, isMissingPersistenceTableError } from "./db.ts";
+import { beginPersistenceTransaction, isMissingPersistenceTableError, reserveRegistrationNumber } from "./db.ts";
 
 test("only a missing app_state table triggers schema initialization on read", () => {
   assert.equal(isMissingPersistenceTableError({ code: "42P01" }), true);
@@ -58,4 +58,19 @@ test("registration transactions initialize once when app_state is missing", asyn
     "SELECT registrations FROM app_state FOR UPDATE"
   ]);
   assert.deepEqual(result.rows, [{ registrations: [] }]);
+});
+
+test("registration numbers are reserved atomically and keep the public format", async () => {
+  let query = "";
+  const client = {
+    async query(sql: string) {
+      query = sql;
+      return { rows: [{ value: "724" }] };
+    }
+  };
+
+  assert.equal(await reserveRegistrationNumber(client as never), "REG-0724");
+  assert.match(query, /ON CONFLICT \(scope\) DO UPDATE/);
+  assert.match(query, /cfl_registration_counters\.value \+ 1/);
+  assert.doesNotMatch(query, /cfl_registration_records/);
 });
