@@ -17,13 +17,15 @@ function isQualifyingPastRegistration(registration: RegistrationEntry) {
 export function findRepeaterSource(
   registrations: RegistrationEntry[],
   attendanceEntries: AttendanceEntry[],
-  incoming: Pick<RegistrationEntry, "mobile" | "workshopId">
+  incoming: Pick<RegistrationEntry, "mobile" | "workshopId">,
+  sourceWorkshopIds: string[]
 ) {
   const mobile = mobileDigits(incoming.mobile);
-  if (mobile.length !== 10) return undefined;
+  const allowedWorkshops = new Set(sourceWorkshopIds.filter((id) => id && id !== incoming.workshopId));
+  if (mobile.length !== 10 || !allowedWorkshops.size) return undefined;
 
   const registrationSource = registrations
-    .filter((entry) => entry.workshopId !== incoming.workshopId
+    .filter((entry) => allowedWorkshops.has(entry.workshopId)
       && mobileDigits(entry.mobile) === mobile
       && isQualifyingPastRegistration(entry))
     .sort((first, second) => new Date(second.createdAt).getTime() - new Date(first.createdAt).getTime())[0];
@@ -36,7 +38,7 @@ export function findRepeaterSource(
   }
 
   const attendanceSource = attendanceEntries
-    .filter((entry) => entry.workshopId !== incoming.workshopId && mobileDigits(entry.mobile) === mobile)
+    .filter((entry) => allowedWorkshops.has(entry.workshopId) && mobileDigits(entry.mobile) === mobile)
     .sort((first, second) => new Date(second.submittedAt).getTime() - new Date(first.submittedAt).getTime())[0];
   if (!attendanceSource) return undefined;
   return {

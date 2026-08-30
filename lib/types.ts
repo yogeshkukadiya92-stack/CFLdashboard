@@ -510,6 +510,7 @@ export interface BuilderForm {
   responseLimit?: number;
   closedMessage?: string;
   requireAttendanceForConfirmation?: boolean;
+  attendanceOnlyConfirmation?: boolean;
   requiredAttendanceSessionId?: string;
   allowReferralConfirmation?: boolean;
   referralCodes?: ReferralCodeConfig[];
@@ -518,6 +519,7 @@ export interface BuilderForm {
   waitingMode?: boolean;
   waitingTitle?: string;
   waitingMessage?: string;
+  repeaterSourceWorkshopIds?: string[];
   fields: BuilderField[];
   updatedAt: string;
 }

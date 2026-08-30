@@ -188,10 +188,14 @@ export default function WorkshopMasterPage() {
   const [formFields, setFormFields] = useState<BuilderField[]>(defaultBuilderFields);
   const [formHighlights, setFormHighlights] = useState<string[]>([]);
   const [formOtpRequired, setFormOtpRequired] = useState(false);
+  const [formRequireAttendanceForConfirmation, setFormRequireAttendanceForConfirmation] = useState(false);
+  const [formRequiredAttendanceSessionId, setFormRequiredAttendanceSessionId] = useState("");
   const [formWaitingMode, setFormWaitingMode] = useState(false);
   const [formRegistrationCapacity, setFormRegistrationCapacity] = useState("");
   const [formWaitingTitle, setFormWaitingTitle] = useState("Waiting List Registration");
   const [formWaitingMessage, setFormWaitingMessage] = useState("Seats are currently full. Your registration will be added to the waiting list.");
+  const [formRepeaterSourceWorkshopIds, setFormRepeaterSourceWorkshopIds] = useState<string[]>([]);
+  const [repeaterWorkshopQuery, setRepeaterWorkshopQuery] = useState("");
   const [whatsappGroupUrl, setWhatsappGroupUrl] = useState("");
   const [whatsappConfirmationEnabled, setWhatsappConfirmationEnabled] = useState(false);
   const [whatsappConfirmationTemplate, setWhatsappConfirmationTemplate] = useState("");
@@ -477,6 +481,10 @@ export default function WorkshopMasterPage() {
     }
     if (mfwEnrollmentEnabled && !mfwWorkshopEventId) {
       setMessage("Please select an MFW workshop or turn off MFW enrollment.");
+      return;
+    }
+    if (formRequireAttendanceForConfirmation && !formRequiredAttendanceSessionId) {
+      setMessage("Please select the required attendance form or turn off attendance confirmation.");
       return;
     }
     if (editingId) {
@@ -784,10 +792,14 @@ export default function WorkshopMasterPage() {
     setFormFields(defaultBuilderFields());
     setFormHighlights([]);
     setFormOtpRequired(false);
+    setFormRequireAttendanceForConfirmation(false);
+    setFormRequiredAttendanceSessionId("");
     setFormWaitingMode(false);
     setFormRegistrationCapacity("");
     setFormWaitingTitle("Waiting List Registration");
     setFormWaitingMessage("Seats are currently full. Your registration will be added to the waiting list.");
+    setFormRepeaterSourceWorkshopIds([]);
+    setRepeaterWorkshopQuery("");
     setWhatsappGroupUrl("");
     setWhatsappConfirmationEnabled(false);
     setWhatsappConfirmationTemplate("");
@@ -811,10 +823,14 @@ export default function WorkshopMasterPage() {
       fee: Number(record.feesWithTax || 0),
       partPayment: Boolean(record.isPartPaymentAllow),
       otpRequired: formOtpRequired,
+      requireAttendanceForConfirmation: formRequireAttendanceForConfirmation,
+      attendanceOnlyConfirmation: formRequireAttendanceForConfirmation,
+      requiredAttendanceSessionId: formRequireAttendanceForConfirmation ? formRequiredAttendanceSessionId || undefined : undefined,
       waitingMode: formWaitingMode,
       registrationCapacity: Math.max(0, Number(formRegistrationCapacity) || 0) || undefined,
       waitingTitle: formWaitingTitle.trim() || undefined,
       waitingMessage: formWaitingMessage.trim() || undefined,
+      repeaterSourceWorkshopIds: formRepeaterSourceWorkshopIds,
       highlights: formHighlights.map((item) => item.trim()).filter(Boolean),
       whatsappGroupUrl: whatsappGroupUrl.trim() || undefined,
       whatsappConfirmationEnabled,
@@ -831,7 +847,7 @@ export default function WorkshopMasterPage() {
     try {
       const forms = readLocalArray<BuilderForm>(FORMS_STORAGE_KEY);
       const existing = forms.find((item) => item.workshopId === record.id);
-      const form = { ...buildRegistrationForm(record), requireAttendanceForConfirmation: existing?.requireAttendanceForConfirmation, requiredAttendanceSessionId: existing?.requiredAttendanceSessionId, allowReferralConfirmation: existing?.allowReferralConfirmation, referralCodes: existing?.referralCodes, eligibilityWaitingMessage: existing?.eligibilityWaitingMessage };
+      const form = { ...buildRegistrationForm(record), allowReferralConfirmation: existing?.allowReferralConfirmation, referralCodes: existing?.referralCodes, eligibilityWaitingMessage: existing?.eligibilityWaitingMessage };
       const next = [form, ...forms.filter((item) => item.id !== form.id && item.workshopId !== record.id)];
       return saveLiveState({ forms: next });
     } catch {
@@ -855,10 +871,14 @@ export default function WorkshopMasterPage() {
         setFormFields(defaultBuilderFields());
         setFormHighlights([]);
         setFormOtpRequired(false);
+        setFormRequireAttendanceForConfirmation(false);
+        setFormRequiredAttendanceSessionId("");
         setFormWaitingMode(false);
         setFormRegistrationCapacity("");
         setFormWaitingTitle("Waiting List Registration");
         setFormWaitingMessage("Seats are currently full. Your registration will be added to the waiting list.");
+        setFormRepeaterSourceWorkshopIds([]);
+        setRepeaterWorkshopQuery("");
         setWhatsappGroupUrl("");
         setWhatsappConfirmationEnabled(false);
         setWhatsappConfirmationTemplate("");
@@ -876,10 +896,14 @@ export default function WorkshopMasterPage() {
       setFormFields(savedForm.fields?.length ? normalizeCoreFieldRequirements(savedForm.fields) : defaultBuilderFields());
       setFormHighlights(savedForm.highlights ?? []);
       setFormOtpRequired(Boolean(savedForm.otpRequired));
+      setFormRequireAttendanceForConfirmation(Boolean(savedForm.attendanceOnlyConfirmation));
+      setFormRequiredAttendanceSessionId(savedForm.requiredAttendanceSessionId ?? "");
       setFormWaitingMode(Boolean(savedForm.waitingMode));
       setFormRegistrationCapacity(savedForm.registrationCapacity ? String(savedForm.registrationCapacity) : "");
       setFormWaitingTitle(savedForm.waitingTitle || "Waiting List Registration");
       setFormWaitingMessage(savedForm.waitingMessage || "Seats are currently full. Your registration will be added to the waiting list.");
+      setFormRepeaterSourceWorkshopIds(savedForm.repeaterSourceWorkshopIds ?? []);
+      setRepeaterWorkshopQuery("");
       setWhatsappGroupUrl(savedForm.whatsappGroupUrl ?? "");
       setWhatsappConfirmationEnabled(Boolean(savedForm.whatsappConfirmationEnabled));
       setWhatsappConfirmationTemplate(savedForm.whatsappConfirmationTemplate ?? "");
@@ -1335,6 +1359,33 @@ export default function WorkshopMasterPage() {
               </span>
               <input checked={formOtpRequired} className="size-5 shrink-0 accent-emerald-600" onChange={(event) => setFormOtpRequired(event.target.checked)} type="checkbox" />
             </label>
+            <div className="rounded-xl border border-sky-200 bg-sky-50/70 p-4 md:col-span-2">
+              <label className="flex min-h-[48px] items-center justify-between gap-4">
+                <span>
+                  <span className="block text-sm font-black text-slate-800">Confirm only attended participants</span>
+                  <span className="mt-0.5 block text-xs font-semibold text-slate-500">When ON, only mobile numbers found in the selected attendance form are confirmed. Everyone else joins the waiting list.</span>
+                </span>
+                <input
+                  checked={formRequireAttendanceForConfirmation}
+                  className="size-5 shrink-0 accent-sky-600"
+                  onChange={(event) => {
+                    setFormRequireAttendanceForConfirmation(event.target.checked);
+                    if (!event.target.checked) setFormRequiredAttendanceSessionId("");
+                  }}
+                  type="checkbox"
+                />
+              </label>
+              {formRequireAttendanceForConfirmation ? (
+                <label className="mt-3 block">
+                  <span className="mb-2 block text-xs font-black text-slate-600">Required Attendance Form</span>
+                  <select className={inputClass} onChange={(event) => setFormRequiredAttendanceSessionId(event.target.value)} value={formRequiredAttendanceSessionId}>
+                    <option value="">Select attendance form</option>
+                    {attendanceSessions.map((session) => <option key={session.id} value={session.id}>{session.workshopName} · {session.title} · {session.sessionDate}</option>)}
+                  </select>
+                  {!attendanceSessions.length ? <span className="mt-2 block text-xs font-bold text-rose-600">Create an attendance form first, then return here to select it.</span> : null}
+                </label>
+              ) : null}
+            </div>
             <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-4 md:col-span-2">
               <label className="flex min-h-[48px] items-center justify-between gap-4">
                 <span>
@@ -1357,6 +1408,42 @@ export default function WorkshopMasterPage() {
                   <input className={inputClass} maxLength={240} onChange={(event) => setFormWaitingMessage(event.target.value)} value={formWaitingMessage} />
                 </label>
               </div>
+            </div>
+            <div className="rounded-xl border border-violet-200 bg-violet-50/70 p-4 md:col-span-2">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <span>
+                  <span className="block text-sm font-black text-slate-800">Repeater Source Workshops</span>
+                  <span className="mt-0.5 block text-xs font-semibold text-slate-500">Only participants matching a selected workshop by mobile number will enter Waiting · Repeater review.</span>
+                </span>
+                <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-violet-700">{formRepeaterSourceWorkshopIds.length} selected</span>
+              </div>
+              <label className="relative mt-3 block">
+                <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
+                <input className={`${inputClass} pl-10`} onChange={(event) => setRepeaterWorkshopQuery(event.target.value)} placeholder="Search past workshops" value={repeaterWorkshopQuery} />
+              </label>
+              <div className="mt-2 max-h-56 overflow-y-auto rounded-xl border border-violet-100 bg-white">
+                {records
+                  .filter((workshop) => workshop.id !== editingId && workshop.name.toLowerCase().includes(repeaterWorkshopQuery.trim().toLowerCase()))
+                  .map((workshop) => {
+                    const checked = formRepeaterSourceWorkshopIds.includes(workshop.id);
+                    return (
+                      <label className="flex cursor-pointer items-center gap-3 border-b border-slate-100 px-3 py-3 last:border-0 hover:bg-violet-50" key={workshop.id}>
+                        <input
+                          checked={checked}
+                          className="size-4 accent-violet-600"
+                          onChange={(event) => setFormRepeaterSourceWorkshopIds((current) => event.target.checked
+                            ? [...new Set([...current, workshop.id])]
+                            : current.filter((id) => id !== workshop.id))}
+                          type="checkbox"
+                        />
+                        <span className="min-w-0 flex-1 text-sm font-bold text-slate-700">{workshop.name}</span>
+                        {workshop.archived ? <span className="text-[10px] font-black uppercase text-slate-400">Past</span> : null}
+                      </label>
+                    );
+                  })}
+                {!records.some((workshop) => workshop.id !== editingId && workshop.name.toLowerCase().includes(repeaterWorkshopQuery.trim().toLowerCase())) ? <p className="px-4 py-6 text-center text-sm font-bold text-slate-500">No other workshop found.</p> : null}
+              </div>
+              {formRepeaterSourceWorkshopIds.length ? <button className="mt-3 text-xs font-black text-rose-600 hover:underline" onClick={() => setFormRepeaterSourceWorkshopIds([])} type="button">Clear selection</button> : null}
             </div>
           </div>
 

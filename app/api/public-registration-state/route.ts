@@ -143,8 +143,12 @@ export async function POST(request: Request) {
       const capacity = Math.max(0, Number(selectedBatch?.capacity ?? form?.registrationCapacity ?? 0) || 0);
       const requiredSessionId = String(form?.requiredAttendanceSessionId ?? "").trim();
       const attendanceRequired = form?.requireAttendanceForConfirmation === true && Boolean(requiredSessionId);
+      const attendanceOnlyConfirmation = attendanceRequired && form?.attendanceOnlyConfirmation === true;
       const attendanceEntries = (Array.isArray(state.attendance_entries) ? state.attendance_entries : []) as AttendanceEntry[];
-      const repeaterSource = findRepeaterSource(current as RegistrationEntry[], attendanceEntries, sanitizedRegistration);
+      const repeaterSourceWorkshopIds = Array.isArray(form?.repeaterSourceWorkshopIds)
+        ? form.repeaterSourceWorkshopIds.map((value) => String(value ?? "").trim()).filter(Boolean).slice(0, 500)
+        : [];
+      const repeaterSource = findRepeaterSource(current as RegistrationEntry[], attendanceEntries, sanitizedRegistration, repeaterSourceWorkshopIds);
       const attendanceMatched = attendanceRequired
         ? attendanceEntries.some((entry) => attendanceMatchesFinalRegistration(entry, sanitizedRegistration, requiredSessionId))
         : false;
@@ -175,7 +179,9 @@ export async function POST(request: Request) {
         return entry.workshopId === sanitizedRegistration.workshopId && sameBatch && entry.registrationStatus !== "waiting" && entry.id !== sanitizedRegistration.id;
       }).length;
       const eligibilityConfigured = attendanceRequired || referralEnabled;
-      const eligible = !eligibilityConfigured || attendanceMatched || referralValid;
+      const eligible = attendanceOnlyConfirmation
+        ? attendanceMatched
+        : !eligibilityConfigured || attendanceMatched || referralValid;
       const capacityFull = capacity > 0 && confirmedCount >= capacity;
       const waitingReason = repeaterSource
         ? "repeater_review"
@@ -183,6 +189,10 @@ export async function POST(request: Request) {
           ? "manual"
         : capacityFull && eligible
           ? "capacity"
+          : !eligible && attendanceOnlyConfirmation && hasAttendanceForAnotherSession
+            ? "session_mismatch"
+            : !eligible && attendanceOnlyConfirmation
+              ? "attendance_pending"
           : !eligible && referralEnabled && !referralValid
             ? "invalid_referral"
             : !eligible && hasAttendanceForAnotherSession
