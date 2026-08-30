@@ -49,7 +49,11 @@ export function getDbPool() {
     return null;
   }
   if (!pool) {
-    pool = new Pool({ connectionString: process.env.DATABASE_URL });
+    pool = new Pool({
+      connectionString: process.env.DATABASE_URL,
+      connectionTimeoutMillis: 5_000,
+      query_timeout: 10_000
+    });
   }
   return pool;
 }
@@ -143,11 +147,14 @@ export async function ensurePersistenceTable() {
   return true;
 }
 
+export function isMissingPersistenceTableError(error: unknown) {
+  return Boolean(error && typeof error === "object" && "code" in error && error.code === "42P01");
+}
+
 export async function getAppState() {
   const client = getDbPool();
   if (!client) return null;
-  await ensurePersistenceTable();
-  const result = await client.query(`
+  const readState = () => client.query(`
     SELECT
       clients,
       attendance_sessions AS "attendanceSessions",
@@ -171,6 +178,17 @@ export async function getAppState() {
     WHERE id = 1
     LIMIT 1
   `);
+  let result;
+  try {
+    result = await readState();
+  } catch (error) {
+    // Schema creation belongs on the cold-start path only. Running every
+    // CREATE/ALTER before every public read can block all registration links
+    // behind a PostgreSQL DDL lock.
+    if (!isMissingPersistenceTableError(error)) throw error;
+    await ensurePersistenceTable();
+    result = await readState();
+  }
   if (!result.rows[0]) return emptyAppState;
   return result.rows[0];
 }

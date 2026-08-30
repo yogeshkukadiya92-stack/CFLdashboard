@@ -29,6 +29,8 @@ export type LiveState = LiveStatePatch & {
   error?: string;
 };
 
+const PUBLIC_STATE_TIMEOUT_MS = 8_000;
+
 export function readLocalArray<T>(key: string): T[] {
   try {
     const raw = window.localStorage.getItem(key);
@@ -124,8 +126,13 @@ export async function saveLiveState(patch: LiveStatePatch) {
 }
 
 export async function hydratePublicRegistrationState(): Promise<LiveState | null> {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), PUBLIC_STATE_TIMEOUT_MS);
   try {
-    const response = await fetch("/api/public-registration-state", { cache: "no-store" });
+    const response = await fetch("/api/public-registration-state", {
+      cache: "no-store",
+      signal: controller.signal
+    });
     if (!response.ok) return null;
     const state = (await response.json()) as LiveState;
     if (!state.dbEnabled) return state;
@@ -168,6 +175,8 @@ export async function hydratePublicRegistrationState(): Promise<LiveState | null
     return state;
   } catch {
     return null;
+  } finally {
+    window.clearTimeout(timeout);
   }
 }
 
