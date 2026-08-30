@@ -1,4 +1,4 @@
-import { ensurePersistenceTable, getDbPool, isDbEnabled } from "@/lib/db";
+import { ensureRegistrationRecordsTable, getDbPool, isDbEnabled, readRegistrationRecords } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(request: NextRequest) {
@@ -10,9 +10,9 @@ export async function GET(request: NextRequest) {
     const database = getDbPool();
     if (!database) return NextResponse.json({ dbEnabled: false, registrations: [] });
 
-    await ensurePersistenceTable();
+    await ensureRegistrationRecordsTable();
     const versionResult = await database.query<{ version: string }>(
-      `SELECT md5(registrations::text) AS version FROM app_state WHERE id = 1 LIMIT 1`
+      `SELECT md5(COALESCE(MAX(updated_at)::text, 'empty') || ':' || COUNT(*)::text) AS version FROM cfl_registration_records`
     );
     const version = versionResult.rows[0]?.version ?? "empty";
     const etag = `"${version}"`;
@@ -21,11 +21,9 @@ export async function GET(request: NextRequest) {
       return new NextResponse(null, { status: 304, headers: { ETag: etag } });
     }
 
-    const registrationsResult = await database.query<{ registrations: unknown[] }>(
-      `SELECT registrations FROM app_state WHERE id = 1 LIMIT 1`
-    );
+    const registrations = await readRegistrationRecords();
     return NextResponse.json(
-      { dbEnabled: true, registrations: registrationsResult.rows[0]?.registrations ?? [] },
+      { dbEnabled: true, registrations },
       { headers: { "Cache-Control": "no-store", ETag: etag } }
     );
   } catch {

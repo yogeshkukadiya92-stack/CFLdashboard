@@ -1,6 +1,7 @@
 import { Pool, type PoolClient, type QueryResult } from "pg";
 
 let pool: Pool | null = null;
+let registrationRecordsPromise: Promise<boolean> | null = null;
 
 type AppState = {
   attendanceEntries: unknown[];
@@ -147,6 +148,90 @@ export async function ensurePersistenceTable() {
   return true;
 }
 
+export async function ensureRegistrationRecordsTable() {
+  const database = getDbPool();
+  if (!database) return false;
+  if (!registrationRecordsPromise) {
+    registrationRecordsPromise = database.query(`
+      CREATE TABLE IF NOT EXISTS cfl_registration_records (
+        external_id TEXT PRIMARY KEY,
+        workshop_id TEXT NOT NULL,
+        batch_key TEXT NOT NULL DEFAULT '',
+        mobile_normalized TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL,
+        payload JSONB NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS cfl_registration_workshop_batch_idx ON cfl_registration_records (workshop_id, batch_key, created_at);
+      CREATE INDEX IF NOT EXISTS cfl_registration_mobile_idx ON cfl_registration_records (mobile_normalized, workshop_id, batch_key);
+      INSERT INTO cfl_registration_records (external_id, workshop_id, batch_key, mobile_normalized, created_at, payload)
+      SELECT
+        item->>'id',
+        COALESCE(item->>'workshopId', item->>'workshopTitle', ''),
+        COALESCE(NULLIF(item->>'batchId', ''), LOWER(COALESCE(item->>'batch', ''))),
+        RIGHT(REGEXP_REPLACE(COALESCE(item->>'mobile', ''), '[^0-9]', '', 'g'), 10),
+        NOW(),
+        item
+      FROM app_state, LATERAL jsonb_array_elements(registrations) AS item
+      WHERE app_state.id = 1 AND COALESCE(item->>'id', '') <> ''
+      ON CONFLICT (external_id) DO NOTHING;
+    `).then(() => true).catch((error) => {
+      registrationRecordsPromise = null;
+      throw error;
+    });
+  }
+  return registrationRecordsPromise;
+}
+
+export async function readRegistrationRecords(client?: Pick<PoolClient, "query">) {
+  const database = client ?? getDbPool();
+  if (!database) return [] as unknown[];
+  const result = await database.query<{ payload: unknown }>(`SELECT payload FROM cfl_registration_records ORDER BY created_at DESC, external_id DESC`);
+  return result.rows.map((row) => row.payload);
+}
+
+export async function upsertRegistrationRecord(client: Pick<PoolClient, "query">, registration: Record<string, unknown>) {
+  const externalId = String(registration.id ?? "").trim();
+  if (!externalId) throw new Error("Registration id is required.");
+  const workshopId = String(registration.workshopId ?? registration.workshopTitle ?? "").trim();
+  const batchKey = String(registration.batchId ?? "").trim() || String(registration.batch ?? "").trim().toLowerCase();
+  const mobile = String(registration.mobile ?? "").replace(/\D/g, "").slice(-10);
+  const createdAt = String(registration.createdAt ?? new Date().toISOString());
+  await client.query(`
+    INSERT INTO cfl_registration_records (external_id, workshop_id, batch_key, mobile_normalized, created_at, payload, updated_at)
+    VALUES ($1, $2, $3, $4, $5, $6::jsonb, NOW())
+    ON CONFLICT (external_id) DO UPDATE SET payload = EXCLUDED.payload, updated_at = NOW()
+  `, [externalId, workshopId, batchKey, mobile, createdAt, JSON.stringify(registration)]);
+}
+
+export async function replaceRegistrationRecords(registrations: unknown[]) {
+  const database = getDbPool();
+  if (!database) return false;
+  await ensureRegistrationRecordsTable();
+  const client = await database.connect();
+  try {
+    await client.query("BEGIN");
+    const ids = registrations
+      .filter((item): item is Record<string, unknown> => Boolean(item && typeof item === "object" && !Array.isArray(item)))
+      .map((item) => String(item.id ?? "").trim())
+      .filter(Boolean);
+    if (ids.length) await client.query(`DELETE FROM cfl_registration_records WHERE NOT (external_id = ANY($1::text[]))`, [ids]);
+    else await client.query(`DELETE FROM cfl_registration_records`);
+    for (const registration of registrations) {
+      if (registration && typeof registration === "object" && !Array.isArray(registration)) {
+        await upsertRegistrationRecord(client, registration as Record<string, unknown>);
+      }
+    }
+    await client.query("COMMIT");
+    return true;
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 export function isMissingPersistenceTableError(error: unknown) {
   return Boolean(error && typeof error === "object" && "code" in error && error.code === "42P01");
 }
@@ -210,7 +295,13 @@ export async function getAppState() {
     result = await readState();
   }
   if (!result.rows[0]) return emptyAppState;
-  return result.rows[0];
+  try {
+    const registrations = await readRegistrationRecords(client);
+    return registrations.length ? { ...result.rows[0], registrations } : result.rows[0];
+  } catch (error) {
+    if (!isMissingPersistenceTableError(error)) throw error;
+    return result.rows[0];
+  }
 }
 
 export async function saveAppState(input: Partial<AppState>) {
@@ -264,6 +355,7 @@ export async function saveAppState(input: Partial<AppState>) {
       JSON.stringify(input.responseAccessGrants ?? current.responseAccessGrants)
     ]
   );
+  if (Array.isArray(input.registrations)) await replaceRegistrationRecords(input.registrations);
   return true;
 }
 

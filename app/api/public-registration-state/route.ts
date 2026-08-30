@@ -1,4 +1,4 @@
-import { beginPersistenceTransaction, getAppState, getDbPool, isDbEnabled } from "@/lib/db";
+import { ensureRegistrationRecordsTable, getAppState, getDbPool, isDbEnabled, readRegistrationRecords, upsertRegistrationRecord } from "@/lib/db";
 import { upsertLiveRegistration } from "@/lib/crm-db";
 import { upsertLeadFromRegistration } from "@/lib/lead-utils";
 import { assignRegistrationNumbers, sendRegistrationStatusNotifications } from "@/lib/registration-confirmation";
@@ -92,11 +92,14 @@ export async function POST(request: Request) {
 
     const database = getDbPool();
     if (!database) return NextResponse.json({ error: "Database is not configured." }, { status: 500 });
+    await ensureRegistrationRecordsTable();
     const client = await database.connect();
     try {
-      const selected = await beginPersistenceTransaction(client, `SELECT registrations, forms, workshops, leads, sales_people, attendance_entries FROM app_state WHERE id = 1 FOR UPDATE`);
+      await client.query("BEGIN");
+      await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`${sanitizedRegistration.workshopId}:${sanitizedRegistration.batchId ?? sanitizedRegistration.batch}:${sanitizedRegistration.introductionSessionId ?? ""}`]);
+      const selected = await client.query(`SELECT forms, workshops, leads, sales_people, attendance_entries FROM app_state WHERE id = 1`);
       const state = selected.rows[0] ?? {};
-      const current = Array.isArray(state.registrations) ? state.registrations : [];
+      const current = await readRegistrationRecords(client) as RegistrationEntry[];
       const previousRegistration = current.find((value: unknown) => value && typeof value === "object" && (value as RegistrationEntry).id === sanitizedRegistration.id) as RegistrationEntry | undefined;
       const forms = Array.isArray(state.forms) ? state.forms as Array<Record<string, unknown>> : [];
       const form = forms.find((value) => {
@@ -244,8 +247,8 @@ export async function POST(request: Request) {
       ];
       const waiting = unnumbered
         .filter((item: unknown) => item && typeof item === "object" && String((item as Record<string, unknown>).workshopId ?? "") === sanitizedRegistration.workshopId && (item as Record<string, unknown>).registrationStatus === "waiting")
-        .sort((first: Record<string, unknown>, second: Record<string, unknown>) => new Date(String(first.createdAt ?? "")).getTime() - new Date(String(second.createdAt ?? "")).getTime());
-      const positions = new Map(waiting.map((entry: Record<string, unknown>, index: number) => [String(entry.id ?? ""), index + 1]));
+        .sort((first, second) => new Date(String(first.createdAt ?? "")).getTime() - new Date(String(second.createdAt ?? "")).getTime());
+      const positions = new Map(waiting.map((entry, index: number) => [String(entry.id ?? ""), index + 1]));
       const positioned = unnumbered.map((item: unknown) => {
         if (!item || typeof item !== "object") return item;
         const entry = item as Record<string, unknown>;
@@ -273,9 +276,17 @@ export async function POST(request: Request) {
           )
         : Array.isArray(state.leads) ? state.leads : [];
 
-      await upsertLiveRegistration(finalRegistration as unknown as Record<string, unknown>);
-      await client.query(`UPDATE app_state SET leads = $1::jsonb, registrations = $2::jsonb, updated_at = NOW() WHERE id = 1`, [JSON.stringify(leads), JSON.stringify(next.slice(0, 5000))]);
+      await upsertRegistrationRecord(client, finalRegistration as unknown as Record<string, unknown>);
       await client.query("COMMIT");
+      try {
+        await upsertLiveRegistration(finalRegistration as unknown as Record<string, unknown>);
+        if (linkedWorkshop?.transferLeadToCrm === true) {
+          await client.query(`UPDATE app_state SET leads = $1::jsonb, updated_at = NOW() WHERE id = 1`, [JSON.stringify(leads)]);
+        }
+      } catch {
+        // The registration is durable. CRM projection failures must not turn a
+        // successful form submission into a user-visible failure.
+      }
       let savedRegistration = next.find((entry) => entry.id === sanitizedRegistration.id) as RegistrationEntry;
       try {
         const notificationPatch = await sendRegistrationStatusNotifications(savedRegistration, form as Partial<BuilderForm>);
@@ -283,7 +294,7 @@ export async function POST(request: Request) {
           savedRegistration = { ...savedRegistration, ...notificationPatch };
           next = next.map((entry) => entry.id === savedRegistration.id ? savedRegistration : entry);
           await upsertLiveRegistration(savedRegistration as unknown as Record<string, unknown>);
-          await client.query(`UPDATE app_state SET registrations = $1::jsonb, updated_at = NOW() WHERE id = 1`, [JSON.stringify(next.slice(0, 5000))]);
+          await upsertRegistrationRecord(client, savedRegistration as unknown as Record<string, unknown>);
         }
       } catch {
         // Registration is already committed; notification failures never roll it back.
