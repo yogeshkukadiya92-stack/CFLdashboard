@@ -1,6 +1,24 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { normalizeMfwWorkshops, selectMfwWorkshopMapping } from "../lib/mfw-workshop-mapping.ts";
+import { mfwEnrollmentMatches, normalizeMfwWorkshops, selectMfwWorkshopMapping } from "../lib/mfw-workshop-mapping.ts";
+
+test("accepts a successful MFW assignment when the API omits the optional unique ID echo", () => {
+  assert.equal(mfwEnrollmentMatches({
+    participant: { eventId: "hf-38" },
+    registrationNumber: "REG-0724",
+    workshopAssigned: true,
+    workshopEventId: "hf-38"
+  }), true);
+});
+
+test("rejects an MFW assignment when a returned unique ID belongs to another registration", () => {
+  assert.equal(mfwEnrollmentMatches({
+    participant: { eventId: "hf-38", uniqueId: "REG-9999" },
+    registrationNumber: "REG-0724",
+    workshopAssigned: true,
+    workshopEventId: "hf-38"
+  }), false);
+});
 
 test("normalizes MFW event fields from a nested workshops response", () => {
   assert.deepEqual(normalizeMfwWorkshops({

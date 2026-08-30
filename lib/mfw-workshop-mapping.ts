@@ -21,6 +21,19 @@ export type MfwWorkshopPayload = {
 
 export type MfwWorkshopListResponse = unknown;
 
+export function mfwEnrollmentMatches(input: {
+  participant?: { eventId?: string; uniqueId?: string } | null;
+  registrationNumber: string;
+  workshopAssigned?: boolean;
+  workshopEventId: string;
+}) {
+  const participantEventId = String(input.participant?.eventId ?? "").trim();
+  const participantUniqueId = String(input.participant?.uniqueId ?? "").trim();
+  return input.workshopAssigned === true
+    && participantEventId === input.workshopEventId
+    && (!participantUniqueId || participantUniqueId === input.registrationNumber);
+}
+
 function findWorkshopArrays(value: unknown, depth = 0): MfwWorkshopPayload[][] {
   if (depth > 4) return [];
   if (Array.isArray(value)) return [value.filter((item): item is MfwWorkshopPayload => Boolean(item) && typeof item === "object" && !Array.isArray(item))];

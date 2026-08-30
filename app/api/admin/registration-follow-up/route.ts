@@ -51,7 +51,14 @@ export async function PATCH(request: Request) {
       actorName: "Admin User",
       createdAt: now
     };
-    const mfwSync = status === "confirmed" ? await syncConfirmedRegistrationToMfw(numberedCurrent) : {};
+    const form = (Array.isArray(state?.forms) ? state.forms : [])
+      .find((item: BuilderForm) => item.workshopId === current.workshopId) as BuilderForm | undefined;
+    const [mfwSync, whatsapp] = status === "confirmed"
+      ? await Promise.all([
+          syncConfirmedRegistrationToMfw(numberedCurrent),
+          sendRegistrationConfirmation(numberedCurrent, form).catch(() => ({ configured: true, sent: false }))
+        ])
+      : [{}, { configured: false, sent: false }];
     const updated: RegistrationEntry = {
       ...numberedCurrent,
       ...mfwSync,
@@ -59,19 +66,11 @@ export async function PATCH(request: Request) {
       confirmationNote: note,
       confirmationUpdatedAt: now,
       confirmationUpdatedBy: "Admin User",
+      confirmationWhatsappSentAt: whatsapp.sent ? now : numberedCurrent.confirmationWhatsappSentAt,
       confirmationHistory: [activity, ...(current.confirmationHistory ?? [])].slice(0, 200)
     };
     let next = numberedRegistrations.map((entry) => entry.id === registrationId ? updated : entry);
     let saved = next.find((entry) => entry.id === registrationId) as RegistrationEntry;
-    if (status === "confirmed") {
-      const form = (Array.isArray(state?.forms) ? state.forms : [])
-        .find((item: BuilderForm) => item.workshopId === current.workshopId) as BuilderForm | undefined;
-      const whatsapp = await sendRegistrationConfirmation(saved, form).catch(() => ({ configured: true, sent: false }));
-      if (whatsapp.sent) {
-        saved = { ...saved, confirmationWhatsappSentAt: now };
-        next = next.map((entry) => entry.id === registrationId ? saved : entry);
-      }
-    }
     await saveAppState({ registrations: next });
     return NextResponse.json({ registration: saved });
   } catch (error) {

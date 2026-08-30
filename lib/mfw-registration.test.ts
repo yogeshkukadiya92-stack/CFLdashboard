@@ -10,5 +10,9 @@ test("CFL registration number is required before MFW enrollment", () => {
 
 test("CFL registration number is sent to MFW and verified as its unique ID", () => {
   assert.match(source, /registrationNumber: registration\.registrationNumber/);
-  assert.match(source, /participant\.uniqueId !== registration\.registrationNumber/);
+  assert.match(source, /mfwEnrollmentMatches/);
+});
+
+test("already synced registrations do not call MFW again", () => {
+  assert.match(source, /registration\.mfwSyncStatus === "synced"/);
 });

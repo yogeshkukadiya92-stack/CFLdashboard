@@ -1,6 +1,7 @@
 import type { RegistrationEntry } from "@/lib/types";
 import { getAppState } from "@/lib/db";
 import {
+  mfwEnrollmentMatches,
   normalizeMfwWorkshops,
   selectMfwWorkshopMapping,
   type MfwWorkshopListResponse,
@@ -66,6 +67,16 @@ export async function syncConfirmedRegistrationToMfw(registration: RegistrationE
     if (!mapping) return { mfwSyncError: undefined, mfwSyncStatus: "not_required" as const };
     workshopEventId = mapping.workshopEventId;
     if (!workshopEventId) throw new Error(`Select an MFW workshop for '${registration.workshopTitle}' before retrying enrollment.`);
+    if (registration.mfwSyncStatus === "synced" && registration.mfwWorkshopEventId === workshopEventId) {
+      return {
+        mfwParticipantId: registration.mfwParticipantId,
+        mfwSyncError: undefined,
+        mfwSyncStatus: "synced" as const,
+        mfwSyncedAt: registration.mfwSyncedAt,
+        mfwUserId: registration.mfwUserId,
+        mfwWorkshopEventId: workshopEventId
+      };
+    }
     if (!registration.mobile.trim()) throw new Error("Mobile number is required before confirming this registration.");
     if (!registration.registrationNumber) throw new Error("Registration number is required before syncing this registration to MFW.");
     const { apiKey, baseUrl } = config();
@@ -85,15 +96,20 @@ export async function syncConfirmedRegistrationToMfw(registration: RegistrationE
     });
     const result = await response.json().catch(() => ({})) as MfwCustomerResponse;
     const participant = result.data?.participant;
-    if (!response.ok || !result.data?.workshopAssigned || participant?.eventId !== workshopEventId || participant.uniqueId !== registration.registrationNumber) {
+    if (!response.ok || !mfwEnrollmentMatches({
+      participant,
+      registrationNumber: registration.registrationNumber,
+      workshopAssigned: result.data?.workshopAssigned,
+      workshopEventId
+    })) {
       throw new Error(result.message || "MFW user was not assigned to the selected workshop.");
     }
     return {
-      mfwParticipantId: participant.id,
+      mfwParticipantId: participant?.id,
       mfwSyncError: undefined,
       mfwSyncStatus: "synced" as const,
       mfwSyncedAt: new Date().toISOString(),
-      mfwUserId: result.data.id,
+      mfwUserId: result.data?.id,
       mfwWorkshopEventId: workshopEventId
     };
   } catch (error) {
