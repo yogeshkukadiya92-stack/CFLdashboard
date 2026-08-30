@@ -1,4 +1,4 @@
-import { ensurePersistenceTable, getAppState, getDbPool, isDbEnabled } from "@/lib/db";
+import { beginPersistenceTransaction, getAppState, getDbPool, isDbEnabled } from "@/lib/db";
 import { upsertLiveRegistration } from "@/lib/crm-db";
 import { upsertLeadFromRegistration } from "@/lib/lead-utils";
 import { assignRegistrationNumbers, sendRegistrationStatusNotifications } from "@/lib/registration-confirmation";
@@ -92,11 +92,9 @@ export async function POST(request: Request) {
 
     const database = getDbPool();
     if (!database) return NextResponse.json({ error: "Database is not configured." }, { status: 500 });
-    await ensurePersistenceTable();
     const client = await database.connect();
     try {
-      await client.query("BEGIN");
-      const selected = await client.query(`SELECT registrations, forms, workshops, leads, sales_people, attendance_entries FROM app_state WHERE id = 1 FOR UPDATE`);
+      const selected = await beginPersistenceTransaction(client, `SELECT registrations, forms, workshops, leads, sales_people, attendance_entries FROM app_state WHERE id = 1 FOR UPDATE`);
       const state = selected.rows[0] ?? {};
       const current = Array.isArray(state.registrations) ? state.registrations : [];
       const previousRegistration = current.find((value: unknown) => value && typeof value === "object" && (value as RegistrationEntry).id === sanitizedRegistration.id) as RegistrationEntry | undefined;

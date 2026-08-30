@@ -1,4 +1,4 @@
-import { Pool } from "pg";
+import { Pool, type PoolClient, type QueryResult } from "pg";
 
 let pool: Pool | null = null;
 
@@ -149,6 +149,26 @@ export async function ensurePersistenceTable() {
 
 export function isMissingPersistenceTableError(error: unknown) {
   return Boolean(error && typeof error === "object" && "code" in error && error.code === "42P01");
+}
+
+export async function beginPersistenceTransaction<Row extends Record<string, unknown>>(
+  client: Pick<PoolClient, "query">,
+  selectForUpdateSql: string,
+  initialize: () => Promise<unknown> = ensurePersistenceTable
+) {
+  await client.query("BEGIN");
+  try {
+    return await client.query<Row>(selectForUpdateSql);
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    if (!isMissingPersistenceTableError(error)) throw error;
+
+    // Schema DDL needs an exclusive PostgreSQL lock. Keep it off the normal
+    // registration path and run it only when app_state genuinely is missing.
+    await initialize();
+    await client.query("BEGIN");
+    return client.query<Row>(selectForUpdateSql) as Promise<QueryResult<Row>>;
+  }
 }
 
 export async function getAppState() {
