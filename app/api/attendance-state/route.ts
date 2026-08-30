@@ -124,11 +124,16 @@ export async function GET(request: Request) {
   try {
     const state = await getAppState();
     const sessions = (Array.isArray(state?.attendanceSessions) ? state.attendanceSessions : []) as AttendanceSession[];
+    const entries = (Array.isArray(state?.attendanceEntries) ? state.attendanceEntries : []) as AttendanceEntry[];
     const slug = new URL(request.url).searchParams.get("slug")?.trim();
     if (slug) {
       const session = sessions.find((item) => item.slug === slug && item.published !== false);
       return session
-        ? NextResponse.json({ attendanceSession: publicSession(session), dbEnabled: true })
+        ? NextResponse.json({
+            attendanceSession: publicSession(session),
+            dbEnabled: true,
+            responseCount: entries.filter((entry) => entry.sessionId === session.id).length
+          })
         : NextResponse.json({ error: "Attendance link is not active." }, { status: 404 });
     }
     return NextResponse.json({
@@ -207,8 +212,25 @@ export async function POST(request: Request) {
     const saved = await mutateAttendanceEntries((rawEntries) => {
       const entries = rawEntries as AttendanceEntry[];
       const existing = session.allowDuplicate ? undefined : entries.find((entry) => entry.id === stableId);
-      if (existing) return { entries, result: { duplicate: true, entry: existing } };
-      return { entries: [proposedEntry, ...entries].slice(0, 20_000), result: { duplicate: false, entry: proposedEntry } };
+      if (existing) {
+        return {
+          entries,
+          result: {
+            duplicate: true,
+            entry: existing,
+            responseCount: entries.filter((entry) => entry.sessionId === session.id).length
+          }
+        };
+      }
+      const nextEntries = [proposedEntry, ...entries].slice(0, 20_000);
+      return {
+        entries: nextEntries,
+        result: {
+          duplicate: false,
+          entry: proposedEntry,
+          responseCount: nextEntries.filter((entry) => entry.sessionId === session.id).length
+        }
+      };
     });
     if (saved.duplicate) {
       return NextResponse.json({

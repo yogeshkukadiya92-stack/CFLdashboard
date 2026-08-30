@@ -37,11 +37,14 @@ export default function AttendanceFormPage() {
   const [joinUrl, setJoinUrl] = useState("");
   const [countdown, setCountdown] = useState(0);
   const [autoRedirect, setAutoRedirect] = useState(true);
+  const [responseCount, setResponseCount] = useState<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     async function loadSession() {
       let sessions = readLocalArray<AttendanceSession>(ATTENDANCE_SESSIONS_STORAGE_KEY);
+      const localEntries = readLocalArray<AttendanceEntry>(ATTENDANCE_ENTRIES_STORAGE_KEY);
+      let serverResponseCount: number | null = null;
       try {
         const response = await fetch(`/api/attendance-state?slug=${encodeURIComponent(slug)}`, { cache: "no-store" });
         if (response.ok) {
@@ -49,6 +52,7 @@ export default function AttendanceFormPage() {
           if (data?.attendanceSession) {
             sessions = [data.attendanceSession];
             window.localStorage.setItem(ATTENDANCE_SESSIONS_STORAGE_KEY, JSON.stringify(sessions));
+            serverResponseCount = Number.isFinite(data.responseCount) ? data.responseCount : 0;
           }
         } else {
           sessions = [];
@@ -58,6 +62,7 @@ export default function AttendanceFormPage() {
       }
       if (cancelled) return;
       const match = sessions.find((item) => item.slug === slug && item.published !== false) ?? null;
+      setResponseCount(serverResponseCount ?? (match ? localEntries.filter((entry) => entry.sessionId === match.id).length : null));
       setSession(match);
       setReady(true);
     }
@@ -221,6 +226,7 @@ export default function AttendanceFormPage() {
       const savedEntry = data.entry as AttendanceEntry;
       const current = readLocalArray<AttendanceEntry>(ATTENDANCE_ENTRIES_STORAGE_KEY);
       writeLiveStateToLocalStorage({ attendanceEntries: [savedEntry, ...current.filter((item) => item.id !== savedEntry.id)] });
+      setResponseCount((currentCount) => Number.isFinite(data.responseCount) ? data.responseCount : (currentCount ?? 0) + 1);
       setSuccess(true);
       setJoinUrl(String(data.joinUrl || ""));
       setCountdown(Number(data.redirectDelaySeconds) || 0);
@@ -268,6 +274,12 @@ export default function AttendanceFormPage() {
           <p className="mt-2 text-lg font-black text-slate-800">{session.title}</p>
           <p className="mt-2 text-sm font-semibold text-slate-500">{formatSessionDate(session)}{session.facilitator ? ` • ${session.facilitator}` : ""}{session.venue ? ` • ${session.venue}` : ""}</p>
           {session.description ? <p className="mt-4 rounded-2xl bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700">{session.description}</p> : null}
+          {responseCount !== null ? (
+            <p className="mt-4 flex items-center gap-2 text-sm font-bold text-slate-500">
+              <ClipboardCheck className="size-4" style={{ color: accent }} />
+              {responseCount.toLocaleString("en-IN")} {responseCount === 1 ? "response" : "responses"} received
+            </p>
+          ) : null}
         </div>
 
         <div className="border-t border-slate-100 p-6 md:p-8">
