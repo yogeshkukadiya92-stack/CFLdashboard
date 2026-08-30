@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { getAppState, isDbEnabled, saveAppState } from "@/lib/db";
-import { hashAttendanceTeamPassword, toAttendanceTeamSummary } from "@/lib/attendance-team-auth";
+import { createAttendanceTeamAccessToken, hashAttendanceTeamPassword, toAttendanceTeamSummary } from "@/lib/attendance-team-auth";
 import type { AttendanceSession, AttendanceTeamPermissions, AttendanceTeamUser } from "@/lib/types";
 
 function permissions(value: unknown): AttendanceTeamPermissions {
@@ -23,7 +23,10 @@ export async function GET() {
     const sessions = (Array.isArray(state?.attendanceSessions) ? state.attendanceSessions : []) as AttendanceSession[];
     return NextResponse.json({
       sessions: sessions.map((session) => ({ id: session.id, label: `${session.workshopName} · ${session.title}`, published: session.published })),
-      users: [...users].sort((left, right) => right.createdAt.localeCompare(left.createdAt)).map(toAttendanceTeamSummary)
+      users: [...users].sort((left, right) => right.createdAt.localeCompare(left.createdAt)).map((user) => ({
+        ...toAttendanceTeamSummary(user),
+        accessPath: `/attendance-team/access/${createAttendanceTeamAccessToken(user)}`
+      }))
     });
   } catch {
     return NextResponse.json({ error: "Could not load attendance team access." }, { status: 500 });
@@ -66,7 +69,7 @@ export async function POST(request: Request) {
       updatedAt: now
     };
     await saveAppState({ attendanceTeamUsers: [user, ...current.filter((item) => item.id !== user.id)].slice(0, 500) });
-    return NextResponse.json({ user: toAttendanceTeamSummary(user) });
+    return NextResponse.json({ user: { ...toAttendanceTeamSummary(user), accessPath: `/attendance-team/access/${createAttendanceTeamAccessToken(user)}` } });
   } catch {
     return NextResponse.json({ error: "Could not save attendance team access." }, { status: 500 });
   }

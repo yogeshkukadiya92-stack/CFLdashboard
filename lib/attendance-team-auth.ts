@@ -35,6 +35,22 @@ export function createAttendanceTeamSession(user: AttendanceTeamUser) {
   return `${payload}.${sign(`session:${payload}`)}`;
 }
 
+export function createAttendanceTeamAccessToken(user: AttendanceTeamUser) {
+  const payload = Buffer.from(JSON.stringify({ userId: user.id, email: user.email })).toString("base64url");
+  return `${payload}.${sign(`access:${payload}`)}`;
+}
+
+export function verifyAttendanceTeamAccessToken(value: string, user: AttendanceTeamUser) {
+  const [payload, signature] = value.split(".");
+  if (!payload || !signature || !safeEqual(sign(`access:${payload}`), signature)) return false;
+  try {
+    const decoded = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as { userId?: string; email?: string };
+    return decoded.userId === user.id && decoded.email === user.email;
+  } catch {
+    return false;
+  }
+}
+
 export function verifyAttendanceTeamSession(value: string | undefined, user: AttendanceTeamUser) {
   if (!value) return false;
   const [payload, signature] = value.split(".");
