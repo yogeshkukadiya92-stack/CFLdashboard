@@ -1,6 +1,7 @@
 "use client";
 
 import { AdminPlatformShell } from "@/components/admin-platform-shell";
+import { parseBulkAttendanceMobiles } from "@/lib/bulk-attendance";
 import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
 import { DuplicateResponseFilter } from "@/components/duplicate-response-filter";
 import { AdvancedResponseFilters } from "@/components/advanced-response-filters";
@@ -135,6 +136,9 @@ export default function WorkshopAttendancePage() {
   const [sessionView, setSessionView] = useState<SessionView>("responses");
   const [previewDevice, setPreviewDevice] = useState<"desktop" | "mobile">("mobile");
   const [imageError, setImageError] = useState("");
+  const [bulkMobiles, setBulkMobiles] = useState("");
+  const [bulkMessage, setBulkMessage] = useState("");
+  const [bulkSaving, setBulkSaving] = useState(false);
 
   function loadLocal() {
     const loadedWorkshops = readLocalArray<WorkshopRecord>(WORKSHOP_MASTER_STORAGE_KEY).filter((item) => !item.archived);
@@ -339,6 +343,59 @@ export default function WorkshopAttendancePage() {
     if (!deleteEntryTarget) return;
     persistEntries(entries.filter((entry) => entry.id !== deleteEntryTarget.id));
     setDeleteEntryTarget(null);
+  }
+
+  async function addBulkAttendance() {
+    if (!selectedSession || !selectedWorkshop) return;
+    const parsed = parseBulkAttendanceMobiles(bulkMobiles);
+    if (!parsed.mobiles.length) {
+      setBulkMessage("Enter at least one valid 10-digit mobile number.");
+      return;
+    }
+
+    const existingMobiles = new Set(selectedEntries.map((entry) => normalizedMobile(entry.mobile)).filter(Boolean));
+    const newMobiles = parsed.mobiles.filter((mobile) => !existingMobiles.has(mobile));
+    const duplicateCount = parsed.mobiles.length - newMobiles.length;
+    if (!newMobiles.length) {
+      setBulkMessage(`No new attendance added. ${duplicateCount} number${duplicateCount === 1 ? " was" : "s were"} already present.`);
+      return;
+    }
+
+    setBulkSaving(true);
+    const now = new Date().toISOString();
+    const manualEntries: AttendanceEntry[] = newMobiles.map((mobile) => {
+      const registration = registrations.find((item) => (
+        normalizedMobile(item.mobile) === mobile
+        && (item.workshopId === selectedWorkshop.id || item.workshopTitle.trim().toLowerCase() === selectedWorkshop.name.trim().toLowerCase())
+        && (!selectedSession.batch || !item.batch || normalizedBatch(item.batch) === normalizedBatch(selectedSession.batch))
+      ));
+      return {
+        attendeeName: registration?.fullName || `Manual attendee • ${mobile.slice(-4)}`,
+        batch: selectedSession.batch || selectedWorkshop.batch || "",
+        checkInAt: now,
+        city: registration?.city || "",
+        email: registration?.email || "",
+        id: `att-${selectedSession.id}-${mobile}`,
+        mobile: `+91 ${mobile}`,
+        sessionId: selectedSession.id,
+        sessionSlug: selectedSession.slug,
+        source: "manual",
+        status: "checked_in",
+        submittedAt: now,
+        workshopId: selectedWorkshop.id,
+        workshopName: selectedWorkshop.name
+      };
+    });
+    const next = [...manualEntries, ...entries].slice(0, 20_000);
+    setEntries(next);
+    const saved = await saveLiveState({ attendanceEntries: next });
+    setBulkSaving(false);
+    if (!saved) {
+      setBulkMessage("Attendance was saved on this device, but server sync failed. Please try again.");
+      return;
+    }
+    setBulkMobiles("");
+    setBulkMessage(`${manualEntries.length} added${duplicateCount ? `, ${duplicateCount} duplicate skipped` : ""}${parsed.invalid.length ? `, ${parsed.invalid.length} invalid skipped` : ""}.`);
   }
 
   function addField(type: BuilderFieldType) {
@@ -923,6 +980,15 @@ export default function WorkshopAttendancePage() {
                       <UsersRound className="size-7 text-slate-300" />
                     </div>
                   </div>
+                  <details className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50/60 p-4">
+                    <summary className="cursor-pointer text-sm font-black text-emerald-900">Add attendance by mobile numbers in bulk</summary>
+                    <p className="mt-2 text-xs font-semibold leading-5 text-emerald-800/80">Paste one mobile per line, or separate numbers with commas. Existing numbers in this session are skipped automatically.</p>
+                    <textarea className="mt-3 min-h-32 w-full rounded-xl border border-emerald-200 bg-white px-3.5 py-3 font-mono text-sm font-semibold outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100" onChange={(event) => { setBulkMobiles(event.target.value); setBulkMessage(""); }} placeholder={"9876543210\n8765432109\n+91 76543 21098"} value={bulkMobiles} />
+                    <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <p className="text-xs font-bold text-slate-600">{bulkMessage}</p>
+                      <button className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-emerald-700 px-4 text-sm font-black text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-50" disabled={bulkSaving || !bulkMobiles.trim()} onClick={addBulkAttendance} type="button"><Plus className="size-4" />{bulkSaving ? "Adding..." : "Add attendance"}</button>
+                    </div>
+                  </details>
                   <div className="mt-4 flex flex-wrap justify-end gap-2"><AdvancedResponseFilters answerOptions={selectedAnswerOptions} filters={responseFilters} onChange={setResponseFilters} questions={attendanceQuestions} resultCount={displayedEntries.length} totalCount={selectedEntries.length} /><DuplicateResponseFilter checked={hideDuplicates} onChange={setHideDuplicates} rawCount={filteredEntries.length} visibleCount={displayedEntries.length} /></div>
                   {selectedEntries.length === 0 ? (
                     <div className="mt-4 grid min-h-36 place-items-center rounded-xl border border-dashed border-slate-200 bg-slate-50 px-6 text-center">
