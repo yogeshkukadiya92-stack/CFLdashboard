@@ -87,7 +87,7 @@ const BRAND_LOGO_SRC = "/brand/coach-for-life-logo-horizontal.png";
 const defaultWorkshopTypes = ["1-2-1 Coaching", "Workshop", "Online Event", "Offline Event", "Hybrid Program"];
 const defaultFacilitators = ["Dr Luv Patel"];
 const productGroups = ["Health", "Spiritual", "Leadership", "Sales", "Fitness", "Business Growth"];
-const inputClass = "w-full rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-sm outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100";
+const inputClass = "w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100";
 const defaultTheme: BuilderTheme = {
   fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif",
   fontSize: 16,
@@ -1098,7 +1098,7 @@ export default function WorkshopMasterPage() {
   return (
     <AdminPlatformShell activeLabel="Workshop Master" description="Create workshop/product masters and configure registration fields in one platform." title="Manage Workshop">
       {!showData ? (
-      <form className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm md:p-6" onSubmit={submit}>
+      <form className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:p-5" onSubmit={submit}>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-sm font-bold text-slate-500">Form completion</p>
@@ -1286,19 +1286,19 @@ export default function WorkshopMasterPage() {
           </div>
         )}
 
-        <div className="mt-7 rounded-3xl border border-emerald-100 bg-emerald-50/40 p-4 md:p-5">
+        <div className="mt-5 rounded-2xl border border-emerald-100 bg-emerald-50/40 p-3.5 md:p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-700">Registration Form Builder</p>
-              <h3 className="mt-1 text-xl font-black text-slate-950">Create registration form with workshop</h3>
-              <p className="mt-1 text-sm font-semibold text-slate-500">These fields appear on the public registration page for this workshop.</p>
+              <h3 className="mt-0.5 text-lg font-black text-slate-950">Create registration form with workshop</h3>
+              <p className="mt-0.5 text-xs font-semibold text-slate-500">Configure the public registration experience.</p>
             </div>
             <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-emerald-700">{formFields.length} fields</span>
           </div>
 
-          <div className="mt-5 grid gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">
+          <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
             <div className="min-w-0">
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-3 md:grid-cols-2">
             <label className="block">
               <span className="mb-2 block text-sm font-bold text-slate-600">Form Title</span>
               <input className={inputClass} onChange={(event) => setFormTitle(event.target.value)} placeholder="Workshop Registration" value={formTitle} />
@@ -1451,7 +1451,7 @@ export default function WorkshopMasterPage() {
             <FormAnalyticsSummary analytics={editingAnalytics} fields={formFields} />
           ) : null}
 
-          <div className="mt-5 space-y-3">
+          <div className="mt-4 space-y-2">
             {formFields.map((field, index) => (
               <FieldEditor
                 field={field}
@@ -1468,12 +1468,12 @@ export default function WorkshopMasterPage() {
             ))}
           </div>
 
-          <div className="mt-4 border-t border-emerald-100 pt-4">
-            <p className="mb-2 text-sm font-bold text-slate-600">Add field</p>
+          <div className="mt-3 border-t border-emerald-100 pt-3">
+            <p className="mb-2 text-xs font-black uppercase tracking-[0.12em] text-slate-500">Add field</p>
             <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
               {addableTypes.map((fieldType) => (
                 <button
-                  className="inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-xs font-bold text-slate-700 hover:border-emerald-300 hover:bg-emerald-50 sm:min-h-0 sm:py-2"
+                  className="inline-flex min-h-[38px] items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-[11px] font-bold text-slate-700 transition hover:border-emerald-300 hover:bg-emerald-50 sm:min-h-0"
                   key={fieldType}
                   onClick={() => addFormField(fieldType)}
                   type="button"
@@ -1485,8 +1485,8 @@ export default function WorkshopMasterPage() {
             </div>
           </div>
 
-          <div className="mt-5 border-t border-emerald-100 pt-4">
-            <p className="mb-2 text-sm font-bold text-slate-600">What's Included</p>
+          <div className="mt-3 border-t border-emerald-100 pt-3">
+            <p className="mb-2 text-xs font-black uppercase tracking-[0.12em] text-slate-500">What's Included</p>
             <div className="space-y-2">
               {formHighlights.map((item, index) => (
                 <div className="flex gap-2" key={index}>
@@ -1524,12 +1524,12 @@ export default function WorkshopMasterPage() {
           </div>
         </div>
 
-        <div className="mt-7 flex flex-wrap justify-end gap-3">
-          <button className="inline-flex items-center gap-2 rounded-xl border border-slate-300 px-5 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50" onClick={() => clearForm()} type="button">
+        <div className="sticky bottom-3 z-20 mt-5 flex flex-wrap justify-end gap-2 rounded-xl border border-slate-200 bg-white/95 p-2 shadow-lg shadow-slate-900/10 backdrop-blur">
+          <button className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50" onClick={() => clearForm()} type="button">
             <RefreshCw className="size-4" />
             Clear
           </button>
-          <button className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-3 text-sm font-bold text-white hover:bg-indigo-700" type="submit">
+          <button className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-indigo-700" type="submit">
             <Save className="size-4" />
             {editingId ? "Update" : "Save"}
           </button>
@@ -2237,9 +2237,13 @@ function FormExperienceControls({
   ];
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
-      <div className="flex items-center gap-2"><Palette className="size-4 text-emerald-700" /><p className="text-sm font-black text-slate-800">Experience & Theme</p></div>
-      <div className="mt-4">
+    <details className="group rounded-xl border border-slate-200 bg-slate-50/70">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3.5 py-3 marker:content-none">
+        <span className="flex items-center gap-2"><span className="grid size-8 place-items-center rounded-lg bg-white text-emerald-700 shadow-sm"><Palette className="size-4" /></span><span><span className="block text-sm font-black text-slate-800">Experience & Theme</span><span className="block text-[11px] font-semibold text-slate-500">{modes.find((item) => item.value === mode)?.label} · {formFonts.find((font) => font.value === theme.fontFamily)?.label || "Custom"}</span></span></span>
+        <ChevronDown className="size-4 text-slate-400 transition group-open:rotate-180" />
+      </summary>
+      <div className="border-t border-slate-200 px-3.5 pb-3.5 pt-3">
+      <div>
         <span className="mb-2 block text-xs font-black uppercase tracking-[0.14em] text-slate-400">Form experience</span>
         <div className="grid grid-cols-3 gap-2">
           {modes.map((item) => {
@@ -2251,7 +2255,7 @@ function FormExperienceControls({
         {mode === "guided" ? <p className="mt-2 text-xs font-semibold text-slate-500">Customers see one question at a time with keyboard-friendly navigation.</p> : null}
       </div>
 
-      <div className="mt-4 grid gap-4 sm:grid-cols-2">
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
         <div>
           <span className="mb-2 block text-xs font-black uppercase tracking-[0.14em] text-slate-400">Theme presets</span>
           <div className="grid grid-cols-2 gap-2">
@@ -2310,7 +2314,8 @@ function FormExperienceControls({
           <div className="grid grid-cols-2 rounded-xl border border-slate-200 bg-white p-1"><button className={`rounded-lg px-3 py-2.5 text-xs font-black ${theme.align === "left" ? "bg-slate-950 text-white" : "text-slate-500"}`} onClick={() => onThemeChange({ align: "left" })} type="button">Left</button><button className={`rounded-lg px-3 py-2.5 text-xs font-black ${theme.align === "center" ? "bg-slate-950 text-white" : "text-slate-500"}`} onClick={() => onThemeChange({ align: "center" })} type="button">Center</button></div>
         </div>
       </div>
-    </div>
+      </div>
+    </details>
   );
 }
 
@@ -2369,19 +2374,19 @@ function WorkshopFormLivePreview({
   }, [pages.length]);
 
   return (
-    <aside className="xl:sticky xl:top-24 xl:self-start">
-      <div className="mb-3 flex items-center justify-between gap-2">
+    <aside className="xl:sticky xl:top-20 xl:self-start">
+      <div className="mb-2 flex items-center justify-between gap-2">
         <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-700">Live Preview</p>
         <div className="inline-flex rounded-lg border border-slate-200 bg-white p-1">
           <button aria-label="Desktop preview" className={`grid size-8 place-items-center rounded-md ${device === "desktop" ? "bg-slate-950 text-white" : "text-slate-500"}`} onClick={() => setDevice("desktop")} type="button"><Monitor className="size-4" /></button>
           <button aria-label="Mobile preview" className={`grid size-8 place-items-center rounded-md ${device === "mobile" ? "bg-slate-950 text-white" : "text-slate-500"}`} onClick={() => setDevice("mobile")} type="button"><Smartphone className="size-4" /></button>
         </div>
       </div>
-      <div className="rounded-3xl border border-slate-200 p-3 shadow-[0_16px_40px_-24px_rgba(15,23,42,0.55)]" style={{ backgroundColor: theme.backgroundColor || defaultTheme.backgroundColor }}>
+      <div className="rounded-2xl border border-slate-200 p-2.5 shadow-[0_12px_30px_-22px_rgba(15,23,42,0.5)]" style={{ backgroundColor: theme.backgroundColor || defaultTheme.backgroundColor }}>
         <div className={`mx-auto overflow-hidden border border-slate-200 shadow-sm transition-all ${device === "mobile" ? "max-w-[320px] rounded-[28px]" : "w-full rounded-2xl"}`} style={{ backgroundColor: theme.surfaceColor || "#ffffff", fontFamily: theme.fontFamily }}>
           <div className="h-2" style={{ backgroundColor: accent }} />
-          <div className="max-h-[calc(100vh-12rem)] overflow-y-auto p-5">
-            {displayLogoUrl ? <img alt="Coach For Life" className={`mb-4 h-auto max-w-full object-contain ${logoPositionClass}`} src={displayLogoUrl} style={{ width: logoSize }} /> : null}
+          <div className="max-h-[calc(100vh-10rem)] overflow-y-auto p-4">
+            {displayLogoUrl ? <img alt="Coach For Life" className={`mb-3 h-auto max-w-full object-contain ${logoPositionClass}`} src={displayLogoUrl} style={{ width: logoSize }} /> : null}
             <p className="text-[10px] font-black uppercase tracking-[0.2em]" style={{ color: accent }}>CFL Workshop Registration</p>
             <h4 className="mt-2 text-2xl font-black leading-tight text-slate-950">{title || "Workshop Registration"}</h4>
             {tagline.trim() ? <p className="mt-2 text-sm font-bold text-slate-600">{tagline.trim()}</p> : null}
@@ -2933,18 +2938,24 @@ function FieldEditor({
   };
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-3">
+    <div className="rounded-xl border border-slate-200 bg-white p-2.5 shadow-[0_1px_2px_rgba(15,23,42,0.03)] transition hover:border-slate-300">
       <div className="flex items-center gap-2">
-        <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-slate-100 text-slate-600">
+        <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-slate-100 text-slate-600">
           <Icon className="size-4" />
         </span>
         <input
-          className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm font-bold outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
+          className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-bold outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
           onChange={(event) => onChange({ label: event.target.value })}
           placeholder="Field label"
           value={field.label}
         />
-        <span className="hidden rounded-md bg-slate-100 px-2 py-1 text-[11px] font-bold text-slate-500 sm:inline">{meta.label}</span>
+        <span className="hidden rounded-md bg-slate-100 px-2 py-1 text-[10px] font-bold text-slate-500 sm:inline">{meta.label}</span>
+        <div className="hidden items-center gap-0.5 sm:flex">
+          <IconButton disabled={index === 0} onClick={onMoveUp} title="Move up"><ArrowUp className="size-3.5" /></IconButton>
+          <IconButton disabled={index === total - 1} onClick={onMoveDown} title="Move down"><ArrowDown className="size-3.5" /></IconButton>
+          <IconButton onClick={onDuplicate} title="Duplicate"><Copy className="size-3.5" /></IconButton>
+          <IconButton disabled={lockedRole} onClick={onRemove} title={lockedRole ? "Core field" : "Delete"} tone="danger"><Trash2 className="size-3.5" /></IconButton>
+        </div>
       </div>
 
       {isHeightField(field.type, field.label) ? (
@@ -2967,9 +2978,9 @@ function FieldEditor({
           </span>
         </div>
       ) : field.type !== "heading" ? (
-        <div className="mt-2 sm:pl-11">
+        <div className="mt-1.5 sm:pl-10">
           <input
-            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
+            className="w-full rounded-lg border border-slate-200 bg-slate-50/60 px-3 py-2 text-sm font-semibold outline-none focus:border-emerald-500 focus:bg-white focus:ring-2 focus:ring-emerald-100"
             onChange={(event) => onChange({ placeholder: event.target.value })}
             placeholder="Placeholder text"
             value={field.placeholder ?? ""}
@@ -3012,7 +3023,7 @@ function FieldEditor({
       ) : null}
 
       {field.type !== "heading" ? (
-        <div className="mt-3 sm:pl-11">
+        <div className="mt-2 sm:pl-10">
           {field.visibility ? (
             <div className="rounded-xl border border-indigo-100 bg-indigo-50/60 p-3">
               <div className="flex items-center justify-between gap-2">
@@ -3037,12 +3048,12 @@ function FieldEditor({
         </div>
       ) : null}
 
-      <div className="mt-2 flex flex-wrap items-center justify-between gap-2 sm:pl-11">
-        <label className="inline-flex min-h-[40px] items-center gap-2 text-xs font-bold text-slate-600">
-          <input checked={Boolean(field.required)} className="size-5 accent-emerald-600" disabled={lockedRole} onChange={(event) => onChange({ required: event.target.checked })} type="checkbox" />
+      <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2 sm:pl-10">
+        <label className="inline-flex min-h-[32px] items-center gap-2 text-xs font-bold text-slate-600">
+          <input checked={Boolean(field.required)} className="size-4 accent-emerald-600" disabled={lockedRole} onChange={(event) => onChange({ required: event.target.checked })} type="checkbox" />
           Required
         </label>
-        <div className="flex items-center gap-0.5">
+        <div className="flex items-center gap-0.5 sm:hidden">
           <IconButton disabled={index === 0} onClick={onMoveUp} title="Move up"><ArrowUp className="size-4" /></IconButton>
           <IconButton disabled={index === total - 1} onClick={onMoveDown} title="Move down"><ArrowDown className="size-4" /></IconButton>
           <IconButton onClick={onDuplicate} title="Duplicate"><Copy className="size-4" /></IconButton>
