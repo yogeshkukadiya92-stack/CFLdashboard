@@ -282,6 +282,126 @@ main td {
   font-weight: 600;
 }
 
+/* Admin density system
+   Keep the readable type scale, but remove oversized control chrome and empty
+   space across every authenticated admin workflow. Public forms are excluded. */
+.cfl-admin-shell {
+  --cfl-control-height: 36px;
+  --cfl-section-gap: 12px;
+}
+
+.cfl-admin-shell input:not([type="checkbox"]):not([type="radio"]):not([type="color"]):not([type="range"]),
+.cfl-admin-shell select,
+.cfl-admin-shell textarea {
+  min-height: var(--cfl-control-height) !important;
+}
+
+.cfl-admin-shell textarea {
+  line-height: 1.4;
+}
+
+.cfl-admin-shell [class~="min-h-12"],
+.cfl-admin-shell [class~="min-h-11"],
+.cfl-admin-shell [class~="min-h-10"] {
+  min-height: var(--cfl-control-height) !important;
+}
+
+.cfl-admin-shell [class~="size-11"] {
+  width: 36px !important;
+  height: 36px !important;
+}
+
+.cfl-admin-shell [class~="size-10"],
+.cfl-admin-shell [class~="size-9"] {
+  width: 32px !important;
+  height: 32px !important;
+}
+
+.cfl-admin-shell [class~="p-6"],
+.cfl-admin-shell [class~="md:p-6"],
+.cfl-admin-shell [class~="lg:p-6"],
+.cfl-admin-shell [class~="p-5"],
+.cfl-admin-shell [class~="md:p-5"],
+.cfl-admin-shell [class~="lg:p-5"] {
+  padding: 14px !important;
+}
+
+.cfl-admin-shell [class~="p-4"],
+.cfl-admin-shell [class~="md:p-4"],
+.cfl-admin-shell [class~="lg:p-4"] {
+  padding: 12px !important;
+}
+
+.cfl-admin-shell [class~="px-6"],
+.cfl-admin-shell [class~="md:px-6"],
+.cfl-admin-shell [class~="lg:px-6"],
+.cfl-admin-shell [class~="px-5"],
+.cfl-admin-shell [class~="md:px-5"],
+.cfl-admin-shell [class~="lg:px-5"],
+.cfl-admin-shell [class~="px-4"] {
+  padding-right: 12px !important;
+  padding-left: 12px !important;
+}
+
+.cfl-admin-shell [class~="py-6"],
+.cfl-admin-shell [class~="md:py-6"],
+.cfl-admin-shell [class~="lg:py-6"],
+.cfl-admin-shell [class~="py-5"],
+.cfl-admin-shell [class~="md:py-5"],
+.cfl-admin-shell [class~="lg:py-5"],
+.cfl-admin-shell [class~="py-4"] {
+  padding-top: 10px !important;
+  padding-bottom: 10px !important;
+}
+
+.cfl-admin-shell [class~="gap-7"],
+.cfl-admin-shell [class~="gap-6"],
+.cfl-admin-shell [class~="md:gap-6"],
+.cfl-admin-shell [class~="lg:gap-6"],
+.cfl-admin-shell [class~="gap-5"],
+.cfl-admin-shell [class~="md:gap-5"],
+.cfl-admin-shell [class~="lg:gap-5"] {
+  gap: 14px !important;
+}
+
+.cfl-admin-shell [class~="gap-4"],
+.cfl-admin-shell [class~="md:gap-4"],
+.cfl-admin-shell [class~="lg:gap-4"] {
+  gap: var(--cfl-section-gap) !important;
+}
+
+.cfl-admin-shell [class~="mt-7"],
+.cfl-admin-shell [class~="mt-6"],
+.cfl-admin-shell [class~="mt-5"] {
+  margin-top: 14px !important;
+}
+
+.cfl-admin-shell [class~="mb-6"],
+.cfl-admin-shell [class~="mb-5"] {
+  margin-bottom: 14px !important;
+}
+
+.cfl-admin-shell th,
+.cfl-admin-shell td {
+  padding: 8px 10px !important;
+  line-height: 1.3;
+  vertical-align: middle;
+}
+
+.cfl-admin-shell [class~="rounded-3xl"] {
+  border-radius: 14px !important;
+}
+
+.cfl-admin-shell [class~="rounded-2xl"] {
+  border-radius: 12px !important;
+}
+
+@media (max-width: 767px) {
+  .cfl-admin-shell {
+    --cfl-control-height: 40px;
+  }
+}
+
 main tbody tr {
   transition: background-color 140ms ease;
 }

@@ -299,14 +299,14 @@ export function AdminPlatformShell({
   }
 
   return (
-    <main className="min-h-screen overflow-x-hidden bg-slate-100 text-slate-950">
+    <main className="cfl-admin-shell min-h-screen overflow-x-hidden bg-slate-100 text-slate-950">
       <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/90 shadow-[0_1px_24px_rgba(15,23,42,0.05)] backdrop-blur-xl">
-        <div className="mx-auto flex max-w-[1540px] items-center justify-between gap-2 px-3 py-3 sm:gap-3 sm:px-4 lg:px-6">
+        <div className="mx-auto flex max-w-[1600px] items-center justify-between gap-2 px-3 py-2 sm:px-4 lg:px-5">
           <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
             <button
               aria-expanded={sidebarOpen}
               aria-label="Toggle sidebar"
-              className="grid size-10 shrink-0 place-items-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700"
+              className="grid size-9 shrink-0 place-items-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700"
               onClick={() => setSidebarOpen((open) => !open)}
               type="button"
             >
@@ -315,10 +315,10 @@ export function AdminPlatformShell({
             <div className="min-w-0">
               <img
                 alt="Coach For Life"
-                className="h-9 w-auto max-w-[210px] object-contain"
+                className="h-7 w-auto max-w-[190px] object-contain"
                 src={BRAND_LOGO_SRC}
               />
-              <p aria-label="Current page" className="truncate text-lg font-black text-slate-950">{activeLabel}</p>
+              <p aria-label="Current page" className="truncate text-sm font-black text-slate-950">{activeLabel}</p>
             </div>
           </div>
 
@@ -372,13 +372,13 @@ export function AdminPlatformShell({
               <p className="text-xs font-semibold text-slate-500">Welcome</p>
               <p className="text-sm font-bold text-slate-900">{viewer.name || "User"}</p>
             </div>
-            <div className="hidden size-10 place-items-center rounded-lg bg-slate-950 text-sm font-black text-white shadow-lg shadow-slate-950/20 min-[380px]:grid">
+            <div className="hidden size-9 place-items-center rounded-lg bg-slate-950 text-xs font-black text-white shadow-lg shadow-slate-950/20 min-[380px]:grid">
               {(viewer.name || "User").split(" ").map((part) => part[0]).join("").slice(0, 2).toUpperCase()}
             </div>
             <button
               aria-expanded={mobileSearchOpen}
               aria-label="Search pages and workflows"
-              className="grid size-10 place-items-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700 md:hidden"
+              className="grid size-9 place-items-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700 md:hidden"
               onClick={() => setMobileSearchOpen((open) => !open)}
               type="button"
             >
@@ -386,7 +386,7 @@ export function AdminPlatformShell({
             </button>
             <button
               aria-label="Logout"
-              className="grid size-10 place-items-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700"
+              className="grid size-9 place-items-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700"
               onClick={logout}
               type="button"
             >
@@ -440,10 +440,10 @@ export function AdminPlatformShell({
         />
       ) : null}
 
-      <div className="mx-auto grid min-w-0 max-w-[1540px] gap-4 px-3 py-4 sm:px-4 lg:grid-cols-[286px_minmax(0,1fr)] lg:px-6 lg:py-5">
+      <div className="mx-auto grid min-w-0 max-w-[1600px] gap-3 px-3 py-3 sm:px-4 lg:grid-cols-[250px_minmax(0,1fr)] lg:px-5 lg:py-3">
         <aside
           aria-hidden={!desktopSidebar && !sidebarOpen}
-          className={`${sidebarOpen ? "left-3 translate-x-0" : "left-0 -translate-x-full"} fixed bottom-3 top-3 z-50 w-[min(286px,calc(100vw-24px))] overflow-y-auto rounded-2xl border border-white/10 bg-slate-950 p-3 shadow-2xl transition-transform duration-200 lg:sticky lg:top-[84px] lg:z-20 lg:block lg:h-[calc(100vh-104px)] lg:w-auto lg:translate-x-0 lg:shadow-panel`}
+          className={`${sidebarOpen ? "left-3 translate-x-0" : "left-0 -translate-x-full"} fixed bottom-3 top-3 z-50 w-[min(270px,calc(100vw-24px))] overflow-y-auto rounded-2xl border border-white/10 bg-slate-950 p-2.5 shadow-2xl transition-transform duration-200 lg:sticky lg:top-[68px] lg:z-20 lg:block lg:h-[calc(100vh-80px)] lg:w-auto lg:translate-x-0 lg:shadow-panel`}
           data-open={sidebarOpen}
           inert={!desktopSidebar && !sidebarOpen ? true : undefined}
         >
@@ -457,10 +457,10 @@ export function AdminPlatformShell({
               <X className="size-4" />
             </button>
           </div>
-          <div className="rounded-xl border border-white/10 bg-white/[0.06] p-4 text-white">
+          <div className="rounded-xl border border-white/10 bg-white/[0.06] p-3 text-white">
             <p className="text-[11px] font-black uppercase tracking-[0.18em] text-emerald-300">Unified Platform</p>
-            <div className="mt-3">
-              <img alt="Coach For Life" className="h-14 w-full object-contain" src={BRAND_LOGO_SRC} />
+            <div className="mt-2">
+              <img alt="Coach For Life" className="h-10 w-full object-contain" src={BRAND_LOGO_SRC} />
             </div>
             <p className="mt-1 text-xs font-semibold text-slate-300">Live business workspace.</p>
           </div>
@@ -597,13 +597,13 @@ export function AdminPlatformShell({
           </nav>
         </aside>
 
-        <section className="min-w-0 space-y-4 lg:space-y-5">
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-soft md:p-6 lg:px-7">
+        <section className="min-w-0 space-y-3">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-soft lg:px-5">
             <div className="flex flex-wrap items-end justify-between gap-4">
               <div>
                 <p className="text-[11px] font-black uppercase tracking-[0.18em] text-emerald-700">Admin Platform</p>
-                <h1 className="mt-2 text-2xl font-black tracking-tight text-slate-950 md:text-[30px]">{title}</h1>
-                {description ? <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">{description}</p> : null}
+                <h1 className="mt-1 text-xl font-black tracking-tight text-slate-950 md:text-2xl">{title}</h1>
+                {description ? <p className="mt-1 max-w-3xl text-xs leading-5 text-slate-500">{description}</p> : null}
               </div>
               {viewer.role === "admin" ? <div className="flex shrink-0 items-center gap-2">
                 <a aria-label="Client import and export" className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-slate-950 px-3 text-white shadow-lg shadow-slate-950/15 hover:bg-slate-800" href="/manage-client" title="Client import and export">

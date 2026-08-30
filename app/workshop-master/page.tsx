@@ -244,6 +244,12 @@ export default function WorkshopMasterPage() {
   }, []);
 
   useEffect(() => {
+    if (!message) return;
+    const timeout = window.setTimeout(() => setMessage(""), 5500);
+    return () => window.clearTimeout(timeout);
+  }, [message]);
+
+  useEffect(() => {
     let cancelled = false;
     let inFlight = false;
     let etag = "";
@@ -1116,13 +1122,6 @@ export default function WorkshopMasterPage() {
           </div>
         </div>
 
-        {message ? (
-          <div className={`mt-5 flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-bold ${message.includes("Please") ? "bg-red-50 text-red-700" : "bg-emerald-50 text-emerald-700"}`}>
-            {message.includes("Please") ? <AlertCircle className="size-4" /> : <Check className="size-4" />}
-            {message}
-          </div>
-        ) : null}
-
         <section className="mt-6 rounded-2xl border border-indigo-200 bg-indigo-50/50 p-4">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
             <label className="min-w-0 flex-1">
@@ -1656,19 +1655,19 @@ export default function WorkshopMasterPage() {
               }}
               role="dialog"
             >
-              <section className="max-h-[calc(100dvh-1rem)] w-full max-w-[1600px] overflow-y-auto overscroll-contain rounded-2xl border border-indigo-100 bg-indigo-50 p-4 shadow-2xl sm:max-h-[calc(100dvh-2.5rem)] sm:rounded-3xl sm:p-5">
-              <div className="flex flex-wrap items-start justify-between gap-3">
+              <section className="max-h-[calc(100dvh-1rem)] w-full max-w-[1600px] overflow-y-auto overscroll-contain rounded-2xl border border-indigo-100 bg-indigo-50 p-3 shadow-2xl sm:max-h-[calc(100dvh-2rem)]">
+              <div className="sticky -top-3 z-20 -mx-3 -mt-3 flex flex-wrap items-start justify-between gap-2 border-b border-indigo-100 bg-indigo-50/95 px-3 py-2.5 backdrop-blur">
                 <div>
                   <p className="text-xs font-black uppercase tracking-[0.2em] text-indigo-600">Workshop Opened</p>
-                  <h4 className="mt-2 text-2xl font-black text-slate-950" id="opened-workshop-title">{selectedWorkshop.name}</h4>
-                  <p className="mt-1 text-sm font-semibold text-slate-600">
+                  <h4 className="mt-0.5 text-xl font-black text-slate-950" id="opened-workshop-title">{selectedWorkshop.name}</h4>
+                  <p className="mt-0.5 text-xs font-semibold text-slate-600">
                     {selectedWorkshop.type} | {selectedWorkshop.facilitator} | {selectedWorkshop.productGroup}
                   </p>
                   {selectedWorkshop.batches?.length ? (
-                    <label className="mt-3 block text-xs font-black uppercase tracking-[0.16em] text-slate-500">
+                    <label className="mt-1.5 block text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">
                       Participant batch
                       <select
-                        className="mt-1 block min-h-11 min-w-64 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold normal-case tracking-normal text-slate-800 outline-none focus:border-indigo-500"
+                        className="mt-1 block min-h-9 min-w-56 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-bold normal-case tracking-normal text-slate-800 outline-none focus:border-indigo-500"
                         onChange={(event) => {
                           setSelectedParticipantBatchId(event.target.value);
                           setSelectedParticipantIds([]);
@@ -1682,12 +1681,12 @@ export default function WorkshopMasterPage() {
                   ) : null}
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <label className={`inline-flex min-h-11 cursor-pointer items-center gap-3 rounded-xl border px-4 py-2 text-sm font-black ${formWaitingMode ? "border-amber-300 bg-amber-100 text-amber-900" : "border-slate-200 bg-white text-slate-700"}`}>
-                    <input checked={formWaitingMode} className="size-5 accent-amber-600" onChange={(event) => void updateSelectedWaitingMode(event.target.checked)} type="checkbox" />
+                  <label className={`inline-flex min-h-9 cursor-pointer items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-black ${formWaitingMode ? "border-amber-300 bg-amber-100 text-amber-900" : "border-slate-200 bg-white text-slate-700"}`}>
+                    <input checked={formWaitingMode} className="size-4 accent-amber-600" onChange={(event) => void updateSelectedWaitingMode(event.target.checked)} type="checkbox" />
                     Waiting Mode {formWaitingMode ? "ON" : "OFF"}
                   </label>
                   <button
-                    className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white hover:bg-emerald-700"
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-700"
                     onClick={sendResponseSummaryOnWhatsApp}
                     title="Share workshop registration summary on WhatsApp"
                     type="button"
@@ -1696,7 +1695,7 @@ export default function WorkshopMasterPage() {
                     Share Summary
                   </button>
                   <button
-                    className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"
                     onClick={exportSelectedRegistrations}
                     title="Download this workshop's registration responses as an Excel-compatible CSV"
                     type="button"
@@ -1705,7 +1704,7 @@ export default function WorkshopMasterPage() {
                     Download Excel
                   </button>
                   <button
-                    className="inline-flex items-center gap-2 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-900 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-900 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
                     disabled={!waitingParticipants.length}
                     onClick={exportWaitingList}
                     title="Download only waiting-list registrations"
@@ -1715,7 +1714,7 @@ export default function WorkshopMasterPage() {
                     Download Waiting List
                   </button>
                   <a
-                    className="inline-flex items-center gap-2 rounded-xl border border-indigo-200 bg-white px-4 py-3 text-sm font-bold text-indigo-700 hover:bg-indigo-50"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-white px-3 py-2 text-xs font-bold text-indigo-700 hover:bg-indigo-50"
                     href={`/process/import-data-workshop-wise?workshopId=${encodeURIComponent(selectedWorkshop.id)}`}
                     title={`Bulk import registrations into ${selectedWorkshop.name}`}
                   >
@@ -1723,7 +1722,7 @@ export default function WorkshopMasterPage() {
                     Import Data
                   </a>
                   <button
-                    className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-bold text-white hover:bg-indigo-700"
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-bold text-white hover:bg-indigo-700"
                     onClick={() => setShowParticipants((value) => !value)}
                     type="button"
                   >
@@ -1732,7 +1731,7 @@ export default function WorkshopMasterPage() {
                   </button>
                   <button
                     aria-label="Close workshop details"
-                    className="grid size-11 place-items-center rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
+                    className="grid size-9 place-items-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
                     onClick={() => {
                       setSelectedWorkshopId(null);
                       setSelectedParticipantBatchId("all");
@@ -1752,7 +1751,7 @@ export default function WorkshopMasterPage() {
                 </div>
               ) : null}
 
-              <div className="mt-4 grid gap-3 sm:grid-cols-4">
+              <div className="mt-3 grid gap-2 sm:grid-cols-4">
                 <MiniStat label="Users" value={displayedParticipants.length} />
                 <MiniStat label="Paid" value={displayedParticipants.filter((entry) => entry.status === "Paid").length} />
                 <MiniStat label="Due" value={displayedParticipants.filter((entry) => entry.status === "Due").length} />
@@ -1761,7 +1760,7 @@ export default function WorkshopMasterPage() {
               </div>
 
               {showParticipants ? (
-                <div className="mt-4 rounded-2xl border border-slate-200 bg-white">
+                <div className="mt-3 rounded-xl border border-slate-200 bg-white">
                   <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 p-3">
                     <p className="text-xs font-bold text-slate-500">
                       Filters stay saved for this workshop. WhatsApp summary uses the same visible registrations shown below.
@@ -1943,6 +1942,18 @@ export default function WorkshopMasterPage() {
             </div>
           ) : null}
         </section>
+      ) : null}
+
+      {message ? (
+        <div
+          aria-live="polite"
+          className={`fixed right-3 top-16 z-[70] flex max-w-[min(420px,calc(100vw-24px))] items-start gap-2 rounded-xl border px-3 py-2.5 text-sm font-bold shadow-2xl backdrop-blur sm:right-5 ${/please|failed|error|could not/i.test(message) ? "border-rose-200 bg-rose-50/95 text-rose-800" : "border-emerald-200 bg-emerald-50/95 text-emerald-800"}`}
+          role="status"
+        >
+          {/please|failed|error|could not/i.test(message) ? <AlertCircle className="mt-0.5 size-4 shrink-0" /> : <Check className="mt-0.5 size-4 shrink-0" />}
+          <span className="min-w-0 flex-1">{message}</span>
+          <button aria-label="Dismiss notification" className="grid size-6 shrink-0 place-items-center rounded-md hover:bg-black/5" onClick={() => setMessage("")} type="button"><X className="size-3.5" /></button>
+        </div>
       ) : null}
 
       {linkWorkshop ? <RegistrationLinkModal workshop={linkWorkshop} onClose={() => setLinkWorkshop(null)} /> : null}
@@ -2528,7 +2539,7 @@ function RichTextEditor({ onChange, value }: { onChange: (value: string) => void
         ))}
       </div>
       <div
-        className="rich-text-editor min-h-28 px-3.5 py-3 text-sm font-semibold leading-6 text-slate-800 outline-none focus:ring-4 focus:ring-emerald-100"
+        className="rich-text-editor min-h-[72px] px-3 py-2 text-sm font-semibold leading-5 text-slate-800 outline-none focus:ring-2 focus:ring-emerald-100"
         contentEditable
         onBlur={() => {
           isEditingRef.current = false;
@@ -2543,7 +2554,7 @@ function RichTextEditor({ onChange, value }: { onChange: (value: string) => void
         role="textbox"
         suppressContentEditableWarning
       />
-      <p className="border-t border-slate-100 px-3.5 py-2 text-xs font-semibold text-slate-400">Enter creates a new line. Use toolbar for bold, italic, underline, lists and text color.</p>
+      <p className="border-t border-slate-100 px-3 py-1.5 text-[10px] font-semibold text-slate-400">Enter adds a line · toolbar formats text.</p>
     </div>
   );
 }
@@ -2563,11 +2574,11 @@ function FormLogoUploader({ onChange, value }: { onChange: (value: string) => vo
   return (
     <div>
       <span className="mb-2 block text-sm font-bold text-slate-600">Form Logo</span>
-      <div className="flex min-h-[74px] items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-3">
+      <div className="flex min-h-[56px] items-center gap-2 rounded-lg border border-slate-200 bg-white px-2.5 py-2">
         {value ? (
-          <img alt="Form logo preview" className="size-14 rounded-xl object-cover ring-1 ring-slate-200" src={value} />
+          <img alt="Form logo preview" className="size-10 rounded-lg object-cover ring-1 ring-slate-200" src={value} />
         ) : (
-          <span className="grid size-14 shrink-0 place-items-center rounded-xl bg-slate-100 text-slate-400">
+          <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-slate-100 text-slate-400">
             <Image className="size-5" />
           </span>
         )}
@@ -2989,32 +3000,32 @@ function FieldEditor({
       ) : null}
 
       {meta.hasOptions ? (
-        <div className="mt-3 space-y-2 sm:pl-11">
-          <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-400">Options</p>
+        <div className="mt-2 space-y-1 sm:pl-10">
+          <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">Options</p>
           {options.map((option, optionIndex) => (
-            <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-2" key={`${field.id}-option-${optionIndex}`}>
-              <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-white text-xs font-black text-slate-500">{optionIndex + 1}</span>
+            <div className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 p-1" key={`${field.id}-option-${optionIndex}`}>
+              <span className="grid size-6 shrink-0 place-items-center rounded-md bg-white text-[10px] font-black text-slate-500">{optionIndex + 1}</span>
               <input
-                className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm font-bold outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
+                className="min-w-0 flex-1 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-bold outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
                 onChange={(event) => updateOption(optionIndex, event.target.value)}
                 placeholder={`Option ${optionIndex + 1}`}
                 value={option}
               />
-              <button className="grid size-9 shrink-0 place-items-center rounded-lg text-rose-500 hover:bg-rose-50" onClick={() => removeOption(optionIndex)} type="button">
-                <Trash2 className="size-4" />
+              <button className="grid size-7 shrink-0 place-items-center rounded-md text-rose-500 hover:bg-rose-50" onClick={() => removeOption(optionIndex)} type="button">
+                <Trash2 className="size-3.5" />
               </button>
             </div>
           ))}
           <div className="flex flex-wrap items-center justify-between gap-2">
             <button
-              className="inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border border-dashed border-slate-300 bg-white px-3 py-2 text-xs font-black text-slate-600 hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700"
+              className="inline-flex min-h-8 items-center gap-1.5 rounded-md border border-dashed border-slate-300 bg-white px-2.5 py-1.5 text-[11px] font-black text-slate-600 hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700"
               onClick={() => onChange({ options: [...options, `Option ${options.length + 1}`] })}
               type="button"
             >
               <Plus className="size-3.5" />
               Add Option
             </button>
-            <label className="inline-flex min-h-[38px] items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-600">
+            <label className="inline-flex min-h-8 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-black text-slate-600">
               <input checked={Boolean(field.allowOther)} className="size-4 accent-emerald-600" onChange={(event) => onChange({ allowOther: event.target.checked })} type="checkbox" />
               Add Other text option
             </label>
@@ -3022,9 +3033,8 @@ function FieldEditor({
         </div>
       ) : null}
 
-      {field.type !== "heading" ? (
+      {field.type !== "heading" && field.visibility ? (
         <div className="mt-2 sm:pl-10">
-          {field.visibility ? (
             <div className="rounded-xl border border-indigo-100 bg-indigo-50/60 p-3">
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2 text-xs font-black text-indigo-800"><Route className="size-3.5" />Display logic</div>
@@ -3042,17 +3052,19 @@ function FieldEditor({
                 ) : <input className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 outline-none" onChange={(event) => onChange({ visibility: { ...field.visibility!, value: event.target.value } })} placeholder="Match value" value={field.visibility.value ?? ""} />}
               </div>
             </div>
-          ) : (
-            <button className="inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border border-dashed border-indigo-200 bg-white px-3 py-2 text-xs font-black text-indigo-600 hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-40" disabled={!sourceFields.length} onClick={() => sourceFields[0] && onChange({ visibility: { fieldId: sourceFields[0].id, operator: "equals", value: "" } })} type="button"><Route className="size-3.5" />Add display logic</button>
-          )}
         </div>
       ) : null}
 
       <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2 sm:pl-10">
-        <label className="inline-flex min-h-[32px] items-center gap-2 text-xs font-bold text-slate-600">
+        <div className="flex flex-wrap items-center gap-3">
+          {field.type !== "heading" && !field.visibility ? (
+            <button className="inline-flex min-h-7 items-center gap-1 rounded-md text-[11px] font-black text-indigo-600 hover:text-indigo-800 disabled:cursor-not-allowed disabled:opacity-40" disabled={!sourceFields.length} onClick={() => sourceFields[0] && onChange({ visibility: { fieldId: sourceFields[0].id, operator: "equals", value: "" } })} type="button"><Route className="size-3" />Display logic</button>
+          ) : null}
+        {field.type !== "heading" ? <label className="inline-flex min-h-7 items-center gap-1.5 text-[11px] font-bold text-slate-600">
           <input checked={Boolean(field.required)} className="size-4 accent-emerald-600" disabled={lockedRole} onChange={(event) => onChange({ required: event.target.checked })} type="checkbox" />
           Required
-        </label>
+        </label> : null}
+        </div>
         <div className="flex items-center gap-0.5 sm:hidden">
           <IconButton disabled={index === 0} onClick={onMoveUp} title="Move up"><ArrowUp className="size-4" /></IconButton>
           <IconButton disabled={index === total - 1} onClick={onMoveDown} title="Move down"><ArrowDown className="size-4" /></IconButton>
@@ -3156,9 +3168,9 @@ function IconButton({ children, disabled, onClick, title, tone }: { children: Re
 
 function MiniStat({ label, value }: { label: string; value: number }) {
   return (
-    <div className="min-w-[78px] rounded-2xl border border-indigo-100 bg-indigo-50 px-3 py-2 text-center">
-      <p className="text-xl font-black text-indigo-700">{value}</p>
-      <p className="text-xs font-bold text-slate-500">{label}</p>
+    <div className="min-w-[68px] rounded-lg border border-indigo-100 bg-indigo-50 px-2.5 py-1.5 text-center">
+      <p className="text-base font-black leading-none text-indigo-700">{value}</p>
+      <p className="mt-1 text-[10px] font-bold text-slate-500">{label}</p>
     </div>
   );
 }
