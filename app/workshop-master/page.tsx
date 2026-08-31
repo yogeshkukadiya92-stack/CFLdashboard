@@ -1174,8 +1174,9 @@ export default function WorkshopMasterPage() {
     <AdminPlatformShell activeLabel="Workshop Master" description="Create workshop/product masters and configure registration fields in one platform." title="Manage Workshop">
       {!showData ? (
       <div aria-labelledby="workshop-editor-title" aria-modal="true" className="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/60 p-1.5 backdrop-blur-sm sm:p-3" role="dialog">
+      <button aria-label="Close workshop editor" className="fixed right-3 top-3 z-50 grid size-10 place-items-center rounded-xl border border-slate-200 bg-white text-slate-500 shadow-lg hover:bg-slate-50 hover:text-slate-950 sm:right-5 sm:top-5" onClick={() => setShowData(true)} title="Close workshop editor" type="button"><X className="size-5" /></button>
       <form className="max-h-[calc(100dvh-0.75rem)] w-full max-w-[1600px] overflow-y-auto overscroll-contain rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl sm:max-h-[calc(100dvh-1.5rem)] md:p-5" noValidate onSubmit={submit}>
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 pr-12 sm:pr-14">
           <div>
             <p className="text-sm font-bold text-slate-500" id="workshop-editor-title">Workshop editor · Form completion</p>
             <p className="text-3xl font-black text-slate-950">{progress}%</p>
