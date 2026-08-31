@@ -804,14 +804,35 @@ export default function WorkshopMasterPage() {
   function sendResponseSummaryOnWhatsApp() {
     if (!selectedWorkshop) return;
 
-    const totalRegistrations = displayedParticipants.length;
-    const todaysRegistrations = displayedParticipants.filter((entry) => isTodayInIndia(entry.createdAt)).length;
+    const lastSevenDaysRegistrations = selectedParticipants.filter((entry) => isWithinLastIndiaCalendarDays(entry.createdAt, 7));
+    const lastSevenDaysWaiting = lastSevenDaysRegistrations.filter((entry) => entry.registrationStatus === "waiting").length;
+    const lastSevenDaysConfirmed = lastSevenDaysRegistrations.length - lastSevenDaysWaiting;
+    const totalWaiting = selectedParticipants.filter((entry) => entry.registrationStatus === "waiting").length;
+    const totalConfirmed = selectedParticipants.length - totalWaiting;
+    const updatedAt = new Date().toLocaleString("en-IN", {
+      day: "2-digit",
+      hour: "2-digit",
+      hour12: true,
+      minute: "2-digit",
+      month: "short",
+      timeZone: "Asia/Kolkata",
+      year: "numeric"
+    });
     const message = [
-      "Workshop Registration Summary",
+      "📊 Workshop Registration Summary",
       "",
       `Workshop: ${selectedWorkshop.name}`,
-      `Total Registrations: ${totalRegistrations}`,
-      `Today's Registrations: ${todaysRegistrations}`
+      "Period: Last 7 Days",
+      "",
+      `New Registrations: ${lastSevenDaysRegistrations.length}`,
+      `Confirmed: ${lastSevenDaysConfirmed}`,
+      `Waiting List: ${lastSevenDaysWaiting}`,
+      "",
+      `Total Registrations: ${selectedParticipants.length}`,
+      `Total Confirmed: ${totalConfirmed}`,
+      `Total Waiting: ${totalWaiting}`,
+      "",
+      `Updated: ${updatedAt}`
     ].join("\n");
 
     window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, "_blank", "noopener,noreferrer");
@@ -3331,20 +3352,26 @@ function submittedAtTimestamp(value?: string) {
   return Number.isNaN(timestamp) ? Number.MIN_SAFE_INTEGER : timestamp;
 }
 
-function isTodayInIndia(value?: string) {
-  if (!value) return false;
-
+function isWithinLastIndiaCalendarDays(value: string | undefined, days: number) {
+  if (!value || days < 1) return false;
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return false;
 
-  const dateFormatter = new Intl.DateTimeFormat("en-CA", {
-    day: "2-digit",
-    month: "2-digit",
-    timeZone: "Asia/Kolkata",
-    year: "numeric"
-  });
+  const indiaDateParts = (input: Date) => {
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      day: "2-digit",
+      month: "2-digit",
+      timeZone: "Asia/Kolkata",
+      year: "numeric"
+    }).formatToParts(input);
+    const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+    return Date.UTC(Number(values.year), Number(values.month) - 1, Number(values.day));
+  };
 
-  return dateFormatter.format(date) === dateFormatter.format(new Date());
+  const today = indiaDateParts(new Date());
+  const submittedDay = indiaDateParts(date);
+  const firstIncludedDay = today - (days - 1) * 24 * 60 * 60 * 1000;
+  return submittedDay >= firstIncludedDay && submittedDay <= today;
 }
 
 function WhatsAppVerificationBadge({ status }: { status?: RegistrationEntry["whatsappVerificationStatus"] }) {
