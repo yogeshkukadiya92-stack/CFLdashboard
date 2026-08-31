@@ -1,6 +1,7 @@
 "use client";
 
 import { AdminPlatformShell } from "@/components/admin-platform-shell";
+import { OperationalStat } from "@/components/operational-stat";
 import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
 import { isHeightField } from "@/components/height-input";
 import { DuplicateResponseFilter } from "@/components/duplicate-response-filter";
@@ -227,6 +228,51 @@ export default function WorkshopMasterPage() {
   const [shareSelectedOpen, setShareSelectedOpen] = useState(false);
   const [promoteWaitingOpen, setPromoteWaitingOpen] = useState(false);
   const [promotingWaiting, setPromotingWaiting] = useState(false);
+  const participantSearchRef = useRef<HTMLInputElement>(null);
+  const workshopDialogRef = useRef<HTMLElement>(null);
+  const workshopCloseButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!selectedWorkshopId) return undefined;
+
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.requestAnimationFrame(() => workshopCloseButtonRef.current?.focus());
+
+    function onKeyDown(event: KeyboardEvent) {
+      const dialog = workshopDialogRef.current;
+      if (!dialog) return;
+      const openModalCount = document.querySelectorAll('[role="dialog"][aria-modal="true"]').length;
+      if (event.key === "Escape" && openModalCount === 1) {
+        event.preventDefault();
+        closeOpenedWorkshop();
+        return;
+      }
+      if (event.key !== "Tab" || openModalCount > 1) return;
+
+      const focusable = Array.from(dialog.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      )).filter((element) => !element.hasAttribute("hidden") && element.offsetParent !== null);
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKeyDown);
+      previousFocus?.focus();
+    };
+  }, [selectedWorkshopId]);
 
   useEffect(() => {
     function loadLocal() {
@@ -616,6 +662,13 @@ export default function WorkshopMasterPage() {
     } catch {
       // Keep locally available registrations visible if CRM recovery is unavailable.
     }
+  }
+
+  function closeOpenedWorkshop() {
+    setSelectedWorkshopId(null);
+    setSelectedParticipantBatchId("all");
+    setSelectedParticipantIds([]);
+    setShowParticipants(false);
   }
 
   function deleteRecord(id: string) {
@@ -1104,7 +1157,7 @@ export default function WorkshopMasterPage() {
   return (
     <AdminPlatformShell activeLabel="Workshop Master" description="Create workshop/product masters and configure registration fields in one platform." title="Manage Workshop">
       {!showData ? (
-      <form className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:p-5" onSubmit={submit}>
+      <form className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:p-5" noValidate onSubmit={submit}>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-sm font-bold text-slate-500">Form completion</p>
@@ -1646,97 +1699,102 @@ export default function WorkshopMasterPage() {
             <div
               aria-labelledby="opened-workshop-title"
               aria-modal="true"
-              className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-2 backdrop-blur-sm sm:p-5"
+              className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-1.5 backdrop-blur-sm sm:p-3"
               onMouseDown={(event) => {
                 if (event.target !== event.currentTarget) return;
-                setSelectedWorkshopId(null);
-                setSelectedParticipantBatchId("all");
-                setShowParticipants(false);
+                closeOpenedWorkshop();
               }}
               role="dialog"
             >
-              <section className="max-h-[calc(100dvh-1rem)] w-full max-w-[1600px] overflow-y-auto overscroll-contain rounded-2xl border border-indigo-100 bg-indigo-50 p-3 shadow-2xl sm:max-h-[calc(100dvh-2rem)]">
-              <div className="sticky -top-3 z-20 -mx-3 -mt-3 flex flex-wrap items-start justify-between gap-2 border-b border-indigo-100 bg-indigo-50/95 px-3 py-2.5 backdrop-blur">
-                <div>
-                  <p className="text-xs font-black uppercase tracking-[0.2em] text-indigo-600">Workshop Opened</p>
-                  <h4 className="mt-0.5 text-xl font-black text-slate-950" id="opened-workshop-title">{selectedWorkshop.name}</h4>
-                  <p className="mt-0.5 text-xs font-semibold text-slate-600">
-                    {selectedWorkshop.type} | {selectedWorkshop.facilitator} | {selectedWorkshop.productGroup}
-                  </p>
-                  {selectedWorkshop.batches?.length ? (
-                    <label className="mt-1.5 block text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">
-                      Participant batch
-                      <select
-                        className="mt-1 block min-h-9 min-w-56 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-bold normal-case tracking-normal text-slate-800 outline-none focus:border-indigo-500"
-                        onChange={(event) => {
-                          setSelectedParticipantBatchId(event.target.value);
-                          setSelectedParticipantIds([]);
-                        }}
-                        value={selectedParticipantBatchId}
-                      >
-                        <option value="all">All batches</option>
-                        {selectedWorkshop.batches.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-                      </select>
-                    </label>
-                  ) : null}
+              <section
+                className={`flex max-h-[calc(100dvh-0.75rem)] w-full max-w-[1600px] flex-col overflow-hidden overscroll-contain rounded-2xl border border-slate-200 bg-white shadow-2xl sm:max-h-[calc(100dvh-1.5rem)] ${showParticipants ? "h-[calc(100dvh-0.75rem)] sm:h-[calc(100dvh-1.5rem)]" : ""}`}
+                ref={workshopDialogRef}
+              >
+              <div className="grid shrink-0 gap-2 border-b border-slate-200 bg-white px-3 py-2 lg:grid-cols-[minmax(260px,1fr)_auto] lg:items-start">
+                <div className="min-w-0">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <p className="shrink-0 text-[10px] font-black uppercase tracking-[0.18em] text-emerald-700">Workshop responses</p>
+                    <span className="h-px min-w-4 flex-1 bg-slate-200" />
+                  </div>
+                  <h4 className="mt-1 truncate text-lg font-black text-slate-950" id="opened-workshop-title">{selectedWorkshop.name}</h4>
+                  <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-semibold text-slate-500">
+                    <span>{selectedWorkshop.type}</span>
+                    <span aria-hidden="true" className="text-slate-300">•</span>
+                    <span>{selectedWorkshop.facilitator}</span>
+                    <span aria-hidden="true" className="text-slate-300">•</span>
+                    <span>{selectedWorkshop.productGroup}</span>
+                    {selectedWorkshop.batches?.length ? (
+                      <label className="inline-flex items-center gap-1.5 font-black text-slate-600">
+                        <span>Batch</span>
+                        <select
+                          className="min-h-8 max-w-52 rounded-lg border border-slate-200 bg-slate-50 px-2 text-[11px] font-bold text-slate-800 outline-none focus:border-emerald-500"
+                          onChange={(event) => {
+                            setSelectedParticipantBatchId(event.target.value);
+                            setSelectedParticipantIds([]);
+                          }}
+                          value={selectedParticipantBatchId}
+                        >
+                          <option value="all">All batches</option>
+                          {selectedWorkshop.batches.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                        </select>
+                      </label>
+                    ) : null}
+                  </div>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  <label className={`inline-flex min-h-9 cursor-pointer items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-black ${formWaitingMode ? "border-amber-300 bg-amber-100 text-amber-900" : "border-slate-200 bg-white text-slate-700"}`}>
+                <div className="flex flex-wrap items-center gap-1.5 lg:justify-end">
+                  <label className={`inline-flex min-h-8 cursor-pointer items-center gap-1.5 rounded-lg border px-2.5 text-[11px] font-black ${formWaitingMode ? "border-amber-300 bg-amber-100 text-amber-900" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"}`}>
                     <input checked={formWaitingMode} className="size-4 accent-amber-600" onChange={(event) => void updateSelectedWaitingMode(event.target.checked)} type="checkbox" />
-                    Waiting Mode {formWaitingMode ? "ON" : "OFF"}
+                    Waiting {formWaitingMode ? "ON" : "OFF"}
                   </label>
                   <button
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-700"
+                    className="inline-flex min-h-8 items-center gap-1.5 rounded-lg bg-emerald-600 px-2.5 text-[11px] font-black text-white hover:bg-emerald-700"
                     onClick={sendResponseSummaryOnWhatsApp}
                     title="Share workshop registration summary on WhatsApp"
                     type="button"
                   >
-                    <MessageCircle className="size-4" />
-                    Share Summary
+                    <MessageCircle className="size-3.5" />
+                    Share summary
                   </button>
                   <button
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"
+                    className="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-[11px] font-black text-slate-700 hover:bg-slate-50"
                     onClick={exportSelectedRegistrations}
                     title="Download this workshop's registration responses as an Excel-compatible CSV"
                     type="button"
                   >
-                    <Download className="size-4" />
-                    Download Excel
+                    <Download className="size-3.5" />
+                    Excel
                   </button>
                   <button
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-900 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-2.5 text-[11px] font-black text-amber-900 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
                     disabled={!waitingParticipants.length}
                     onClick={exportWaitingList}
                     title="Download only waiting-list registrations"
                     type="button"
                   >
-                    <Download className="size-4" />
-                    Download Waiting List
+                    <Download className="size-3.5" />
+                    Waiting CSV
                   </button>
                   <a
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-white px-3 py-2 text-xs font-bold text-indigo-700 hover:bg-indigo-50"
+                    className="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-indigo-200 bg-white px-2.5 text-[11px] font-black text-indigo-700 hover:bg-indigo-50"
                     href={`/process/import-data-workshop-wise?workshopId=${encodeURIComponent(selectedWorkshop.id)}`}
                     title={`Bulk import registrations into ${selectedWorkshop.name}`}
                   >
-                    <Upload className="size-4" />
-                    Import Data
+                    <Upload className="size-3.5" />
+                    Import
                   </a>
                   <button
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-bold text-white hover:bg-indigo-700"
+                    className="inline-flex min-h-8 items-center gap-1.5 rounded-lg bg-indigo-600 px-2.5 text-[11px] font-black text-white hover:bg-indigo-700"
                     onClick={() => setShowParticipants((value) => !value)}
                     type="button"
                   >
-                    <UsersRound className="size-4" />
-                    {showParticipants ? "Hide Data" : `View Data (${selectedParticipants.length})`}
+                    <UsersRound className="size-3.5" />
+                    {showParticipants ? "Hide responses" : `Responses (${selectedParticipants.length})`}
                   </button>
                   <button
                     aria-label="Close workshop details"
-                    className="grid size-9 place-items-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
-                    onClick={() => {
-                      setSelectedWorkshopId(null);
-                      setSelectedParticipantBatchId("all");
-                      setShowParticipants(false);
-                    }}
+                    className="grid size-8 place-items-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-800"
+                    onClick={closeOpenedWorkshop}
+                    ref={workshopCloseButtonRef}
                     type="button"
                   >
                     <X className="size-4" />
@@ -1744,59 +1802,24 @@ export default function WorkshopMasterPage() {
                 </div>
               </div>
 
-              {formWaitingMode ? (
-                <div className="mt-4 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-900">
-                  <AlertCircle className="mt-0.5 size-5 shrink-0" />
-                  All new form submissions are going directly to the waiting list.
-                </div>
-              ) : null}
-
-              <div className="mt-3 grid gap-2 sm:grid-cols-4">
-                <MiniStat label="Users" value={displayedParticipants.length} />
-                <MiniStat label="Paid" value={displayedParticipants.filter((entry) => entry.status === "Paid").length} />
-                <MiniStat label="Due" value={displayedParticipants.filter((entry) => entry.status === "Due").length} />
-                <MiniStat label="Waiting" value={selectedParticipants.filter((entry) => entry.registrationStatus === "waiting").length} />
-                {activeParticipantFilterCount ? <MiniStat label="Saved filters" value={activeParticipantFilterCount} /> : null}
+              <div className="flex shrink-0 flex-wrap items-center gap-x-1 border-b border-slate-200 bg-slate-50/80 px-3 py-1.5">
+                <OperationalStat label="Users" value={displayedParticipants.length} />
+                <OperationalStat label="Paid" tone="success" value={displayedParticipants.filter((entry) => entry.status === "Paid").length} />
+                <OperationalStat label="Due" value={displayedParticipants.filter((entry) => entry.status === "Due").length} />
+                <OperationalStat label="Waiting" value={selectedParticipants.filter((entry) => entry.registrationStatus === "waiting").length} tone="warning" />
+                {activeParticipantFilterCount ? <OperationalStat label="Saved filters" value={activeParticipantFilterCount} tone="info" /> : null}
+                {formWaitingMode ? (
+                  <p className="ml-auto inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-black text-amber-900">
+                    <AlertCircle className="size-3.5" />
+                    New submissions join the waiting list
+                  </p>
+                ) : null}
               </div>
 
               {showParticipants ? (
-                <div className="mt-3 rounded-xl border border-slate-200 bg-white">
-                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 p-3">
-                    <p className="text-xs font-bold text-slate-500">
-                      Filters stay saved for this workshop. WhatsApp summary uses the same visible registrations shown below.
-                    </p>
-                    <div className="flex flex-wrap justify-end gap-2">
-                      <AdvancedResponseFilters filters={responseFilters} onChange={setResponseFilters} questions={participantQuestions} resultCount={displayedParticipants.length} totalCount={selectedParticipants.length} />
-                      <DuplicateResponseFilter checked={hideDuplicateParticipants} onChange={setHideDuplicateParticipants} rawCount={searchedParticipants.length} visibleCount={displayedParticipants.length} />
-                      <label className={`inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-xl border px-3.5 text-sm font-black ${hideWaitingParticipants ? "border-amber-300 bg-amber-50 text-amber-900" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"}`}>
-                        <input
-                          checked={hideWaitingParticipants}
-                          className="size-5 accent-amber-600"
-                          onChange={(event) => {
-                            const checked = event.target.checked;
-                            setHideWaitingParticipants(checked);
-                            if (checked) setFollowUpScope("all");
-                            if (checked) setSelectedParticipantIds((current) => current.filter((id) => !waitingParticipants.some((entry) => entry.id === id)));
-                          }}
-                          type="checkbox"
-                        />
-                        <EyeOff className="size-4" />
-                        Hide waiting list ({waitingParticipants.length})
-                      </label>
-                      <button
-                        className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-rose-200 bg-white px-3.5 text-sm font-black text-rose-700 hover:bg-rose-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400 disabled:hover:bg-white"
-                        disabled={!duplicateParticipantIds.length}
-                        onClick={() => setRemoveDuplicatesOpen(true)}
-                        title="Permanently remove older duplicate registrations"
-                        type="button"
-                      >
-                        <Trash2 className="size-4" />
-                        Remove duplicates ({duplicateParticipantIds.length})
-                      </button>
-                    </div>
-                  </div>
-                  <div className="flex flex-col gap-3 border-b border-slate-200 p-3 xl:flex-row xl:items-center xl:justify-between">
-                    <div className="flex flex-wrap gap-2">
+                <div className="flex min-h-0 flex-1 flex-col bg-white">
+                  <div className="flex shrink-0 flex-col gap-2 border-b border-slate-200 px-3 py-2 xl:flex-row xl:items-center">
+                    <div aria-label="Response status" className="flex shrink-0 gap-1 overflow-x-auto" role="group">
                       {([
                         ["needs_follow_up", "Needs follow-up"],
                         ["completed", "Completed"],
@@ -1804,7 +1827,8 @@ export default function WorkshopMasterPage() {
                         ["all", "All responses"]
                       ] as const).map(([value, label]) => (
                         <button
-                          className={`min-h-10 rounded-lg px-3 text-xs font-black ${followUpScope === value ? "bg-slate-950 text-white" : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}
+                          aria-pressed={followUpScope === value}
+                          className={`min-h-8 shrink-0 rounded-lg px-2.5 text-[11px] font-black ${followUpScope === value ? "bg-slate-950 text-white" : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}
                           key={value}
                           onClick={() => {
                             setFollowUpScope(value);
@@ -1817,48 +1841,97 @@ export default function WorkshopMasterPage() {
                         </button>
                       ))}
                     </div>
-                    <label className="relative block w-full max-w-lg">
+                    <label className="relative block min-w-0 flex-1 xl:min-w-64">
                       <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
                       <input
                         aria-label="Search responses by name or mobile number"
-                        className="min-h-11 w-full rounded-xl border border-slate-200 bg-white py-2 pl-10 pr-10 text-sm font-semibold text-slate-800 outline-none placeholder:text-slate-400 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100"
+                        className="min-h-8 w-full rounded-lg border border-slate-200 bg-white py-1.5 pl-9 pr-9 text-xs font-semibold text-slate-800 outline-none placeholder:text-slate-400 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
                         onChange={(event) => setParticipantSearch(event.target.value)}
                         placeholder="Search by name or mobile number"
+                        ref={participantSearchRef}
                         type="search"
                         value={participantSearch}
                       />
                       {participantSearch ? (
                         <button
                           aria-label="Clear response search"
-                          className="absolute right-2 top-1/2 grid size-8 -translate-y-1/2 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-                          onClick={() => setParticipantSearch("")}
+                          className="absolute right-1.5 top-1/2 grid size-7 -translate-y-1/2 place-items-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                          onClick={() => {
+                            setParticipantSearch("");
+                            window.requestAnimationFrame(() => participantSearchRef.current?.focus());
+                          }}
                           type="button"
                         >
                           <X className="size-4" />
                         </button>
                       ) : null}
                     </label>
+                    <div className="flex shrink-0 items-center gap-1.5">
+                      <AdvancedResponseFilters filters={responseFilters} onChange={setResponseFilters} questions={participantQuestions} resultCount={displayedParticipants.length} totalCount={selectedParticipants.length} />
+                      <details className="group relative">
+                        <summary className="inline-flex min-h-8 cursor-pointer list-none items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-[11px] font-black text-slate-600 hover:bg-slate-50 [&::-webkit-details-marker]:hidden">
+                          <LayoutList className="size-3.5" />
+                          View options
+                          <ChevronDown className="size-3.5 transition group-open:rotate-180" />
+                        </summary>
+                        <div className="absolute right-0 z-30 mt-1.5 w-[min(310px,calc(100vw-2rem))] space-y-2 rounded-xl border border-slate-200 bg-white p-2.5 shadow-2xl">
+                          <div className="flex items-center justify-between gap-2 px-1">
+                            <p className="text-[11px] font-black text-slate-800">Visible responses</p>
+                            <p className="text-[10px] font-bold text-emerald-700">Auto-saved</p>
+                          </div>
+                          <DuplicateResponseFilter checked={hideDuplicateParticipants} onChange={setHideDuplicateParticipants} rawCount={searchedParticipants.length} visibleCount={displayedParticipants.length} />
+                          <label className={`flex min-h-9 cursor-pointer items-center gap-2 rounded-lg border px-3 text-xs font-black ${hideWaitingParticipants ? "border-amber-300 bg-amber-50 text-amber-900" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"}`}>
+                            <input
+                              checked={hideWaitingParticipants}
+                              className="size-4 accent-amber-600"
+                              onChange={(event) => {
+                                const checked = event.target.checked;
+                                setHideWaitingParticipants(checked);
+                                if (checked) setFollowUpScope("all");
+                                if (checked) setSelectedParticipantIds((current) => current.filter((id) => !waitingParticipants.some((entry) => entry.id === id)));
+                              }}
+                              type="checkbox"
+                            />
+                            <EyeOff className="size-3.5" />
+                            Hide waiting list ({waitingParticipants.length})
+                          </label>
+                          <div className="border-t border-slate-100 pt-2">
+                            <button
+                              className="inline-flex min-h-9 w-full items-center gap-2 rounded-lg px-3 text-left text-xs font-black text-rose-700 hover:bg-rose-50 disabled:cursor-not-allowed disabled:text-slate-400 disabled:hover:bg-transparent"
+                              disabled={!duplicateParticipantIds.length}
+                              onClick={() => setRemoveDuplicatesOpen(true)}
+                              title="Permanently remove older duplicate registrations"
+                              type="button"
+                            >
+                              <Trash2 className="size-3.5" />
+                              Remove duplicates ({duplicateParticipantIds.length})
+                            </button>
+                          </div>
+                        </div>
+                      </details>
+                    </div>
                   </div>
                   {selectedParticipantIds.length ? (
-                    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-emerald-200 bg-emerald-50 px-4 py-3">
-                      <p className="text-sm font-black text-emerald-900">{selectedParticipantIds.length} participant{selectedParticipantIds.length === 1 ? "" : "s"} selected</p>
-                      <div className="flex flex-wrap gap-2">
-                        <button className="min-h-10 rounded-lg border border-emerald-300 bg-white px-3 text-xs font-black text-emerald-800" onClick={() => setSelectedParticipantIds([])} type="button">Clear</button>
+                    <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-emerald-200 bg-emerald-50 px-3 py-2">
+                      <p className="text-xs font-black text-emerald-900">{selectedParticipantIds.length} participant{selectedParticipantIds.length === 1 ? "" : "s"} selected</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        <button className="min-h-8 rounded-lg border border-emerald-300 bg-white px-2.5 text-[11px] font-black text-emerald-800 hover:bg-emerald-100" onClick={() => setSelectedParticipantIds([])} type="button">Clear</button>
                         {selectedWaitingParticipants.length ? (
-                          <button className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-amber-600 px-3 text-xs font-black text-white hover:bg-amber-700" onClick={() => setPromoteWaitingOpen(true)} type="button">
-                            <CheckSquare className="size-4" />
+                          <button className="inline-flex min-h-8 items-center gap-1.5 rounded-lg bg-amber-600 px-2.5 text-[11px] font-black text-white hover:bg-amber-700" onClick={() => setPromoteWaitingOpen(true)} type="button">
+                            <CheckSquare className="size-3.5" />
                             Confirm selected ({selectedWaitingParticipants.length})
                           </button>
                         ) : null}
-                        <button className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-emerald-700 px-3 text-xs font-black text-white hover:bg-emerald-800" onClick={() => setShareSelectedOpen(true)} type="button"><Share2 className="size-4" />Share Selected</button>
+                        <button className="inline-flex min-h-8 items-center gap-1.5 rounded-lg bg-emerald-700 px-2.5 text-[11px] font-black text-white hover:bg-emerald-800" onClick={() => setShareSelectedOpen(true)} type="button"><Share2 className="size-3.5" />Share selected</button>
                       </div>
                     </div>
                   ) : null}
-                  <div className="overflow-x-auto">
-                  <table className="min-w-[1240px] w-full text-left text-sm">
-                    <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+                  <div className="min-h-0 flex-1 overflow-auto overscroll-contain">
+                  <table className="workshop-response-table w-full min-w-[1160px] text-left text-xs">
+                    <caption className="sr-only">Workshop registration responses</caption>
+                    <thead className="text-[10px] uppercase text-slate-500">
                       <tr>
-                        <th className="px-4 py-3">
+                        <th className="sticky top-0 z-30 w-10 min-w-10 bg-slate-50 px-2 py-2.5 lg:left-0">
                           <input
                             aria-label="Select all visible responses"
                             checked={displayedParticipants.length > 0 && displayedParticipants.every((entry) => selectedParticipantIds.includes(entry.id))}
@@ -1869,67 +1942,75 @@ export default function WorkshopMasterPage() {
                             type="checkbox"
                           />
                         </th>
-                        {["Action", "User", "Mobile", "Email", "City", "Source", "WhatsApp", "Confirmation", "MFW", "Call Note", "Payment", "Paid", "Due", "Submitted"].map((head) => <th className="px-4 py-3" key={head}>{head}</th>)}
+                        <th className="sticky top-0 z-30 w-[76px] min-w-[76px] bg-slate-50 px-2 py-2.5 lg:left-10">Action</th>
+                        <th className="sticky top-0 z-30 min-w-[190px] border-r border-slate-200 bg-slate-50 px-2.5 py-2.5 shadow-[8px_0_16px_-16px_rgba(15,23,42,0.65)] lg:left-[116px]">User</th>
+                        {["Contact", "City", "Source", "WhatsApp", "Confirmation", "MFW", "Call note", "Payment", "Submitted"].map((head) => <th className="sticky top-0 z-20 bg-slate-50 px-2.5 py-2.5" key={head}>{head}</th>)}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
 	                      {displayedParticipants.length ? displayedParticipants.map((entry) => (
-	                        <tr className="hover:bg-indigo-50/40" key={entry.id}>
-                          <td className="px-4 py-4">
+	                        <tr className="group hover:bg-emerald-50/40" key={entry.id}>
+                          <td className="w-10 min-w-10 bg-white px-2 py-2.5 group-hover:bg-emerald-50 lg:sticky lg:left-0 lg:z-10">
                             <input aria-label={`Select ${entry.fullName}`} checked={selectedParticipantIds.includes(entry.id)} className="size-4 accent-emerald-600" onChange={(event) => setSelectedParticipantIds((current) => event.target.checked ? [...new Set([...current, entry.id])] : current.filter((id) => id !== entry.id))} type="checkbox" />
                           </td>
-                          <td className="px-4 py-4">
-                            <div className="flex gap-2">
-                            <button aria-label={`Update follow-up for ${entry.fullName}`} className="grid size-9 place-items-center rounded-xl bg-emerald-50 text-emerald-700 hover:bg-emerald-100" onClick={() => setFollowUpTarget(entry)} title="Update confirmation and call note" type="button"><PhoneCall className="size-4" /></button>
+                          <td className="w-[76px] min-w-[76px] bg-white px-2 py-2.5 group-hover:bg-emerald-50 lg:sticky lg:left-10 lg:z-10">
+                            <div className="flex gap-1">
+                            <button aria-label={`Update follow-up for ${entry.fullName}`} className="grid size-8 place-items-center rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100" onClick={() => setFollowUpTarget(entry)} title="Update confirmation and call note" type="button"><PhoneCall className="size-3.5" /></button>
                             <button
                               aria-label={`Delete response from ${entry.fullName}`}
-                              className="grid size-9 place-items-center rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-100"
+                              className="grid size-8 place-items-center rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100"
                               onClick={() => setDeleteResponseTarget(entry)}
                               title="Delete response"
                               type="button"
                             >
-                              <Trash2 className="size-4" />
+                              <Trash2 className="size-3.5" />
                             </button>
                             </div>
                           </td>
-	                          <td className="px-4 py-4 font-black text-slate-950">
-                              {entry.fullName}
-                              {entry.registrationStatus === "waiting" ? <span className={`mt-1 block w-fit rounded-full px-2 py-1 text-[11px] font-black ${entry.waitingReason === "repeater_review" ? "bg-indigo-100 text-indigo-800" : "bg-amber-100 text-amber-800"}`}>Waiting WL-{entry.waitingPosition ?? "-"} · {entry.waitingReason === "repeater_review" ? "Repeater review" : entry.waitingReason === "attendance_pending" ? "Attendance pending" : entry.waitingReason === "eligibility_pending" ? "Eligibility pending" : entry.waitingReason === "session_mismatch" ? "Session mismatch" : entry.waitingReason === "invalid_referral" ? "Invalid referral" : entry.waitingReason === "capacity" ? "Capacity full" : "Manual"}</span> : null}
-                              {entry.isRepeater ? <span className="mt-1 block w-fit rounded-full bg-violet-100 px-2 py-1 text-[11px] font-black text-violet-800">Repeater{entry.repeaterSourceWorkshopTitle ? ` · ${entry.repeaterSourceWorkshopTitle}` : ""}</span> : null}
-                              {entry.registrationStatus !== "waiting" && entry.registrationNumber ? <span className="mt-1 block w-fit rounded-full bg-emerald-100 px-2 py-1 text-[11px] font-black text-emerald-800" title="Registration / Unique ID">{entry.registrationNumber}</span> : null}
-                              {entry.registrationStatus !== "waiting" && entry.confirmationSource ? <span className="mt-1 block text-[11px] font-bold text-emerald-700">Confirmed via {entry.confirmationSource.replaceAll("_", " + ")}</span> : null}
+	                          <td className="min-w-[190px] border-r border-slate-100 bg-white px-2.5 py-2.5 font-black text-slate-950 shadow-[8px_0_16px_-16px_rgba(15,23,42,0.65)] group-hover:bg-emerald-50 lg:sticky lg:left-[116px] lg:z-10">
+                              <p>{entry.fullName}</p>
+                              <div className="mt-1 flex max-w-[220px] flex-wrap gap-1">
+                                {entry.registrationStatus === "waiting" ? <span className={`w-fit rounded-full px-2 py-0.5 text-[10px] font-black ${entry.waitingReason === "repeater_review" ? "bg-indigo-100 text-indigo-800" : "bg-amber-100 text-amber-800"}`}>WL-{entry.waitingPosition ?? "-"} · {entry.waitingReason === "repeater_review" ? "Repeater" : entry.waitingReason === "attendance_pending" ? "Attendance" : entry.waitingReason === "eligibility_pending" ? "Eligibility" : entry.waitingReason === "session_mismatch" ? "Session" : entry.waitingReason === "invalid_referral" ? "Referral" : entry.waitingReason === "capacity" ? "Capacity" : "Manual"}</span> : null}
+                                {entry.isRepeater ? <span className="w-fit rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-black text-violet-800">Repeater</span> : null}
+                                {entry.registrationStatus !== "waiting" && entry.registrationNumber ? <span className="w-fit rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-black text-emerald-800" title="Registration / Unique ID">{entry.registrationNumber}</span> : null}
+                              </div>
+                              {entry.registrationStatus !== "waiting" && entry.confirmationSource ? <span className="mt-1 block text-[10px] font-bold text-emerald-700">Confirmed via {entry.confirmationSource.replaceAll("_", " + ")}</span> : null}
                             </td>
-	                          <td className="px-4 py-4">{entry.mobile}</td>
-	                          <td className="px-4 py-4">{entry.email}</td>
-                          <td className="px-4 py-4">{entry.city}</td>
-                          <td className="px-4 py-4"><RegistrationSourceBadge source={entry.source} /></td>
-                          <td className="px-4 py-4">
+	                          <td className="min-w-[150px] px-2.5 py-2.5">
+                            <p className="font-bold text-slate-700">{entry.mobile}</p>
+                            <p className="mt-0.5 max-w-[180px] truncate text-[10px] text-slate-500" title={entry.email || "No email provided"}>{entry.email || "No email"}</p>
+                          </td>
+                          <td className="min-w-[86px] px-2.5 py-2.5">{entry.city || "-"}</td>
+                          <td className="px-2.5 py-2.5"><RegistrationSourceBadge source={entry.source} /></td>
+                          <td className="min-w-[130px] px-2.5 py-2.5">
                             <WhatsAppVerificationBadge status={entry.whatsappVerificationStatus} />
-                            <div className="mt-2 flex items-center gap-2">
-                              <span className={`text-[11px] font-black ${registrationWhatsAppStatus(entry) === "sent" ? "text-emerald-700" : registrationWhatsAppStatus(entry) === "failed" ? "text-rose-700" : "text-slate-500"}`}>
-                                Status: {registrationWhatsAppStatus(entry)}
+                            <div className="mt-1 flex items-center gap-1.5">
+                              <span className={`text-[10px] font-black ${registrationWhatsAppStatus(entry) === "sent" ? "text-emerald-700" : registrationWhatsAppStatus(entry) === "failed" ? "text-rose-700" : "text-slate-500"}`}>
+                                {registrationWhatsAppStatus(entry)}
                               </span>
-                              {registrationWhatsAppStatus(entry) !== "sent" ? <button aria-label={`Retry WhatsApp for ${entry.fullName}`} className="grid size-8 place-items-center rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100" onClick={() => void retryRegistrationWhatsApp(entry.id)} title="Retry registration WhatsApp" type="button"><MessageCircle className="size-4" /></button> : null}
+                              {registrationWhatsAppStatus(entry) !== "sent" ? <button aria-label={`Retry WhatsApp for ${entry.fullName}`} className="grid size-7 place-items-center rounded-md bg-emerald-50 text-emerald-700 hover:bg-emerald-100" onClick={() => void retryRegistrationWhatsApp(entry.id)} title="Retry registration WhatsApp" type="button"><MessageCircle className="size-3.5" /></button> : null}
                             </div>
                           </td>
-                          <td className="px-4 py-4">
+                          <td className="min-w-[130px] px-2.5 py-2.5">
                             <RegistrationConfirmationBadge status={entry.confirmationStatus} />
-                            {entry.confirmationUpdatedBy ? <p className="mt-1 text-xs text-slate-500">{entry.confirmationUpdatedBy}{entry.confirmationUpdatedAt ? ` · ${formatSubmittedAt(entry.confirmationUpdatedAt)}` : ""}</p> : null}
+                            {entry.confirmationUpdatedBy ? <p className="mt-1 max-w-[150px] text-[10px] leading-4 text-slate-500">{entry.confirmationUpdatedBy}{entry.confirmationUpdatedAt ? ` · ${formatSubmittedAt(entry.confirmationUpdatedAt)}` : ""}</p> : null}
                           </td>
-                          <td className="px-4 py-4"><MfwSyncBadge entry={entry} /></td>
-                          <td className="max-w-[240px] px-4 py-4 text-xs leading-5 text-slate-600">{entry.confirmationNote || "-"}</td>
-                          <td className="px-4 py-4">
+                          <td className="px-2.5 py-2.5"><MfwSyncBadge entry={entry} /></td>
+                          <td className="min-w-[150px] max-w-[220px] whitespace-normal px-2.5 py-2.5 text-[11px] leading-4 text-slate-600">{entry.confirmationNote || "-"}</td>
+                          <td className="min-w-[150px] px-2.5 py-2.5">
                             <span className={`rounded-full px-3 py-1 text-xs font-black ${entry.status === "Paid" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
                               {entry.status}
                             </span>
+                            <div className="mt-1.5 grid grid-cols-2 gap-2 text-[10px] leading-4 text-slate-500">
+                              <p><span className="block font-bold uppercase text-slate-400">Paid</span>INR {entry.amountPaid.toLocaleString("en-IN")}</p>
+                              <p><span className="block font-bold uppercase text-slate-400">Due</span>INR {entry.amountDue.toLocaleString("en-IN")}</p>
+                            </div>
                           </td>
-                          <td className="px-4 py-4">INR {entry.amountPaid.toLocaleString("en-IN")}</td>
-                          <td className="px-4 py-4">INR {entry.amountDue.toLocaleString("en-IN")}</td>
-                          <td className="px-4 py-4">{formatSubmittedAt(entry.createdAt)}</td>
+                          <td className="min-w-[130px] whitespace-normal px-2.5 py-2.5 text-[11px] leading-4">{formatSubmittedAt(entry.createdAt)}</td>
                         </tr>
 	                      )) : (
 	                        <tr>
-	                          <td className="px-4 py-8 text-center text-slate-500" colSpan={15}>
+	                          <td className="px-4 py-10 text-center text-slate-500" colSpan={12}>
 	                            {participantSearch ? "No response found for this name or mobile number." : "No users registered in this workshop yet."}
 	                          </td>
 	                        </tr>
@@ -2062,7 +2143,7 @@ function FollowUpModal({
             </select>
           </label>
           <label className="mt-4 block text-sm font-black text-slate-700">Call note
-            <textarea className={`${inputClass} mt-2 min-h-32 resize-y`} maxLength={2000} onChange={(event) => setNote(event.target.value)} placeholder="Add call outcome or follow-up details..." value={note} />
+            <textarea className={`${inputClass} mt-2 min-h-32 resize-none`} maxLength={2000} onChange={(event) => setNote(event.target.value)} placeholder="Add call outcome or follow-up details..." value={note} />
           </label>
           <button className="mt-5 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-emerald-700 px-4 text-sm font-black text-white disabled:opacity-60" disabled={saving} onClick={() => void save()} type="button"><Save className="size-4" />{saving ? "Saving..." : "Save follow-up"}</button>
         </div>
@@ -2846,7 +2927,7 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
               </label>
               <label className="block">
                 <span className="mb-2 block text-sm font-bold text-slate-600">Waiting Message</span>
-                <textarea className={inputClass} maxLength={240} onChange={(event) => setWaitingMessage(event.target.value)} rows={3} value={waitingMessage} />
+                <textarea className={`${inputClass} resize-none`} maxLength={240} onChange={(event) => setWaitingMessage(event.target.value)} rows={3} value={waitingMessage} />
               </label>
             </div>
           </div>

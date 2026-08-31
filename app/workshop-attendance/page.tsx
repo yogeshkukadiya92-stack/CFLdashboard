@@ -1,6 +1,7 @@
 "use client";
 
 import { AdminPlatformShell } from "@/components/admin-platform-shell";
+import { OperationalStat } from "@/components/operational-stat";
 import { parseBulkAttendanceMobiles } from "@/lib/bulk-attendance";
 import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
 import { DuplicateResponseFilter } from "@/components/duplicate-response-filter";
@@ -12,8 +13,7 @@ import { publicFormSlug } from "@/lib/public-slug";
 import { hideDuplicateResponses } from "@/lib/response-dedupe";
 import { applyResponseFilters, emptyResponseFilters, responseQuestionOptions, type ResponseFilterState } from "@/lib/response-filters";
 import { ArrowDown, ArrowUp, BarChart3, CalendarDays, CheckSquare, Circle, Copy, Download, ExternalLink, Eye, Heading, Image as ImageIcon, Laptop, LayoutTemplate, Mail, MessageCircle, Palette, Phone, Plus, QrCode, RefreshCw, Ruler, Save, Search, Settings2, Smartphone, Star, Trash2, Type, Upload, UserCheck, UsersRound, UserX, Video, X } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 const WORKSHOP_MASTER_STORAGE_KEY = "cfl_workshop_master_records_v1";
 const REGISTRATION_STORAGE_KEY = "cfl_registrations_v1";
@@ -28,7 +28,7 @@ type WorkshopRecord = {
   name: string;
 };
 
-const inputClass = "w-full rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-sm font-semibold outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100";
+const inputClass = "min-h-9 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100";
 
 const fieldTypeMeta: Record<BuilderFieldType, { icon: typeof Type; label: string; hasOptions: boolean }> = {
   short_text: { icon: Type, label: "Short Text", hasOptions: false },
@@ -139,6 +139,7 @@ export default function WorkshopAttendancePage() {
   const [bulkMobiles, setBulkMobiles] = useState("");
   const [bulkMessage, setBulkMessage] = useState("");
   const [bulkSaving, setBulkSaving] = useState(false);
+  const workshopSearchRef = useRef<HTMLInputElement>(null);
 
   function loadLocal() {
     const loadedWorkshops = readLocalArray<WorkshopRecord>(WORKSHOP_MASTER_STORAGE_KEY).filter((item) => !item.archived);
@@ -576,27 +577,48 @@ export default function WorkshopAttendancePage() {
 
   return (
     <AdminPlatformShell activeLabel="Workshop Attendance" description="Create session-wise attendance forms and track who attended every workshop session." title="Workshop Attendance">
-      <section className="min-w-0 space-y-4">
-        <aside className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-700">Attendance</p>
-              <h2 className="text-xl font-black text-slate-950">Workshops</h2>
+      <section className="min-w-0 space-y-3">
+        <aside className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="mr-auto">
+              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-700">Attendance workspace</p>
+              <h2 className="text-lg font-black text-slate-950">Choose workshop</h2>
             </div>
-            <span className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-black text-slate-600">{workshops.length}</span>
+            <div className="relative w-full sm:w-72">
+              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
+              <input
+                aria-label="Search workshops"
+                className="min-h-9 w-full rounded-lg border border-slate-200 bg-slate-50 py-2 pl-9 pr-9 text-sm font-semibold outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search workshops"
+                ref={workshopSearchRef}
+                type="search"
+                value={query}
+              />
+              {query ? (
+                <button
+                  aria-label="Clear workshop search"
+                  className="absolute right-1.5 top-1/2 grid size-7 -translate-y-1/2 place-items-center rounded-md text-slate-400 hover:bg-white hover:text-slate-700"
+                  onClick={() => {
+                    setQuery("");
+                    workshopSearchRef.current?.focus();
+                  }}
+                  type="button"
+                >
+                  <X className="size-3.5" />
+                </button>
+              ) : null}
+            </div>
+            <span className="inline-flex min-h-9 items-center rounded-lg bg-slate-100 px-3 text-xs font-black tabular-nums text-slate-600">{workshops.length}</span>
           </div>
-          <div className="mt-4 flex min-w-0 flex-col gap-3 lg:flex-row">
-            <label className="flex w-full shrink-0 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 lg:w-80">
-              <Search className="size-4 text-slate-400" />
-              <input className="min-w-0 flex-1 bg-transparent text-sm font-semibold outline-none" onChange={(event) => setQuery(event.target.value)} placeholder="Search workshop..." value={query} />
-            </label>
-            <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto pb-1">
+          <div className="mt-2 flex min-w-0 gap-1.5 overflow-x-auto pb-1">
               {filteredWorkshops.map((workshop) => {
                 const count = sessions.filter((session) => session.workshopId === workshop.id).length;
                 const active = selectedWorkshop?.id === workshop.id;
                 return (
                   <button
-                    className={`w-[240px] shrink-0 rounded-xl border px-3 py-3 text-left transition ${active ? "border-emerald-300 bg-emerald-50 text-emerald-900" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"}`}
+                    aria-pressed={active}
+                    className={`w-[210px] shrink-0 rounded-lg border px-3 py-2 text-left transition ${active ? "border-emerald-300 bg-emerald-50 text-emerald-900" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"}`}
                     key={workshop.id}
                     onClick={() => {
                       setSelectedWorkshopId(workshop.id);
@@ -605,125 +627,124 @@ export default function WorkshopAttendancePage() {
                     }}
                     type="button"
                   >
-                    <p className="line-clamp-2 text-sm font-black">{workshop.name}</p>
-                    <p className="mt-1 text-xs font-bold text-slate-400">{count} sessions</p>
+                    <p className="truncate text-xs font-black">{workshop.name}</p>
+                    <p className="mt-0.5 text-[10px] font-bold text-slate-400">{count} sessions</p>
                   </button>
                 );
               })}
               {filteredWorkshops.length === 0 ? (
-                <div className="w-full rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center">
-                  <Search className="mx-auto size-6 text-slate-300" />
-                  <p className="mt-2 text-sm font-black text-slate-600">{workshops.length ? "No workshops found" : "No workshops created yet"}</p>
-                  {workshops.length ? <p className="mt-1 text-xs font-semibold text-slate-400">Try a different search.</p> : <a className="mt-3 inline-flex min-h-9 items-center justify-center rounded-lg bg-slate-950 px-3 text-xs font-black text-white" href="/workshop-master">Create workshop</a>}
+                <div className="w-full rounded-lg border border-dashed border-slate-200 bg-slate-50 px-4 py-4 text-center">
+                  <Search className="mx-auto size-5 text-slate-300" />
+                  <p className="mt-1.5 text-xs font-black text-slate-600">{workshops.length ? "No workshops found" : "No workshops created yet"}</p>
+                  {workshops.length ? <button className="mt-1 text-xs font-black text-emerald-700 hover:text-emerald-800" onClick={() => { setQuery(""); workshopSearchRef.current?.focus(); }} type="button">Clear search</button> : <a className="mt-2 inline-flex min-h-8 items-center justify-center rounded-lg bg-slate-950 px-3 text-xs font-black text-white" href="/workshop-master">Create workshop</a>}
                 </div>
               ) : null}
-            </div>
           </div>
         </aside>
 
-        <div className="min-w-0 space-y-4">
-          <div className="grid gap-4 md:grid-cols-4">
-            <Metric label="Workshops" value={workshops.length} />
-            <Metric label="Sessions" value={sessions.length} />
-            <Metric label="Attendance Entries" value={entries.length} />
-            <Metric label="Unique Attendees" value={totalAttendees} />
+        <div className="min-w-0 space-y-3">
+          <div className="flex flex-wrap items-center rounded-xl border border-slate-200 bg-slate-50/80 px-1 py-1.5 shadow-sm">
+            <OperationalStat label="Workshops" value={workshops.length} />
+            <OperationalStat label="Sessions" tone="info" value={sessions.length} />
+            <OperationalStat label="Entries" tone="success" value={entries.length} />
+            <OperationalStat label="Unique attendees" value={totalAttendees} />
           </div>
 
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-700">1 · Select Session</p>
-                <h2 className="mt-1 text-2xl font-black text-slate-950">{selectedWorkshop?.name || "Select workshop"}</h2>
-                <p className="mt-1 text-sm font-semibold text-slate-500">Add sessions, build attendance forms, share links, and view attendance data.</p>
+          <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-700">Session desk</p>
+                <h2 className="mt-0.5 truncate text-lg font-black text-slate-950">{selectedWorkshop?.name || "Select workshop"}</h2>
+                <p className="mt-0.5 text-xs font-semibold text-slate-500">Build, share and review attendance sessions.</p>
               </div>
-              <div className="flex flex-wrap gap-2">
-                <button className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-700 hover:bg-slate-50" disabled={refreshing} onClick={refreshAttendance} type="button">
-                  <RefreshCw className={`size-4 ${refreshing ? "animate-spin" : ""}`} />
+              <div className="flex flex-wrap gap-1.5">
+                <button className="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-[11px] font-black text-slate-700 hover:bg-slate-50 disabled:cursor-wait disabled:opacity-60" disabled={refreshing} onClick={refreshAttendance} type="button">
+                  <RefreshCw className={`size-3.5 ${refreshing ? "animate-spin" : ""}`} />
                   Refresh
                 </button>
-                {selectedSession ? <button className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-black text-emerald-700 hover:bg-emerald-100" onClick={() => setSessionView(sessionView === "edit" ? "responses" : "edit")} type="button">{sessionView === "edit" ? <UsersRound className="size-4" /> : <Settings2 className="size-4" />}{sessionView === "edit" ? "View Responses" : "Edit Form"}</button> : null}
-                <button className="inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-black text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500" disabled={!selectedWorkshop} onClick={() => createSession()} type="button">
-                  <Plus className="size-4" />
-                  Add Session
+                {selectedSession ? <button className="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 text-[11px] font-black text-emerald-700 hover:bg-emerald-100" onClick={() => setSessionView(sessionView === "edit" ? "responses" : "edit")} type="button">{sessionView === "edit" ? <UsersRound className="size-3.5" /> : <Settings2 className="size-3.5" />}{sessionView === "edit" ? "Responses" : "Edit form"}</button> : null}
+                <button className="inline-flex min-h-8 items-center gap-1.5 rounded-lg bg-emerald-600 px-2.5 text-[11px] font-black text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500" disabled={!selectedWorkshop} onClick={() => createSession()} type="button">
+                  <Plus className="size-3.5" />
+                  Add session
                 </button>
               </div>
             </div>
 
             {workshopSessions.length > 0 ? (
-              <div className="mt-5 flex gap-2 overflow-x-auto pb-1">
+              <div className="mt-2 flex gap-1.5 overflow-x-auto border-t border-slate-100 pt-2">
                 {workshopSessions.map((session) => (
                   <button
-                    className={`shrink-0 rounded-xl border px-4 py-3 text-left text-sm font-black ${selectedSession?.id === session.id ? "border-emerald-300 bg-emerald-50 text-emerald-800" : "border-slate-200 text-slate-600 hover:bg-slate-50"}`}
+                    aria-pressed={selectedSession?.id === session.id}
+                    className={`shrink-0 rounded-lg border px-3 py-2 text-left text-xs font-black ${selectedSession?.id === session.id ? "border-emerald-300 bg-emerald-50 text-emerald-800" : "border-slate-200 text-slate-600 hover:bg-slate-50"}`}
                     key={session.id}
                     onClick={() => { setSelectedSessionId(session.id); setSessionView("responses"); }}
                     type="button"
                   >
                     <span>{session.title}</span>
-                    <span className="mt-1 block text-xs text-slate-400">{formatDate(session.sessionDate)} · {entries.filter((entry) => entry.sessionId === session.id).length} responses</span>
+                    <span className="mt-0.5 block text-[10px] text-slate-400">{formatDate(session.sessionDate)} · {entries.filter((entry) => entry.sessionId === session.id).length} responses</span>
                   </button>
                 ))}
               </div>
             ) : (
-              <div className="mt-5 rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center">
-                <CalendarDays className="mx-auto size-10 text-slate-300" />
-                <p className="mt-3 text-sm font-black text-slate-700">No sessions yet</p>
-                <p className="mt-1 text-sm font-semibold text-slate-400">Create the first session to generate an attendance form.</p>
+              <div className="mt-2 rounded-lg border border-dashed border-slate-200 bg-slate-50 p-4 text-center">
+                <CalendarDays className="mx-auto size-6 text-slate-300" />
+                <p className="mt-2 text-xs font-black text-slate-700">No sessions yet</p>
+                <p className="mt-0.5 text-xs font-semibold text-slate-400">Create the first session to generate an attendance form.</p>
               </div>
             )}
           </div>
 
           {selectedSession && sessionView === "responses" ? (
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <div className="flex flex-wrap items-start justify-between gap-4">
-                <div>
-                  <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-700">2 · Attendance & Follow-up</p>
-                  <h3 className="mt-1 text-2xl font-black text-slate-950">{selectedSession.title}</h3>
-                  <p className="mt-1 text-sm font-semibold text-slate-500">{formatDate(selectedSession.sessionDate)} · {selectedSession.facilitator || "Facilitator not set"} · {selectedSession.batch || "Main Batch"}</p>
+            <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+              <div className="flex flex-wrap items-start justify-between gap-2 border-b border-slate-200 px-3 py-2">
+                <div className="min-w-0">
+                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-700">Attendance & follow-up</p>
+                  <h3 className="mt-0.5 truncate text-lg font-black text-slate-950">{selectedSession.title}</h3>
+                  <p className="mt-0.5 text-[11px] font-semibold text-slate-500">{formatDate(selectedSession.sessionDate)} · {selectedSession.facilitator || "Facilitator not set"} · {selectedSession.batch || "Main Batch"}</p>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  <button className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-slate-200 px-3 text-sm font-black text-slate-700 hover:bg-slate-50" onClick={copyLink} type="button"><Copy className="size-4" />{copied ? "Copied" : "Copy Link"}</button>
-                  <a className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-slate-200 px-3 text-sm font-black text-slate-700 hover:bg-slate-50" href={link} rel="noreferrer" target="_blank"><ExternalLink className="size-4" />Open Form</a>
-                  <button className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-slate-950 px-3 text-sm font-black text-white hover:bg-slate-800" onClick={() => setSessionView("edit")} type="button"><Settings2 className="size-4" />Edit Form</button>
+                <div className="flex flex-wrap gap-1.5">
+                  <button className="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 text-[11px] font-black text-slate-700 hover:bg-slate-50" onClick={copyLink} type="button"><Copy className="size-3.5" />{copied ? "Copied" : "Copy link"}</button>
+                  <a className="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 text-[11px] font-black text-slate-700 hover:bg-slate-50" href={link} rel="noreferrer" target="_blank"><ExternalLink className="size-3.5" />Open form</a>
+                  <button className="inline-flex min-h-8 items-center gap-1.5 rounded-lg bg-slate-950 px-2.5 text-[11px] font-black text-white hover:bg-slate-800" onClick={() => setSessionView("edit")} type="button"><Settings2 className="size-3.5" />Edit form</button>
                 </div>
               </div>
 
-              <div className="mt-5 grid gap-3 sm:grid-cols-3">
-                <Metric label="Total Responses" value={selectedEntries.length} />
-                <Metric label="Visible Responses" value={displayedEntries.length} />
-                <Metric label="Form Fields" value={selectedSession.fields.length} />
+              <div className="flex flex-wrap items-center border-b border-slate-200 bg-slate-50/80 px-1 py-1.5">
+                <OperationalStat label="Responses" value={selectedEntries.length} />
+                <OperationalStat label="Visible" value={displayedEntries.length} />
+                <OperationalStat label="Fields" tone="info" value={selectedSession.fields.length} />
+                <OperationalStat label="Registered" value={comparison.registered.length} />
+                <OperationalStat label="Attended" tone="success" value={comparison.attended.length} />
+                <OperationalStat label="Absent" tone="danger" value={comparison.absent.length} />
+                <OperationalStat label="Walk-ins" tone="warning" value={comparison.walkIns.length} />
+                <OperationalStat label="Rate" suffix="%" tone="info" value={attendanceRate} />
               </div>
 
-              <section className="mt-5 border-t border-slate-100 pt-5">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-700">Registration Comparison</p>
-                    <h4 className="mt-1 text-lg font-black text-slate-950">Attendance follow-up</h4>
-                    <p className="mt-1 text-xs font-semibold text-slate-500">
-                      Only registrations received by {registrationCutoff ? registrationCutoff.toLocaleString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "the session date"} are included. Mobiles are matched after removing +91, 91, leading zero, spaces and hyphens.
-                    </p>
+              <section aria-labelledby="attendance-follow-up-title" className="border-b border-slate-200 px-3 py-2.5">
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="mr-auto min-w-0">
+                    <h4 className="text-sm font-black text-slate-950" id="attendance-follow-up-title">Registration comparison</h4>
+                    <details className="mt-0.5 text-[11px] font-semibold text-slate-500">
+                      <summary className="cursor-pointer font-bold text-slate-500 hover:text-slate-700">How matching works</summary>
+                      <p className="mt-1 max-w-4xl leading-5">
+                        Registrations received by {registrationCutoff ? registrationCutoff.toLocaleString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "the session date"} are included. Mobile matching ignores +91, 91, leading zero, spaces and hyphens.
+                      </p>
+                    </details>
                   </div>
-                  <button className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-black text-slate-700 hover:bg-slate-50 disabled:opacity-40" disabled={comparison[comparisonFilter === "walk_ins" ? "walkIns" : comparisonFilter].length === 0} onClick={exportComparisonCsv} type="button">
-                    <Download className="size-4" />
-                    Export {comparisonFilter === "walk_ins" ? "Walk-ins" : comparisonFilter.charAt(0).toUpperCase() + comparisonFilter.slice(1)}
+                  <button className="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-[11px] font-black text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40" disabled={comparison[comparisonFilter === "walk_ins" ? "walkIns" : comparisonFilter].length === 0} onClick={exportComparisonCsv} type="button">
+                    <Download className="size-3.5" />
+                    Export {comparisonFilter === "walk_ins" ? "walk-ins" : comparisonFilter}
                   </button>
                 </div>
 
-                <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-                  <ComparisonMetric icon={UsersRound} label="Registered" tone="slate" value={comparison.registered.length} />
-                  <ComparisonMetric icon={UserCheck} label="Attended" tone="emerald" value={comparison.attended.length} />
-                  <ComparisonMetric icon={UserX} label="Absent" tone="rose" value={comparison.absent.length} />
-                  <ComparisonMetric icon={Plus} label="Walk-ins" tone="amber" value={comparison.walkIns.length} />
-                  <ComparisonMetric icon={BarChart3} label="Attendance Rate" suffix="%" tone="indigo" value={attendanceRate} />
-                </div>
-
-                <div className="mt-4 flex gap-2 overflow-x-auto pb-1" role="tablist">
+                <div className="mt-2 flex gap-1.5 overflow-x-auto pb-1" aria-label="Attendance comparison scope">
                   {([
                     ["registered", "Registered", comparison.registered.length],
                     ["attended", "Attended", comparison.attended.length],
                     ["absent", "Absent", comparison.absent.length],
                     ["walk_ins", "Walk-ins", comparison.walkIns.length]
                   ] as Array<[ComparisonFilter, string, number]>).map(([value, label, count]) => (
-                    <button aria-selected={comparisonFilter === value} className={`shrink-0 rounded-lg px-3 py-2 text-xs font-black ${comparisonFilter === value ? "bg-slate-950 text-white" : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`} key={value} onClick={() => setComparisonFilter(value)} role="tab" type="button">
+                    <button aria-pressed={comparisonFilter === value} className={`shrink-0 rounded-lg px-2.5 py-1.5 text-[11px] font-black ${comparisonFilter === value ? "bg-slate-950 text-white" : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`} key={value} onClick={() => setComparisonFilter(value)} type="button">
                       {label} <span className="ml-1 opacity-70">{count}</span>
                     </button>
                   ))}
@@ -737,20 +758,29 @@ export default function WorkshopAttendancePage() {
                 />
               </section>
 
-              <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-5">
-                <div><h4 className="text-lg font-black text-slate-950">Attendance Data</h4><p className="mt-1 text-xs font-semibold text-slate-500">Filter, review and export this session's responses.</p></div>
-                <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-slate-50/50 px-3 py-2">
+                <div><h4 className="text-sm font-black text-slate-950">Attendance responses</h4><p className="text-[11px] font-semibold text-slate-500">Filter, review and export this session.</p></div>
+                <div className="flex flex-wrap items-center gap-1.5">
                   <AdvancedResponseFilters answerOptions={selectedAnswerOptions} filters={responseFilters} onChange={setResponseFilters} questions={attendanceQuestions} resultCount={displayedEntries.length} totalCount={selectedEntries.length} />
                   <DuplicateResponseFilter checked={hideDuplicates} onChange={setHideDuplicates} rawCount={filteredEntries.length} visibleCount={displayedEntries.length} />
-                  <button className="grid size-10 place-items-center rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40" disabled={selectedEntries.length === 0} onClick={exportAttendanceCsv} title="Export attendance CSV" type="button"><Download className="size-4" /></button>
+                  <button aria-label="Export attendance CSV" className="grid size-8 place-items-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40" disabled={selectedEntries.length === 0} onClick={exportAttendanceCsv} title="Export attendance CSV" type="button"><Download className="size-3.5" /></button>
                 </div>
               </div>
 
-              {selectedEntries.length === 0 ? <div className="mt-5 grid min-h-52 place-items-center rounded-xl border border-dashed border-slate-200 bg-slate-50 px-6 text-center"><div><UsersRound className="mx-auto size-9 text-slate-300" /><p className="mt-3 text-sm font-black text-slate-700">No attendance recorded yet</p><p className="mt-1 text-xs font-semibold text-slate-500">Share the public form link to start collecting responses.</p></div></div> : (
-                <div className="mt-4 w-full overflow-auto rounded-xl border border-slate-200">
-                  <table className="w-full min-w-[820px] text-left text-sm">
-                    <thead className="bg-slate-50 text-xs uppercase tracking-[0.12em] text-slate-400"><tr><th className="px-4 py-3">Name</th><th className="px-4 py-3">Mobile</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Check-in</th><th className="px-4 py-3">Actions</th></tr></thead>
-                    <tbody className="divide-y divide-slate-100">{displayedEntries.map((entry) => <tr className="hover:bg-slate-50" key={entry.id}><td className="px-4 py-3 font-bold text-slate-900">{entry.attendeeName}</td><td className="px-4 py-3 font-semibold text-slate-500">{entry.mobile}</td><td className="px-4 py-3"><select aria-label={`Attendance status for ${entry.attendeeName}`} className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs font-black text-slate-700" onChange={(event) => updateEntry(entry.id, { status: event.target.value as AttendanceEntry["status"] })} value={entry.status || "checked_in"}><option value="checked_in">Checked In</option><option value="late">Late</option><option value="joined_zoom">Joined Zoom</option><option value="completed">Completed</option></select></td><td className="px-4 py-3 font-semibold text-slate-500">{entry.submittedAt ? new Date(entry.submittedAt).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : "-"}</td><td className="px-4 py-3"><div className="flex gap-2"><button aria-label={`View ${entry.attendeeName} answers`} className="grid size-8 place-items-center rounded-lg border border-slate-200 text-slate-500 hover:bg-white" onClick={() => setEntryDetail(entry)} type="button"><Eye className="size-3.5" /></button><button aria-label={`Delete ${entry.attendeeName} attendance`} className="grid size-8 place-items-center rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100" onClick={() => setDeleteEntryTarget(entry)} type="button"><Trash2 className="size-3.5" /></button></div></td></tr>)}</tbody>
+              {selectedEntries.length === 0 ? <div className="m-3 grid min-h-32 place-items-center rounded-lg border border-dashed border-slate-200 bg-slate-50 px-6 text-center"><div><UsersRound className="mx-auto size-7 text-slate-300" /><p className="mt-2 text-sm font-black text-slate-700">No attendance recorded yet</p><p className="mt-0.5 text-xs font-semibold text-slate-500">Share the public form link to start collecting responses.</p></div></div> : displayedEntries.length === 0 ? (
+                <div className="m-3 grid min-h-28 place-items-center rounded-lg border border-dashed border-slate-200 bg-slate-50 px-6 text-center">
+                  <div>
+                    <Search className="mx-auto size-6 text-slate-300" />
+                    <p className="mt-2 text-sm font-black text-slate-700">No responses match these filters</p>
+                    <button className="mt-1.5 text-xs font-black text-emerald-700 hover:text-emerald-800" onClick={() => { setResponseFilters({ ...emptyResponseFilters }); setHideDuplicates(false); }} type="button">Clear filters</button>
+                  </div>
+                </div>
+              ) : (
+                <div className="max-h-[420px] w-full overflow-auto">
+                  <table className="w-full min-w-[760px] text-left text-xs">
+                    <caption className="sr-only">Attendance responses for {selectedSession.title}</caption>
+                    <thead className="sticky top-0 z-10 bg-slate-50 text-[10px] uppercase tracking-[0.12em] text-slate-500"><tr><th className="px-3 py-2">Name</th><th className="px-3 py-2">Mobile</th><th className="px-3 py-2">Status</th><th className="px-3 py-2">Check-in</th><th className="px-3 py-2">Actions</th></tr></thead>
+                    <tbody className="divide-y divide-slate-100">{displayedEntries.map((entry) => <tr className="hover:bg-slate-50" key={entry.id}><td className="px-3 py-2 font-bold text-slate-900">{entry.attendeeName}</td><td className="px-3 py-2 font-semibold text-slate-500">{entry.mobile}</td><td className="px-3 py-2"><select aria-label={`Attendance status for ${entry.attendeeName}`} className="min-h-8 rounded-lg border border-slate-200 bg-white px-2 text-[11px] font-black text-slate-700" onChange={(event) => updateEntry(entry.id, { status: event.target.value as AttendanceEntry["status"] })} value={entry.status || "checked_in"}><option value="checked_in">Checked In</option><option value="late">Late</option><option value="joined_zoom">Joined Zoom</option><option value="completed">Completed</option></select></td><td className="px-3 py-2 font-semibold text-slate-500">{entry.submittedAt ? new Date(entry.submittedAt).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : "-"}</td><td className="px-3 py-2"><div className="flex gap-1.5"><button aria-label={`View ${entry.attendeeName} answers`} className="grid size-8 place-items-center rounded-lg border border-slate-200 text-slate-500 hover:bg-white" onClick={() => setEntryDetail(entry)} type="button"><Eye className="size-3.5" /></button><button aria-label={`Delete ${entry.attendeeName} attendance`} className="grid size-8 place-items-center rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100" onClick={() => setDeleteEntryTarget(entry)} type="button"><Trash2 className="size-3.5" /></button></div></td></tr>)}</tbody>
                   </table>
                 </div>
               )}
@@ -825,12 +855,12 @@ export default function WorkshopAttendancePage() {
                     </div>
                     <label className="md:col-span-2">
                       <span className="mb-2 block text-sm font-bold text-slate-600">Message when Zoom link is not configured</span>
-                      <textarea className={inputClass} onChange={(event) => updateSession({ noZoomMessage: event.target.value })} placeholder="Attendance is saved. The Zoom link has not been configured for this session." rows={2} value={selectedSession.noZoomMessage ?? "Attendance is saved. The Zoom link has not been configured for this session."} />
+                      <textarea className={`${inputClass} resize-none`} onChange={(event) => updateSession({ noZoomMessage: event.target.value })} placeholder="Attendance is saved. The Zoom link has not been configured for this session." rows={2} value={selectedSession.noZoomMessage ?? "Attendance is saved. The Zoom link has not been configured for this session."} />
                       <span className="mt-1.5 block text-xs font-semibold text-slate-400">Shown after attendance is submitted when this session has no Zoom link.</span>
                     </label>
                     <label className="md:col-span-2">
                       <span className="mb-2 block text-sm font-bold text-slate-600">Form Description</span>
-                      <textarea className={inputClass} onChange={(event) => updateSession({ description: event.target.value })} rows={3} value={selectedSession.description} />
+                      <textarea className={`${inputClass} resize-none`} onChange={(event) => updateSession({ description: event.target.value })} rows={3} value={selectedSession.description} />
                     </label>
                   </div>
                 </div>
@@ -983,7 +1013,7 @@ export default function WorkshopAttendancePage() {
                   <details className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50/60 p-4">
                     <summary className="cursor-pointer text-sm font-black text-emerald-900">Add attendance by mobile numbers in bulk</summary>
                     <p className="mt-2 text-xs font-semibold leading-5 text-emerald-800/80">Paste one mobile per line, or separate numbers with commas. Existing numbers in this session are skipped automatically.</p>
-                    <textarea className="mt-3 min-h-32 w-full rounded-xl border border-emerald-200 bg-white px-3.5 py-3 font-mono text-sm font-semibold outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100" onChange={(event) => { setBulkMobiles(event.target.value); setBulkMessage(""); }} placeholder={"9876543210\n8765432109\n+91 76543 21098"} value={bulkMobiles} />
+                    <textarea className="mt-3 min-h-32 w-full resize-none rounded-xl border border-emerald-200 bg-white px-3.5 py-3 font-mono text-sm font-semibold outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100" onChange={(event) => { setBulkMobiles(event.target.value); setBulkMessage(""); }} placeholder={"9876543210\n8765432109\n+91 76543 21098"} value={bulkMobiles} />
                     <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                       <p className="text-xs font-bold text-slate-600">{bulkMessage}</p>
                       <button className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-emerald-700 px-4 text-sm font-black text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-50" disabled={bulkSaving || !bulkMobiles.trim()} onClick={addBulkAttendance} type="button"><Plus className="size-4" />{bulkSaving ? "Adding..." : "Add attendance"}</button>
@@ -1042,25 +1072,6 @@ export default function WorkshopAttendancePage() {
   );
 }
 
-function ComparisonMetric({ icon: Icon, label, suffix = "", tone, value }: { icon: LucideIcon; label: string; suffix?: string; tone: "amber" | "emerald" | "indigo" | "rose" | "slate"; value: number }) {
-  const tones = {
-    amber: "bg-amber-50 text-amber-700",
-    emerald: "bg-emerald-50 text-emerald-700",
-    indigo: "bg-indigo-50 text-indigo-700",
-    rose: "bg-rose-50 text-rose-700",
-    slate: "bg-slate-100 text-slate-700"
-  };
-  return (
-    <div className="flex min-h-20 items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
-      <span className={`grid size-10 shrink-0 place-items-center rounded-lg ${tones[tone]}`}><Icon className="size-5" /></span>
-      <div className="min-w-0">
-        <p className="truncate text-xs font-black uppercase tracking-[0.1em] text-slate-400">{label}</p>
-        <p className="mt-0.5 text-xl font-black text-slate-950">{value}{suffix}</p>
-      </div>
-    </div>
-  );
-}
-
 function ComparisonTable({
   comparison,
   filter,
@@ -1084,41 +1095,42 @@ function ComparisonTable({
 
   if (count === 0) {
     return (
-      <div className="mt-3 grid min-h-32 place-items-center rounded-xl border border-dashed border-slate-200 bg-slate-50 px-5 text-center">
+      <div className="mt-2 grid min-h-24 place-items-center rounded-lg border border-dashed border-slate-200 bg-slate-50 px-5 text-center">
         <div><UserCheck className="mx-auto size-7 text-slate-300" /><p className="mt-2 text-sm font-black text-slate-700">No {filter === "walk_ins" ? "walk-ins" : filter} found</p></div>
       </div>
     );
   }
 
   return (
-    <div className="mt-3 w-full overflow-auto rounded-xl border border-slate-200">
-      <table className="w-full min-w-[900px] text-left text-sm">
-        <thead className="bg-slate-50 text-xs uppercase tracking-[0.1em] text-slate-400">
-          <tr><th className="px-4 py-3">Name</th><th className="px-4 py-3">Mobile</th><th className="px-4 py-3">Email / City</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Date</th><th className="px-4 py-3">Follow-up</th></tr>
+    <div className="mt-2 max-h-[340px] w-full overflow-auto rounded-lg border border-slate-200">
+      <table className="w-full min-w-[840px] text-left text-xs">
+        <caption className="sr-only">{filter === "walk_ins" ? "Walk-in" : filter} registration comparison</caption>
+        <thead className="sticky top-0 z-10 bg-slate-50 text-[10px] uppercase tracking-[0.1em] text-slate-500">
+          <tr><th className="px-3 py-2">Name</th><th className="px-3 py-2">Mobile</th><th className="px-3 py-2">Email / City</th><th className="px-3 py-2">Status</th><th className="px-3 py-2">Date</th><th className="px-3 py-2">Follow-up</th></tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
           {filter === "attended" ? comparison.attended.map(({ attendance, registration }) => {
             const mobile = normalizedMobile(registration.mobile || attendance.mobile);
             return (
               <tr className="hover:bg-slate-50" key={registration.id}>
-                <td className="px-4 py-3 font-bold text-slate-900">{registration.fullName || attendance.attendeeName}</td>
-                <td className="px-4 py-3 font-semibold text-slate-600">{mobile || "-"}</td>
-                <td className="px-4 py-3"><p className="font-semibold text-slate-600">{registration.email || attendance.email || "-"}</p><p className="mt-0.5 text-xs text-slate-400">{registration.city || attendance.city || "-"}</p></td>
-                <td className="px-4 py-3"><StatusBadge label="Attended" tone="emerald" /></td>
-                <td className="px-4 py-3 font-semibold text-slate-500">{attendance.submittedAt ? new Date(attendance.submittedAt).toLocaleString("en-IN") : "-"}</td>
-                <td className="px-4 py-3"><ContactActions message={followUpMessage(registration.fullName)} mobile={mobile} name={registration.fullName} /></td>
+                <td className="px-3 py-2 font-bold text-slate-900">{registration.fullName || attendance.attendeeName}</td>
+                <td className="px-3 py-2 font-semibold text-slate-600">{mobile || "-"}</td>
+                <td className="px-3 py-2"><p className="font-semibold text-slate-600">{registration.email || attendance.email || "-"}</p><p className="mt-0.5 text-[11px] text-slate-400">{registration.city || attendance.city || "-"}</p></td>
+                <td className="px-3 py-2"><StatusBadge label="Attended" tone="emerald" /></td>
+                <td className="px-3 py-2 font-semibold text-slate-500">{attendance.submittedAt ? new Date(attendance.submittedAt).toLocaleString("en-IN") : "-"}</td>
+                <td className="px-3 py-2"><ContactActions message={followUpMessage(registration.fullName)} mobile={mobile} name={registration.fullName} /></td>
               </tr>
             );
           }) : filter === "walk_ins" ? comparison.walkIns.map((attendance) => {
             const mobile = normalizedMobile(attendance.mobile);
             return (
               <tr className="hover:bg-slate-50" key={attendance.id}>
-                <td className="px-4 py-3 font-bold text-slate-900">{attendance.attendeeName}</td>
-                <td className="px-4 py-3 font-semibold text-slate-600">{mobile || "-"}</td>
-                <td className="px-4 py-3"><p className="font-semibold text-slate-600">{attendance.email || "-"}</p><p className="mt-0.5 text-xs text-slate-400">{attendance.city || "-"}</p></td>
-                <td className="px-4 py-3"><StatusBadge label="Walk-in" tone="amber" /></td>
-                <td className="px-4 py-3 font-semibold text-slate-500">{attendance.submittedAt ? new Date(attendance.submittedAt).toLocaleString("en-IN") : "-"}</td>
-                <td className="px-4 py-3"><ContactActions message={followUpMessage(attendance.attendeeName)} mobile={mobile} name={attendance.attendeeName} /></td>
+                <td className="px-3 py-2 font-bold text-slate-900">{attendance.attendeeName}</td>
+                <td className="px-3 py-2 font-semibold text-slate-600">{mobile || "-"}</td>
+                <td className="px-3 py-2"><p className="font-semibold text-slate-600">{attendance.email || "-"}</p><p className="mt-0.5 text-[11px] text-slate-400">{attendance.city || "-"}</p></td>
+                <td className="px-3 py-2"><StatusBadge label="Walk-in" tone="amber" /></td>
+                <td className="px-3 py-2 font-semibold text-slate-500">{attendance.submittedAt ? new Date(attendance.submittedAt).toLocaleString("en-IN") : "-"}</td>
+                <td className="px-3 py-2"><ContactActions message={followUpMessage(attendance.attendeeName)} mobile={mobile} name={attendance.attendeeName} /></td>
               </tr>
             );
           }) : registrations.map((registration) => {
@@ -1126,12 +1138,12 @@ function ComparisonTable({
             const attended = attendedRegistrationIds.has(registration.id);
             return (
               <tr className="hover:bg-slate-50" key={registration.id}>
-                <td className="px-4 py-3 font-bold text-slate-900">{registration.fullName}</td>
-                <td className="px-4 py-3 font-semibold text-slate-600">{mobile || "-"}</td>
-                <td className="px-4 py-3"><p className="font-semibold text-slate-600">{registration.email || "-"}</p><p className="mt-0.5 text-xs text-slate-400">{registration.city || "-"}</p></td>
-                <td className="px-4 py-3"><StatusBadge label={attended ? "Attended" : "Absent"} tone={attended ? "emerald" : "rose"} /></td>
-                <td className="px-4 py-3 font-semibold text-slate-500">{registration.createdAt ? new Date(registration.createdAt).toLocaleString("en-IN") : "-"}</td>
-                <td className="px-4 py-3"><ContactActions message={followUpMessage(registration.fullName)} mobile={mobile} name={registration.fullName} /></td>
+                <td className="px-3 py-2 font-bold text-slate-900">{registration.fullName}</td>
+                <td className="px-3 py-2 font-semibold text-slate-600">{mobile || "-"}</td>
+                <td className="px-3 py-2"><p className="font-semibold text-slate-600">{registration.email || "-"}</p><p className="mt-0.5 text-[11px] text-slate-400">{registration.city || "-"}</p></td>
+                <td className="px-3 py-2"><StatusBadge label={attended ? "Attended" : "Absent"} tone={attended ? "emerald" : "rose"} /></td>
+                <td className="px-3 py-2 font-semibold text-slate-500">{registration.createdAt ? new Date(registration.createdAt).toLocaleString("en-IN") : "-"}</td>
+                <td className="px-3 py-2"><ContactActions message={followUpMessage(registration.fullName)} mobile={mobile} name={registration.fullName} /></td>
               </tr>
             );
           })}
@@ -1143,15 +1155,15 @@ function ComparisonTable({
 
 function StatusBadge({ label, tone }: { label: string; tone: "amber" | "emerald" | "rose" }) {
   const tones = { amber: "bg-amber-50 text-amber-700", emerald: "bg-emerald-50 text-emerald-700", rose: "bg-rose-50 text-rose-700" };
-  return <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-black ${tones[tone]}`}>{label}</span>;
+  return <span className={`inline-flex rounded-full px-2 py-1 text-[10px] font-black ${tones[tone]}`}>{label}</span>;
 }
 
 function ContactActions({ message, mobile, name }: { message: string; mobile: string; name: string }) {
   if (!mobile) return <span className="text-xs font-semibold text-slate-400">No valid mobile</span>;
   return (
-    <div className="flex gap-2">
-      <a aria-label={`Call ${name}`} className="grid size-9 place-items-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50" href={`tel:+91${mobile}`} title="Call"><Phone className="size-4" /></a>
-      <a aria-label={`WhatsApp ${name}`} className="grid size-9 place-items-center rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100" href={`https://wa.me/91${mobile}?text=${message}`} rel="noreferrer" target="_blank" title="WhatsApp"><MessageCircle className="size-4" /></a>
+    <div className="flex gap-1.5">
+      <a aria-label={`Call ${name}`} className="grid size-8 place-items-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50" href={`tel:+91${mobile}`} title="Call"><Phone className="size-3.5" /></a>
+      <a aria-label={`WhatsApp ${name}`} className="grid size-8 place-items-center rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100" href={`https://wa.me/91${mobile}?text=${message}`} rel="noreferrer" target="_blank" title="WhatsApp"><MessageCircle className="size-3.5" /></a>
     </div>
   );
 }
@@ -1211,7 +1223,7 @@ function AttendancePreview({ device, session }: { device: "desktop" | "mobile"; 
       <div className="p-4">{session.theme?.logoUrl ? <img alt="Logo preview" className="mb-3 max-h-12 max-w-[55%] object-contain" src={session.theme.logoUrl} /> : null}<p className="text-[9px] font-black uppercase tracking-[0.18em]" style={{ color: accent }}>CFL Session Attendance</p><h4 className="mt-1 text-lg font-black leading-tight">{session.workshopName}</h4><p className="mt-1 text-xs font-bold text-slate-500">{session.title}</p></div>
       <div className={`grid gap-3 border-t border-slate-100 p-4 ${device === "desktop" ? "grid-cols-2" : "grid-cols-1"}`}>
         {fields.map((field) => field.type === "divider" ? <hr className="col-span-full border-slate-200" key={field.id} /> : field.type === "heading" ? <p className="col-span-full text-sm font-black" key={field.id}>{field.label}</p> : <div className={field.width === "full" ? "col-span-full" : ""} key={field.id}><p className="mb-1 text-[10px] font-black text-slate-600">{field.label}{field.required ? " *" : ""}</p><div className={`h-9 border border-slate-200 bg-slate-50 ${radius}`} /></div>)}
-        <button className={`col-span-full min-h-10 text-xs font-black text-white ${radius}`} style={{ backgroundColor: accent }} type="button">{session.submitButtonText || "Mark Attendance"}</button>
+        <div aria-hidden="true" className={`col-span-full grid min-h-10 place-items-center text-xs font-black text-white ${radius}`} style={{ backgroundColor: accent }}>{session.submitButtonText || "Mark Attendance"}</div>
       </div>
     </div>
   );
