@@ -706,6 +706,7 @@ export default function WorkshopAttendancePage() {
                   <button className="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 text-[11px] font-black text-slate-700 hover:bg-slate-50" onClick={copyLink} type="button"><Copy className="size-3.5" />{copied ? "Copied" : "Copy link"}</button>
                   <a className="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 text-[11px] font-black text-slate-700 hover:bg-slate-50" href={link} rel="noreferrer" target="_blank"><ExternalLink className="size-3.5" />Open form</a>
                   <button className="inline-flex min-h-8 items-center gap-1.5 rounded-lg bg-slate-950 px-2.5 text-[11px] font-black text-white hover:bg-slate-800" onClick={() => setSessionView("edit")} type="button"><Settings2 className="size-3.5" />Edit form</button>
+                  <button aria-label={`Delete ${selectedSession.title} session`} className="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-2.5 text-[11px] font-black text-rose-700 hover:bg-rose-100" onClick={() => setDeleteSessionTarget(selectedSession)} type="button"><Trash2 className="size-3.5" />Delete session</button>
                 </div>
               </div>
 

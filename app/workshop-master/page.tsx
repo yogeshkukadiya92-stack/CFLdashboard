@@ -59,6 +59,7 @@ function registrationWhatsAppStatus(entry: RegistrationEntry) {
   return participantStatus === "not_configured" || referrerStatus === "not_configured" ? "not_configured" : "not sent";
 }
 type DiscountType = "percent" | "flat";
+type AnalyticsPanel = "cohort" | "overlap" | null;
 type RegistrationLinkConfig = {
   batch?: string;
   customBaseUrl?: string;
@@ -207,6 +208,7 @@ export default function WorkshopMasterPage() {
   const [recordScope, setRecordScope] = useState<"all" | "active" | "historical">("active");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedWorkshopId, setSelectedWorkshopId] = useState<string | null>(null);
+  const [analyticsPanel, setAnalyticsPanel] = useState<AnalyticsPanel>(null);
   const [selectedParticipantBatchId, setSelectedParticipantBatchId] = useState("all");
   const [showParticipants, setShowParticipants] = useState(false);
   const [registrations, setRegistrations] = useState<RegistrationEntry[]>([]);
@@ -231,6 +233,20 @@ export default function WorkshopMasterPage() {
   const participantSearchRef = useRef<HTMLInputElement>(null);
   const workshopDialogRef = useRef<HTMLElement>(null);
   const workshopCloseButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!analyticsPanel) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setAnalyticsPanel(null);
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [analyticsPanel]);
 
   useEffect(() => {
     if (!selectedWorkshopId) return undefined;
@@ -1157,10 +1173,11 @@ export default function WorkshopMasterPage() {
   return (
     <AdminPlatformShell activeLabel="Workshop Master" description="Create workshop/product masters and configure registration fields in one platform." title="Manage Workshop">
       {!showData ? (
-      <form className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:p-5" noValidate onSubmit={submit}>
+      <div aria-labelledby="workshop-editor-title" aria-modal="true" className="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/60 p-1.5 backdrop-blur-sm sm:p-3" role="dialog">
+      <form className="max-h-[calc(100dvh-0.75rem)] w-full max-w-[1600px] overflow-y-auto overscroll-contain rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl sm:max-h-[calc(100dvh-1.5rem)] md:p-5" noValidate onSubmit={submit}>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="text-sm font-bold text-slate-500">Form completion</p>
+            <p className="text-sm font-bold text-slate-500" id="workshop-editor-title">Workshop editor · Form completion</p>
             <p className="text-3xl font-black text-slate-950">{progress}%</p>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2">
@@ -1587,6 +1604,7 @@ export default function WorkshopMasterPage() {
           </button>
         </div>
       </form>
+      </div>
       ) : null}
 
       {showData ? (
@@ -1641,10 +1659,20 @@ export default function WorkshopMasterPage() {
                 />
               </label>
             </div>
-            <button className="inline-flex items-center gap-2 rounded-xl bg-slate-950 px-4 py-3 text-sm font-bold text-white hover:bg-slate-800" onClick={exportCsv} type="button">
-              <Download className="size-4" />
-              Export CSV
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button className="inline-flex items-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm font-bold text-indigo-700 hover:bg-indigo-100" onClick={() => setAnalyticsPanel("cohort")} type="button">
+                <BarChart3 className="size-4" />
+                Cohort comparison
+              </button>
+              <button className="inline-flex items-center gap-2 rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm font-bold text-violet-700 hover:bg-violet-100" onClick={() => setAnalyticsPanel("overlap")} type="button">
+                <UsersRound className="size-4" />
+                Workshop overlap
+              </button>
+              <button className="inline-flex items-center gap-2 rounded-xl bg-slate-950 px-4 py-3 text-sm font-bold text-white hover:bg-slate-800" onClick={exportCsv} type="button">
+                <Download className="size-4" />
+                Export CSV
+              </button>
+            </div>
           </div>
 
           <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200">
@@ -1687,13 +1715,37 @@ export default function WorkshopMasterPage() {
             </table>
           </div>
 
-          <WorkshopCohortCompare registrations={registrations} workshops={records} />
-          <MultiWorkshopOverlap
-            attendanceEntries={attendanceEntries}
-            attendanceSessions={attendanceSessions}
-            registrations={registrations}
-            workshops={records}
-          />
+          {analyticsPanel ? (
+            <div
+              aria-labelledby="workshop-analytics-title"
+              aria-modal="true"
+              className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-1.5 backdrop-blur-sm sm:p-3"
+              onMouseDown={(event) => {
+                if (event.target === event.currentTarget) setAnalyticsPanel(null);
+              }}
+              role="dialog"
+            >
+              <section className="flex max-h-[calc(100dvh-0.75rem)] w-full max-w-[1500px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl sm:max-h-[calc(100dvh-1.5rem)]">
+                <header className="flex shrink-0 items-center justify-between gap-4 border-b border-slate-200 px-4 py-3">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.18em] text-indigo-600">Workshop analytics</p>
+                    <h4 className="mt-0.5 text-lg font-black text-slate-950" id="workshop-analytics-title">{analyticsPanel === "cohort" ? "Cohort comparison" : "Workshop participant overlap"}</h4>
+                  </div>
+                  <button aria-label="Close analytics" className="grid size-10 shrink-0 place-items-center rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-950" onClick={() => setAnalyticsPanel(null)} type="button"><X className="size-5" /></button>
+                </header>
+                <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-5 sm:px-5">
+                  {analyticsPanel === "cohort" ? <WorkshopCohortCompare registrations={registrations} workshops={records} /> : (
+                    <MultiWorkshopOverlap
+                      attendanceEntries={attendanceEntries}
+                      attendanceSessions={attendanceSessions}
+                      registrations={registrations}
+                      workshops={records}
+                    />
+                  )}
+                </div>
+              </section>
+            </div>
+          ) : null}
 
           {selectedWorkshop ? (
             <div
