@@ -48,6 +48,7 @@ type ClientRecord = {
 };
 type QueueScope = "all" | "today" | "overdue" | "unassigned" | "blocked";
 type ViewMode = "list" | "pipeline";
+type LeadDateType = "created" | "updated" | "lastActivity" | "followUp";
 
 const stages: LeadStage[] = ["New Leads", "Contacted", "Qualified", "Proposal", "Won", "Lost"];
 const activeStages: LeadStage[] = ["New Leads", "Contacted", "Qualified", "Proposal"];
@@ -86,6 +87,11 @@ export default function LeadsPage() {
   const [followUpType, setFollowUpType] = useState<LeadFollowUp["type"]>("Call");
   const [followUpAt, setFollowUpAt] = useState("");
   const [followUpNote, setFollowUpNote] = useState("");
+  const [dateType, setDateType] = useState<LeadDateType>("created");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+  const [pasteOpen, setPasteOpen] = useState(false);
+  const [pasteText, setPasteText] = useState("");
 
   useEffect(() => {
     function load() {
@@ -113,11 +119,17 @@ export default function LeadsPage() {
       if (scope === "overdue" && !hasOverdueFollowUp(lead)) return false;
       if (scope === "unassigned" && (lead.assignedTo || ["Won", "Lost"].includes(lead.stage))) return false;
       if (scope === "blocked" && !lead.blocked) return false;
+      const dateValue = leadDateValue(lead, dateType);
+      if (fromDate && (!dateValue || dateValue < startOfDay(fromDate))) return false;
+      if (toDate && (!dateValue || dateValue > endOfDay(toDate))) return false;
       if (!query) return true;
       return [lead.name, lead.mobile, lead.email, lead.city, lead.source, lead.interest, lead.assignedTo, ...(lead.tags ?? [])]
         .some((value) => String(value ?? "").toLowerCase().includes(query));
     });
-  }, [leads, ownerFilter, scope, search, stageFilter]);
+  }, [dateType, fromDate, leads, ownerFilter, scope, search, stageFilter, toDate]);
+
+  const pastedRows = useMemo(() => parsePastedRows(pasteText), [pasteText]);
+  const pastedSummary = useMemo(() => summarizeImportRows(pastedRows, leads), [leads, pastedRows]);
 
   async function persist(next: Lead[], successMessage?: string) {
     setLeads(next);
@@ -312,6 +324,43 @@ export default function LeadsPage() {
     setMessage("Lead import sample downloaded.");
   }
 
+  async function processImportRows(rows: Record<string, unknown>[], importSource: "Excel Paste" | "Spreadsheet Import") {
+    const byMobile = new Map(leads.map((lead) => [normalizeLeadMobile(lead.mobile), lead]));
+    let processed = 0;
+    let invalid = 0;
+    rows.slice(0, 10_000).forEach((row) => {
+      const mobile = normalizeLeadMobile(pickImportValue(row, ["mobile", "phone", "contact", "mobile no"]));
+      const name = pickImportValue(row, ["name", "full name", "lead name"]);
+      const salespersonCode = pickImportValue(row, ["salesperson id", "sales person id", "salesperson code", "owner id"]);
+      const codeOwner = findSalesPersonByCode(salesPeople, salespersonCode);
+      if (mobile.length !== 10 || !name) { invalid += 1; return; }
+      const existing = byMobile.get(mobile);
+      if (existing) {
+        byMobile.set(mobile, normalizeLead({
+          ...existing,
+          assignedSalesPersonCode: existing.assignedSalesPersonCode || codeOwner?.salesPersonCode || (codeOwner ? salesPersonCodeFromId(codeOwner.id) : undefined),
+          assignedSalesPersonId: existing.assignedSalesPersonId || codeOwner?.id,
+          assignedTo: existing.assignedTo || codeOwner?.name || pickImportValue(row, ["assigned to", "owner", "sales person"]),
+          city: existing.city || pickImportValue(row, ["city"]), email: existing.email || pickImportValue(row, ["email", "email id"]),
+          interest: existing.interest || pickImportValue(row, ["interest", "workshop"]),
+          sourceDetails: [...new Set([importSource, ...(existing.sourceDetails ?? [])])], updatedAt: new Date().toISOString()
+        }));
+      } else {
+        const now = new Date().toISOString();
+        byMobile.set(mobile, normalizeLead({
+          activities: [createLeadActivity("created", `Lead imported from ${importSource.toLowerCase()}.`)],
+          assignedSalesPersonCode: codeOwner?.salesPersonCode || (codeOwner ? salesPersonCodeFromId(codeOwner.id) : undefined), assignedSalesPersonId: codeOwner?.id,
+          assignedTo: codeOwner?.name || pickImportValue(row, ["assigned to", "owner", "sales person"]), city: pickImportValue(row, ["city"]),
+          country: pickImportValue(row, ["country"]) || "India", createdAt: now, email: pickImportValue(row, ["email", "email id"]), id: createLeadId(),
+          interest: pickImportValue(row, ["interest", "workshop"]), mobile, name, priority: normalizePriority(pickImportValue(row, ["priority", "temperature"])),
+          source: pickImportValue(row, ["source"]) || importSource, sourceDetails: [importSource], stage: normalizeStage(pickImportValue(row, ["stage", "status"])), updatedAt: now
+        }));
+      }
+      processed += 1;
+    });
+    await persist(Array.from(byMobile.values()), `${processed} rows processed${invalid ? ` · ${invalid} invalid rows skipped` : ""}. Duplicate mobiles were safely merged.`);
+  }
+
   async function importLeads(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -320,52 +369,7 @@ export default function LeadsPage() {
       const workbook = XLSX.read(await file.arrayBuffer(), { type: "array" });
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
       const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "" }).slice(0, 10_000);
-      const byMobile = new Map(leads.map((lead) => [normalizeLeadMobile(lead.mobile), lead]));
-      let imported = 0;
-      rows.forEach((row) => {
-        const mobile = normalizeLeadMobile(pickImportValue(row, ["mobile", "phone", "contact", "mobile no"]));
-        const name = pickImportValue(row, ["name", "full name", "lead name"]);
-        const salespersonCode = pickImportValue(row, ["salesperson id", "sales person id", "salesperson code", "owner id"]);
-        const codeOwner = findSalesPersonByCode(salesPeople, salespersonCode);
-        if (mobile.length !== 10 || !name) return;
-        const existing = byMobile.get(mobile);
-        if (existing) {
-          byMobile.set(mobile, normalizeLead({
-            ...existing,
-            assignedSalesPersonCode: existing.assignedSalesPersonCode || codeOwner?.salesPersonCode || (codeOwner ? salesPersonCodeFromId(codeOwner.id) : undefined),
-            assignedSalesPersonId: existing.assignedSalesPersonId || codeOwner?.id,
-            assignedTo: existing.assignedTo || codeOwner?.name || pickImportValue(row, ["assigned to", "owner", "sales person"]),
-            city: existing.city || pickImportValue(row, ["city"]),
-            email: existing.email || pickImportValue(row, ["email", "email id"]),
-            interest: existing.interest || pickImportValue(row, ["interest", "workshop"]),
-            sourceDetails: [...new Set(["CSV Import", ...(existing.sourceDetails ?? [])])],
-            updatedAt: new Date().toISOString()
-          }));
-        } else {
-          const now = new Date().toISOString();
-          byMobile.set(mobile, normalizeLead({
-            activities: [createLeadActivity("created", "Lead imported from spreadsheet.")],
-            assignedSalesPersonCode: codeOwner?.salesPersonCode || (codeOwner ? salesPersonCodeFromId(codeOwner.id) : undefined),
-            assignedSalesPersonId: codeOwner?.id,
-            assignedTo: codeOwner?.name || pickImportValue(row, ["assigned to", "owner", "sales person"]),
-            city: pickImportValue(row, ["city"]),
-            country: pickImportValue(row, ["country"]) || "India",
-            createdAt: now,
-            email: pickImportValue(row, ["email", "email id"]),
-            id: createLeadId(),
-            interest: pickImportValue(row, ["interest", "workshop"]),
-            mobile,
-            name,
-            priority: normalizePriority(pickImportValue(row, ["priority", "temperature"])),
-            source: pickImportValue(row, ["source"]) || "CSV Import",
-            sourceDetails: ["CSV Import"],
-            stage: normalizeStage(pickImportValue(row, ["stage", "status"])),
-            updatedAt: now
-          }));
-        }
-        imported += 1;
-      });
-      await persist(Array.from(byMobile.values()), `${imported} lead rows processed. Duplicate mobiles were merged.`);
+      await processImportRows(rows, "Spreadsheet Import");
     } catch {
       setMessage("Lead import failed. Use a valid CSV or Excel file with Name and Mobile columns.");
     } finally {
@@ -400,6 +404,7 @@ export default function LeadsPage() {
               <button className="inline-flex items-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-sm font-black text-indigo-700 hover:bg-indigo-100" onClick={downloadImportSample} type="button"><Download className="size-4" />Download Sample</button>
               <input accept=".csv,.xlsx,.xls" className="hidden" onChange={(event) => void importLeads(event)} ref={importRef} type="file" />
               <button className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-black text-slate-700 hover:bg-slate-50" onClick={() => importRef.current?.click()} type="button"><Upload className="size-4" />Import</button>
+              <button className="inline-flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-black text-emerald-700 hover:bg-emerald-100" onClick={() => setPasteOpen(true)} type="button"><Upload className="size-4" />Paste Excel Data</button>
               <button className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-black text-white hover:bg-emerald-700" onClick={() => setCreateOpen(true)} type="button"><Plus className="size-4" />Add Lead</button>
             </div>
           </div>
@@ -421,6 +426,12 @@ export default function LeadsPage() {
             ] as Array<[QueueScope, string, number]>).map(([value, label, count]) => (
               <button className={`whitespace-nowrap rounded-lg px-3 py-2 text-xs font-black ${scope === value ? "bg-slate-950 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`} key={value} onClick={() => setScope(value)} type="button">{label} ({count})</button>
             ))}
+          </div>
+          <div className="mt-3 grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 md:grid-cols-[190px_1fr_1fr_auto]">
+            <select className={inputClass} onChange={(event) => setDateType(event.target.value as LeadDateType)} value={dateType}><option value="created">Created date</option><option value="updated">Updated date</option><option value="lastActivity">Last activity date</option><option value="followUp">Follow-up date</option></select>
+            <label className="text-xs font-black uppercase text-slate-500">From date<input className={`${inputClass} mt-1`} onChange={(event) => setFromDate(event.target.value)} type="date" value={fromDate} /></label>
+            <label className="text-xs font-black uppercase text-slate-500">To date<input className={`${inputClass} mt-1`} min={fromDate || undefined} onChange={(event) => setToDate(event.target.value)} type="date" value={toDate} /></label>
+            <button className="self-end rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-600" onClick={() => { setFromDate(""); setToDate(""); }} type="button">Clear dates</button>
           </div>
           {message ? <div className="mt-3 flex items-center justify-between gap-3 rounded-lg bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700"><span>{message}</span><button aria-label="Dismiss message" onClick={() => setMessage("")} type="button"><X className="size-4" /></button></div> : null}
           {selectedLeadIds.length ? <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50 p-3"><span className="mr-auto text-sm font-black text-indigo-900">{selectedLeadIds.length} selected</span><select className="rounded-lg border border-indigo-200 bg-white px-3 py-2 text-sm font-bold" onChange={(event) => setBulkOwnerId(event.target.value)} value={bulkOwnerId}><option value="">Move to Unassigned</option>{salesPeople.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}</select><button className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-black text-white" onClick={bulkAssign} type="button">Assign / Transfer</button><button className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-black text-white" onClick={bulkBlock} type="button">Block selected</button><button className="rounded-lg px-3 py-2 text-sm font-black text-slate-600" onClick={() => setSelectedLeadIds([])} type="button">Clear</button></div> : null}
@@ -456,6 +467,7 @@ export default function LeadsPage() {
       ) : null}
 
       {createOpen ? <CreateLeadModal leads={leads} onClose={() => setCreateOpen(false)} onSave={(lead) => { void persist([lead, ...leads], "Lead created and added to the pipeline."); setCreateOpen(false); setSelectedId(lead.id); }} salesPeople={salesPeople} workshops={workshops} /> : null}
+      {pasteOpen ? <PasteImportModal onClose={() => { setPasteOpen(false); setPasteText(""); }} onImport={() => { void processImportRows(pastedRows, "Excel Paste").then(() => { setPasteOpen(false); setPasteText(""); }); }} rows={pastedRows} setText={setPasteText} summary={pastedSummary} text={pasteText} /> : null}
       <ConfirmDialog confirmLabel="Delete Lead" description="This removes the lead and its complete activity history." onCancel={() => setDeleteTarget(null)} onConfirm={deleteLead} open={Boolean(deleteTarget)} title="Delete lead?">{deleteTarget ? `${deleteTarget.name} · ${deleteTarget.mobile}` : null}</ConfirmDialog>
     </AdminPlatformShell>
   );
@@ -502,6 +514,16 @@ function CreateLeadModal({ leads, onClose, onSave, salesPeople, workshops }: { l
   return <div aria-modal="true" className="fixed inset-0 z-50 grid place-items-end bg-slate-950/50 backdrop-blur-sm sm:place-items-center sm:p-4" role="dialog"><form className="max-h-[92vh] w-full overflow-y-auto bg-white p-5 shadow-2xl sm:max-w-xl sm:rounded-xl" onSubmit={submit}><div className="flex items-start justify-between"><div><h2 className="text-2xl font-black">Add Lead</h2><p className="mt-1 text-sm font-semibold text-slate-500">Enter a salesperson ID for instant assignment.</p></div><button aria-label="Close" className="grid size-10 place-items-center rounded-lg border border-slate-200" onClick={onClose} type="button"><X className="size-4" /></button></div>{error ? <p className="mt-4 rounded-lg bg-rose-50 px-4 py-3 text-sm font-bold text-rose-700">{error}</p> : null}<div className="mt-5 grid gap-4 sm:grid-cols-2"><Field label="Full Name *"><input autoFocus className={inputClass} onChange={(event) => setName(event.target.value)} value={name} /></Field><Field label="Mobile *"><input className={inputClass} inputMode="numeric" onChange={(event) => setMobile(event.target.value)} value={mobile} /></Field><Field label="Email"><input className={inputClass} onChange={(event) => setEmail(event.target.value)} type="email" value={email} /></Field><Field label="City"><input className={inputClass} onChange={(event) => setCity(event.target.value)} value={city} /></Field><Field label="Source"><select className={inputClass} onChange={(event) => setSource(event.target.value)} value={source}>{["Manual", "Registration Link", "Landing Page", "Referral", "CSV Import", "Website"].map((value) => <option key={value}>{value}</option>)}</select></Field><Field label="Workshop / Interest"><select className={inputClass} onChange={(event) => setInterest(event.target.value)} value={interest}><option value="">General enquiry</option>{workshops.map((workshop) => <option key={workshop.id}>{workshop.name}</option>)}</select></Field><Field label="Priority"><select className={inputClass} onChange={(event) => setPriority(event.target.value as LeadPriority)} value={priority}><option>Hot</option><option>Warm</option><option>Cold</option></select></Field><Field label="Salesperson Unique ID"><input className={inputClass} onChange={(event) => setSalespersonCode(event.target.value.toUpperCase())} placeholder="SP-XXXXXXXX" value={salespersonCode} />{salespersonCode ? <span className={`mt-1 block text-xs font-bold ${codeOwner ? "text-emerald-600" : "text-rose-600"}`}>{codeOwner ? `Will assign to ${codeOwner.name}` : "No active salesperson found"}</span> : null}</Field><Field label="Assign To (optional fallback)"><select className={inputClass} disabled={Boolean(codeOwner)} onChange={(event) => setAssignedTo(event.target.value)} value={codeOwner?.name || assignedTo}><option value="">Unassigned</option>{salesPeople.map((person) => <option key={person.id} value={person.name}>{person.name} · {person.salesPersonCode || salesPersonCodeFromId(person.id)}</option>)}</select></Field></div><div className="mt-6 flex justify-end gap-2"><button className="rounded-lg border border-slate-200 px-5 py-3 text-sm font-black text-slate-700" onClick={onClose} type="button">Cancel</button><button className="rounded-lg bg-emerald-600 px-5 py-3 text-sm font-black text-white" type="submit">Create Lead</button></div></form></div>;
 }
 
+function PasteImportModal({ onClose, onImport, rows, setText, summary, text }: { onClose: () => void; onImport: () => void; rows: Record<string, unknown>[]; setText: (value: string) => void; summary: { duplicates: number; invalid: number; valid: number }; text: string }) {
+  return <div aria-modal="true" className="fixed inset-0 z-50 grid place-items-end bg-slate-950/50 backdrop-blur-sm sm:place-items-center sm:p-4" role="dialog"><section className="max-h-[92vh] w-full overflow-y-auto bg-white p-5 shadow-2xl sm:max-w-4xl sm:rounded-2xl"><div className="flex items-start justify-between gap-4"><div><h2 className="text-2xl font-black">Paste Excel or Google Sheets data</h2><p className="mt-1 text-sm font-semibold text-slate-500">Copy rows with a header line. Required columns: Name and Mobile. Duplicate mobile numbers will be merged.</p></div><button aria-label="Close paste import" className="grid size-10 place-items-center rounded-lg border border-slate-200" onClick={onClose} type="button"><X className="size-4" /></button></div>
+    <div className="mt-4 rounded-xl bg-slate-50 p-3 text-xs font-bold text-slate-600">Recommended headers: Name · Mobile · Email · City · Source · Workshop · Stage · Priority · Salesperson ID</div>
+    <textarea autoFocus className={`${inputClass} mt-4 min-h-48 resize-y font-mono text-xs`} onChange={(event) => setText(event.target.value)} placeholder={"Name\tMobile\tEmail\tCity\nRahul Patel\t9876543210\trahul@example.com\tSurat"} value={text} />
+    <div className="mt-4 grid gap-3 sm:grid-cols-4"><Metric icon={UsersRound} label="Rows" value={rows.length} /><Metric icon={Check} label="Valid" tone="emerald" value={summary.valid} /><Metric icon={UsersRound} label="Duplicates" tone="amber" value={summary.duplicates} /><Metric icon={Ban} label="Invalid" tone="rose" value={summary.invalid} /></div>
+    {rows.length ? <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200"><table className="w-full min-w-[680px] text-left text-xs"><thead className="bg-slate-50 uppercase text-slate-500"><tr>{["Name", "Mobile", "Email", "City", "Status"].map((value) => <th className="px-3 py-2" key={value}>{value}</th>)}</tr></thead><tbody className="divide-y divide-slate-100">{rows.slice(0, 10).map((row, index) => { const mobile = normalizeLeadMobile(pickImportValue(row, ["mobile", "phone", "contact", "mobile no"])); const name = pickImportValue(row, ["name", "full name", "lead name"]); const valid = mobile.length === 10 && Boolean(name); return <tr key={index}><td className="px-3 py-2 font-bold">{name || "Missing"}</td><td className="px-3 py-2">{mobile || "Missing"}</td><td className="px-3 py-2">{pickImportValue(row, ["email", "email id"]) || "—"}</td><td className="px-3 py-2">{pickImportValue(row, ["city"]) || "—"}</td><td className={`px-3 py-2 font-black ${valid ? "text-emerald-600" : "text-rose-600"}`}>{valid ? "Ready" : "Invalid"}</td></tr>; })}</tbody></table>{rows.length > 10 ? <p className="border-t border-slate-200 px-3 py-2 text-xs font-bold text-slate-500">Previewing first 10 of {rows.length} rows.</p> : null}</div> : null}
+    <div className="mt-5 flex justify-end gap-2"><button className="rounded-lg border border-slate-200 px-5 py-3 text-sm font-black" onClick={onClose} type="button">Cancel</button><button className="rounded-lg bg-emerald-600 px-5 py-3 text-sm font-black text-white disabled:opacity-50" disabled={!summary.valid} onClick={onImport} type="button">Import {summary.valid} valid rows</button></div>
+  </section></div>;
+}
+
 function Metric({ icon: Icon, label, tone = "slate", value }: { icon: typeof UsersRound; label: string; tone?: "slate" | "emerald" | "rose" | "amber" | "indigo"; value: number | string }) { const styles = { amber: "bg-amber-50 text-amber-700", emerald: "bg-emerald-50 text-emerald-700", indigo: "bg-indigo-50 text-indigo-700", rose: "bg-rose-50 text-rose-700", slate: "bg-slate-100 text-slate-700" }; return <div className="flex min-w-0 items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><span className={`grid size-10 shrink-0 place-items-center rounded-lg ${styles[tone]}`}><Icon className="size-5" /></span><div className="min-w-0"><p className="truncate text-xs font-black uppercase text-slate-500">{label}</p><p className="mt-1 truncate text-xl font-black text-slate-950">{value}</p></div></div>; }
 function ModeButton({ active, icon: Icon, label, onClick }: { active: boolean; icon: typeof List; label: string; onClick: () => void }) { return <button className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-xs font-black ${active ? "bg-white text-slate-950 shadow-sm" : "text-slate-500"}`} onClick={onClick} type="button"><Icon className="size-4" />{label}</button>; }
 function Field({ children, label }: { children: React.ReactNode; label: string }) { return <label className="block"><span className="mb-2 block text-xs font-black uppercase text-slate-500">{label}</span>{children}</label>; }
@@ -516,3 +538,9 @@ function normalizeHeader(value: string) { return value.toLowerCase().replace(/[^
 function pickImportValue(row: Record<string, unknown>, keys: string[]) { const values = new Map(Object.entries(row).map(([key, value]) => [normalizeHeader(key), String(value ?? "").trim()])); for (const key of keys) { const value = values.get(normalizeHeader(key)); if (value) return value; } return ""; }
 function normalizePriority(value: string): LeadPriority { const normalized = value.toLowerCase(); return normalized.includes("hot") ? "Hot" : normalized.includes("cold") ? "Cold" : "Warm"; }
 function normalizeStage(value: string): LeadStage { const normalized = value.toLowerCase(); return stages.find((stage) => stage.toLowerCase() === normalized) ?? "New Leads"; }
+function startOfDay(value: string) { return new Date(`${value}T00:00:00`).getTime(); }
+function endOfDay(value: string) { return new Date(`${value}T23:59:59.999`).getTime(); }
+function leadDateValue(lead: Lead, type: LeadDateType) { const raw = type === "created" ? lead.createdAt : type === "updated" ? lead.updatedAt : type === "lastActivity" ? lead.lastActivityAt : nextPendingFollowUp(lead.followUps ?? [])?.dueAt; const value = raw ? new Date(raw).getTime() : Number.NaN; return Number.isFinite(value) ? value : null; }
+function parsePastedRows(value: string): Record<string, unknown>[] { const lines = value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean); if (lines.length < 2) return []; const delimiter = lines[0].includes("\t") ? "\t" : ","; const headers = splitImportLine(lines[0], delimiter); return lines.slice(1, 10_001).map((line) => { const cells = splitImportLine(line, delimiter); return Object.fromEntries(headers.map((header, index) => [header, cells[index] ?? ""])); }); }
+function splitImportLine(line: string, delimiter: string) { if (delimiter === "\t") return line.split("\t").map((value) => value.trim()); const cells: string[] = []; let current = "", quoted = false; for (let index = 0; index < line.length; index += 1) { const char = line[index]; if (char === '"' && line[index + 1] === '"' && quoted) { current += '"'; index += 1; } else if (char === '"') quoted = !quoted; else if (char === "," && !quoted) { cells.push(current.trim()); current = ""; } else current += char; } cells.push(current.trim()); return cells; }
+function summarizeImportRows(rows: Record<string, unknown>[], leads: Lead[]) { const existing = new Set(leads.map((lead) => normalizeLeadMobile(lead.mobile))); const seen = new Set<string>(); let valid = 0, invalid = 0, duplicates = 0; rows.forEach((row) => { const mobile = normalizeLeadMobile(pickImportValue(row, ["mobile", "phone", "contact", "mobile no"])); const name = pickImportValue(row, ["name", "full name", "lead name"]); if (mobile.length !== 10 || !name) { invalid += 1; return; } valid += 1; if (existing.has(mobile) || seen.has(mobile)) duplicates += 1; seen.add(mobile); }); return { duplicates, invalid, valid }; }

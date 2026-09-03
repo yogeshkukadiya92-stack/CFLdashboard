@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readCallFlowBearer } from "@/lib/callflow-auth";
-import { applyCallFlowEvent, parseEventPayload, type CallFlowCallRecord, type CallFlowEvent } from "@/lib/callflow-connector";
+import { applyCallFlowEvent, normalizedCallPhone, parseEventPayload, type CallFlowCallRecord, type CallFlowEvent } from "@/lib/callflow-connector";
 import { getAppState, saveAppState } from "@/lib/db";
 import type { Lead, SalesTeamUser } from "@/lib/types";
 
@@ -28,8 +28,18 @@ export async function POST(request: NextRequest) {
       if (!event?.eventUuid || !event.entityId) { if (event?.eventUuid) failedEventIds.push(event.eventUuid); continue; }
       if (processed.has(event.eventUuid)) { acceptedEventIds.push(event.eventUuid); continue; }
       const payload = parseEventPayload(event);
-      const leadId = event.entityType === "LEAD" ? event.entityId : String(payload.leadId || "");
-      const index = leads.findIndex((lead) => lead.id === leadId && (lead.assignedTo === assignee || lead.assignedSalesPersonId === identity.salesPersonId));
+      let leadId = event.entityType === "LEAD" ? event.entityId : String(payload.leadId || "");
+      let index = leads.findIndex((lead) => lead.id === leadId && (lead.assignedTo === assignee || lead.assignedSalesPersonId === identity.salesPersonId));
+      if (event.entityType === "CALL" && payload.endedAt) {
+        // A system call-log entry can arrive without a lead id. Link it by normalized
+        // phone number, preferring the caller's assigned copy when duplicates exist.
+        const callPhone = normalizedCallPhone(payload.phone);
+        const phoneMatches = callPhone
+          ? leads.map((lead, leadIndex) => ({ lead, leadIndex })).filter(({ lead }) => normalizedCallPhone(lead.mobile) === callPhone)
+          : [];
+        const matched = phoneMatches.find(({ lead }) => lead.assignedTo === assignee || lead.assignedSalesPersonId === identity.salesPersonId);
+        if (matched) { index = matched.leadIndex; leadId = matched.lead.id; }
+      }
       if (index < 0 && event.entityType === "CALL" && payload.endedAt && !leadId) {
         if (!callRecords.some((record) => record.eventUuid === event.eventUuid)) {
           const durationSeconds = Math.max(0, Number(payload.durationSeconds) || 0);
@@ -43,11 +53,26 @@ export async function POST(request: NextRequest) {
             durationSeconds, connected: durationSeconds > 0,
             outcome: durationSeconds > 0 ? "Connected" : direction === "INCOMING" ? "Missed" : "Not connected",
             source: String(payload.source || "android_call_log"),
+            simSlot: payload.simSlot != null && Number.isFinite(Number(payload.simSlot)) ? Number(payload.simSlot) : null,
+            simLabel: payload.simLabel ? String(payload.simLabel) : null,
+            phoneAccountId: payload.phoneAccountId ? String(payload.phoneAccountId) : null,
           });
         }
         processed.add(event.eventUuid); acceptedEventIds.push(event.eventUuid); continue;
       }
       if (index < 0) { failedEventIds.push(event.eventUuid); continue; }
+      if (event.entityType === "CALL" && event.operation === "UPDATE" && payload.leadId) {
+        const recordIndex = callRecords.findIndex((record) => record.id === String(payload.callId || event.entityId));
+        if (recordIndex >= 0) callRecords[recordIndex] = {
+          ...callRecords[recordIndex],
+          leadId,
+          leadName: leads[index].name,
+          campaign: leads[index].source || "Unknown",
+          salespersonId: identity.salesPersonId,
+          salespersonName: user.name,
+        };
+        processed.add(event.eventUuid); acceptedEventIds.push(event.eventUuid); continue;
+      }
       leads[index] = applyCallFlowEvent(leads[index], event, user.name);
       if (event.entityType === "CALL" && payload.endedAt && !callRecords.some((record) => record.eventUuid === event.eventUuid)) {
         const durationSeconds = Math.max(0, Number(payload.durationSeconds) || 0);
@@ -60,6 +85,9 @@ export async function POST(request: NextRequest) {
           startedAt: new Date(startedAtMs).toISOString(), endedAt: new Date(Number(payload.endedAt) || now).toISOString(),
           durationSeconds, connected: durationSeconds > 0, outcome: recentOutcome?.outcome || (durationSeconds > 0 ? "Connected" : String(payload.direction).toUpperCase() === "INCOMING" ? "Missed" : "Not connected"),
           source: String(payload.source || "callflow"),
+          simSlot: payload.simSlot != null && Number.isFinite(Number(payload.simSlot)) ? Number(payload.simSlot) : null,
+          simLabel: payload.simLabel ? String(payload.simLabel) : null,
+          phoneAccountId: payload.phoneAccountId ? String(payload.phoneAccountId) : null,
         });
       }
       if (event.entityType === "CALL_DISPOSITION") {

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { applyCallFlowEvent } from "../lib/callflow-connector.ts";
+import { applyCallFlowEvent, callDurationLabel, callFlowDispositions, leadToCallFlow, normalizedCallPhone } from "../lib/callflow-connector.ts";
 import type { Lead } from "../lib/types.ts";
 
 function lead(): Lead {
@@ -33,6 +33,22 @@ test("CallFlow dispositions are recorded in dashboard activity and notes", () =>
   assert.ok(result.notes.includes("Send brochure"));
 });
 
+test("call duration and phone helpers provide dashboard-safe values", () => {
+  assert.equal(callDurationLabel(0), "0s");
+  assert.equal(callDurationLabel(65), "1m 05s");
+  assert.equal(callDurationLabel(3725), "62m 05s");
+  assert.equal(normalizedCallPhone("+91 98765-43210"), "9876543210");
+});
+
+test("completed calls are written to the lead timeline with salesperson and exact duration", () => {
+  const updated = applyCallFlowEvent(lead(), {
+    eventUuid: "call-event-1", entityType: "CALL", entityId: "call-1", operation: "CREATE",
+    payload: { direction: "OUTGOING", startedAt: 1_786_000_000_000, endedAt: 1_786_000_125_000, durationSeconds: 125 },
+  }, "Sales One");
+  assert.match(updated.callHistory?.at(-1) || "", /Outgoing call · 2m 05s · Connected · Salesperson: Sales One/);
+  assert.equal(updated.activities?.at(-1)?.createdBy, "Sales One");
+});
+
 test("wrong number disposition enables Do Not Call protection", () => {
   const result = applyCallFlowEvent(lead(), {
     eventUuid: "event-wrong-number", entityType: "CALL_DISPOSITION", entityId: "disposition-wrong", operation: "CREATE",
@@ -41,4 +57,18 @@ test("wrong number disposition enables Do Not Call protection", () => {
   assert.equal(result.doNotCall, true);
   assert.equal(result.stage, "Lost");
   assert.ok(result.tags?.includes("Do Not Call"));
+});
+
+test("mobile sales workflow exposes every requested disposition", () => {
+  const byCode = new Map(callFlowDispositions.map((value) => [value[1], value]));
+  for (const code of ["WARM", "INVITE_INTRO", "ONLINE_INTRO", "NEXT_TIME_ATTEND", "INTRO_ATTENDED", "NOT_ELIGIBLE", "GENERATE_MEETING"] as const) assert.ok(byCode.has(code), `${code} is missing`);
+  assert.equal(byCode.get("NOT_ELIGIBLE")?.[3], true);
+  assert.equal(byCode.get("GENERATE_MEETING")?.[4], true);
+});
+
+test("Android lead sync includes source score and quality filters", () => {
+  const result = leadToCallFlow(lead(), "sales-user");
+  assert.equal(result.campaignId, "Dashboard");
+  assert.equal(result.score, 50);
+  assert.equal(result.quality, "Warm");
 });

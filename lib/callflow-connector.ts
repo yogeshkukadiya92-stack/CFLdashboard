@@ -6,6 +6,13 @@ export const callFlowStages = [
 ] as const;
 
 export const callFlowDispositions = [
+  ["warm", "WARM", "Warm", false, false, "qualified"],
+  ["invite_intro", "INVITE_INTRO", "Invite intro", false, false, "contacted"],
+  ["online_intro", "ONLINE_INTRO", "Online intro", false, true, "contacted"],
+  ["next_time_attend", "NEXT_TIME_ATTEND", "Next time attend", false, true, "contacted"],
+  ["intro_attended", "INTRO_ATTENDED", "Intro attended", false, false, "qualified"],
+  ["not_eligible", "NOT_ELIGIBLE", "Not eligible", true, false, "lost"],
+  ["generate_meeting", "GENERATE_MEETING", "Generate meeting", false, true, "contacted"],
   ["hot", "HOT", "Hot", false, false, "qualified"],
   ["interested", "INTERESTED", "Interested", false, false, "qualified"],
   ["follow_up", "FOLLOW_UP", "Follow-up", false, true, "contacted"],
@@ -23,6 +30,15 @@ function stageId(stage: string) { return stage.trim().toLowerCase().replace(/\s+
 function stageName(id: string) { return callFlowStages.find(([code]) => code === id)?.[1] || "Contacted"; }
 function phone(value: string) { const digits = value.replace(/\D/g, ""); return digits.length > 10 ? digits.slice(-10) : digits; }
 
+export function callDurationLabel(value: unknown) {
+  const totalSeconds = Math.max(0, Math.floor(Number(value) || 0));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return minutes > 0 ? `${minutes}m ${String(seconds).padStart(2, "0")}s` : `${seconds}s`;
+}
+
+export function normalizedCallPhone(value: unknown) { return phone(String(value || "")); }
+
 export function leadToCallFlow(lead: Lead, userId: string, duplicateCount = 1) {
   const updatedAt = Math.max(time(lead.updatedAt), time(lead.lastActivityAt), time(lead.createdAt), 1);
   const normalizedPhone = phone(lead.mobile);
@@ -31,7 +47,8 @@ export function leadToCallFlow(lead: Lead, userId: string, duplicateCount = 1) {
     normalizedPhone, displayPhone: lead.mobile || normalizedPhone, stageId: stageId(lead.stage),
     assignedUserId: lead.assignedSalesPersonId || lead.assignedSalesPersonCode || userId,
     campaignId: lead.source || null, nextFollowUpAt: time(lead.nextFollowUp) || null,
-    updatedAt, updatedBy: "cfl-dashboard", version: updatedAt, doNotCall: lead.doNotCall === true || lead.tags?.some((tag) => tag.toLowerCase() === "do not call"), duplicateCount: Math.max(1, duplicateCount)
+    updatedAt, updatedBy: "cfl-dashboard", version: updatedAt, doNotCall: lead.doNotCall === true || lead.tags?.some((tag) => tag.toLowerCase() === "do not call"), duplicateCount: Math.max(1, duplicateCount),
+    score: Math.max(0, Math.round(Number(lead.score) || 0)), quality: lead.priority || null
   };
 }
 
@@ -53,6 +70,9 @@ export type CallFlowCallRecord = {
   connected: boolean;
   outcome: string;
   source: string;
+  simSlot?: number | null;
+  simLabel?: string | null;
+  phoneAccountId?: string | null;
 };
 
 export function parseEventPayload(event: CallFlowEvent) {
@@ -63,7 +83,7 @@ export function parseEventPayload(event: CallFlowEvent) {
 
 export function applyCallFlowEvent(lead: Lead, event: CallFlowEvent, actor: string, now = Date.now()): Lead {
   const payload = parseEventPayload(event);
-  const at = iso(payload.createdAt, now);
+  const at = iso(payload.createdAt ?? payload.startedAt, now);
   const activities = [...(lead.activities || [])];
   const notes = [...(lead.notes || [])];
   const callHistory = [...(lead.callHistory || [])];
@@ -76,7 +96,7 @@ export function applyCallFlowEvent(lead: Lead, event: CallFlowEvent, actor: stri
     const duration = Math.max(0, Number(payload.durationSeconds) || 0);
     const direction = String(payload.direction || "OUTGOING").toLowerCase();
     const message = payload.endedAt
-      ? `${direction === "incoming" ? "Incoming" : "Outgoing"} call · ${duration}s · ${duration > 0 ? "Connected" : "Not connected"}`
+      ? `${direction === "incoming" ? "Incoming" : "Outgoing"} call · ${callDurationLabel(duration)} · ${duration > 0 ? "Connected" : direction === "incoming" ? "Missed" : "Not connected"} · Salesperson: ${actor}`
       : `Call initiated from CallFlow${payload.callId ? ` (${String(payload.callId).slice(0, 8)})` : ""}`;
     callHistory.push(message);
     activities.push({ id: event.eventUuid, type: "call", message, createdAt: at, createdBy: actor });
