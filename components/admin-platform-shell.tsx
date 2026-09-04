@@ -25,6 +25,7 @@ import {
   TicketCheck,
   UserPlus,
   UsersRound,
+  Workflow,
   X,
   type LucideIcon
 } from "lucide-react";
@@ -93,6 +94,7 @@ const navGroups: NavGroup[] = [
     icon: ClipboardCheck,
     label: "Process",
     items: [
+      { href: "/workflows", icon: Workflow, label: "Workflow Automation" },
       { href: "/process/client-batch-transfer", icon: ClipboardCheck, label: "Batch Transfer" },
       { href: "/process/refund", icon: TicketCheck, label: "Refund" },
       { href: "/process/apply-coupon", icon: Tags, label: "Apply Coupon" },
