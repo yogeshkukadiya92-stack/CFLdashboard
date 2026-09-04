@@ -6,6 +6,7 @@ import { syncConfirmedRegistrationToMfw } from "@/lib/mfw-registration";
 import type { AttendanceEntry, BuilderForm, ReferralCodeConfig, RegistrationEntry } from "@/lib/types";
 import { attendanceMatchesFinalRegistration, findRepeaterSource, isDuplicateWorkshopRegistration } from "@/lib/workshop-hierarchy";
 import { resolveWorkshopSalesPersonId, type WorkshopLeadAssignmentRule } from "@/lib/workshop-lead-assignment";
+import { getActiveWorkflowAssignmentSettings } from "@/lib/workflow-db";
 import { NextResponse } from "next/server";
 
 export async function GET() {
@@ -276,15 +277,26 @@ export async function POST(request: Request) {
         return String(workshop.id ?? "") === sanitizedRegistration.workshopId
           || String(workshop.name ?? "").trim().toLowerCase() === workshopTitle.toLowerCase();
       }) as { assignedSalesPersonId?: unknown; leadAssignmentRules?: WorkshopLeadAssignmentRule[]; transferLeadToCrm?: unknown } | undefined;
-      const assignedSalesPersonId = resolveWorkshopSalesPersonId(finalRegistration, linkedWorkshop?.leadAssignmentRules, linkedWorkshop?.assignedSalesPersonId);
+      const workflowAssignment = await getActiveWorkflowAssignmentSettings(sanitizedRegistration.workshopId).catch(() => null);
+      const assignmentRules = linkedWorkshop?.leadAssignmentRules?.length ? linkedWorkshop.leadAssignmentRules : workflowAssignment?.rules;
+      const salesPeople = Array.isArray(state.sales_people) ? state.sales_people : [];
+      const currentLeads = Array.isArray(state.leads) ? state.leads : [];
+      const assignedSalesPersonId = resolveWorkshopSalesPersonId(
+        finalRegistration,
+        assignmentRules,
+        linkedWorkshop?.assignedSalesPersonId || workflowAssignment?.defaultSalesPersonId,
+        salesPeople as Array<Record<string, unknown>>,
+        currentLeads as Array<Record<string, unknown>>,
+        workflowAssignment?.fallbackStrategy ?? "unassigned"
+      );
       const leads = linkedWorkshop?.transferLeadToCrm === true
         ? upsertLeadFromRegistration(
-            Array.isArray(state.leads) ? state.leads : [],
+            currentLeads,
             finalRegistration,
-            Array.isArray(state.sales_people) ? state.sales_people : [],
+            salesPeople,
             assignedSalesPersonId
           )
-        : Array.isArray(state.leads) ? state.leads : [];
+        : currentLeads;
 
       await upsertRegistrationRecord(client, finalRegistration as unknown as Record<string, unknown>);
       await client.query("COMMIT");

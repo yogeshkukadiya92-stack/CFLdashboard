@@ -1,6 +1,6 @@
 import { extractPreQualification } from "./crm-scorecard.ts";
-import type { Lead, LeadActivity, LeadFollowUp, LeadPriority, LeadStage } from "@/lib/types";
-import { salesPersonCodeFromId } from "@/lib/sales-person-code";
+import type { Lead, LeadActivity, LeadFollowUp, LeadPriority, LeadStage } from "./types.ts";
+import { salesPersonCodeFromId } from "./sales-person-code.ts";
 
 type SalesPersonLike = {
   acceptingLeads?: boolean;

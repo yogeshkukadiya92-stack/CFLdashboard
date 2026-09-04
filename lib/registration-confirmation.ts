@@ -1,6 +1,16 @@
 import type { BuilderForm, RegistrationEntry } from "@/lib/types";
+import { recordOutboundWhatsAppMessage } from "./whatsapp-automation.ts";
 
 const REGISTRATION_NUMBER_PATTERN = /^REG-(\d+)$/i;
+
+function readProviderMessageId(result: unknown) {
+  if (!result || typeof result !== "object" || Array.isArray(result)) return undefined;
+  const value = result as Record<string, unknown>;
+  const messages = Array.isArray(value.messages) ? value.messages as Array<Record<string, unknown>> : [];
+  const nested = value.data && typeof value.data === "object" && !Array.isArray(value.data) ? value.data as Record<string, unknown> : undefined;
+  const nestedMessages = Array.isArray(nested?.messages) ? nested.messages as Array<Record<string, unknown>> : [];
+  return String(messages[0]?.id ?? nestedMessages[0]?.id ?? value.messageId ?? value.message_id ?? "").trim() || undefined;
+}
 
 export function assignRegistrationNumbers(registrations: RegistrationEntry[], workshopId: string) {
   let nextNumber = registrations.reduce((highest, entry) => {
@@ -64,21 +74,25 @@ export async function sendRegistrationConfirmation(registration: RegistrationEnt
   });
 
   let sent = response.ok;
+  let messageId: string | undefined;
   try {
     const result = await response.clone().json();
+    messageId = readProviderMessageId(result);
     if (typeof result?.IsSuccess === "boolean") sent = result.IsSuccess;
     if (typeof result?.Status === "number") sent = sent && result.Status >= 200 && result.Status < 300;
   } catch {
     // Successful 11za responses are not guaranteed to be JSON.
   }
+  await recordOutboundWhatsAppMessage({ providerMessageId: messageId, registrationId: registration.id, mobile, templateName, status: sent ? "sent" : "failed", error: sent ? undefined : `Provider returned HTTP ${response.status}` }).catch(() => undefined);
   return { configured: true, sent };
 }
 
-type WhatsAppDeliveryResult = { configured: boolean; error?: string; sent: boolean };
+type WhatsAppDeliveryResult = { configured: boolean; error?: string; messageId?: string; sent: boolean };
 
 async function sendTemplateMessage(input: {
   mobile: string;
   name: string;
+  registrationId?: string;
   templateName?: string;
   values: string[];
 }): Promise<WhatsAppDeliveryResult> {
@@ -118,14 +132,18 @@ async function sendTemplateMessage(input: {
       method: "POST"
     });
     let sent = response.ok;
+    let messageId: string | undefined;
     try {
       const result = await response.clone().json();
+      messageId = readProviderMessageId(result);
       if (typeof result?.IsSuccess === "boolean") sent = result.IsSuccess;
       if (typeof result?.Status === "number") sent = sent && result.Status >= 200 && result.Status < 300;
     } catch {
       // Successful provider responses are not guaranteed to be JSON.
     }
-    return { configured: true, error: sent ? undefined : `WhatsApp provider returned ${response.status}.`, sent };
+    const error = sent ? undefined : `WhatsApp provider returned ${response.status}.`;
+    await recordOutboundWhatsAppMessage({ providerMessageId: messageId, registrationId: input.registrationId, mobile, templateName: input.templateName, status: sent ? "sent" : "failed", error }).catch(() => undefined);
+    return { configured: true, error, messageId, sent };
   } catch (error) {
     return { configured: true, error: error instanceof Error ? error.message : "WhatsApp delivery failed.", sent: false };
   }
@@ -152,6 +170,7 @@ export async function sendRegistrationStatusNotifications(registration: Registra
     const participantResult = await sendTemplateMessage({
       mobile: registration.mobile,
       name: registration.fullName,
+      registrationId: registration.id,
       templateName: participantTemplate,
       values: [
         registration.fullName,
@@ -174,6 +193,7 @@ export async function sendRegistrationStatusNotifications(registration: Registra
     const referrerResult = await sendTemplateMessage({
       mobile: referenceDigits,
       name: registration.referrerName || "Referrer",
+      registrationId: registration.id,
       templateName: referrerTemplate,
       values: [
         registration.referrerName || "Referrer",

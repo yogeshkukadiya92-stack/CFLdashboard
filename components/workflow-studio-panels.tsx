@@ -2,7 +2,9 @@
 
 import {
   AlertCircle,
+  ArrowDown,
   ArrowRight,
+  ArrowUp,
   Braces,
   Check,
   CheckCircle2,
@@ -12,9 +14,10 @@ import {
   Plus,
   RefreshCw,
   Search,
+  Trash2,
   X,
 } from "lucide-react";
-import type { ReactNode, RefObject } from "react";
+import { useMemo, useState, type ReactNode, type RefObject } from "react";
 import {
   colorByKind,
   type CatalogItem,
@@ -23,19 +26,25 @@ import {
   type PickerContext,
   type RunRow,
   type RunStatus,
+  type WorkflowSalesPerson,
   type WorkflowNode,
+  type WorkflowVersionSummary,
 } from "@/lib/workflow-studio";
+import { resolveSmartLeadAssignment, type LeadAssignmentStrategy, type WorkshopLeadAssignmentRule } from "@/lib/workshop-lead-assignment";
 
 export type InspectorTab = "parameters" | "settings" | "output";
 
-export function ParametersPanel({ node, onChange, onRename, onTest }: {
+export function ParametersPanel({ node, onChange, onRename, onTest, salesPeople = [] }: {
   node: WorkflowNode;
   onChange: (key: string, value: ConfigValue) => void;
   onRename: (value: string) => void;
   onTest: () => void;
+  salesPeople?: WorkflowSalesPerson[];
 }) {
-  const isAssignNode = node.kind === "crm" && node.title.toLowerCase().includes("assign");
-  const handled = ["message", "condition", "workshop", "attendance", "delay", "trigger", "webhook"].includes(node.kind) || isAssignNode;
+  const isAssignNode = node.kind === "crm" && !node.title.toLowerCase().includes("reassign") && node.title.toLowerCase().includes("assign");
+  const isCrmAction = node.kind === "crm" && !isAssignNode;
+  const isScheduleNode = node.kind === "delay" && (node.config.scheduleEnabled === true || ["Scheduled time", "Schedule for date"].includes(node.title));
+  const handled = ["message", "condition", "workshop", "attendance", "payment", "delay", "trigger", "webhook"].includes(node.kind) || isAssignNode || isCrmAction;
   return <div className="space-y-4">
     <Field label="Node name"><input className="workflow-input" onChange={(event) => onRename(event.target.value)} value={node.title} /></Field>
 
@@ -43,6 +52,10 @@ export function ParametersPanel({ node, onChange, onRename, onTest }: {
       <Field hint="Settings → Integrations" label="WhatsApp credential"><select className="workflow-input" onChange={(event) => onChange("credential", event.target.value)} value={String(node.config.credential ?? "")}><option>Meta Business · Coach For Life</option><option>OpenWA · Primary</option><option>Choose credential</option></select></Field>
       <Field hint="Approved templates only" label="Message template"><select className="workflow-input" onChange={(event) => onChange("template", event.target.value)} value={String(node.config.template ?? "")}><option>cfl_registration_confirmation_v3</option><option>cfl_waiting_list_v2</option><option>cfl_workshop_reminder_v4</option><option>Select approved template</option></select></Field>
       <Field label="Recipient mapping"><div className="relative"><Braces className="absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-indigo-500" /><input className="workflow-input pl-9 font-mono text-[10px]" onChange={(event) => onChange("recipient", event.target.value)} value={String(node.config.recipient ?? "")} /></div></Field>
+      <Field label="Message experience"><select className="workflow-input" onChange={(event) => onChange("messageType", event.target.value)} value={String(node.config.messageType ?? "template")}><option value="template">Approved template</option><option value="buttons">Interactive buttons</option><option value="list">Interactive list</option></select></Field>
+      {node.config.messageType === "buttons" ? <div className="grid grid-cols-2 gap-2"><Field label="Primary button"><input className="workflow-input" maxLength={20} onChange={(event) => onChange("button1", event.target.value)} value={String(node.config.button1 ?? "Confirm")} /></Field><Field label="Secondary button"><input className="workflow-input" maxLength={20} onChange={(event) => onChange("button2", event.target.value)} value={String(node.config.button2 ?? "Talk to sales")} /></Field></div> : null}
+      <ToggleField checked={node.config.trackDelivery !== false} label="Track sent, delivered, read and failed" onChange={(value) => onChange("trackDelivery", value)} />
+      <Field label="Failure path"><select className="workflow-input" onChange={(event) => onChange("failureAction", event.target.value)} value={String(node.config.failureAction ?? "retry")}><option value="retry">Retry with exponential backoff</option><option value="sales-task">Create salesperson task</option><option value="continue">Continue without delivery</option></select></Field>
       <Field label="Template variables"><div className="space-y-1.5 rounded-xl border border-slate-200 bg-slate-50 p-2.5">{[
         ["1 · First name", "{{registration.first_name}}"],
         ["2 · Workshop", "{{workshop.title}}"],
@@ -57,30 +70,61 @@ export function ParametersPanel({ node, onChange, onRename, onTest }: {
       <div className="grid grid-cols-2 gap-2"><Field label="Operator"><select className="workflow-input" onChange={(event) => onChange("operator", event.target.value)} value={String(node.config.operator ?? "")}><option>Equals</option><option>Contains</option><option>Is valid</option><option>Is after</option><option>Is before</option></select></Field><Field label="Value"><input className="workflow-input" onChange={(event) => onChange("value", event.target.value)} value={String(node.config.value ?? "")} /></Field></div>
       <div className="grid grid-cols-2 gap-2"><Field label="Branch A"><input className="workflow-input" onChange={(event) => onChange("branchA", event.target.value)} value={String(node.config.branchA ?? "Matches")} /></Field><Field label="Branch B"><input className="workflow-input" onChange={(event) => onChange("branchB", event.target.value)} value={String(node.config.branchB ?? "Otherwise")} /></Field></div>
     </> : null}
+    {node.kind === "transform" ? <><Field label="Source field"><input className="workflow-input" onChange={(event) => onChange("sourceField", event.target.value)} value={String(node.config.sourceField ?? "fullName")} /></Field><Field label="Target field"><input className="workflow-input" onChange={(event) => onChange("targetField", event.target.value)} value={String(node.config.targetField ?? "normalizedName")} /></Field><Field label="Operation"><select className="workflow-input" onChange={(event) => onChange("operation", event.target.value)} value={String(node.config.operation ?? "trim")}><option value="trim">Trim whitespace</option><option value="uppercase">Uppercase</option><option value="lowercase">Lowercase</option><option value="number">Convert to number</option></select></Field></> : null}
 
     {isAssignNode ? <>
       <Field hint="First matching rule wins" label="Assignment strategy"><select className="workflow-input" onChange={(event) => onChange("strategy", event.target.value)} value={String(node.config.strategy ?? "Round robin")}><option>City + date + workload</option><option>City-based rules</option><option>Date-based rules</option><option>Round robin</option><option>Least active leads</option><option>Fixed sales person</option></select></Field>
-      <Field label="Sales person"><select className="workflow-input" onChange={(event) => onChange("salesperson", event.target.value)} value={String(node.config.salesperson ?? "Auto-select active sales person")}><option>Auto-select active sales person</option><option>Bhavin J. Shah</option><option>Sales Team · West</option></select></Field>
-      <Field label="Fallback rule"><select className="workflow-input" onChange={(event) => onChange("fallback", event.target.value)} value={String(node.config.fallback ?? "Round robin")}><option>Round robin</option><option>Least active leads</option><option>Keep unassigned</option></select></Field>
-      <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-3 text-[10px] font-semibold leading-4 text-indigo-900"><strong>Priority:</strong> city rule → date rule → workload → fallback. Duplicate leads retain their current owner.</div>
+      <Field label="Default sales person"><select className="workflow-input" onChange={(event) => onChange("defaultSalesPersonId", event.target.value)} value={String(node.config.defaultSalesPersonId ?? "")}><option value="">Auto-select available sales person</option>{salesPeople.map((person) => <option disabled={!person.isActive || !person.acceptingLeads} key={person.id} value={person.id}>{person.name} · {person.activeLeadCount} active{!person.acceptingLeads ? " · paused" : ""}</option>)}</select></Field>
+      <Field label="Fallback rule"><select className="workflow-input" onChange={(event) => onChange("fallbackStrategy", event.target.value)} value={String(node.config.fallbackStrategy ?? "least-active")}><option value="least-active">Least active leads</option><option value="round-robin">Round robin</option><option value="unassigned">Keep unassigned</option></select></Field>
+      <LeadAssignmentRuleBuilder node={node} onChange={onChange} salesPeople={salesPeople} />
+    </> : null}
+
+    {isCrmAction ? <>
+      <Field label="CRM action"><select className="workflow-input" onChange={(event) => onChange("action", event.target.value)} value={String(node.config.action ?? "Create follow-up")}><option>Create follow-up</option><option>Update lead status</option><option>Add lead tag</option><option>Escalate lead</option><option>Reassign lead</option><option>Create conversation task</option></select></Field>
+      <div className="grid grid-cols-2 gap-2"><Field label="Priority"><select className="workflow-input" onChange={(event) => onChange("priority", event.target.value)} value={String(node.config.priority ?? "High")}><option>Normal</option><option>High</option><option>Urgent</option></select></Field><Field label="Due"><select className="workflow-input" onChange={(event) => onChange("due", event.target.value)} value={String(node.config.due ?? "Today")}><option>Immediately</option><option>Today</option><option>Tomorrow</option><option>In 3 days</option></select></Field></div>
+      <Field label="Task type"><select className="workflow-input" onChange={(event) => onChange("taskType", event.target.value)} value={String(node.config.taskType ?? "Call")}><option>Call</option><option>WhatsApp</option><option>Meeting</option><option>Payment Follow-up</option><option>Send Information</option></select></Field>
+      <Field label="Reason / note"><textarea className="workflow-input min-h-20 resize-y" onChange={(event) => onChange("reason", event.target.value.slice(0, 500))} placeholder="What should the salesperson do?" value={String(node.config.reason ?? "")} /></Field>
+      <ToggleField checked={node.config.preserveHistory !== false} label="Preserve previous owner and activity history" onChange={(value) => onChange("preserveHistory", value)} />
+      <ToggleField checked={Boolean(node.config.notifyManager)} label="Notify sales manager for missed SLA" onChange={(value) => onChange("notifyManager", value)} />
     </> : null}
 
     {node.kind === "workshop" ? <>
       <Field label="Workshop"><select className="workflow-input" onChange={(event) => onChange("workshop", event.target.value)} value={String(node.config.workshop ?? "")}><option>Business Growth Blueprint</option><option>Healthy Forever</option><option>From registration source</option></select></Field>
       <Field label="Batch"><select className="workflow-input" onChange={(event) => onChange("batch", event.target.value)} value={String(node.config.batch ?? "")}><option>Best available batch</option><option>Selected batch</option><option>Main Batch</option><option>From registration link</option></select></Field>
       <Field label="Capacity behaviour"><select className="workflow-input" onChange={(event) => onChange("capacity", event.target.value)} value={String(node.config.capacity ?? "")}><option>Respect capacity</option><option>Waiting list</option><option>Allow overbooking</option></select></Field>
+      <ToggleField checked={node.config.preserveSource !== false} label="Preserve registration source and sales owner" onChange={(value) => onChange("preserveSource", value)} />
+      <ToggleField checked={Boolean(node.config.notifyParticipant)} label="Notify participant after assignment" onChange={(value) => onChange("notifyParticipant", value)} />
     </> : null}
 
     {node.kind === "attendance" ? <>
       <Field label="Attendance source"><select className="workflow-input" onChange={(event) => onChange("source", event.target.value)} value={String(node.config.source ?? "Workshop attendance")}><option>Workshop attendance</option><option>Introduction session</option><option>Selected attendance form</option></select></Field>
       <Field label="Match participant by"><select className="workflow-input" onChange={(event) => onChange("match", event.target.value)} value={String(node.config.match ?? "Mobile number")}><option>Mobile number</option><option>Registration ID</option><option>Email</option></select></Field>
       <Field label="Set status"><select className="workflow-input" onChange={(event) => onChange("status", event.target.value)} value={String(node.config.status ?? "Present")}><option>Present</option><option>Absent</option><option>Late</option></select></Field>
+      <div className="grid grid-cols-2 gap-2"><Field hint="For no-show rules" label="Grace period"><input className="workflow-input" min="0" onChange={(event) => onChange("graceMinutes", Math.min(1440, Math.max(0, Number(event.target.value))))} type="number" value={Number(node.config.graceMinutes ?? 30)} /></Field><Field label="Minimum duration"><input className="workflow-input" min="0" onChange={(event) => onChange("minimumDurationMinutes", Math.min(1440, Math.max(0, Number(event.target.value))))} type="number" value={Number(node.config.minimumDurationMinutes ?? 0)} /></Field></div>
+      <ToggleField checked={Boolean(node.config.createFollowUp)} label="Create CRM follow-up for absent participants" onChange={(value) => onChange("createFollowUp", value)} />
+      <ToggleField checked={Boolean(node.config.promoteWaiting)} label="Promote attendance-matched waiting registration" onChange={(value) => onChange("promoteWaiting", value)} />
     </> : null}
 
-    {node.kind === "delay" ? <><div className="grid grid-cols-2 gap-2"><Field label="Wait for"><input className="workflow-input" min="0" onChange={(event) => onChange("amount", Number(event.target.value))} type="number" value={Number(node.config.amount ?? 10)} /></Field><Field label="Unit"><select className="workflow-input" onChange={(event) => onChange("unit", event.target.value)} value={String(node.config.unit ?? "Minutes")}><option>Minutes</option><option>Hours</option><option>Days</option></select></Field></div><ToggleField checked={Boolean(node.config.businessHours)} label="Respect business hours" onChange={(value) => onChange("businessHours", value)} /></> : null}
+    {node.kind === "payment" ? <>
+      <Field label="Payment event"><select className="workflow-input" onChange={(event) => onChange("event", event.target.value)} value={String(node.config.event ?? "Payment completed")}><option>Payment completed</option><option>Payment failed</option><option>Payment authorized</option><option>Part payment received</option><option>Payment overdue</option></select></Field>
+      <Field label="Provider"><select className="workflow-input" onChange={(event) => onChange("provider", event.target.value)} value={String(node.config.provider ?? "Razorpay")}><option>Razorpay</option><option>Manual payment</option><option>Any provider</option></select></Field>
+      <Field label="Action"><select className="workflow-input" onChange={(event) => onChange("action", event.target.value)} value={String(node.config.action ?? "Update registration payment")}><option>Update registration payment</option><option>Create payment follow-up</option><option>Send payment receipt</option><option>Notify sales owner</option></select></Field>
+      <div className="grid grid-cols-2 gap-2"><Field label="Minimum amount"><input className="workflow-input" min="0" onChange={(event) => onChange("minimumAmount", Math.max(0, Number(event.target.value)))} type="number" value={Number(node.config.minimumAmount ?? 0)} /></Field><Field label="Follow-up due"><select className="workflow-input" onChange={(event) => onChange("due", event.target.value)} value={String(node.config.due ?? "Today")}><option>Immediately</option><option>Today</option><option>Tomorrow</option><option>In 3 days</option></select></Field></div>
+      <ToggleField checked={node.config.reconcile !== false} label="Reconcile amount with registration balance" onChange={(value) => onChange("reconcile", value)} />
+      <ToggleField checked={Boolean(node.config.includeBalance)} label="Include remaining balance in receipt" onChange={(value) => onChange("includeBalance", value)} />
+    </> : null}
+
+    {node.kind === "delay" && !isScheduleNode ? <><div className="grid grid-cols-2 gap-2"><Field label="Wait for"><input className="workflow-input" min="0" onChange={(event) => onChange("amount", Number(event.target.value))} type="number" value={Number(node.config.amount ?? 10)} /></Field><Field label="Unit"><select className="workflow-input" onChange={(event) => onChange("unit", event.target.value)} value={String(node.config.unit ?? "Minutes")}><option>Minutes</option><option>Hours</option><option>Days</option></select></Field></div><ToggleField checked={Boolean(node.config.businessHours)} label="Respect business hours" onChange={(value) => onChange("businessHours", value)} /></> : null}
+
+    {isScheduleNode ? <>
+      <Field label="Frequency"><select className="workflow-input" onChange={(event) => onChange("frequency", event.target.value)} value={String(node.config.frequency ?? (node.title === "Schedule for date" ? "once" : "daily"))}><option value="hourly">Every hour</option><option value="daily">Every day</option><option value="weekly">Selected weekdays</option><option value="once">One time</option></select></Field>
+      {String(node.config.frequency ?? (node.title === "Schedule for date" ? "once" : "daily")) === "once" ? <Field label="Run at"><input className="workflow-input" onChange={(event) => onChange("scheduledAt", event.target.value ? new Date(event.target.value).toISOString() : "")} type="datetime-local" value={node.config.scheduledAt ? new Date(String(node.config.scheduledAt)).toISOString().slice(0, 16) : ""} /></Field> : <div className="grid grid-cols-2 gap-2"><Field label="Time"><input className="workflow-input" onChange={(event) => onChange("time", event.target.value)} type="time" value={String(node.config.time ?? "09:00")} /></Field><Field label="Timezone"><select className="workflow-input" onChange={(event) => onChange("timezone", event.target.value)} value={String(node.config.timezone ?? "Asia/Kolkata")}><option value="Asia/Kolkata">India · IST</option><option value="UTC">UTC</option></select></Field></div>}
+      {node.config.frequency === "weekly" ? <Field label="Weekdays"><div className="grid grid-cols-4 gap-1">{["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day) => { const selected = Array.isArray(node.config.weekdays) && node.config.weekdays.includes(day); return <button className={`rounded-lg border px-2 py-1.5 text-[9px] font-black ${selected ? "border-indigo-300 bg-indigo-50 text-indigo-700" : "border-slate-200 text-slate-500"}`} key={day} onClick={() => { const current = Array.isArray(node.config.weekdays) ? node.config.weekdays.map(String) : []; onChange("weekdays", selected ? current.filter((item) => item !== day) : [...current, day]); }} type="button">{day}</button>; })}</div></Field> : null}
+      <ToggleField checked={node.config.deduplicate !== false} label="Prevent duplicate run in the same minute" onChange={(value) => onChange("deduplicate", value)} />
+    </> : null}
 
     {node.kind === "trigger" ? <>
-      <Field label="Event"><select className="workflow-input" onChange={(event) => onChange("event", event.target.value)} value={String(node.config.event ?? "New public registration")}><option>New public registration</option><option>Registration confirmed</option><option>Waiting-list registration</option><option>Payment completed</option></select></Field>
+      <Field label="Event"><select className="workflow-input" onChange={(event) => onChange("event", event.target.value)} value={String(node.config.event ?? "New public registration")}><option>New public registration</option><option>Registration confirmed</option><option>Waiting-list registration</option><option>Lead SLA breached</option><option>Follow-up overdue</option><option>Payment completed</option><option>Payment failed</option><option>Payment authorized</option><option>Attendance submitted</option><option>Late attendance submitted</option><option>Attendance no-show detected</option><option>WhatsApp reply received</option><option>WhatsApp message delivered</option><option>WhatsApp message read</option><option>WhatsApp message failed</option></select></Field>
       <Field label="Registration form"><select className="workflow-input" onChange={(event) => onChange("form", event.target.value)} value={String(node.config.form ?? "All active forms")}><option>All active forms</option><option>Business Growth Blueprint</option><option>Healthy Forever</option></select></Field>
       <ToggleField checked={Boolean(node.config.deduplicate)} label="Ignore duplicate webhook events" onChange={(value) => onChange("deduplicate", value)} />
     </> : null}
@@ -92,6 +136,69 @@ export function ParametersPanel({ node, onChange, onRename, onTest }: {
 
     {!handled ? <><Field label="Action"><select className="workflow-input" onChange={(event) => onChange("action", event.target.value)} value={String(node.config.action ?? node.title)}><option>{node.title}</option><option>Update existing record</option><option>Create a new record</option></select></Field><Field label="Due / schedule"><input className="workflow-input" onChange={(event) => onChange("due", event.target.value)} value={String(node.config.due ?? "Tomorrow at 10:00 AM")} /></Field></> : null}
     <button className="workflow-button-primary w-full justify-center" onClick={onTest} type="button"><Play className="size-4" />Test with mock data</button>
+  </div>;
+}
+
+function LeadAssignmentRuleBuilder({ node, onChange, salesPeople }: { node: WorkflowNode; onChange: (key: string, value: ConfigValue) => void; salesPeople: WorkflowSalesPerson[] }) {
+  const rules = Array.isArray(node.config.assignmentRules) ? node.config.assignmentRules as WorkshopLeadAssignmentRule[] : [];
+  const [city, setCity] = useState("Ahmedabad");
+  const [state, setState] = useState("Gujarat");
+  const [pincode, setPincode] = useState("");
+  const [source, setSource] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [salesPersonId, setSalesPersonId] = useState("");
+  const [strategy, setStrategy] = useState<LeadAssignmentStrategy>("fixed");
+  const [maxActiveLeads, setMaxActiveLeads] = useState("");
+  const [sampleCity, setSampleCity] = useState("Ahmedabad");
+  const [samplePincode, setSamplePincode] = useState("380015");
+  const [sampleSource, setSampleSource] = useState("Registration Link");
+
+  const decision = useMemo(() => resolveSmartLeadAssignment(
+    { id: "rule-preview", city: sampleCity, state: "Gujarat", pincode: samplePincode, source: sampleSource, createdAt: new Date().toISOString() },
+    rules,
+    salesPeople,
+    [],
+    node.config.defaultSalesPersonId,
+    String(node.config.fallbackStrategy ?? "least-active") as LeadAssignmentStrategy
+  ), [node.config.defaultSalesPersonId, node.config.fallbackStrategy, rules, salesPeople, sampleCity, samplePincode, sampleSource]);
+
+  function saveRules(next: WorkshopLeadAssignmentRule[]) {
+    onChange("assignmentRules", next.map((rule, index) => ({ ...rule, priority: index + 1 })));
+  }
+
+  function addRule() {
+    if (strategy === "fixed" && !salesPersonId) return;
+    if (![city, state, pincode, source, startDate, endDate].some((value) => value.trim())) return;
+    saveRules([...rules, {
+      id: `rule-${crypto.randomUUID().slice(0, 8)}`,
+      enabled: true,
+      city: city.trim() || undefined,
+      state: state.trim() || undefined,
+      pincode: pincode.trim() || undefined,
+      source: source.trim() || undefined,
+      startDate: startDate || undefined,
+      endDate: endDate || undefined,
+      salesPersonId: strategy === "fixed" ? salesPersonId : undefined,
+      strategy,
+      maxActiveLeads: Number(maxActiveLeads) || undefined
+    }]);
+    setCity(""); setState(""); setPincode(""); setSource(""); setStartDate(""); setEndDate(""); setSalesPersonId(""); setMaxActiveLeads("");
+  }
+
+  return <div className="space-y-3 rounded-2xl border border-indigo-200 bg-indigo-50/60 p-3">
+    <div className="flex items-start justify-between gap-3"><div><p className="text-[11px] font-black text-indigo-950">Assignment rule builder</p><p className="mt-0.5 text-[9px] font-semibold leading-4 text-indigo-700">City, state, pincode, source and date conditions run top to bottom.</p></div><span className="rounded-lg bg-white px-2 py-1 text-[9px] font-black text-indigo-700">{rules.length} RULES</span></div>
+    {rules.length ? <div className="space-y-1.5">{rules.map((rule, index) => {
+      const person = salesPeople.find((item) => item.id === rule.salesPersonId);
+      const conditions = [rule.city && `City ${rule.city}`, rule.state && `State ${rule.state}`, rule.pincode && `PIN ${rule.pincode}`, rule.source && `Source ${rule.source}`, (rule.startDate || rule.endDate) && `${rule.startDate || "Any"} → ${rule.endDate || "Any"}`].filter(Boolean);
+      return <div className="flex items-center gap-2 rounded-xl border border-indigo-100 bg-white p-2" key={rule.id}><span className="grid size-6 shrink-0 place-items-center rounded-lg bg-indigo-50 text-[9px] font-black text-indigo-700">{index + 1}</span><span className="min-w-0 flex-1"><span className="block truncate text-[9px] font-black text-slate-800">{conditions.join(" · ")}</span><span className="mt-0.5 block text-[8px] font-semibold text-slate-400">→ {person?.name || (rule.strategy === "least-active" ? "Least active salesperson" : rule.strategy === "round-robin" ? "Round robin" : "Unavailable salesperson")}{rule.maxActiveLeads ? ` · max ${rule.maxActiveLeads}` : ""}</span></span><div className="flex shrink-0"><button aria-label="Move rule up" className="rounded-md p-1 text-slate-400 hover:bg-slate-100 disabled:opacity-25" disabled={index === 0} onClick={() => { const next = [...rules]; [next[index - 1], next[index]] = [next[index], next[index - 1]]; saveRules(next); }} type="button"><ArrowUp className="size-3" /></button><button aria-label="Move rule down" className="rounded-md p-1 text-slate-400 hover:bg-slate-100 disabled:opacity-25" disabled={index === rules.length - 1} onClick={() => { const next = [...rules]; [next[index], next[index + 1]] = [next[index + 1], next[index]]; saveRules(next); }} type="button"><ArrowDown className="size-3" /></button><button aria-label="Delete rule" className="rounded-md p-1 text-rose-500 hover:bg-rose-50" onClick={() => saveRules(rules.filter((item) => item.id !== rule.id))} type="button"><Trash2 className="size-3" /></button></div></div>;
+    })}</div> : <div className="rounded-xl border border-dashed border-indigo-200 bg-white/70 px-3 py-4 text-center text-[9px] font-bold text-indigo-500">No priority rules yet. Fallback strategy will handle every lead.</div>}
+    <div className="grid grid-cols-2 gap-2"><Field label="City"><input className="workflow-input" onChange={(event) => setCity(event.target.value)} placeholder="Ahmedabad" value={city} /></Field><Field label="State"><input className="workflow-input" onChange={(event) => setState(event.target.value)} placeholder="Gujarat" value={state} /></Field><Field label="Pincode"><input className="workflow-input" inputMode="numeric" maxLength={6} onChange={(event) => setPincode(event.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="380015" value={pincode} /></Field><Field label="Source"><select className="workflow-input" onChange={(event) => setSource(event.target.value)} value={source}><option value="">Any source</option><option>Registration Link</option><option>Landing Page</option><option>Referral</option><option>Manual</option></select></Field><Field label="From date"><input className="workflow-input" onChange={(event) => setStartDate(event.target.value)} type="date" value={startDate} /></Field><Field label="To date"><input className="workflow-input" min={startDate || undefined} onChange={(event) => setEndDate(event.target.value)} type="date" value={endDate} /></Field></div>
+    <Field label="Assignment action"><select className="workflow-input" onChange={(event) => setStrategy(event.target.value as LeadAssignmentStrategy)} value={strategy}><option value="fixed">Fixed salesperson</option><option value="least-active">Least active salesperson</option><option value="round-robin">Round robin</option></select></Field>
+    {strategy === "fixed" ? <Field label="Assign to"><select className="workflow-input" onChange={(event) => setSalesPersonId(event.target.value)} value={salesPersonId}><option value="">Select available salesperson</option>{salesPeople.filter((person) => person.isActive && person.acceptingLeads).map((person) => <option key={person.id} value={person.id}>{person.name} · {person.activeLeadCount} active</option>)}</select></Field> : null}
+    <Field hint="Optional safety cap" label="Max active leads"><input className="workflow-input" min="1" onChange={(event) => setMaxActiveLeads(event.target.value)} placeholder="No rule-specific limit" type="number" value={maxActiveLeads} /></Field>
+    <button className="workflow-button-primary w-full justify-center" disabled={(strategy === "fixed" && !salesPersonId) || ![city, state, pincode, source, startDate, endDate].some((value) => value.trim()) || Boolean(startDate && endDate && endDate < startDate)} onClick={addRule} type="button"><Plus className="size-4" />Add priority rule</button>
+    <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-2.5"><div className="flex items-center justify-between gap-2"><span className="text-[9px] font-black text-emerald-900">Live rule preview</span><span className="rounded-md bg-white px-1.5 py-0.5 text-[8px] font-black text-emerald-700">NO DATA CHANGED</span></div><div className="mt-2 grid grid-cols-3 gap-1.5"><input aria-label="Sample city" className="workflow-input" onChange={(event) => setSampleCity(event.target.value)} placeholder="City" value={sampleCity} /><input aria-label="Sample pincode" className="workflow-input" onChange={(event) => setSamplePincode(event.target.value)} placeholder="Pincode" value={samplePincode} /><select aria-label="Sample source" className="workflow-input" onChange={(event) => setSampleSource(event.target.value)} value={sampleSource}><option>Registration Link</option><option>Landing Page</option><option>Referral</option><option>Manual</option></select></div><p className={`mt-2 text-[9px] font-black ${decision.salesPersonId ? "text-emerald-800" : "text-amber-800"}`}>{decision.salesPersonId ? `${decision.salesPersonName} · ${decision.activeLeadCount} active leads` : "No eligible salesperson · lead stays unassigned"}</p><p className="mt-0.5 text-[8px] font-semibold text-emerald-700">{decision.reason}</p></div>
   </div>;
 }
 
@@ -141,12 +248,8 @@ export function NodePicker({ context, items, onAdd, onClose, query, searchRef, s
   </div>;
 }
 
-export function VersionHistory({ onClose, onRestore }: { onClose: () => void; onRestore: () => void }) {
-  return <DialogFrame onClose={onClose} subtitle="Restore a known configuration without losing undo history." title="Version history"><div className="space-y-2">{[
-    ["v2.4", "Current production", "Just now", true],
-    ["v2.3", "Added waiting-list WhatsApp branch", "Today, 09:48 AM", false],
-    ["v2.2", "Salesperson city and date routing", "Yesterday, 06:20 PM", false],
-  ].map(([version, title, time, current]) => <div className="flex items-center gap-3 rounded-xl border border-slate-200 p-3" key={String(version)}><span className={`grid size-10 place-items-center rounded-xl text-xs font-black ${current ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>{version}</span><span className="min-w-0 flex-1"><span className="block text-xs font-black text-slate-900">{title}</span><span className="mt-0.5 block text-[10px] font-semibold text-slate-400">{time} · Admin User</span></span>{current ? <span className="rounded-lg bg-emerald-50 px-2 py-1 text-[9px] font-black text-emerald-700">CURRENT</span> : <button className="text-[10px] font-black text-indigo-700" onClick={onRestore} type="button">Restore</button>}</div>)}</div></DialogFrame>;
+export function VersionHistory({ currentVersion, onClose, onRestore, restoring, versions }: { currentVersion: number; onClose: () => void; onRestore: (version: number) => void; restoring: number | null; versions: WorkflowVersionSummary[] }) {
+  return <DialogFrame onClose={onClose} subtitle="Every rollback creates a new immutable version, preserving the complete audit trail." title="Version history"><div className="max-h-[430px] space-y-2 overflow-y-auto">{versions.length ? versions.map((item) => { const current = item.version === currentVersion; return <div className="flex items-center gap-3 rounded-xl border border-slate-200 p-3" key={item.version}><span className={`grid size-10 place-items-center rounded-xl text-xs font-black ${current ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>v{item.version}</span><span className="min-w-0 flex-1"><span className="block text-xs font-black text-slate-900">{item.restoredFromVersion ? `Restored from v${item.restoredFromVersion}` : `${item.nodeCount} configured nodes`}</span><span className="mt-0.5 block text-[10px] font-semibold text-slate-400">{new Date(item.createdAt).toLocaleString("en-IN")} · {item.createdBy}</span></span>{current ? <span className="rounded-lg bg-emerald-50 px-2 py-1 text-[9px] font-black text-emerald-700">CURRENT</span> : <button className="inline-flex items-center gap-1 text-[10px] font-black text-indigo-700 disabled:opacity-40" disabled={restoring !== null} onClick={() => onRestore(item.version)} type="button">{restoring === item.version ? <RefreshCw className="size-3 animate-spin" /> : null}{restoring === item.version ? "Restoring" : "Restore"}</button>}</div>; }) : <div className="py-12 text-center text-xs font-bold text-slate-400">No saved versions yet.</div>}</div></DialogFrame>;
 }
 
 export function ShortcutDialog({ onClose }: { onClose: () => void }) {
@@ -154,8 +257,9 @@ export function ShortcutDialog({ onClose }: { onClose: () => void }) {
   return <DialogFrame onClose={onClose} subtitle="Fast controls for building larger automations." title="Keyboard shortcuts"><div className="grid grid-cols-1 gap-2 sm:grid-cols-2">{shortcuts.map(([label, keys]) => <div className="flex items-center justify-between rounded-xl border border-slate-200 px-3 py-2.5" key={label}><span className="text-[11px] font-bold text-slate-600">{label}</span><KeyCap>{keys}</KeyCap></div>)}</div></DialogFrame>;
 }
 
-export function RunDetail({ onClose, run }: { onClose: () => void; run: RunRow }) {
-  return <DialogFrame onClose={onClose} subtitle={`${run.participant} · ${run.started}`} title={`Execution ${run.id}`}><div className="space-y-3"><div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 p-3"><RunStatusBadge status={run.status} /><span className="text-[10px] font-black text-slate-500">{run.progress} · {run.duration}</span></div><p className="rounded-xl border border-slate-200 p-3 text-[11px] font-semibold leading-5 text-slate-600">{run.detail}</p><div className="space-y-1.5">{["Registration received", "Validated required fields", "Evaluated city & date route", run.status === "failed" ? "WhatsApp template failed" : "Completed CRM and message actions"].map((step, index) => <div className="flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2 text-[10px] font-bold text-slate-600" key={step}><span className={`grid size-5 place-items-center rounded-full ${run.status === "failed" && index === 3 ? "bg-rose-100 text-rose-700" : "bg-emerald-100 text-emerald-700"}`}>{run.status === "failed" && index === 3 ? <X className="size-3" /> : <Check className="size-3" />}</span>{step}<span className="ml-auto font-mono text-[9px] text-slate-400">{12 + index * 18}ms</span></div>)}</div></div></DialogFrame>;
+export function RunDetail({ onClose, onReplay, replaying, run }: { onClose: () => void; onReplay?: () => void; replaying?: boolean; run: RunRow }) {
+  const steps = run.steps?.length ? run.steps : ["Registration received", "Validated required fields", "Evaluated city & date route", run.status === "failed" ? "WhatsApp template failed" : "Completed CRM and message actions"].map((title, index) => ({ nodeId: `legacy-${index}`, title, status: run.status === "failed" && index === 3 ? "failed" as const : "success" as const, durationMs: 12 + index * 18, detail: title }));
+  return <DialogFrame onClose={onClose} subtitle={`${run.participant} · ${run.started}`} title={`Execution ${run.id}`}><div className="space-y-3"><div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 p-3"><RunStatusBadge status={run.status} /><span className="text-[10px] font-black text-slate-500">{run.progress} · {run.duration}</span></div><p className="rounded-xl border border-slate-200 p-3 text-[11px] font-semibold leading-5 text-slate-600">{run.detail}</p><div className="max-h-[360px] space-y-1.5 overflow-y-auto">{steps.map((step) => <div className="rounded-lg bg-slate-50 px-3 py-2 text-[10px] font-bold text-slate-600" key={`${step.nodeId}-${step.title}`}><div className="flex items-center gap-2"><span className={`grid size-5 place-items-center rounded-full ${step.status === "failed" ? "bg-rose-100 text-rose-700" : step.status === "skipped" ? "bg-slate-200 text-slate-500" : "bg-emerald-100 text-emerald-700"}`}>{step.status === "failed" ? <X className="size-3" /> : <Check className="size-3" />}</span><span className="min-w-0 flex-1 truncate">{step.title}</span><span className="font-mono text-[9px] text-slate-400">{step.durationMs}ms</span></div><p className="ml-7 mt-1 text-[9px] font-semibold leading-4 text-slate-400">{step.detail}</p></div>)}</div>{run.status === "failed" && onReplay ? <button className="workflow-button-primary w-full justify-center" disabled={replaying} onClick={onReplay} type="button">{replaying ? <RefreshCw className="size-4 animate-spin" /> : <Play className="size-4" />}{replaying ? "Replaying safely" : "Replay in safe test mode"}</button> : null}</div></DialogFrame>;
 }
 
 export function RunStatusBadge({ status }: { status: RunStatus }) {

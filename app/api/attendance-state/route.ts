@@ -2,8 +2,10 @@ import { ensurePersistenceTable, getAppState, getDbPool, isDbEnabled, mutateAtte
 import { attendanceWindow } from "@/lib/attendance-window";
 import { assignRegistrationNumbers } from "@/lib/registration-confirmation";
 import { syncConfirmedRegistrationToMfw } from "@/lib/mfw-registration";
+import { executeWorkflow } from "@/lib/workflow-engine";
+import { listActiveWorkflowsForTrigger, recordWorkflowExecution } from "@/lib/workflow-db";
 import type { AttendanceEntry, AttendanceSession, BuilderField, BuilderForm, RegistrationEntry } from "@/lib/types";
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 
 function cleanText(value: unknown, max = 300) {
   return String(value ?? "").trim().slice(0, max);
@@ -117,6 +119,50 @@ async function promoteAttendanceWaitingRegistrations(attendance: AttendanceEntry
   } finally {
     client.release();
   }
+}
+
+async function runAttendanceWorkflows(attendance: AttendanceEntry, promotedRegistrations: number) {
+  const state = await getAppState();
+  if (!state) return;
+  const trigger = attendance.status === "late" ? "Late attendance submitted" : "Attendance submitted";
+  const workflows = await listActiveWorkflowsForTrigger([trigger, "Attendance submitted"]);
+  await Promise.all(workflows.map(async (workflow) => {
+    const started = Date.now();
+    const event = {
+      id: attendance.id,
+      fullName: attendance.attendeeName,
+      mobile: attendance.mobile,
+      city: attendance.city,
+      workshopId: attendance.workshopId,
+      workshopTitle: attendance.workshopName,
+      batch: attendance.batch,
+      attendanceStatus: attendance.status || "checked_in",
+      attendanceSessionId: attendance.sessionId,
+      source: attendance.source || "attendance_form",
+      promotedRegistrations,
+      createdAt: attendance.submittedAt
+    };
+    const result = executeWorkflow({
+      nodes: workflow.nodes,
+      connections: workflow.connections,
+      registration: event,
+      salesPeople: Array.isArray(state.salesPeople) ? state.salesPeople as Array<Record<string, unknown>> : [],
+      leads: Array.isArray(state.leads) ? state.leads as Array<Record<string, unknown>> : [],
+      mode: "production"
+    });
+    await recordWorkflowExecution({
+      id: `EXE-${crypto.randomUUID().slice(0, 8).toUpperCase()}`,
+      workflowId: workflow.id,
+      mode: "production",
+      status: result.status,
+      trigger,
+      participant: `${attendance.attendeeName} · ${attendance.workshopName}`,
+      registration: event,
+      output: { summary: result.summary, promotedRegistrations },
+      steps: result.steps,
+      durationMs: Date.now() - started
+    });
+  }));
 }
 
 export async function GET(request: Request) {
@@ -240,6 +286,7 @@ export async function POST(request: Request) {
       }, { status: 409 });
     }
     const promotedRegistrations = await promoteAttendanceWaitingRegistrations(saved.entry).catch(() => 0);
+    after(() => runAttendanceWorkflows(saved.entry, promotedRegistrations).catch(() => undefined));
     return NextResponse.json({ ...saved, ok: true, promotedRegistrations, ...responseMeta });
   } catch {
     return NextResponse.json({ error: "Failed to save attendance." }, { status: 500 });
