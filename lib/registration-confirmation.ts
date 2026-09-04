@@ -178,6 +178,7 @@ export async function sendRegistrationStatusNotifications(registration: Registra
       values: [
         registration.referrerName || "Referrer",
         registration.fullName,
+        registration.mobile,
         registration.workshopTitle,
         registration.batch || "Main Batch",
         `WL-${registration.waitingPosition || "-"}`

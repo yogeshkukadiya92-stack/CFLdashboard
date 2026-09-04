@@ -78,6 +78,7 @@ test("routes confirmed and waiting WhatsApp messages only to allowed recipients"
     }, form);
     assert.deepEqual(requests.map((request) => request.PhoneNumber), ["919876543210", "919123456789"]);
     assert.deepEqual(requests.map((request) => request.TemplateName), ["participant_waiting", "referrer_waiting"]);
+    assert.deepEqual(requests[1].variables, ["Test Referrer", "Test Participant", "+91 9876543210", "Healthy Forever", "Batch 2", "WL-5"]);
     assert.equal(referredWaitingPatch.waitingWhatsappStatus, "sent");
     assert.equal(referredWaitingPatch.referrerWaitingWhatsappStatus, "sent");
 
