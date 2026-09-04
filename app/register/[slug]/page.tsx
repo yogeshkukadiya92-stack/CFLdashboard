@@ -4,6 +4,7 @@ import { HeightInput, isHeightField } from "@/components/height-input";
 import { workshops as seedWorkshops } from "@/lib/data";
 import { hydratePublicRegistrationState, readLocalArray, readLocalObject, savePublicRegistration, writeLiveStateToLocalStorage } from "@/lib/live-state";
 import { sanitizeRichTextHtml } from "@/lib/rich-text";
+import { COUNTRY_OPTIONS, citiesForCountry } from "@/lib/location-options";
 import type { BuilderField, BuilderForm, BuilderFormMode, BuilderTheme, FormAnalyticsRecord, PaymentTier, RegistrationEntry } from "@/lib/types";
 import { decodeJsonParam, formatCurrency } from "@/lib/utils";
 import { AlertTriangle, ArrowLeft, ArrowRight, Check, CheckCircle2, Loader2, ShieldCheck } from "lucide-react";
@@ -89,7 +90,8 @@ function simpleFields(): BuilderField[] {
     { id: "name", type: "short_text", label: "Full Name", placeholder: "Your full name", required: true, role: "name" },
     { id: "mobile", type: "mobile", label: "Mobile Number", placeholder: "10-digit mobile", required: true, role: "mobile" },
     { id: "email", type: "email", label: "Email", placeholder: "you@example.com", required: false, role: "email" },
-    { id: "city", type: "short_text", label: "City", placeholder: "Your city", required: false, role: "city" }
+    { id: "country", type: "dropdown", label: "Country", required: true, options: [...COUNTRY_OPTIONS], role: "country" },
+    { id: "city", type: "dropdown", label: "City", required: false, allowOther: true, role: "city" }
   ];
 }
 
@@ -616,7 +618,15 @@ export default function RegistrationPage() {
       analyticsStartedRef.current = true;
       trackAnalytics("start");
     }
-    setAnswers((prev) => ({ ...prev, [id]: value }));
+    setAnswers((prev) => {
+      const next = { ...prev, [id]: value };
+      // A city is only valid for the country it was selected under.
+      if (id === roleField("country")?.id) {
+        const cityId = roleField("city")?.id;
+        if (cityId) next[cityId] = "";
+      }
+      return next;
+    });
   }
 
   function toggleCheckbox(id: string, option: string) {
@@ -1021,6 +1031,8 @@ export default function RegistrationPage() {
                     onChange={(value) => setAnswer(field.id, value)}
                     onToggle={(option) => toggleCheckbox(field.id, option)}
                     radiusClass={fieldRadiusClass}
+                    dependentOptions={field.role === "city" ? citiesForCountry(answers[roleField("country")?.id ?? ""] ?? "") : undefined}
+                    disabled={field.role === "city" && Boolean(roleField("country")) && !answers[roleField("country")?.id ?? ""]}
                     value={answers[field.id] ?? ""}
                   />
                 ))}
@@ -1235,6 +1247,8 @@ function RenderField({
   onChange,
   onToggle,
   radiusClass,
+  dependentOptions,
+  disabled,
   value
 }: {
   accent: string;
@@ -1242,6 +1256,8 @@ function RenderField({
   onChange: (value: string) => void;
   onToggle: (option: string) => void;
   radiusClass: string;
+  dependentOptions?: readonly string[];
+  disabled?: boolean;
   value: string;
 }) {
   if (field.type === "heading") {
@@ -1266,9 +1282,9 @@ function RenderField({
     const isOther = value.startsWith("Other: ");
     control = (
       <div className="space-y-2">
-        <select className={inputClass} onChange={(event) => onChange(event.target.value === "__other" ? "Other: " : event.target.value)} value={isOther ? "__other" : value}>
-          <option value="">Select…</option>
-          {(field.options ?? []).map((option) => <option key={option} value={option}>{option}</option>)}
+        <select className={inputClass} disabled={disabled} onChange={(event) => onChange(event.target.value === "__other" ? "Other: " : event.target.value)} value={isOther ? "__other" : value}>
+          <option value="">{disabled ? "Select country first" : "Select…"}</option>
+          {(dependentOptions ?? field.options ?? []).map((option) => <option key={option} value={option}>{option}</option>)}
           {field.allowOther ? <option value="__other">Other</option> : null}
         </select>
         {field.allowOther && isOther ? (

@@ -6,6 +6,7 @@ import { hydrateLiveState, readLocalArray, saveLiveState } from "@/lib/live-stat
 import { buildRegistrationUrl, normalizeBaseUrl } from "@/lib/registration-url";
 import { publicFormSlug } from "@/lib/public-slug";
 import { sanitizeRichTextHtml } from "@/lib/rich-text";
+import { COUNTRY_OPTIONS } from "@/lib/location-options";
 import type { AttendanceSession, BuilderField, BuilderFieldType, BuilderForm, PaymentTier, ReferralCodeConfig } from "@/lib/types";
 import { generateId } from "@/lib/utils";
 import {
@@ -125,7 +126,8 @@ function defaultFields(): BuilderField[] {
     { id: generateId(), type: "short_text", label: "Full Name", placeholder: "Your full name", required: true, role: "name" },
     { id: generateId(), type: "mobile", label: "Mobile Number", placeholder: "10-digit mobile", required: true, role: "mobile" },
     { id: generateId(), type: "email", label: "Email", placeholder: "you@example.com", required: false, role: "email" },
-    { id: generateId(), type: "short_text", label: "City", placeholder: "Your city", required: false, role: "city" }
+    { id: generateId(), type: "dropdown", label: "Country", required: true, options: [...COUNTRY_OPTIONS], role: "country" },
+    { id: generateId(), type: "dropdown", label: "City", required: false, allowOther: true, role: "city" }
   ];
 }
 
@@ -298,6 +300,17 @@ export default function FormBuilderPage() {
         options: meta.hasOptions ? ["Option 1", "Option 2"] : undefined
       }
     ]);
+  }
+
+  function addCountryCityFields() {
+    setFields((current) => {
+      const withoutLocation = current.filter((field) => field.role !== "country" && field.role !== "city");
+      return [
+        ...withoutLocation,
+        { id: generateId(), type: "dropdown", label: "Country", required: true, options: [...COUNTRY_OPTIONS], role: "country" },
+        { id: generateId(), type: "dropdown", label: "City", required: false, allowOther: true, role: "city" }
+      ];
+    });
   }
 
   function moveField(index: number, direction: -1 | 1) {
@@ -665,6 +678,15 @@ export default function FormBuilderPage() {
             </div>
 
             <div className="mt-4 border-t border-slate-100 pt-4">
+              <button
+                className="mb-3 inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2.5 text-xs font-bold text-indigo-700 hover:border-indigo-300 hover:bg-indigo-100"
+                onClick={addCountryCityFields}
+                type="button"
+              >
+                <Plus className="size-3.5" />
+                Add Country → City dropdowns
+              </button>
+              <p className="mb-3 text-xs font-semibold text-slate-400">Selecting a country on the registration form will show its cities automatically.</p>
               <p className="mb-2 text-sm font-bold text-slate-600">Add a field</p>
               <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
                 {addableTypes.map((type) => (
