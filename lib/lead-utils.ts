@@ -1,5 +1,6 @@
 import { extractPreQualification } from "./crm-scorecard.ts";
 import type { Lead, LeadActivity, LeadFollowUp, LeadPriority, LeadStage } from "@/lib/types";
+import { salesPersonCodeFromId } from "@/lib/sales-person-code";
 
 type SalesPersonLike = {
   acceptingLeads?: boolean;
@@ -105,7 +106,8 @@ export function normalizeLead(value: unknown): Lead {
 export function upsertLeadFromRegistration(
   currentLeads: unknown[],
   registration: RegistrationLeadInput,
-  _salesPeople: unknown[] = []
+  salesPeople: unknown[] = [],
+  assignedSalesPersonId?: unknown
 ) {
   const leads = currentLeads.map(normalizeLead);
   const mobile = normalizeLeadMobile(registration.mobile);
@@ -117,13 +119,25 @@ export function upsertLeadFromRegistration(
   const sourceDetail = `${source}: ${workshop}`;
   const existingIndex = leads.findIndex((lead) => normalizeLeadMobile(lead.mobile) === mobile);
   const preQualification = extractPreQualification(registration.answers);
+  const assignedPerson = salesPeople
+    .filter((value): value is SalesPersonLike => Boolean(value) && typeof value === "object" && !Array.isArray(value))
+    .find((person) => String(person.id ?? "") === String(assignedSalesPersonId ?? "") && person.isActive !== false);
+  const assignment = assignedPerson?.id && assignedPerson.name ? {
+    assignedSalesPersonCode: salesPersonCodeFromId(String(assignedPerson.id)),
+    assignedSalesPersonId: String(assignedPerson.id),
+    assignedTo: String(assignedPerson.name)
+  } : undefined;
 
   if (existingIndex >= 0) {
     const existing = leads[existingIndex];
     const activity = createLeadActivity("created", `New ${source.toLowerCase()} response received for ${workshop}.`, "System", now);
+    const assignmentActivity = assignment && !existing.assignedTo
+      ? createLeadActivity("assignment", `Automatically assigned to ${assignment.assignedTo} from the workshop registration setting.`, "System", now)
+      : undefined;
     leads[existingIndex] = {
       ...existing,
-      activities: [activity, ...(existing.activities ?? [])].slice(0, 300),
+      ...(assignment && !existing.assignedTo ? assignment : {}),
+      activities: [activity, ...(assignmentActivity ? [assignmentActivity] : []), ...(existing.activities ?? [])].slice(0, 300),
       city: existing.city || String(registration.city ?? ""),
       email: existing.email || String(registration.email ?? ""),
       interest: workshop || existing.interest,
@@ -137,9 +151,12 @@ export function upsertLeadFromRegistration(
   }
 
   const created = createLeadActivity("created", `Lead captured from ${source.toLowerCase()} for ${workshop}.`, "System", now);
+  const assignmentActivity = assignment
+    ? createLeadActivity("assignment", `Automatically assigned to ${assignment.assignedTo} from the workshop registration setting.`, "System", now)
+    : undefined;
   const lead = normalizeLead({
-    activities: [created],
-    assignedTo: "",
+    activities: assignmentActivity ? [assignmentActivity, created] : [created],
+    ...assignment,
     city: String(registration.city ?? ""),
     country: "India",
     createdAt: now,

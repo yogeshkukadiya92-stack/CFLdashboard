@@ -58,6 +58,26 @@ test("registration leads remain unassigned for manual Phase 1 routing", () => {
   assert.equal((leads[0].activities ?? []).some((activity) => activity.message.includes("Automatically assigned")), false);
 });
 
+test("workshop registration assigns new leads to its configured sales person", () => {
+  const leads = upsertLeadFromRegistration([], {
+    fullName: "Assigned Workshop Lead",
+    mobile: "9876543217",
+    workshopTitle: "Business Growth Blueprint"
+  }, [{ id: "sales-1", isActive: true, name: "Sales One" }], "sales-1");
+  assert.equal(leads[0].assignedTo, "Sales One");
+  assert.equal(leads[0].assignedSalesPersonId, "sales-1");
+  assert.equal((leads[0].activities ?? []).some((activity) => activity.type === "assignment"), true);
+});
+
+test("workshop assignment fills an existing unassigned lead without taking over an assigned lead", () => {
+  const people = [{ id: "sales-1", isActive: true, name: "Sales One" }];
+  const unassigned = upsertLeadFromRegistration([{ id: "lead-1", name: "Existing", mobile: "9876543218", assignedTo: "" }], { fullName: "Existing", mobile: "9876543218", workshopTitle: "Workshop" }, people, "sales-1");
+  assert.equal(unassigned[0].assignedTo, "Sales One");
+  assert.equal((unassigned[0].activities ?? []).some((activity) => activity.type === "assignment"), true);
+  const owned = upsertLeadFromRegistration([{ id: "lead-2", name: "Owned", mobile: "9876543219", assignedTo: "Sales Two" }], { fullName: "Owned", mobile: "9876543219", workshopTitle: "Workshop" }, people, "sales-1");
+  assert.equal(owned[0].assignedTo, "Sales Two");
+});
+
 test("lead block metadata survives normalization", () => {
   const lead = normalizeLead({
     id: "blocked",

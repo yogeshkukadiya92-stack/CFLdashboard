@@ -5,6 +5,7 @@ import { sendRegistrationStatusNotifications } from "@/lib/registration-confirma
 import { syncConfirmedRegistrationToMfw } from "@/lib/mfw-registration";
 import type { AttendanceEntry, BuilderForm, ReferralCodeConfig, RegistrationEntry } from "@/lib/types";
 import { attendanceMatchesFinalRegistration, findRepeaterSource, isDuplicateWorkshopRegistration } from "@/lib/workshop-hierarchy";
+import { resolveWorkshopSalesPersonId, type WorkshopLeadAssignmentRule } from "@/lib/workshop-lead-assignment";
 import { NextResponse } from "next/server";
 
 export async function GET() {
@@ -274,12 +275,14 @@ export async function POST(request: Request) {
         const workshop = value as { id?: unknown; name?: unknown };
         return String(workshop.id ?? "") === sanitizedRegistration.workshopId
           || String(workshop.name ?? "").trim().toLowerCase() === workshopTitle.toLowerCase();
-      }) as { transferLeadToCrm?: unknown } | undefined;
+      }) as { assignedSalesPersonId?: unknown; leadAssignmentRules?: WorkshopLeadAssignmentRule[]; transferLeadToCrm?: unknown } | undefined;
+      const assignedSalesPersonId = resolveWorkshopSalesPersonId(finalRegistration, linkedWorkshop?.leadAssignmentRules, linkedWorkshop?.assignedSalesPersonId);
       const leads = linkedWorkshop?.transferLeadToCrm === true
         ? upsertLeadFromRegistration(
             Array.isArray(state.leads) ? state.leads : [],
             finalRegistration,
-            Array.isArray(state.sales_people) ? state.sales_people : []
+            Array.isArray(state.sales_people) ? state.sales_people : [],
+            assignedSalesPersonId
           )
         : Array.isArray(state.leads) ? state.leads : [];
 
