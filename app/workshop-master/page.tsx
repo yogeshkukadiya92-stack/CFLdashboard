@@ -2982,7 +2982,7 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
       };
       const forms = readLocalArray<BuilderForm>(FORMS_STORAGE_KEY);
       const existingForm = forms.find((item) => item.workshopId === workshop.id || item.workshopSlug === workshopSlug(workshop.name));
-      const nextForms = existingForm ? [{ ...existingForm, waitingMode, waitingTitle: waitingTitle.trim() || undefined, waitingMessage: waitingMessage.trim() || undefined, updatedAt: new Date().toISOString() }, ...forms.filter((item) => item.id !== existingForm.id)] : forms;
+      const nextForms = existingForm ? [{ ...existingForm, otpRequired, waitingMode, waitingTitle: waitingTitle.trim() || undefined, waitingMessage: waitingMessage.trim() || undefined, updatedAt: new Date().toISOString() }, ...forms.filter((item) => item.id !== existingForm.id)] : forms;
       const saved = await saveLiveState({ forms: nextForms, registrationLinks: configs });
       if (!saved) {
         setSaveStatus("failed");

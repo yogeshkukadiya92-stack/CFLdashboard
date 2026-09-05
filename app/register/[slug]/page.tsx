@@ -5,6 +5,7 @@ import { workshops as seedWorkshops } from "@/lib/data";
 import { hydratePublicRegistrationState, readLocalArray, readLocalObject, savePublicRegistration, writeLiveStateToLocalStorage } from "@/lib/live-state";
 import { sanitizeRichTextHtml } from "@/lib/rich-text";
 import { COUNTRY_OPTIONS, citiesForCountry } from "@/lib/location-options";
+import { resolveRegistrationOtpRequired } from "@/lib/registration-otp";
 import type { BuilderField, BuilderForm, BuilderFormMode, BuilderTheme, FormAnalyticsRecord, PaymentTier, RegistrationEntry } from "@/lib/types";
 import { decodeJsonParam, formatCurrency } from "@/lib/utils";
 import { AlertTriangle, ArrowLeft, ArrowRight, Check, CheckCircle2, Loader2, ShieldCheck } from "lucide-react";
@@ -322,7 +323,10 @@ export default function RegistrationPage() {
                 partPayment: Boolean(config.partPayment),
                 venue: config.venue || "TBA"
               });
-              resolved = { ...resolved, otpRequired: Boolean(savedForm.otpRequired || config.otpRequired) };
+              resolved = {
+                ...resolved,
+                otpRequired: resolveRegistrationOtpRequired(config.otpRequired, savedForm.otpRequired)
+              };
             } else {
               resolved = {
                 formId: `form-${config.id || slug}-main`,
