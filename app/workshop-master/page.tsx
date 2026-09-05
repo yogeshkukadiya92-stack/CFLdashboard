@@ -12,6 +12,7 @@ import { AlertCircle, Archive, ArrowDown, ArrowUp, BarChart3, Bold, CalendarDays
 import { hydrateLiveState, readLocalArray, readLocalObject, saveLiveState } from "@/lib/live-state";
 import { buildRegistrationUrl, normalizeBaseUrl } from "@/lib/registration-url";
 import { publicFormSlug } from "@/lib/public-slug";
+import { resolveRegistrationOtpRequired } from "@/lib/registration-otp";
 import { sanitizeRichTextHtml } from "@/lib/rich-text";
 import { hideDuplicateResponses, partitionDuplicateResponses } from "@/lib/response-dedupe";
 import { activeResponseFilterCount, applyResponseFilters, emptyResponseFilters, responseQuestionOptions, type ResponseFilterState } from "@/lib/response-filters";
@@ -2931,10 +2932,8 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
         setPublished(existing.published !== false);
         setPublishUntil(existing.publishUntil || "");
         setCustomBaseUrl(existing.customBaseUrl || "");
-        setOtpRequired(Boolean(existing.otpRequired));
-      } else {
-        setOtpRequired(Boolean(savedForm?.otpRequired));
       }
+      setOtpRequired(resolveRegistrationOtpRequired(existing?.otpRequired, savedForm?.otpRequired));
       setWaitingMode(Boolean(savedForm?.waitingMode));
       setWaitingTitle(savedForm?.waitingTitle || "Waiting List Registration");
       setWaitingMessage(savedForm?.waitingMessage || "Seats are currently full. Your registration will be added to the waiting list.");
