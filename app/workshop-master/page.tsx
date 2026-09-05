@@ -1610,24 +1610,6 @@ export default function WorkshopMasterPage() {
           </div>
         ) : null}
 
-        {editingId ? (
-          <WorkshopHierarchyManager
-            registrations={registrations}
-            workshop={records.find((record) => record.id === editingId)!}
-            onChange={async (batches) => {
-              const next = records.map((record) => record.id === editingId ? { ...record, batches, batch: batches[0]?.name || record.batch } : record);
-              await saveRecords(next);
-              setMessage("Batch and introduction session structure saved.");
-            }}
-          />
-        ) : (
-          <div className="mt-7 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5 text-center">
-            <CalendarDays className="mx-auto size-6 text-slate-400" />
-            <p className="mt-2 font-black text-slate-800">Save the workshop to create batches</p>
-            <p className="mt-1 text-sm font-semibold text-slate-500">After the workshop master is saved, add batch dates, capacity and introduction sessions without creating the workshop again.</p>
-          </div>
-        )}
-
         <div className="mt-5 rounded-2xl border border-emerald-100 bg-emerald-50/40 p-3.5 md:p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
