@@ -788,3 +788,16 @@ main.registration-public-page .registration-public-form textarea,
     scrollbar-color: auto;
   }
 }
+
+/* Keep native selection controls independent of text-field sizing. */
+main .registration-link-dialog input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  min-height: 20px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+main .registration-link-dialog input[type="datetime-local"] {
+  min-width: 0;
+  max-width: 100%;
+}

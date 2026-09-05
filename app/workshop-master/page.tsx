@@ -20,7 +20,7 @@ import { registrationMatchesBatch } from "@/lib/workshop-hierarchy";
 import { generateId } from "@/lib/utils";
 import { salesPersonCodeFromId } from "@/lib/sales-person-code";
 import type { WorkshopLeadAssignmentRule } from "@/lib/workshop-lead-assignment";
-import { type ClipboardEvent, type FormEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { type ClipboardEvent, type FormEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type WorkshopRecord = {
   archived?: boolean;
@@ -2848,6 +2848,43 @@ function FormLogoUploader({ onChange, value }: { onChange: (value: string) => vo
 }
 
 function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord; onClose: () => void }) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
+  useEffect(() => {
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    closeRef.current?.focus();
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onCloseRef.current();
+      }
+      if (event.key !== "Tab") return;
+      const elements = Array.from(dialogRef.current?.querySelectorAll<HTMLElement>(
+        'button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex="0"]'
+      ) ?? []).filter((element) => element.getClientRects().length > 0);
+      const first = elements[0];
+      const last = elements[elements.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last?.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first?.focus();
+      }
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = previousOverflow;
+      previousFocus?.focus();
+    };
+  }, []);
+
   const [paid, setPaid] = useState(workshop.isPaid);
   const [fee, setFee] = useState(workshop.feesWithTax ?? "");
   const [partPayment, setPartPayment] = useState(Boolean(workshop.isPartPaymentAllow));
@@ -2862,7 +2899,7 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
   const [waitingMessage, setWaitingMessage] = useState("Seats are currently full. Your registration will be added to the waiting list.");
   const [registrationDomains, setRegistrationDomains] = useState<string[]>([]);
   const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "failed">("idle");
-  const [saveStatus, setSaveStatus] = useState<"idle" | "saved">("idle");
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "failed">("idle");
   const [linkSettingsLoaded, setLinkSettingsLoaded] = useState(false);
   const shortSlug = useMemo(() => registrationSlug(workshop), [workshop]);
 
@@ -2922,10 +2959,11 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
     void loadRegistrationDomains();
   }, []);
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (!linkSettingsLoaded) return;
+  const saveRegistrationLink = useCallback(async () => {
+    if (typeof window === "undefined") return false;
+    if (!linkSettingsLoaded) return false;
     try {
+      setSaveStatus("saving");
       const configs = readLocalObject<Record<string, RegistrationLinkConfig>>(REGISTRATION_LINK_CONFIG_STORAGE_KEY);
       configs[shortSlug] = {
         batch: batch.trim() || "Main Batch",
@@ -2945,14 +2983,18 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
       const forms = readLocalArray<BuilderForm>(FORMS_STORAGE_KEY);
       const existingForm = forms.find((item) => item.workshopId === workshop.id || item.workshopSlug === workshopSlug(workshop.name));
       const nextForms = existingForm ? [{ ...existingForm, waitingMode, waitingTitle: waitingTitle.trim() || undefined, waitingMessage: waitingMessage.trim() || undefined, updatedAt: new Date().toISOString() }, ...forms.filter((item) => item.id !== existingForm.id)] : forms;
-      void saveLiveState({ forms: nextForms, registrationLinks: configs });
-      setSaveStatus("saved");
-      const timeout = window.setTimeout(() => setSaveStatus("idle"), 1600);
-      return () => window.clearTimeout(timeout);
+      const saved = await saveLiveState({ forms: nextForms, registrationLinks: configs });
+      if (!saved) {
+        setSaveStatus("failed");
+        return false;
+      }
+      onClose();
+      return true;
     } catch {
-      // The link still opens from Workshop Master fallback if storage is unavailable.
+      setSaveStatus("failed");
+      return false;
     }
-  }, [batch, customBaseUrl, fee, linkSettingsLoaded, otpRequired, paid, partPayment, publishUntil, published, shortSlug, venue, waitingMessage, waitingMode, waitingTitle, workshop]);
+  }, [batch, customBaseUrl, fee, linkSettingsLoaded, onClose, otpRequired, paid, partPayment, publishUntil, published, shortSlug, venue, waitingMessage, waitingMode, waitingTitle, workshop]);
 
   async function copyLink() {
     let copied = false;
@@ -2989,18 +3031,18 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
   }
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-slate-950/40 p-3 sm:p-4">
-      <div className="flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
-        <div className="flex items-center justify-between border-b border-slate-100 p-5">
+    <div className="fixed inset-0 z-50 grid place-items-center overflow-hidden bg-slate-950/40 p-3 sm:p-4">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="registration-link-title" className="registration-link-dialog flex max-h-[calc(100dvh-2rem)] w-full max-w-3xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
+        <div className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-100 p-4 sm:p-5">
           <div>
             <p className="text-xs font-black uppercase tracking-[0.2em] text-emerald-600">Edit Registration Link</p>
-            <h3 className="mt-1 text-xl font-black text-slate-950">{workshop.name}</h3>
-            <p className="mt-1 text-xs font-bold text-slate-400">{saveStatus === "saved" ? "Link settings saved" : "Change batch, venue, payment and QR anytime."}</p>
+            <h3 id="registration-link-title" className="mt-1 break-words text-xl font-black text-slate-950">{workshop.name}</h3>
+            <p className="mt-1 text-xs font-bold text-slate-500">{saveStatus === "failed" ? "Could not save. Please try again." : "Change batch, venue, payment and QR anytime."}</p>
           </div>
-          <button className="grid size-10 place-items-center rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50" onClick={onClose} type="button"><X className="size-4" /></button>
+          <button ref={closeRef} aria-label="Close registration link settings" className="grid size-10 shrink-0 place-items-center rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50" onClick={onClose} type="button"><X className="size-4" /></button>
         </div>
 
-        <div className="space-y-5 overflow-y-auto p-5">
+        <div className="min-h-0 space-y-5 overflow-y-auto overscroll-contain p-4 sm:p-5">
           <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
@@ -3009,7 +3051,7 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
               </div>
               <span className={`rounded-full px-3 py-1 text-xs font-black ${linkStatusClass}`}>{linkStatus}</span>
             </div>
-            <div className="mt-4 grid gap-4 sm:grid-cols-[auto_1fr]">
+            <div className="mt-4 grid items-start gap-4 sm:grid-cols-[auto_minmax(0,1fr)]">
               <button
                 className={`inline-flex min-h-[44px] items-center justify-center rounded-xl px-4 py-2.5 text-sm font-black text-white ${published ? "bg-rose-600 hover:bg-rose-700" : "bg-emerald-600 hover:bg-emerald-700"}`}
                 onClick={() => setPublished((value) => !value)}
@@ -3020,7 +3062,7 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
               <label className="block">
                 <span className="mb-2 block text-sm font-bold text-slate-600">Publish Until</span>
                 <input className={inputClass} onChange={(event) => setPublishUntil(event.target.value)} type="datetime-local" value={publishUntil} />
-                <span className="mt-1 block text-xs font-semibold text-slate-400">Leave blank if the link should not expire automatically.</span>
+                <span className="mt-1 block text-xs font-semibold text-slate-500">Leave blank if the link should not expire automatically.</span>
               </label>
             </div>
           </div>
@@ -3040,6 +3082,7 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
             <div className="flex flex-wrap gap-3">
               <button
                 className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-bold ${!paid ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-slate-200 text-slate-600 hover:bg-slate-50"}`}
+                aria-pressed={!paid}
                 onClick={() => setPaid(false)}
                 type="button"
               >
@@ -3047,6 +3090,7 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
               </button>
               <button
                 className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-bold ${paid ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-slate-200 text-slate-600 hover:bg-slate-50"}`}
+                aria-pressed={paid}
                 onClick={() => setPaid(true)}
                 type="button"
               >
@@ -3071,7 +3115,7 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
           <label className="flex min-h-[58px] items-center justify-between gap-4 rounded-2xl border border-emerald-100 bg-emerald-50/60 px-4 py-3">
             <span>
               <span className="block text-sm font-black text-slate-800">WhatsApp OTP Required</span>
-              <span className="mt-0.5 block text-xs font-semibold text-slate-500">Participants must verify WhatsApp OTP before this registration link can submit.</span>
+              <span className="mt-0.5 block text-xs font-semibold text-slate-500">Participants must verify their WhatsApp number before registering.</span>
             </span>
             <input checked={otpRequired} className="size-5 shrink-0 accent-emerald-600" onChange={(event) => setOtpRequired(event.target.checked)} type="checkbox" />
           </label>
@@ -3080,7 +3124,7 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
             <label className="flex min-h-[48px] items-center justify-between gap-4">
               <span>
                 <span className="block text-sm font-black text-slate-800">Waiting Mode</span>
-                <span className="mt-0.5 block text-xs font-semibold text-slate-500">Waiting content below is shown on the public registration link.</span>
+                <span className="mt-0.5 block text-xs font-semibold text-slate-500">When enabled, registrations join the waiting list.</span>
               </span>
               <input checked={waitingMode} className="size-5 shrink-0 accent-amber-600" onChange={(event) => setWaitingMode(event.target.checked)} type="checkbox" />
             </label>
@@ -3096,8 +3140,8 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
             </div>
           </div>
 
-          <div className="grid gap-4 lg:grid-cols-[1fr_240px]">
-            <div>
+          <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_220px]">
+            <div className="min-w-0">
             <div className="mb-3 grid gap-3">
               <label className="block">
                 <span className="mb-2 block text-sm font-bold text-slate-600">Registration Domain</span>
@@ -3115,7 +3159,7 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
                   ))}
                   {customBaseUrl && selectedDomainOption === "__custom" ? <option value="__custom">Custom domain</option> : null}
                 </select>
-                <span className="mt-1 block text-xs font-semibold text-slate-400">Add reusable subdomains in Settings. Leave current dashboard domain if no custom subdomain is connected.</span>
+                <span className="mt-1 block text-xs font-semibold text-slate-500">Add reusable subdomains in Settings. Leave current dashboard domain if no custom subdomain is connected.</span>
               </label>
               <label className="block">
                 <span className="mb-2 block text-sm font-bold text-slate-600">Custom Domain</span>
@@ -3123,8 +3167,8 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
               </label>
             </div>
             <span className="mb-2 block text-sm font-bold text-slate-600">Shareable Link</span>
-            <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-2">
-              <span className="min-w-0 flex-1 truncate px-2 text-sm font-semibold text-slate-700">{link}</span>
+            <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-2">
+              <span className="w-full break-all px-2 text-sm font-semibold text-slate-700">{link}</span>
               <button className="inline-flex items-center gap-2 rounded-lg bg-slate-950 px-3 py-2 text-sm font-bold text-white hover:bg-slate-800" onClick={copyLink} type="button">
                 <Copy className="size-4" />
                 {copyStatus === "copied" ? "Copied" : "Copy"}
@@ -3134,7 +3178,7 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
                 Open
               </a>
             </div>
-            <p className="mt-2 text-xs font-semibold text-slate-400">
+            <p className="mt-2 text-xs font-semibold text-slate-500">
               {copyStatus === "failed" ? "Copy was blocked. Select the link and copy it manually." : "Short link saved. Open the link or scan the QR code to view the registration form."}
             </p>
             </div>
@@ -3152,6 +3196,20 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
               ) : null}
             </div>
           </div>
+        </div>
+        <div className="flex shrink-0 flex-col-reverse gap-3 border-t border-slate-100 bg-white p-4 sm:flex-row sm:items-center sm:justify-end sm:p-5">
+          <button className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-black text-slate-700 hover:bg-slate-50" onClick={onClose} type="button">
+            Cancel
+          </button>
+          <button
+            className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-black text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-emerald-300"
+            disabled={!linkSettingsLoaded || saveStatus === "saving"}
+            onClick={() => void saveRegistrationLink()}
+            type="button"
+          >
+            <Save className="size-4" />
+            {saveStatus === "saving" ? "Saving..." : "Save Changes"}
+          </button>
         </div>
       </div>
     </div>
