@@ -75,6 +75,7 @@ function registrationWhatsAppStatus(entry: RegistrationEntry) {
 }
 type DiscountType = "percent" | "flat";
 type AnalyticsPanel = "cohort" | "overlap" | null;
+type FormWorkflowPanel = "basics" | "automation" | "fields" | "includes" | "preview" | null;
 type RegistrationLinkConfig = {
   batch?: string;
   customBaseUrl?: string;
@@ -221,6 +222,7 @@ export default function WorkshopMasterPage() {
   const [formRepeaterSourceWorkshopIds, setFormRepeaterSourceWorkshopIds] = useState<string[]>([]);
   const [formRepeaterWaitingMode, setFormRepeaterWaitingMode] = useState(true);
   const [repeaterWorkshopQuery, setRepeaterWorkshopQuery] = useState("");
+  const [formWorkflowPanel, setFormWorkflowPanel] = useState<FormWorkflowPanel>(null);
   const [whatsappGroupUrl, setWhatsappGroupUrl] = useState("");
   const [whatsappConfirmationEnabled, setWhatsappConfirmationEnabled] = useState(false);
   const [whatsappConfirmationTemplate, setWhatsappConfirmationTemplate] = useState("");
@@ -1477,13 +1479,25 @@ export default function WorkshopMasterPage() {
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-700">Registration Form Builder</p>
-              <h3 className="mt-0.5 text-lg font-black text-slate-950">Create registration form with workshop</h3>
-              <p className="mt-0.5 text-xs font-semibold text-slate-500">Configure the public registration experience.</p>
+              <h3 className="mt-0.5 text-lg font-black text-slate-950">Form workflow setup</h3>
+              <p className="mt-0.5 text-xs font-semibold text-slate-500">Open one setup panel at a time. The page stays compact while all settings remain available.</p>
             </div>
             <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-emerald-700">{formFields.length} fields</span>
           </div>
 
-          <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
+          <div className="mt-4 grid gap-2 md:grid-cols-5">
+            <FormWorkflowCard title="Basics" detail={formTitle || "Untitled form"} meta={formMode === "classic" ? "Classic" : formMode === "steps" ? "Multi-step" : "Guided"} onOpen={() => setFormWorkflowPanel("basics")} />
+            <FormWorkflowCard title="Automation" detail={`${formWaitingMode ? "Waiting ON" : "Waiting OFF"} · ${formOtpRequired ? "OTP ON" : "OTP OFF"}`} meta={`${formRepeaterSourceWorkshopIds.length} repeater source${formRepeaterSourceWorkshopIds.length === 1 ? "" : "s"}`} onOpen={() => setFormWorkflowPanel("automation")} />
+            <FormWorkflowCard title="Fields" detail={`${formFields.length} fields`} meta={`${formFields.filter((field) => field.required).length} required`} onOpen={() => setFormWorkflowPanel("fields")} />
+            <FormWorkflowCard title="Included" detail={`${formHighlights.filter(Boolean).length} items`} meta="Workshop highlights" onOpen={() => setFormWorkflowPanel("includes")} />
+            <FormWorkflowCard title="Preview" detail="Public form" meta={isPaid ? "Paid" : "Free"} onOpen={() => setFormWorkflowPanel("preview")} />
+          </div>
+
+          {editingAnalytics ? (
+            <FormAnalyticsSummary analytics={editingAnalytics} fields={formFields} />
+          ) : null}
+
+          <div className="hidden">
             <div className="min-w-0">
           <div className="grid gap-3 md:grid-cols-2">
             <label className="block">
@@ -1717,6 +1731,175 @@ export default function WorkshopMasterPage() {
             />
           </div>
         </div>
+
+        {formWorkflowPanel ? (
+          <div
+            aria-labelledby="form-workflow-panel-title"
+            aria-modal="true"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-2 backdrop-blur-sm sm:p-4"
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget) setFormWorkflowPanel(null);
+            }}
+            role="dialog"
+          >
+            <section className="flex max-h-[calc(100dvh-1rem)] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+              <header className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-700">Form workflow</p>
+                  <h4 className="text-lg font-black text-slate-950" id="form-workflow-panel-title">
+                    {formWorkflowPanel === "basics" ? "Basics" : formWorkflowPanel === "automation" ? "Automation rules" : formWorkflowPanel === "fields" ? "Form fields" : formWorkflowPanel === "includes" ? "What's included" : "Live preview"}
+                  </h4>
+                </div>
+                <button aria-label="Close form workflow panel" className="grid size-9 place-items-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-950" onClick={() => setFormWorkflowPanel(null)} type="button"><X className="size-4" /></button>
+              </header>
+              <div className="min-h-0 flex-1 overflow-y-auto p-4">
+                {formWorkflowPanel === "basics" ? (
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <label className="block">
+                      <span className="mb-2 block text-sm font-bold text-slate-600">Form Title</span>
+                      <input className={inputClass} onChange={(event) => setFormTitle(event.target.value)} placeholder="Workshop Registration" value={formTitle} />
+                    </label>
+                    <FormLogoUploader value={formLogoUrl} onChange={setFormLogoUrl} />
+                    <label className="block md:col-span-2">
+                      <span className="mb-2 block text-sm font-bold text-slate-600">Form Tagline</span>
+                      <input className={inputClass} onChange={(event) => setFormTagline(event.target.value)} placeholder="Short subtitle shown below the form title" value={formTagline} />
+                    </label>
+                    <div className="md:col-span-2">
+                      <FormExperienceControls mode={formMode} onModeChange={setFormMode} onThemeChange={(patch) => setFormTheme((current) => ({ ...current, ...patch }))} theme={formTheme} />
+                    </div>
+                    <div className="block md:col-span-2">
+                      <span className="mb-2 block text-sm font-bold text-slate-600">Form Description</span>
+                      <RichTextEditor onChange={setFormDescription} value={formDescription} />
+                    </div>
+                    <label className="block md:col-span-2">
+                      <span className="mb-2 block text-sm font-bold text-slate-600">Submit Button Text</span>
+                      <input className={inputClass} maxLength={60} onChange={(event) => setFormSubmitButtonText(event.target.value)} placeholder={isPaid ? "Register & Pay" : "Confirm Registration"} value={formSubmitButtonText} />
+                    </label>
+                  </div>
+                ) : null}
+
+                {formWorkflowPanel === "automation" ? (
+                  <div className="grid gap-3">
+                    <label className="block">
+                      <span className="mb-2 block text-sm font-bold text-slate-600">WhatsApp Group Invite Link</span>
+                      <input className={inputClass} onChange={(event) => setWhatsappGroupUrl(event.target.value)} placeholder="https://chat.whatsapp.com/xxxxxxxx" value={whatsappGroupUrl} />
+                    </label>
+                    <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4">
+                      <label className="flex min-h-[48px] items-center justify-between gap-4">
+                        <span>
+                          <span className="block text-sm font-black text-slate-700">Send registration status on WhatsApp</span>
+                          <span className="mt-0.5 block text-xs font-semibold text-slate-500">Confirmed and waiting participants receive separate templates.</span>
+                        </span>
+                        <input checked={whatsappConfirmationEnabled} className="size-5 shrink-0 accent-emerald-600" onChange={(event) => setWhatsappConfirmationEnabled(event.target.checked)} type="checkbox" />
+                      </label>
+                      {whatsappConfirmationEnabled ? (
+                        <div className="mt-3 grid gap-3 md:grid-cols-3">
+                          <label className="block"><span className="mb-2 block text-xs font-bold text-slate-600">Participant Confirmation Template</span><input className={inputClass} onChange={(event) => setWhatsappConfirmationTemplate(event.target.value)} placeholder="registration_confirmed" value={whatsappConfirmationTemplate} /></label>
+                          <label className="block"><span className="mb-2 block text-xs font-bold text-slate-600">Participant Waiting Template</span><input className={inputClass} onChange={(event) => setWhatsappWaitingTemplate(event.target.value)} placeholder="registration_waiting" value={whatsappWaitingTemplate} /></label>
+                          <label className="block"><span className="mb-2 block text-xs font-bold text-slate-600">Referrer Waiting Template</span><input className={inputClass} onChange={(event) => setWhatsappReferrerWaitingTemplate(event.target.value)} placeholder="referrer_registration_waiting" value={whatsappReferrerWaitingTemplate} /></label>
+                        </div>
+                      ) : null}
+                    </div>
+                    <label className="flex min-h-[52px] items-center justify-between gap-4 rounded-xl border border-emerald-100 bg-white px-4 py-3">
+                      <span><span className="block text-sm font-black text-slate-700">WhatsApp OTP Verification</span><span className="mt-0.5 block text-xs font-semibold text-slate-400">Require OTP before final registration submit.</span></span>
+                      <input checked={formOtpRequired} className="size-5 shrink-0 accent-emerald-600" onChange={(event) => setFormOtpRequired(event.target.checked)} type="checkbox" />
+                    </label>
+                    <div className="rounded-xl border border-sky-200 bg-sky-50/70 p-4">
+                      <label className="flex min-h-[48px] items-center justify-between gap-4">
+                        <span><span className="block text-sm font-black text-slate-800">Confirm only attended participants</span><span className="mt-0.5 block text-xs font-semibold text-slate-500">Others join waiting until attendance is matched.</span></span>
+                        <input checked={formRequireAttendanceForConfirmation} className="size-5 shrink-0 accent-sky-600" onChange={(event) => { setFormRequireAttendanceForConfirmation(event.target.checked); if (!event.target.checked) setFormRequiredAttendanceSessionId(""); }} type="checkbox" />
+                      </label>
+                      {formRequireAttendanceForConfirmation ? (
+                        <label className="mt-3 block">
+                          <span className="mb-2 block text-xs font-black text-slate-600">Required Attendance Form</span>
+                          <select className={inputClass} onChange={(event) => setFormRequiredAttendanceSessionId(event.target.value)} value={formRequiredAttendanceSessionId}>
+                            <option value="">Select attendance form</option>
+                            {attendanceSessions.map((session) => <option key={session.id} value={session.id}>{session.workshopName} · {session.title} · {session.sessionDate}</option>)}
+                          </select>
+                        </label>
+                      ) : null}
+                    </div>
+                    <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-4">
+                      <label className="flex min-h-[48px] items-center justify-between gap-4">
+                        <span><span className="block text-sm font-black text-slate-800">Waiting Mode</span><span className="mt-0.5 block text-xs font-semibold text-slate-500">Send every new form submission to waiting.</span></span>
+                        <input checked={formWaitingMode} className="size-5 shrink-0 accent-amber-600" onChange={(event) => setFormWaitingMode(event.target.checked)} type="checkbox" />
+                      </label>
+                      <div className="mt-3 grid gap-3 md:grid-cols-2">
+                        <label className="block"><span className="mb-2 block text-xs font-black text-slate-600">Registration Capacity</span><input className={inputClass} inputMode="numeric" min={1} onChange={(event) => setFormRegistrationCapacity(event.target.value.replace(/\D/g, ""))} placeholder="No limit" value={formRegistrationCapacity} /></label>
+                        <label className="block"><span className="mb-2 block text-xs font-black text-slate-600">Waiting Heading</span><input className={inputClass} maxLength={80} onChange={(event) => setFormWaitingTitle(event.target.value)} placeholder="Waiting List Registration" value={formWaitingTitle} /></label>
+                        <label className="block md:col-span-2"><span className="mb-2 block text-xs font-black text-slate-600">Waiting Message</span><input className={inputClass} maxLength={240} onChange={(event) => setFormWaitingMessage(event.target.value)} value={formWaitingMessage} /></label>
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-violet-200 bg-violet-50/70 p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <span><span className="block text-sm font-black text-slate-800">Repeater Source Workshops</span><span className="mt-0.5 block text-xs font-semibold text-slate-500">Matching participants are marked as repeaters.</span></span>
+                        <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-violet-700">{formRepeaterSourceWorkshopIds.length} selected</span>
+                      </div>
+                      <label className="mt-3 flex min-h-[48px] items-center justify-between gap-4 rounded-xl border border-violet-100 bg-white px-3 py-2">
+                        <span><span className="block text-sm font-black text-slate-800">Repeater Waiting Mode</span><span className="mt-0.5 block text-xs font-semibold text-slate-500">{formRepeaterWaitingMode ? "ON: repeaters go to Waiting · Repeater review." : "OFF: repeaters stay confirmed and keep the Repeater status."}</span></span>
+                        <input checked={formRepeaterWaitingMode} className="size-5 shrink-0 accent-violet-600" onChange={(event) => setFormRepeaterWaitingMode(event.target.checked)} type="checkbox" />
+                      </label>
+                      <label className="relative mt-3 block">
+                        <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
+                        <input className={`${inputClass} pl-10`} onChange={(event) => setRepeaterWorkshopQuery(event.target.value)} placeholder="Search past workshops" value={repeaterWorkshopQuery} />
+                      </label>
+                      <div className="mt-2 max-h-56 overflow-y-auto rounded-xl border border-violet-100 bg-white">
+                        {records.filter((workshop) => workshop.id !== editingId && workshop.name.toLowerCase().includes(repeaterWorkshopQuery.trim().toLowerCase())).map((workshop) => {
+                          const checked = formRepeaterSourceWorkshopIds.includes(workshop.id);
+                          return (
+                            <label className="flex cursor-pointer items-center gap-3 border-b border-slate-100 px-3 py-3 last:border-0 hover:bg-violet-50" key={workshop.id}>
+                              <input checked={checked} className="size-4 accent-violet-600" onChange={(event) => setFormRepeaterSourceWorkshopIds((current) => event.target.checked ? [...new Set([...current, workshop.id])] : current.filter((id) => id !== workshop.id))} type="checkbox" />
+                              <span className="min-w-0 flex-1 text-sm font-bold text-slate-700">{workshop.name}</span>
+                              {workshop.archived ? <span className="text-[10px] font-black uppercase text-slate-400">Past</span> : null}
+                            </label>
+                          );
+                        })}
+                      </div>
+                      {formRepeaterSourceWorkshopIds.length ? <button className="mt-3 text-xs font-black text-rose-600 hover:underline" onClick={() => setFormRepeaterSourceWorkshopIds([])} type="button">Clear selection</button> : null}
+                    </div>
+                  </div>
+                ) : null}
+
+                {formWorkflowPanel === "fields" ? (
+                  <>
+                    <div className="space-y-2">
+                      {formFields.map((field, index) => (
+                        <FieldEditor field={field} fields={formFields} index={index} key={field.id} onChange={(patch) => updateFormField(field.id, patch)} onDuplicate={() => duplicateFormField(field.id)} onMoveDown={() => moveFormField(index, 1)} onMoveUp={() => moveFormField(index, -1)} onRemove={() => removeFormField(field.id)} total={formFields.length} />
+                      ))}
+                    </div>
+                    <div className="mt-3 border-t border-emerald-100 pt-3">
+                      <p className="mb-2 text-xs font-black uppercase tracking-[0.12em] text-slate-500">Add field</p>
+                      <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+                        {addableTypes.map((fieldType) => (
+                          <button className="inline-flex min-h-[38px] items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-[11px] font-bold text-slate-700 transition hover:border-emerald-300 hover:bg-emerald-50" key={fieldType} onClick={() => addFormField(fieldType)} type="button"><Plus className="size-3.5" />{fieldTypeMeta[fieldType].label}</button>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                ) : null}
+
+                {formWorkflowPanel === "includes" ? (
+                  <div className="space-y-2">
+                    {formHighlights.map((item, index) => (
+                      <div className="flex gap-2" key={index}>
+                        <input className={inputClass} onChange={(event) => setFormHighlights((current) => current.map((value, itemIndex) => itemIndex === index ? event.target.value : value))} placeholder="e.g. Certificate of completion" value={item} />
+                        <button className="grid size-11 shrink-0 place-items-center rounded-xl text-rose-500 hover:bg-rose-50" onClick={() => setFormHighlights((current) => current.filter((_, itemIndex) => itemIndex !== index))} type="button"><Trash2 className="size-4" /></button>
+                      </div>
+                    ))}
+                    <button className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-slate-300 bg-white px-3 py-2.5 text-xs font-bold text-slate-500 hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700" onClick={() => setFormHighlights((current) => [...current, ""])} type="button"><Plus className="size-3.5" />Add Item</button>
+                  </div>
+                ) : null}
+
+                {formWorkflowPanel === "preview" ? (
+                  <WorkshopFormLivePreview description={formDescription} fields={formFields} highlights={formHighlights} logoUrl={formLogoUrl} mode={formMode} paid={isPaid} submitButtonText={formSubmitButtonText} theme={formTheme} title={formTitle || `${name || "Workshop"} Registration`} tagline={formTagline} />
+                ) : null}
+              </div>
+              <footer className="flex shrink-0 justify-end border-t border-slate-100 bg-white px-4 py-3">
+                <button className="inline-flex min-h-9 items-center rounded-lg bg-slate-950 px-4 text-sm font-black text-white hover:bg-slate-800" onClick={() => setFormWorkflowPanel(null)} type="button">Done</button>
+              </footer>
+            </section>
+          </div>
+        ) : null}
 
         <div className="sticky bottom-3 z-20 mt-5 flex flex-wrap justify-end gap-2 rounded-xl border border-slate-200 bg-white/95 p-2 shadow-lg shadow-slate-900/10 backdrop-blur">
           <button className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50" onClick={() => clearForm()} type="button">
@@ -2585,6 +2768,23 @@ function FormExperienceControls({
       </div>
       </div>
     </details>
+  );
+}
+
+function FormWorkflowCard({ detail, meta, onOpen, title }: { detail: string; meta: string; onOpen: () => void; title: string }) {
+  return (
+    <button
+      className="group flex min-h-[82px] cursor-pointer flex-col items-start justify-between rounded-xl border border-emerald-100 bg-white px-3 py-2.5 text-left shadow-sm transition hover:border-emerald-300 hover:bg-emerald-50 focus:outline-none focus:ring-4 focus:ring-emerald-100"
+      onClick={onOpen}
+      type="button"
+    >
+      <span className="flex w-full items-center justify-between gap-2">
+        <span className="text-sm font-black text-slate-900">{title}</span>
+        <ChevronDown className="-rotate-90 size-4 text-slate-400 transition group-hover:text-emerald-700" />
+      </span>
+      <span className="mt-2 line-clamp-1 text-xs font-bold text-slate-600">{detail}</span>
+      <span className="mt-1 text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">{meta}</span>
+    </button>
   );
 }
 
