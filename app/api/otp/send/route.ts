@@ -1,21 +1,15 @@
 import { NextResponse } from "next/server";
 
-type OtpRecord = {
-  attempts: number;
-  code: string;
-  expiresAt: number;
-};
-
+import { randomInt } from "node:crypto";
+import { saveOtp, clearOtp } from "@/lib/otp-store";
 const OTP_TTL_MS = 5 * 60 * 1000;
-const OTP_STORE = (globalThis as unknown as { __cflOtpStore?: Map<string, OtpRecord> }).__cflOtpStore ?? new Map<string, OtpRecord>();
-(globalThis as unknown as { __cflOtpStore?: Map<string, OtpRecord> }).__cflOtpStore = OTP_STORE;
 
 function cleanMobile(value: unknown) {
   return String(value ?? "").replace(/\D/g, "").slice(-10);
 }
 
 function createOtp() {
-  return String(Math.floor(100000 + Math.random() * 900000));
+  return String(randomInt(100000,1000000));
 }
 
 async function sendWhatsAppOtp(mobile: string, code: string) {
@@ -139,14 +133,14 @@ export async function POST(request: Request) {
     }
 
     const code = createOtp();
-    OTP_STORE.set(mobile, { attempts: 0, code, expiresAt: Date.now() + OTP_TTL_MS });
+    await saveOtp(mobile, code, OTP_TTL_MS);
     const whatsapp = await sendWhatsAppOtp(mobile, code);
     if (!whatsapp.configured && process.env.NODE_ENV === "production") {
-      OTP_STORE.delete(mobile);
+      await clearOtp(mobile, code);
       return NextResponse.json({ error: "WhatsApp OTP service is not configured. Please contact admin or use a non-OTP form." }, { status: 503 });
     }
     if (whatsapp.configured && !whatsapp.sent) {
-      OTP_STORE.delete(mobile);
+      await clearOtp(mobile, code);
       return NextResponse.json({ error: "Could not send WhatsApp OTP. Please try again." }, { status: 502 });
     }
 

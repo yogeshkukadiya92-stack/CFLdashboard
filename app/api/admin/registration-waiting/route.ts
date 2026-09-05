@@ -1,123 +1,51 @@
-import { ensurePersistenceTable, ensureRegistrationRecordsTable, getDbPool, isDbEnabled, reserveRegistrationNumber, upsertRegistrationRecord } from "@/lib/db";
-import { upsertLiveRegistration } from "@/lib/crm-db";
+import { ensurePersistenceTable, ensureRegistrationRecordsTable, getDbPool, reserveRegistrationNumber, upsertRegistrationRecord } from "@/lib/db";
+import { ensureRegistrationHotPath } from "@/lib/registration-hot-path";
+import { drainRegistrationJobs, ensureRegistrationJobs } from "@/lib/registration-jobs";
 import type { RegistrationEntry } from "@/lib/types";
-import type { BuilderForm } from "@/lib/types";
-import { sendRegistrationConfirmation } from "@/lib/registration-confirmation";
-import { syncConfirmedRegistrationToMfw } from "@/lib/mfw-registration";
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 
 export const runtime = "nodejs";
-
-function renumberWaitingList(registrations: RegistrationEntry[], workshopId: string) {
-  const waiting = registrations
-    .filter((entry) => entry.workshopId === workshopId && entry.registrationStatus === "waiting")
-    .sort((first, second) => new Date(first.createdAt).getTime() - new Date(second.createdAt).getTime());
-  const positions = new Map(waiting.map((entry, index) => [entry.id, index + 1]));
-
-  return registrations.map((entry) => positions.has(entry.id)
-    ? { ...entry, waitingPosition: positions.get(entry.id) }
-    : entry);
-}
-
 export async function PATCH(request: Request) {
-  if (!(await isDbEnabled())) {
-    return NextResponse.json({ error: "Database is required to update the waiting list." }, { status: 503 });
-  }
-
+  const database=getDbPool();
+  if(!database)return NextResponse.json({error:"Database is required to update the waiting list."},{status:503});
   try {
-    const body = await request.json() as Record<string, unknown>;
-    const workshopId = String(body.workshopId ?? "").trim();
-    const registrationIds = Array.from(new Set(
-      (Array.isArray(body.registrationIds) ? body.registrationIds : [])
-        .map((value) => String(value).trim())
-        .filter(Boolean)
-    )).slice(0, 5000);
-    if (!workshopId || !registrationIds.length) {
-      return NextResponse.json({ error: "Workshop and waiting registrations are required." }, { status: 400 });
-    }
-
-    const database = getDbPool();
-    if (!database) return NextResponse.json({ error: "Database is not configured." }, { status: 500 });
-    await ensurePersistenceTable();
-    await ensureRegistrationRecordsTable();
-    const client = await database.connect();
-    let next: RegistrationEntry[] = [];
+    const body=await request.json() as Record<string,unknown>;
+    const workshopId=String(body.workshopId??"").trim();
+    const ids=[...new Set((Array.isArray(body.registrationIds)?body.registrationIds:[]).map(String).map(v=>v.trim()).filter(Boolean))].slice(0,5000);
+    if(!workshopId||!ids.length)return NextResponse.json({error:"Workshop and waiting registrations are required."},{status:400});
+    await ensurePersistenceTable();await ensureRegistrationRecordsTable();await ensureRegistrationJobs();await ensureRegistrationHotPath();
+    const client=await database.connect();
+    let promoted=0;
     try {
       await client.query("BEGIN");
-      const selected = await client.query(`SELECT forms FROM app_state WHERE id = 1 FOR UPDATE`);
-      const registrationRows = await client.query<{ payload: RegistrationEntry }>(`
-        SELECT payload
-        FROM cfl_registration_records
-        ORDER BY created_at DESC, external_id DESC
-        FOR UPDATE
-      `);
-      const registrations = registrationRows.rows.map((row) => row.payload);
-      const requestedIds = new Set(registrationIds);
-      const confirmedAt = new Date().toISOString();
-      let promoted = 0;
-      let promotedRegistrations = registrations.map((entry) => {
-        if (entry.workshopId !== workshopId || entry.registrationStatus !== "waiting" || !requestedIds.has(entry.id)) return entry;
-        promoted += 1;
-        return {
-          ...entry,
-          confirmationStatus: "confirmed" as const,
-          confirmationSource: "manual" as const,
-          confirmationUpdatedAt: confirmedAt,
-          confirmationUpdatedBy: "Workshop Master Admin",
-          registrationStatus: "confirmed" as const,
-          waitingPosition: undefined,
-          waitingReason: undefined
-        };
-      });
-      for (const entry of promotedRegistrations) {
-        if (entry.workshopId === workshopId && requestedIds.has(entry.id) && entry.registrationStatus === "confirmed" && !entry.registrationNumber) {
-          const registrationNumber = await reserveRegistrationNumber(client);
-          promotedRegistrations = promotedRegistrations.map((item) => item.id === entry.id ? { ...item, registrationNumber } : item);
-        }
+      await client.query("SELECT pg_advisory_xact_lock(hashtext($1))",[`registration-workshop:${workshopId}`]);
+      const selected=await client.query<{payload:RegistrationEntry}>(`SELECT payload FROM cfl_registration_records
+        WHERE workshop_id=$1 AND external_id=ANY($2::text[]) AND payload->>'registrationStatus'='waiting' ORDER BY external_id FOR UPDATE`,[workshopId,ids]);
+      const now=new Date().toISOString();
+      for(const {payload:entry} of selected.rows){
+        const next={...entry,confirmationStatus:"confirmed",confirmationSource:"manual",confirmationUpdatedAt:now,
+          confirmationUpdatedBy:"Workshop Master Admin",registrationStatus:"confirmed",waitingPosition:undefined,waitingReason:undefined,
+          registrationNumber:entry.registrationNumber||await reserveRegistrationNumber(client)};
+        await upsertRegistrationRecord(client,next);
+        await client.query(`INSERT INTO cfl_registration_jobs(registration_id) VALUES($1)
+          ON CONFLICT(registration_id) DO UPDATE SET completed_at=NULL,available_at=NOW(),attempts=0,last_error=NULL,
+          revision=cfl_registration_jobs.revision+1`,[entry.id]);
+        promoted++;
       }
-      if (!promoted) {
-        await client.query("ROLLBACK");
-        return NextResponse.json({ error: "No matching waiting registrations were found." }, { status: 404 });
-      }
-
-      next = renumberWaitingList(promotedRegistrations, workshopId);
-      for (const registration of next.filter((entry) => requestedIds.has(entry.id) && entry.registrationStatus === "confirmed")) {
-        const mfwSync = await syncConfirmedRegistrationToMfw(registration);
-        next = next.map((entry) => entry.id === registration.id ? { ...entry, ...mfwSync } : entry);
-      }
-      for (const registration of next.filter((entry) => requestedIds.has(entry.id) || entry.workshopId === workshopId)) {
-        await upsertRegistrationRecord(client, registration as unknown as Record<string, unknown>);
-      }
-      await client.query(`UPDATE app_state SET registrations = $1::jsonb, updated_at = NOW() WHERE id = 1`, [JSON.stringify(next)]);
+      if(!promoted){await client.query("ROLLBACK");return NextResponse.json({error:"No matching waiting registrations were found."},{status:404});}
+      await client.query(`WITH positions AS (
+        SELECT external_id,row_number() OVER(ORDER BY created_at,external_id) position FROM cfl_registration_records
+        WHERE workshop_id=$1 AND payload->>'registrationStatus'='waiting')
+        UPDATE cfl_registration_records r SET payload=jsonb_set(r.payload,'{waitingPosition}',to_jsonb(p.position)),updated_at=NOW()
+        FROM positions p WHERE r.external_id=p.external_id AND r.payload->>'waitingPosition' IS DISTINCT FROM p.position::text`,[workshopId]);
       await client.query("COMMIT");
-      const form = (Array.isArray(selected.rows[0]?.forms) ? selected.rows[0].forms : [])
-        .find((item: BuilderForm) => item.workshopId === workshopId) as BuilderForm | undefined;
-      const promotedEntries = next.filter((entry) => requestedIds.has(entry.id) && entry.registrationStatus === "confirmed");
-      for (const entry of promotedEntries) {
-        await upsertLiveRegistration(entry as unknown as Record<string, unknown>).catch(() => undefined);
-      }
-      const sentIds = new Set<string>();
-      for (const entry of promotedEntries) {
-        const result = await sendRegistrationConfirmation(entry, form).catch(() => ({ configured: true, sent: false }));
-        if (result.sent) sentIds.add(entry.id);
-      }
-      if (sentIds.size) {
-        const sentAt = new Date().toISOString();
-        next = next.map((entry) => sentIds.has(entry.id) ? { ...entry, confirmationWhatsappSentAt: sentAt } : entry);
-        await client.query(`UPDATE app_state SET registrations = $1::jsonb, updated_at = NOW() WHERE id = 1`, [JSON.stringify(next)])
-          .catch(() => undefined);
-        await Promise.all(next
-          .filter((registration) => sentIds.has(registration.id))
-          .map((entry) => upsertRegistrationRecord(client, entry as unknown as Record<string, unknown>).catch(() => undefined)));
-      }
-      return NextResponse.json({ promoted, registrations: next });
-    } catch (error) {
-      await client.query("ROLLBACK").catch(() => undefined);
-      throw error;
-    } finally {
-      client.release();
-    }
-  } catch {
-    return NextResponse.json({ error: "Could not convert waiting registrations." }, { status: 500 });
-  }
+    }catch(error){await client.query("ROLLBACK").catch(()=>undefined);throw error;}finally{client.release();}
+    // External providers run after the durable confirmation; no provider call
+    // holds participant rows or a database transaction open.
+    after(()=>process.env.REGISTRATION_WORKER_ENABLED==="false"?Promise.resolve():drainRegistrationJobs());
+    const scoped=body.responseScope==="workshop";
+    const result=await database.query<{payload:RegistrationEntry}>(`SELECT payload FROM cfl_registration_records
+      WHERE ($1::text IS NULL OR workshop_id=$1) ORDER BY created_at DESC,external_id DESC`,[scoped?workshopId:null]);
+    return NextResponse.json({promoted,registrations:result.rows.map(r=>r.payload),...(scoped?{scope:"workshop",workshopId}:{})});
+  }catch(error){console.error("Waiting confirmation failed",error instanceof Error?error.message:"unknown");return NextResponse.json({error:"Could not convert waiting registrations."},{status:500});}
 }

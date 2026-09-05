@@ -739,7 +739,11 @@ export default function WorkshopMasterPage() {
       headers: { "Content-Type": "application/json" },
       method: "DELETE"
     });
-    const result = response.ok ? await response.json() as { registrations?: RegistrationEntry[] } : null;
+    if (!response.ok) {
+      setMessage("Registration could not be deleted. Please try again.");
+      return;
+    }
+    const result = await response.json() as { registrations?: RegistrationEntry[] };
     const next = Array.isArray(result?.registrations)
       ? result.registrations
       : registrations.filter((entry) => entry.id !== id);
@@ -747,7 +751,6 @@ export default function WorkshopMasterPage() {
     window.localStorage.setItem(REGISTRATION_STORAGE_KEY, JSON.stringify(next));
     setDeleteResponseTarget(null);
     setMessage("Registration response deleted.");
-    if (!response.ok) await saveLiveState({ registrations: next });
   }
 
   async function updateRegistrationFollowUp(status: RegistrationEntry["confirmationStatus"], note: string) {
@@ -803,16 +806,20 @@ export default function WorkshopMasterPage() {
     try {
       const response = await fetch("/api/admin/registration-waiting", {
         body: JSON.stringify({
+          responseScope: "workshop",
           registrationIds: selectedWaitingParticipants.map((entry) => entry.id),
           workshopId: selectedWorkshop.id
         }),
         headers: { "Content-Type": "application/json" },
         method: "PATCH"
       });
-      const result = await response.json().catch(() => ({})) as { error?: string; promoted?: number; registrations?: RegistrationEntry[] };
+      const result = await response.json().catch(() => ({})) as { error?: string; promoted?: number; scope?: string; registrations?: RegistrationEntry[] };
       if (!response.ok || !Array.isArray(result.registrations)) throw new Error(result.error || "Promotion failed.");
-      setRegistrations(result.registrations);
-      window.localStorage.setItem(REGISTRATION_STORAGE_KEY, JSON.stringify(result.registrations));
+      const updatedRegistrations = result.scope === "workshop"
+        ? [...registrations.filter(entry => entry.workshopId !== selectedWorkshop.id), ...result.registrations]
+        : result.registrations;
+      setRegistrations(updatedRegistrations);
+      window.localStorage.setItem(REGISTRATION_STORAGE_KEY, JSON.stringify(updatedRegistrations));
       setSelectedParticipantIds([]);
       setPromoteWaitingOpen(false);
       setMessage(`${result.promoted ?? selectedWaitingParticipants.length} waiting registration${(result.promoted ?? selectedWaitingParticipants.length) === 1 ? "" : "s"} converted successfully.`);

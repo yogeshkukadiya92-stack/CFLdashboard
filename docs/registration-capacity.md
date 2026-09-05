@@ -1,40 +1,94 @@
-# Registration storage and Coolify operation
+# Registration reliability and capacity
 
-## Data responsibilities
+## Release — 6 September 2026
 
-All authoritative writes continue to use the existing `DATABASE_URL` PostgreSQL primary. This change does not move or delete existing records or create an unsynchronized second database.
+The registration request commits the participant and durable follow-up job together before returning success. CRM, MFW enrollment and WhatsApp delivery run afterward. Registration is not acknowledged from browser storage or from an uncommitted queue entry.
 
-- `cfl_registration_records`: individual registration rows, indexed by workshop/batch and mobile; submissions retrieve a person's history and SQL aggregates rather than transferring the entire workshop history.
-- `cfl_form_analytics`: isolated per-form counters (introduced previously).
-- `cfl_registration_jobs`: durable follow-up outbox. A registration and its job commit together. CRM, MFW and WhatsApp work happens after the HTTP response, outside the registration connection pool.
-- `app_state`: workshop configuration and legacy CRM/attendance data. Public submission filters configuration and attendance in SQL. This still scans attendance JSON; normalizing attendance is the next measured step if this becomes dominant.
+The existing PostgreSQL primary remains authoritative. Splitting related writes between independent databases would introduce consistency problems without fixing the measured query and lock bottlenecks.
 
-## Coolify deployment
+### Storage and request changes
 
-Use the existing Next.js application on Node with `npm run build` and `npm run start`. The Node instrumentation hook starts a background worker automatically; no external cron or Redis is required. Do not use an idle-suspending/serverless runtime for this worker.
+- `cfl_registration_records` stores individual participants with workshop/batch and mobile indexes.
+- `cfl_attendance_lookup` indexes attendance by normalized mobile. A synchronous trigger mirrors attendance changes, so submission checks no longer scan the complete attendance JSON array.
+- `cfl_registration_totals` holds exact response/confirmed/waiting counts per workshop, batch and introduction session. Row triggers maintain counts on insertion, confirmation, transfer and deletion in the same transaction.
+- Partial indexes cover waiting positions and referral usage. Submission configuration reads exclude logos, field definitions and other presentation content.
+- Workshop limits retain transaction locks to prevent overselling and duplicate waiting positions. Mobile history lookup happens before acquiring the workshop lock. Registration numbers reserve durable blocks of 100 from the shared counter; unused numbers can leave gaps after a restart or rollback.
+- Public form configuration is serialized once per process per second, with concurrent cache misses coalesced. Eligibility always reads fresh database state on submission. An already open form can show configuration up to one second old on its next fetch.
+- Manual waiting-list confirmation updates selected records and commits before contacting providers. The current dashboard requests only that workshop's updated records; older clients retain the previous full-response contract.
+- A stale dashboard snapshot cannot delete registrations omitted from its list. Deletion now requires explicit participant IDs. Saving settings only updates supplied columns, preserving concurrent changes to other settings/attendance columns. Legacy full-record edits still use last-writer-wins for the same supplied participant; this release does not implement general optimistic edit conflict resolution.
+- OTP challenges are shared in PostgreSQL with hashed codes, expiry and transactional single-use verification. Requests may reach either web process.
 
-The additive jobs table/index are created automatically with the existing DB role, matching existing project migrations. Run a normal deployment. No database replacement or destructive migration is required.
+### Server and follow-ups
 
-Keep `REGISTRATION_WORKER_ENABLED=true` on at least one application replica. A PostgreSQL session advisory lock allows one worker across replicas. Each worker pass handles at most 10 jobs and checks again every five seconds. Do not put this worker's shared `DATABASE_URL` behind a transaction-mode pooler: session advisory locks require a session connection.
+`npm run start -- --hostname 0.0.0.0 --port 3000` uses a Node cluster supervisor with two stock Next.js server processes sharing one port. The supervisor restarts an exited process and shuts down cleanly on container termination. Startup prepares additive database migrations before the application becomes ready.
 
-`REGISTRATION_DB_POOL_MAX` defaults to 10 reserved submission connections; the existing shared admin/worker pool has 10. Budget **20 connections per replica plus other services and operations headroom** before increasing replicas. Extra pools isolate application wait queues, not CPU or database disk. Do not increase connection counts to 600.
+`GET /api/health` returns 200 only when the database and registration migration are available; otherwise 503. Configure Coolify HTTP health checks on port 3000, path `/api/health`, expected status 200, with a startup allowance of 30 seconds.
 
-Authenticated admins can read `/api/admin/registration-queue` to inspect pending, retrying, completed and oldest pending time. Failed jobs retry with exponential backoff capped at one hour. Jobs are retained, including completed jobs; add an explicit retention policy when volume warrants it.
+| Setting | Default | Purpose |
+| --- | --- | --- |
+| `WEB_CONCURRENCY` | 2 | Web processes per container; supported range 1–4 |
+| `REGISTRATION_DB_POOL_MAX` | 10 | Reserved submission connections per process |
+| `REGISTRATION_WORKER_ENABLED` | true | Leave enabled on at least one long-running replica |
+| `REGISTRATION_JOB_CONCURRENCY` | 2 | Concurrent external follow-ups across the whole deployment; range 1–4 |
 
-Provider calls have a 15-second timeout. Successful status fields are saved before updating the CRM projection, so a later CRM error does not resend an already-recorded message. External delivery is **at least once**: a crash after a provider accepts a message but before its receipt commits can duplicate that message. Provider idempotency support is needed to eliminate that boundary.
+The shared admin/background pool also permits 10 connections per process. Budget **40 connections per container**, or **80 during a two-container rolling deployment**, plus other database users and operational headroom. Do not increase web processes or pool sizes without rechecking `max_connections`. A shared pooler in transaction mode is not compatible with the follow-up worker's session advisory lock.
 
-An asynchronous job always reloads the durable registration. Integration patches merge only integration fields, preserving concurrent changes to confirmation/payment fields. Job recovery does not depend on the participant keeping the browser open.
+The follow-up worker uses one elected worker group across all processes. It processes up to 25 bounded batches per pass and continues immediately when more jobs remain. Idle discovery polls every five seconds. Failed jobs retry with exponential backoff capped at one hour. A revision check prevents an old in-flight waiting notification from acknowledging a newer confirmation job.
 
-## Load validation
+Authenticated admins can inspect `/api/admin/registration-queue`. Completed jobs remain available for audit; retention is a separate operational policy. External delivery remains **at least once**: a crash after a provider accepts a message but before its receipt is saved can cause a resend. Registration retry idempotency does not imply exactly-once delivery by external providers.
 
-`scripts/load/registration-burst.mjs` targets only localhost and synthetic disposable data. Start the built app with a disposable PostgreSQL database and no external provider credentials, then set `TEST_DATABASE_URL` and optionally `TEST_BASE_URL` (default localhost:3319). The script sends 600 simultaneous submissions and asserts 600 durable rows/jobs, a 300-seat capacity boundary, waiting positions, registration numbers, identical-request retries and duplicate rejection. It mirrors the form's three-attempt retry policy and reports retries separately.
+### Existing production capacity observed
 
-This is not a production 600-user certification. Production acceptance requires the same burst behind Coolify's actual reverse proxy with production-shaped data, pool/CPU/disk/lock monitoring, plus a sustained workload. A read replica improves reporting reads only and cannot fix a saturated primary write path. Add servers based on those measurements.
+Read-only diagnostics found 12 logical CPUs, about 47 GiB RAM (about 36 GiB available), no container CPU/memory cap, PostgreSQL 18.4 with `max_connections=100`, a roughly 681 MB database, 2,532 normalized registrations and 1,153 attendance entries. There were 11 database connections and no pending follow-up jobs at that observation. These were point-in-time observations, not peak measurements. No additional paid server or database was purchased.
 
-### Local result — 2026-09-05
+## Load-test evidence
 
-Production Next build + PostgreSQL 18.4 on localhost; 600 synthetic simultaneous submissions with a 300-seat limit. All 600 eventually saved, all 600 durable jobs existed, 300 confirmed and 300 waiting, unique registration numbers/waiting positions, 20 identical retries remained idempotent, and duplicate mobile was rejected. p50 963 ms, p95 1,272 ms, p99 1,431 ms, max 1,548 ms. There were 19 transport retries; **this is not a zero-retry result**. The first raw attempt without client retry encountered a local TCP reset. The test does not establish production capacity or a before/after speedup.
+**Conditional local pass, not a production 5,000-user certification.** Tests used the production Next build and disposable PostgreSQL 18.4 on the same macOS host. Each target run seeded 5,000 historical registrations in the same workshop and 5,000 attendance entries. It then submitted 5,000 unique users simultaneously, with a 2,500-seat remaining capacity. Assertions checked committed records/jobs, unique registration numbers/waiting positions and the exact capacity boundary.
 
-A deliberately missing synthetic MFW mapping recorded a failed durable job; correcting the mapping allowed the worker to retry and complete without calling an external provider. Existing unit tests: 103 passed. Real provider latency and production-shaped attendance/history volumes remain to be tested on staging.
+Each virtual user had its own pre-established HTTP connection, modelling participants who already opened the form before pressing Submit. Requests were all dispatched together with no application retries. This excludes initial TLS/TCP connection storms and does not model real mobile networks, Coolify's reverse proxy, real providers, large answer payloads, a sustained arrival rate or unrelated production dashboard traffic. Forms in the fixture were deliberately minimal. A raw fresh-connection baseline encountered local `ECONNRESET`; that limitation is not hidden by the successful preconnected results.
 
-Final-build repeat including conflicting-ID rejection: 600/600 saved, 32 transport retries, p50 1,005 ms, p95 1,396 ms, p99 1,464 ms, max 1,567 ms; capacity and idempotency assertions passed again.
+| Run | Successful submissions / submitted | Failures | Total burst | p50 | p95 | p99 |
+| --- | --- | --- | --- | --- | --- | --- |
+| Previous main `1efc1d8`, 1 process, worker off | 2,196 / 5,000 | 2,804 HTTP 500 | 18.75 s | 16.84 s | 18.23 s | 18.51 s |
+| Optimized, 2 processes, worker off | 5,000 / 5,000 | 0 | 7.70 s | 4.58 s | 7.15 s | 7.37 s |
+| Final build, 2 processes, worker on | 5,000 / 5,000 | 0 | 10.03 s | 5.70 s | 9.48 s | 9.81 s |
+
+The baseline used the old route/runtime with the new database projection triggers installed, so it is a comparison of query/runtime behavior with the same added trigger write cost, not a reconstruction of every previous production condition. Its generic HTTP errors did not identify a verified server-side root cause for every failed request.
+
+The final worker-on run saved 2,500 confirmed and 2,500 waiting registrations, with 5,000 durable jobs and zero client retries. All 5,000 synthetic jobs completed without provider retries in 12.53 seconds measured from the first job creation to the last completion. No real WhatsApp or MFW endpoint was called. Peak submission connections were 20; peak observed database lock waiters were 19. Correct same-workshop capacity enforcement still serializes a short critical section; this is not a claim of zero internal waiting.
+
+A preceding worker-on 500-user stage passed 500/500 in 1.66 seconds, p95 1.59 seconds. Earlier validation on 5 September saved 600/600 with 19–32 transport retries; those older runs were not zero-retry results.
+
+Additional validation:
+
+- 30 identical concurrent requests produced one registration, including when duplicate entries were otherwise allowed.
+- Response limits, identity collisions, manual promotion, batch moves and explicit deletion retained exact counters.
+- An empty/stale dashboard snapshot preserved newer registration rows; targeted deletion preserved unrelated rows.
+- Concurrent changes to separate settings columns both survived.
+- 20 concurrent attempts to verify the same OTP produced exactly one success across both processes; incorrect-attempt limits remained enforced.
+- A deliberately invalid synthetic MFW mapping produced a durable failed job; correcting the mapping allowed recovery without contacting an external provider.
+- Stopping one local web process left 20/20 readiness probes successful while the supervisor started a replacement process.
+- Production build passed; 103 existing unit tests passed.
+
+### Reproduce
+
+Use only a disposable localhost database with no real provider credentials. The runners reject remote database/application targets.
+
+```sh
+# Start the built app with DATABASE_URL pointing to the disposable PostgreSQL DB.
+WEB_CONCURRENCY=2 REGISTRATION_WORKER_ENABLED=true npm run start -- --hostname 127.0.0.1 --port 3319
+# TEST_DATABASE_URL must point to the same disposable database.
+LOAD_USERS=500 LOAD_PRECONNECT=true node scripts/load/registration-capacity.mjs
+LOAD_USERS=5000 LOAD_PRECONNECT=true node scripts/load/registration-capacity.mjs
+node scripts/load/registration-queue-retry.mjs
+```
+
+For `registration-integrity.mjs`, use the synthetic admin/secret configuration documented in that runner and disable the worker while asserting pending-job state. The load runner's throughput field counts submitted requests per elapsed second; use `httpSuccess` and `durableRows` to distinguish accepted work, especially for failed baseline runs.
+
+### Deployment and rollback
+
+The additive migration runs once under a database advisory lock and records version 1 in `cfl_registration_migrations`. It briefly locks attendance/registration writes while seeding the indexed projections. Existing participant records stay in place. Startup/health failure must prevent routing a new container before readiness. Keep normal database backups and sufficient connection headroom for the rolling deployment.
+
+A code rollback can leave the additive tables, indexes and triggers in place; they remain compatible with previous registration writes. Registration number blocks share the old global counter, preventing reuse during rolling deployments. OTPs issued by the former in-memory implementation may need to be requested again across this release boundary.
+
+Next infrastructure acceptance step is an isolated staging burst and sustained mixed workload behind the actual Coolify proxy, with CPU, disk latency, lock/pool waits and downstream delivery rate observed together. Additional servers, a read replica or a queue broker should follow that measurement; none can guarantee zero failures under every network or provider outage.

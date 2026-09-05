@@ -63,7 +63,7 @@ export async function runRegistrationFollowup(registrationId: string) {
     }
   }
   let savedRegistration = finalRegistration;
-  if (savedRegistration.attendanceMatched && savedRegistration.registrationStatus !== "waiting" && savedRegistration.mfwSyncStatus !== "synced") {
+  if (savedRegistration.registrationStatus === "confirmed" && savedRegistration.mfwSyncStatus !== "synced") {
     savedRegistration = { ...savedRegistration, ...(await syncConfirmedRegistrationToMfw(savedRegistration)) };
     await persistPatch(savedRegistration);
   }
@@ -74,7 +74,7 @@ export async function runRegistrationFollowup(registrationId: string) {
     await upsertLiveRegistration(savedRegistration as unknown as Record<string, unknown>);
   }
 
-  if ((savedRegistration.attendanceMatched && savedRegistration.registrationStatus !== "waiting" && savedRegistration.mfwSyncStatus === "failed")
+  if ((savedRegistration.registrationStatus === "confirmed" && savedRegistration.mfwSyncStatus === "failed")
     || Object.values(notificationPatch).includes("failed")) {
     throw new Error("Registration follow-up provider failed; retry scheduled");
   }

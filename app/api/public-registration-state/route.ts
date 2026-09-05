@@ -1,5 +1,7 @@
+import { publicRegistrationJson } from "@/lib/public-registration-cache";
+import { ensureRegistrationHotPath } from "@/lib/registration-hot-path";
 import { drainRegistrationJobs, ensureRegistrationJobs } from "@/lib/registration-jobs";
-import { ensureRegistrationRecordsTable, getDbPool, getRegistrationDbPool, isDbEnabled, reserveRegistrationNumber, upsertRegistrationRecord } from "@/lib/db";
+import { ensureRegistrationRecordsTable, getRegistrationDbPool, isDbEnabled, reserveRegistrationNumber, upsertRegistrationRecord } from "@/lib/db";
 import type { AttendanceEntry, BuilderForm, ReferralCodeConfig, RegistrationEntry } from "@/lib/types";
 import { attendanceMatchesFinalRegistration, findRepeaterSource, isDuplicateWorkshopRegistration, shouldSendRepeaterToWaiting } from "@/lib/workshop-hierarchy";
 import { NextResponse } from "next/server";
@@ -11,21 +13,7 @@ export async function GET() {
   }
 
   try {
-    // Public forms do not need the registration history or CRM datasets.
-    const result = await getDbPool()!.query(`SELECT forms, landing_pages AS "landingPages", registration_links AS "registrationLinks", workshops FROM app_state WHERE id = 1`);
-    const state = result.rows[0];
-    const publicForms = (Array.isArray(state?.forms) ? state.forms : []).map((value: unknown) => {
-      if (!value || typeof value !== "object" || Array.isArray(value)) return value;
-      const { referralCodes: _privateReferralCodes, ...publicForm } = value as Record<string, unknown>;
-      return publicForm;
-    });
-    return NextResponse.json({
-      dbEnabled: true,
-      forms: publicForms,
-      landingPages: state?.landingPages ?? [],
-      registrationLinks: state?.registrationLinks ?? {},
-      workshops: state?.workshops ?? []
-    });
+    return new NextResponse(await publicRegistrationJson(), { headers: { "Content-Type":"application/json", "Cache-Control":"no-store" } });
   } catch {
     return NextResponse.json({ error: "Failed to read registration state" }, { status: 500 });
   }
@@ -94,17 +82,22 @@ export async function POST(request: Request) {
     if (!database) return NextResponse.json({ error: "Database is not configured." }, { status: 500 });
     await ensureRegistrationRecordsTable();
     await ensureRegistrationJobs();
+    await ensureRegistrationHotPath();
     const client = await database.connect();
     let released = false;
     try {
       await client.query("BEGIN");
       const selected = await client.query(`SELECT
-        COALESCE((SELECT jsonb_agg(f) FROM jsonb_array_elements(forms) f
+        COALESCE((SELECT jsonb_agg((SELECT jsonb_object_agg(key,value) FROM jsonb_each(f)
+          WHERE key=ANY(ARRAY['workshopId','workshopSlug','batch','registrationCapacity','waitingMode',
+            'requireAttendanceForConfirmation','allowReferralConfirmation','responseLimit','repeaterSourceWorkshopIds',
+            'repeaterWaitingMode','allowDuplicate','closedMessage','requiredAttendanceSessionId','attendanceOnlyConfirmation','referralCodes'])))
+          FROM jsonb_array_elements(forms) f
           WHERE f->>'workshopId' = $1 OR f->>'workshopSlug' = $2), '[]'::jsonb) AS forms,
-        COALESCE((SELECT jsonb_agg(w) FROM jsonb_array_elements(workshops) w
+        COALESCE((SELECT jsonb_agg(jsonb_build_object('id',w->'id','batches',w->'batches')) FROM jsonb_array_elements(workshops) w
           WHERE w->>'id' = $1 OR lower(w->>'name') = lower($3)), '[]'::jsonb) AS workshops,
-        COALESCE((SELECT jsonb_agg(a) FROM jsonb_array_elements(attendance_entries) a
-          WHERE right(regexp_replace(a->>'mobile', '[^0-9]', '', 'g'), 10) = $4), '[]'::jsonb) AS attendance_entries
+        COALESCE((SELECT jsonb_agg(payload) FROM cfl_attendance_lookup
+          WHERE mobile_normalized = $4), '[]'::jsonb) AS attendance_entries
         FROM app_state WHERE id = 1`, [sanitizedRegistration.workshopId, sanitizedRegistration.workshopSlug, workshopTitle, mobileDigits]);
       const state = selected.rows[0] ?? {};
       const forms = Array.isArray(state.forms) ? state.forms as Array<Record<string, unknown>> : [];
@@ -125,12 +118,8 @@ export async function POST(request: Request) {
       // Capacity is batch-wide and referral quotas/waiting positions are workshop-wide.
       // Intro-specific locks did not protect those shared limits.
       const cohortKey = `registration-workshop:${sanitizedRegistration.workshopId}`;
-      if (form?.allowDuplicate !== true) {
-        await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`${sanitizedRegistration.workshopId}:${mobileDigits}`]);
-      }
-      if (needsCohortLock) {
-        await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [cohortKey]);
-      }
+      // Even when repeat entries are allowed, retries of the same identity must serialize.
+      await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`${sanitizedRegistration.workshopId}:${mobileDigits}`]);
       const relevantRecords = await client.query(`SELECT payload FROM cfl_registration_records
         WHERE mobile_normalized = $1
         ORDER BY created_at DESC, external_id DESC`, [mobileDigits]);
@@ -154,19 +143,21 @@ export async function POST(request: Request) {
           error: "This mobile number is already registered for this workshop."
         }, { status: 409 });
       }
+      if (needsCohortLock) {
+        await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [cohortKey]);
+      }
       const responseLimit = Math.max(0, Number(form?.responseLimit ?? 0) || 0);
       const countsResult = await client.query(`SELECT
-        count(*) FILTER (WHERE
-          CASE WHEN $2 <> '' THEN payload->>'batchId' = $2 ELSE lower(btrim(COALESCE(payload->>'batch', ''))) = $3 END
-          AND COALESCE(payload->>'introductionSessionId', '') = $4) AS responses,
-        count(*) FILTER (WHERE
-          CASE WHEN $2 <> '' THEN payload->>'batchId' = $2 ELSE lower(btrim(COALESCE(payload->>'batch', ''))) = $3 END
-          AND COALESCE(payload->>'registrationStatus', '') <> 'waiting' AND external_id <> $5) AS confirmed,
-        GREATEST(count(*) FILTER (WHERE payload->>'registrationStatus' = 'waiting'),
-          COALESCE(max(NULLIF(payload->>'waitingPosition', '')::bigint) FILTER (WHERE payload->>'registrationStatus' = 'waiting'), 0)) AS waiting
-        FROM cfl_registration_records WHERE workshop_id = $1`,
+        COALESCE(sum(responses) FILTER (WHERE
+          CASE WHEN $2 <> '' THEN batch_id=$2 ELSE batch_name=$3 END
+          AND intro_session=$4),0) AS responses,
+        COALESCE(sum(confirmed) FILTER (WHERE CASE WHEN $2 <> '' THEN batch_id=$2 ELSE batch_name=$3 END),0) AS confirmed,
+        GREATEST(COALESCE(sum(waiting),0),COALESCE((SELECT NULLIF(payload->>'waitingPosition','')::bigint
+          FROM cfl_registration_records WHERE workshop_id=$1 AND payload->>'registrationStatus'='waiting'
+          ORDER BY NULLIF(payload->>'waitingPosition','')::bigint DESC NULLS LAST LIMIT 1),0)) AS waiting
+        FROM cfl_registration_totals WHERE workshop_id=$1`,
         [sanitizedRegistration.workshopId, sanitizedRegistration.batchId ?? '', sanitizedRegistration.batch.trim().toLowerCase(),
-          sanitizedRegistration.introductionSessionId ?? '', sanitizedRegistration.id]);
+          sanitizedRegistration.introductionSessionId ?? '']);
       const counts = countsResult.rows[0];
       const formResponseCount = Number(counts.responses);
       if (responseLimit > 0 && formResponseCount >= responseLimit) {
@@ -277,12 +268,11 @@ export async function POST(request: Request) {
       if (!isWaiting && !finalRegistration.registrationNumber) {
         finalRegistration = { ...finalRegistration, registrationNumber: await reserveRegistrationNumber(client) };
       }
-      const inserted = await upsertRegistrationRecord(client, finalRegistration as unknown as Record<string, unknown>, true);
+      const inserted = await upsertRegistrationRecord(client, finalRegistration as unknown as Record<string, unknown>, true, true);
       if (!inserted) {
         await client.query("ROLLBACK");
         return NextResponse.json({ error: "Registration identity already exists. Please reload the form." }, { status: 409 });
       }
-      await client.query(`INSERT INTO cfl_registration_jobs (registration_id) VALUES ($1) ON CONFLICT DO NOTHING`, [finalRegistration.id]);
       await client.query("COMMIT");
       // CRM takes its own pool connection. Never wait for it while holding one:
       // simultaneous submissions otherwise exhaust the pool and deadlock.
@@ -306,7 +296,8 @@ export async function POST(request: Request) {
     } finally {
       if (!released) client.release();
     }
-  } catch {
+  } catch (error) {
+    console.error("Registration save failed", error instanceof Error ? error.message : "unknown");
     return NextResponse.json({ error: "Failed to save registration" }, { status: 500 });
   }
 }
