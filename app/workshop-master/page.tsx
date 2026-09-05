@@ -424,6 +424,7 @@ export default function WorkshopMasterPage() {
   const waitingParticipants = useMemo(() => selectedParticipants
     .filter((entry) => entry.registrationStatus === "waiting")
     .sort((first, second) => (first.waitingPosition ?? Number.MAX_SAFE_INTEGER) - (second.waitingPosition ?? Number.MAX_SAFE_INTEGER)), [selectedParticipants]);
+  const confirmedParticipants = useMemo(() => selectedParticipants.filter((entry) => entry.registrationStatus !== "waiting"), [selectedParticipants]);
   const repeaterParticipants = useMemo(() => selectedParticipants.filter((entry) => entry.isRepeater), [selectedParticipants]);
   const selectedWaitingParticipants = useMemo(() => waitingParticipants.filter((entry) => selectedParticipantIds.includes(entry.id)), [selectedParticipantIds, waitingParticipants]);
   const duplicateParticipantIds = useMemo(() => {
@@ -2311,6 +2312,7 @@ export default function WorkshopMasterPage() {
                 <OperationalStat label="Users" value={displayedParticipants.length} />
                 <OperationalStat label="Paid" tone="success" value={displayedParticipants.filter((entry) => entry.status === "Paid").length} />
                 <OperationalStat label="Due" value={displayedParticipants.filter((entry) => entry.status === "Due").length} />
+                <OperationalStat label="Confirmed" value={confirmedParticipants.length} tone="success" />
                 <OperationalStat label="Waiting" value={selectedParticipants.filter((entry) => entry.registrationStatus === "waiting").length} tone="warning" />
                 <OperationalStat label="Repeaters" value={repeaterParticipants.length} tone="info" />
                 {activeParticipantFilterCount ? <OperationalStat label="Saved filters" value={activeParticipantFilterCount} tone="info" /> : null}
