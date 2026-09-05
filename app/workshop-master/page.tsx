@@ -1174,6 +1174,7 @@ export default function WorkshopMasterPage() {
       "Email",
       "City",
       "Source",
+      "Reference Name",
       "WhatsApp Verification",
       "Call Confirmation",
       "Call Note",
@@ -1192,6 +1193,7 @@ export default function WorkshopMasterPage() {
       entry.email,
       entry.city,
       entry.source ?? "Registration Link",
+      referenceNameForRegistration(entry),
       entry.whatsappVerificationStatus ?? "Not Required",
       entry.confirmationStatus ?? "pending",
       entry.confirmationNote ?? "",
@@ -1223,7 +1225,7 @@ export default function WorkshopMasterPage() {
 
   function exportWaitingList() {
     if (!selectedWorkshop || !waitingParticipants.length) return;
-    const headers = ["Waiting Number", "Name", "Mobile", "Email", "City", "Batch", "Source", "Submitted"];
+    const headers = ["Waiting Number", "Name", "Mobile", "Email", "City", "Batch", "Source", "Reference Name", "Submitted"];
     const rows = waitingParticipants.map((entry) => [
       entry.waitingPosition ?? "",
       entry.fullName,
@@ -1232,6 +1234,7 @@ export default function WorkshopMasterPage() {
       entry.city,
       entry.batch ?? "Main Batch",
       entry.source ?? "Registration Link",
+      referenceNameForRegistration(entry),
       formatSubmittedAt(entry.createdAt)
     ]);
     const cell = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`;
@@ -2437,7 +2440,7 @@ export default function WorkshopMasterPage() {
                     </div>
                   ) : null}
                   <div className="min-h-0 flex-1 overflow-auto overscroll-contain">
-                  <table className="workshop-response-table w-full min-w-[1160px] text-left text-xs">
+                  <table className="workshop-response-table w-full min-w-[1260px] text-left text-xs">
                     <caption className="sr-only">Workshop registration responses</caption>
                     <thead className="text-[10px] uppercase text-slate-500">
                       <tr>
@@ -2454,7 +2457,7 @@ export default function WorkshopMasterPage() {
                         </th>
                         <th className="sticky top-0 z-30 w-[76px] min-w-[76px] bg-slate-50 px-2 py-2.5 lg:left-10">Action</th>
                         <th className="sticky top-0 z-30 min-w-[190px] border-r border-slate-200 bg-slate-50 px-2.5 py-2.5 shadow-[8px_0_16px_-16px_rgba(15,23,42,0.65)] lg:left-[116px]">User</th>
-                        {["Contact", "City", "Source", "WhatsApp", "Confirmation", "MFW", "Call note", "Payment", "Submitted"].map((head) => <th className="sticky top-0 z-20 bg-slate-50 px-2.5 py-2.5" key={head}>{head}</th>)}
+                        {["Contact", "City", "Source", "Reference", "WhatsApp", "Confirmation", "MFW", "Call note", "Payment", "Submitted"].map((head) => <th className="sticky top-0 z-20 bg-slate-50 px-2.5 py-2.5" key={head}>{head}</th>)}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -2492,6 +2495,7 @@ export default function WorkshopMasterPage() {
                           </td>
                           <td className="min-w-[86px] px-2.5 py-2.5">{entry.city || "-"}</td>
                           <td className="px-2.5 py-2.5"><RegistrationSourceBadge source={entry.source} /></td>
+                          <td className="min-w-[130px] max-w-[190px] whitespace-normal px-2.5 py-2.5 text-[11px] font-bold leading-4 text-slate-700">{referenceNameForRegistration(entry) || "-"}</td>
                           <td className="min-w-[130px] px-2.5 py-2.5">
                             <WhatsAppVerificationBadge status={entry.whatsappVerificationStatus} />
                             <div className="mt-1 flex items-center gap-1.5">
@@ -2520,7 +2524,7 @@ export default function WorkshopMasterPage() {
                         </tr>
 	                      )) : (
 	                        <tr>
-	                          <td className="px-4 py-10 text-center text-slate-500" colSpan={12}>
+	                          <td className="px-4 py-10 text-center text-slate-500" colSpan={13}>
 	                            {participantSearch ? "No response found for this name or mobile number." : "No users registered in this workshop yet."}
 	                          </td>
 	                        </tr>
@@ -3859,6 +3863,34 @@ function formatSubmittedAt(value?: string) {
 function submittedAtTimestamp(value?: string) {
   const timestamp = Date.parse(value ?? "");
   return Number.isNaN(timestamp) ? Number.MIN_SAFE_INTEGER : timestamp;
+}
+
+function referenceNameForRegistration(entry: RegistrationEntry) {
+  if (entry.referrerName?.trim()) return entry.referrerName.trim();
+
+  const answers = entry.answers ?? {};
+  const normalize = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, "");
+  const preferredKeys = new Set([
+    "referencename",
+    "refrancename",
+    "referrencename",
+    "referrername",
+    "referredby",
+    "referenceby",
+    "refranceby",
+    "referredname",
+    "sourcename"
+  ]);
+
+  for (const [key, value] of Object.entries(answers)) {
+    const normalizedKey = normalize(key);
+    const text = String(value ?? "").trim();
+    if (!text) continue;
+    if (preferredKeys.has(normalizedKey)) return text;
+    if ((normalizedKey.includes("reference") || normalizedKey.includes("refrance") || normalizedKey.includes("referrer")) && normalizedKey.includes("name")) return text;
+  }
+
+  return "";
 }
 
 function isWithinLastIndiaCalendarDays(value: string | undefined, days: number) {
