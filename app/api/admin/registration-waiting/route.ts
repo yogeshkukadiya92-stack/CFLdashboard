@@ -1,8 +1,8 @@
-import { ensurePersistenceTable, getDbPool, isDbEnabled } from "@/lib/db";
+import { ensurePersistenceTable, ensureRegistrationRecordsTable, getDbPool, isDbEnabled, reserveRegistrationNumber, upsertRegistrationRecord } from "@/lib/db";
 import { upsertLiveRegistration } from "@/lib/crm-db";
 import type { RegistrationEntry } from "@/lib/types";
 import type { BuilderForm } from "@/lib/types";
-import { assignRegistrationNumbers, sendRegistrationConfirmation } from "@/lib/registration-confirmation";
+import { sendRegistrationConfirmation } from "@/lib/registration-confirmation";
 import { syncConfirmedRegistrationToMfw } from "@/lib/mfw-registration";
 import { NextResponse } from "next/server";
 
@@ -39,15 +39,23 @@ export async function PATCH(request: Request) {
     const database = getDbPool();
     if (!database) return NextResponse.json({ error: "Database is not configured." }, { status: 500 });
     await ensurePersistenceTable();
+    await ensureRegistrationRecordsTable();
     const client = await database.connect();
+    let next: RegistrationEntry[] = [];
     try {
       await client.query("BEGIN");
-      const selected = await client.query(`SELECT registrations, forms FROM app_state WHERE id = 1 FOR UPDATE`);
-      const registrations = (Array.isArray(selected.rows[0]?.registrations) ? selected.rows[0].registrations : []) as RegistrationEntry[];
+      const selected = await client.query(`SELECT forms FROM app_state WHERE id = 1 FOR UPDATE`);
+      const registrationRows = await client.query<{ payload: RegistrationEntry }>(`
+        SELECT payload
+        FROM cfl_registration_records
+        ORDER BY created_at DESC, external_id DESC
+        FOR UPDATE
+      `);
+      const registrations = registrationRows.rows.map((row) => row.payload);
       const requestedIds = new Set(registrationIds);
       const confirmedAt = new Date().toISOString();
       let promoted = 0;
-      const promotedRegistrations = registrations.map((entry) => {
+      let promotedRegistrations = registrations.map((entry) => {
         if (entry.workshopId !== workshopId || entry.registrationStatus !== "waiting" || !requestedIds.has(entry.id)) return entry;
         promoted += 1;
         return {
@@ -61,15 +69,24 @@ export async function PATCH(request: Request) {
           waitingReason: undefined
         };
       });
+      for (const entry of promotedRegistrations) {
+        if (entry.workshopId === workshopId && requestedIds.has(entry.id) && entry.registrationStatus === "confirmed" && !entry.registrationNumber) {
+          const registrationNumber = await reserveRegistrationNumber(client);
+          promotedRegistrations = promotedRegistrations.map((item) => item.id === entry.id ? { ...item, registrationNumber } : item);
+        }
+      }
       if (!promoted) {
         await client.query("ROLLBACK");
         return NextResponse.json({ error: "No matching waiting registrations were found." }, { status: 404 });
       }
 
-      let next = assignRegistrationNumbers(renumberWaitingList(promotedRegistrations, workshopId), workshopId);
+      next = renumberWaitingList(promotedRegistrations, workshopId);
       for (const registration of next.filter((entry) => requestedIds.has(entry.id) && entry.registrationStatus === "confirmed")) {
         const mfwSync = await syncConfirmedRegistrationToMfw(registration);
         next = next.map((entry) => entry.id === registration.id ? { ...entry, ...mfwSync } : entry);
+      }
+      for (const registration of next.filter((entry) => requestedIds.has(entry.id) || entry.workshopId === workshopId)) {
+        await upsertRegistrationRecord(client, registration as unknown as Record<string, unknown>);
       }
       await client.query(`UPDATE app_state SET registrations = $1::jsonb, updated_at = NOW() WHERE id = 1`, [JSON.stringify(next)]);
       await client.query("COMMIT");
@@ -77,7 +94,7 @@ export async function PATCH(request: Request) {
         .find((item: BuilderForm) => item.workshopId === workshopId) as BuilderForm | undefined;
       const promotedEntries = next.filter((entry) => requestedIds.has(entry.id) && entry.registrationStatus === "confirmed");
       for (const entry of promotedEntries) {
-        await upsertLiveRegistration(entry as unknown as Record<string, unknown>);
+        await upsertLiveRegistration(entry as unknown as Record<string, unknown>).catch(() => undefined);
       }
       const sentIds = new Set<string>();
       for (const entry of promotedEntries) {
@@ -87,7 +104,11 @@ export async function PATCH(request: Request) {
       if (sentIds.size) {
         const sentAt = new Date().toISOString();
         next = next.map((entry) => sentIds.has(entry.id) ? { ...entry, confirmationWhatsappSentAt: sentAt } : entry);
-        await client.query(`UPDATE app_state SET registrations = $1::jsonb, updated_at = NOW() WHERE id = 1`, [JSON.stringify(next)]);
+        await client.query(`UPDATE app_state SET registrations = $1::jsonb, updated_at = NOW() WHERE id = 1`, [JSON.stringify(next)])
+          .catch(() => undefined);
+        await Promise.all(next
+          .filter((registration) => sentIds.has(registration.id))
+          .map((entry) => upsertRegistrationRecord(client, entry as unknown as Record<string, unknown>).catch(() => undefined)));
       }
       return NextResponse.json({ promoted, registrations: next });
     } catch (error) {
