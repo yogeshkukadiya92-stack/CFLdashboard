@@ -77,6 +77,7 @@ type DiscountType = "percent" | "flat";
 type AnalyticsPanel = "cohort" | "overlap" | null;
 type FormWorkflowPanel = "basics" | "automation" | "fields" | "includes" | "preview" | null;
 type WorkshopWorkflowPanel = "info" | "mfw" | "pricing" | null;
+type FollowUpScope = "needs_follow_up" | "completed" | "waiting" | "repeaters" | "all";
 type RegistrationLinkConfig = {
   batch?: string;
   customBaseUrl?: string;
@@ -251,7 +252,7 @@ export default function WorkshopMasterPage() {
   const [hideWaitingParticipants, setHideWaitingParticipants] = useState(false);
   const [participantSearch, setParticipantSearch] = useState("");
   const [responseFilters, setResponseFilters] = useState<ResponseFilterState>({ ...emptyResponseFilters });
-  const [followUpScope, setFollowUpScope] = useState<"needs_follow_up" | "completed" | "waiting" | "all">("needs_follow_up");
+  const [followUpScope, setFollowUpScope] = useState<FollowUpScope>("needs_follow_up");
   const [selectedParticipantIds, setSelectedParticipantIds] = useState<string[]>([]);
   const [followUpTarget, setFollowUpTarget] = useState<RegistrationEntry | null>(null);
   const [shareSelectedOpen, setShareSelectedOpen] = useState(false);
@@ -423,6 +424,7 @@ export default function WorkshopMasterPage() {
   const waitingParticipants = useMemo(() => selectedParticipants
     .filter((entry) => entry.registrationStatus === "waiting")
     .sort((first, second) => (first.waitingPosition ?? Number.MAX_SAFE_INTEGER) - (second.waitingPosition ?? Number.MAX_SAFE_INTEGER)), [selectedParticipants]);
+  const repeaterParticipants = useMemo(() => selectedParticipants.filter((entry) => entry.isRepeater), [selectedParticipants]);
   const selectedWaitingParticipants = useMemo(() => waitingParticipants.filter((entry) => selectedParticipantIds.includes(entry.id)), [selectedParticipantIds, waitingParticipants]);
   const duplicateParticipantIds = useMemo(() => {
     const { duplicates } = partitionDuplicateResponses(selectedParticipants, {
@@ -459,6 +461,7 @@ export default function WorkshopMasterPage() {
   }, [filteredParticipants, participantSearch]);
   const followUpParticipants = useMemo(() => searchedParticipants.filter((entry) => {
     if (followUpScope === "waiting") return entry.registrationStatus === "waiting";
+    if (followUpScope === "repeaters") return Boolean(entry.isRepeater);
     const completed = Boolean(entry.confirmationStatus && entry.confirmationStatus !== "pending" && entry.confirmationNote?.trim());
     if (followUpScope === "completed") return completed;
     if (followUpScope === "needs_follow_up") return !completed;
@@ -2309,6 +2312,7 @@ export default function WorkshopMasterPage() {
                 <OperationalStat label="Paid" tone="success" value={displayedParticipants.filter((entry) => entry.status === "Paid").length} />
                 <OperationalStat label="Due" value={displayedParticipants.filter((entry) => entry.status === "Due").length} />
                 <OperationalStat label="Waiting" value={selectedParticipants.filter((entry) => entry.registrationStatus === "waiting").length} tone="warning" />
+                <OperationalStat label="Repeaters" value={repeaterParticipants.length} tone="info" />
                 {activeParticipantFilterCount ? <OperationalStat label="Saved filters" value={activeParticipantFilterCount} tone="info" /> : null}
                 {formWaitingMode ? (
                   <p className="ml-auto inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-black text-amber-900">
@@ -2326,8 +2330,9 @@ export default function WorkshopMasterPage() {
                         ["needs_follow_up", "Needs follow-up"],
                         ["completed", "Completed"],
                         ["waiting", `Waiting List (${waitingParticipants.length})`],
+                        ["repeaters", `Repeaters (${repeaterParticipants.length})`],
                         ["all", "All responses"]
-                      ] as const).map(([value, label]) => (
+                      ] satisfies Array<readonly [FollowUpScope, string]>).map(([value, label]) => (
                         <button
                           aria-pressed={followUpScope === value}
                           className={`min-h-8 shrink-0 rounded-lg px-2.5 text-[11px] font-black ${followUpScope === value ? "bg-slate-950 text-white" : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}
@@ -2335,6 +2340,7 @@ export default function WorkshopMasterPage() {
                           onClick={() => {
                             setFollowUpScope(value);
                             if (value === "waiting") setHideWaitingParticipants(false);
+                            if (value === "repeaters") setHideWaitingParticipants(false);
                             setSelectedParticipantIds([]);
                           }}
                           type="button"
