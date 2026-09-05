@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { attendanceCanConfirmWaitingRegistration, attendanceMatchesFinalRegistration, findRepeaterSource, isDuplicateWorkshopRegistration, registrationMatchesBatch, shouldAutoConfirmFromAttendance } from "../lib/workshop-hierarchy.ts";
+import { attendanceCanConfirmWaitingRegistration, attendanceMatchesFinalRegistration, findRepeaterSource, isDuplicateWorkshopRegistration, registrationMatchesBatch, shouldAutoConfirmFromAttendance, shouldSendRepeaterToWaiting } from "../lib/workshop-hierarchy.ts";
 
 const base = {
   workshopId: "workshop-growth",
@@ -86,4 +86,11 @@ test("does not use an unselected past workshop for repeater detection", () => {
     { id: "old", workshopId: "w-old", workshopSlug: "old", workshopTitle: "Old Workshop", fullName: "A", mobile: "9876543210", email: "", city: "", paymentMode: "Full", amountPaid: 100, amountDue: 0, status: "Paid", createdAt: "2026-01-01T00:00:00.000Z" }
   ], [], { mobile: "9876543210", workshopId: "w-new" }, ["another-workshop"]);
   assert.equal(source, undefined);
+});
+
+test("repeater waiting mode defaults on and can be turned off", () => {
+  assert.equal(shouldSendRepeaterToWaiting(undefined), true);
+  assert.equal(shouldSendRepeaterToWaiting({}), true);
+  assert.equal(shouldSendRepeaterToWaiting({ repeaterWaitingMode: true }), true);
+  assert.equal(shouldSendRepeaterToWaiting({ repeaterWaitingMode: false }), false);
 });

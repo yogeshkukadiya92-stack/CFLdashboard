@@ -234,6 +234,7 @@ export default function FormBuilderPage() {
 
   const form = useMemo<BuilderForm>(() => {
     const name = workshop?.name ?? "";
+    const existingForm = workshopId ? readLocalArray<BuilderForm>(FORMS_STORAGE_KEY).find((item) => item.workshopId === workshopId) : undefined;
     return {
       id: workshopId ? `form-${workshopId}-${slugify(batch) || "main"}` : "form-draft",
       workshopId,
@@ -268,6 +269,8 @@ export default function FormBuilderPage() {
       waitingMode,
       waitingTitle: waitingTitle.trim() || undefined,
       waitingMessage: waitingMessage.trim() || undefined,
+      repeaterSourceWorkshopIds: existingForm?.repeaterSourceWorkshopIds,
+      repeaterWaitingMode: existingForm?.repeaterWaitingMode,
       fields,
       updatedAt: new Date().toISOString()
     };

@@ -48,6 +48,10 @@ export function findRepeaterSource(
   };
 }
 
+export function shouldSendRepeaterToWaiting(form: Pick<BuilderForm, "repeaterWaitingMode"> | undefined) {
+  return form?.repeaterWaitingMode !== false;
+}
+
 export function registrationMatchesBatch(registration: Pick<RegistrationEntry, "batch" | "batchId">, batch: Pick<WorkshopBatch, "id" | "name">) {
   if (registration.batchId) return registration.batchId === batch.id;
   return normalized(registration.batch) === normalized(batch.name);

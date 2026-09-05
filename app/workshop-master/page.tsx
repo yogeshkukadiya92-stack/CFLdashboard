@@ -219,6 +219,7 @@ export default function WorkshopMasterPage() {
   const [formWaitingTitle, setFormWaitingTitle] = useState("Waiting List Registration");
   const [formWaitingMessage, setFormWaitingMessage] = useState("Seats are currently full. Your registration will be added to the waiting list.");
   const [formRepeaterSourceWorkshopIds, setFormRepeaterSourceWorkshopIds] = useState<string[]>([]);
+  const [formRepeaterWaitingMode, setFormRepeaterWaitingMode] = useState(true);
   const [repeaterWorkshopQuery, setRepeaterWorkshopQuery] = useState("");
   const [whatsappGroupUrl, setWhatsappGroupUrl] = useState("");
   const [whatsappConfirmationEnabled, setWhatsappConfirmationEnabled] = useState(false);
@@ -933,6 +934,7 @@ export default function WorkshopMasterPage() {
     setFormWaitingTitle("Waiting List Registration");
     setFormWaitingMessage("Seats are currently full. Your registration will be added to the waiting list.");
     setFormRepeaterSourceWorkshopIds([]);
+    setFormRepeaterWaitingMode(true);
     setRepeaterWorkshopQuery("");
     setWhatsappGroupUrl("");
     setWhatsappConfirmationEnabled(false);
@@ -965,6 +967,7 @@ export default function WorkshopMasterPage() {
       waitingTitle: formWaitingTitle.trim() || undefined,
       waitingMessage: formWaitingMessage.trim() || undefined,
       repeaterSourceWorkshopIds: formRepeaterSourceWorkshopIds,
+      repeaterWaitingMode: formRepeaterWaitingMode,
       highlights: formHighlights.map((item) => item.trim()).filter(Boolean),
       whatsappGroupUrl: whatsappGroupUrl.trim() || undefined,
       whatsappConfirmationEnabled,
@@ -1012,6 +1015,7 @@ export default function WorkshopMasterPage() {
         setFormWaitingTitle("Waiting List Registration");
         setFormWaitingMessage("Seats are currently full. Your registration will be added to the waiting list.");
         setFormRepeaterSourceWorkshopIds([]);
+        setFormRepeaterWaitingMode(true);
         setRepeaterWorkshopQuery("");
         setWhatsappGroupUrl("");
         setWhatsappConfirmationEnabled(false);
@@ -1037,6 +1041,7 @@ export default function WorkshopMasterPage() {
       setFormWaitingTitle(savedForm.waitingTitle || "Waiting List Registration");
       setFormWaitingMessage(savedForm.waitingMessage || "Seats are currently full. Your registration will be added to the waiting list.");
       setFormRepeaterSourceWorkshopIds(savedForm.repeaterSourceWorkshopIds ?? []);
+      setFormRepeaterWaitingMode(savedForm.repeaterWaitingMode !== false);
       setRepeaterWorkshopQuery("");
       setWhatsappGroupUrl(savedForm.whatsappGroupUrl ?? "");
       setWhatsappConfirmationEnabled(Boolean(savedForm.whatsappConfirmationEnabled));
@@ -1595,10 +1600,17 @@ export default function WorkshopMasterPage() {
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <span>
                   <span className="block text-sm font-black text-slate-800">Repeater Source Workshops</span>
-                  <span className="mt-0.5 block text-xs font-semibold text-slate-500">Only participants matching a selected workshop by mobile number will enter Waiting · Repeater review.</span>
+                  <span className="mt-0.5 block text-xs font-semibold text-slate-500">Participants matching a selected workshop by mobile number will be marked as repeaters.</span>
                 </span>
                 <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-violet-700">{formRepeaterSourceWorkshopIds.length} selected</span>
               </div>
+              <label className="mt-3 flex min-h-[48px] items-center justify-between gap-4 rounded-xl border border-violet-100 bg-white px-3 py-2">
+                <span>
+                  <span className="block text-sm font-black text-slate-800">Repeater Waiting Mode</span>
+                  <span className="mt-0.5 block text-xs font-semibold text-slate-500">{formRepeaterWaitingMode ? "ON: repeaters go to Waiting · Repeater review." : "OFF: repeaters stay confirmed and keep the Repeater status."}</span>
+                </span>
+                <input checked={formRepeaterWaitingMode} className="size-5 shrink-0 accent-violet-600" onChange={(event) => setFormRepeaterWaitingMode(event.target.checked)} type="checkbox" />
+              </label>
               <label className="relative mt-3 block">
                 <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
                 <input className={`${inputClass} pl-10`} onChange={(event) => setRepeaterWorkshopQuery(event.target.value)} placeholder="Search past workshops" value={repeaterWorkshopQuery} />

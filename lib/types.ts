@@ -520,6 +520,7 @@ export interface BuilderForm {
   waitingTitle?: string;
   waitingMessage?: string;
   repeaterSourceWorkshopIds?: string[];
+  repeaterWaitingMode?: boolean;
   fields: BuilderField[];
   updatedAt: string;
 }
