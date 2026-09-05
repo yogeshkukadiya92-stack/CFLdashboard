@@ -34,10 +34,11 @@ test("advanced attendance and Telegram AI recipes include their safety gates", (
   const telegram = workflowTemplates.find((item) => item.id === "telegram-ai-data-assistant")!;
   assert.deepEqual(attendance.nodes.map((item) => item.title), [
     "Attendance submitted",
-    "Check session attendance count",
-    "Find waiting registration",
-    "Confirm waiting registration",
-    "Send confirmation notice"
+    "Check 1 session attendance",
+    "Find waiting registration by mobile",
+    "Check eligibility + capacity",
+    "Confirm registration",
+    "Send confirmation message"
   ]);
   assert.equal(attendance.nodes.find((item) => item.id === "waiting")?.config.registrationMode, "Existing or new");
   assert.equal(telegram.nodes.find((item) => item.id === "guard")?.config.operator, "Is approved");

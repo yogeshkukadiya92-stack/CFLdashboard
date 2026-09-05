@@ -281,7 +281,12 @@ export function cloneSnapshot(nodes: WorkflowNode[], connections: Connection[]):
 
 export function validateWorkflow(nodes: WorkflowNode[], connections: Connection[]) {
   const issues: Array<{ level: "error" | "warning"; text: string }> = [];
-  if (!nodes.some((node) => node.kind === "trigger")) issues.push({ level: "error", text: "Add at least one trigger before activation." });
+  const isEventTrigger = (node: WorkflowNode) => node.kind === "trigger"
+    || (node.kind === "attendance" && Boolean(node.config.event))
+    || (node.kind === "payment" && Boolean(node.config.event))
+    || (node.kind === "telegram" && node.title.toLowerCase().includes("received"))
+    || (node.kind === "delay" && node.config.scheduleEnabled === true);
+  if (!nodes.some(isEventTrigger)) issues.push({ level: "error", text: "Add at least one trigger before activation." });
   const ids = new Set(nodes.map((node) => node.id));
   if (connections.some((connection) => !ids.has(connection.from) || !ids.has(connection.to))) issues.push({ level: "error", text: "One or more connections point to a missing node." });
   const noInput = nodes.filter((node) => node.kind !== "trigger" && !connections.some((connection) => connection.to === node.id));
