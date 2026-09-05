@@ -1,9 +1,10 @@
-import { ensurePersistenceTable, getAppState, getDbPool, isDbEnabled, mutateAttendanceEntries } from "@/lib/db";
+import { ensurePersistenceTable, ensureRegistrationRecordsTable, getAppState, getDbPool, isDbEnabled, mutateAttendanceEntries, readRegistrationRecords, upsertRegistrationRecord } from "@/lib/db";
 import { attendanceWindow } from "@/lib/attendance-window";
 import { assignRegistrationNumbers } from "@/lib/registration-confirmation";
 import { syncConfirmedRegistrationToMfw } from "@/lib/mfw-registration";
 import { executeWorkflow } from "@/lib/workflow-engine";
 import { listActiveWorkflowsForTrigger, recordWorkflowExecution } from "@/lib/workflow-db";
+import { attendanceCanConfirmWaitingRegistration } from "@/lib/workshop-hierarchy";
 import type { AttendanceEntry, AttendanceSession, BuilderField, BuilderForm, RegistrationEntry } from "@/lib/types";
 import { after, NextResponse } from "next/server";
 
@@ -69,12 +70,14 @@ async function promoteAttendanceWaitingRegistrations(attendance: AttendanceEntry
   const database = getDbPool();
   if (!database) return 0;
   await ensurePersistenceTable();
+  await ensureRegistrationRecordsTable();
   const client = await database.connect();
   try {
     await client.query("BEGIN");
-    const selected = await client.query(`SELECT registrations, forms FROM app_state WHERE id = 1 FOR UPDATE`);
-    const registrations = (Array.isArray(selected.rows[0]?.registrations) ? selected.rows[0].registrations : []) as RegistrationEntry[];
+    const selected = await client.query(`SELECT forms, attendance_sessions FROM app_state WHERE id = 1 FOR UPDATE`);
+    const registrations = await readRegistrationRecords(client) as RegistrationEntry[];
     const forms = (Array.isArray(selected.rows[0]?.forms) ? selected.rows[0].forms : []) as BuilderForm[];
+    const sessions = (Array.isArray(selected.rows[0]?.attendance_sessions) ? selected.rows[0].attendance_sessions : []) as AttendanceSession[];
     const mobile = attendance.mobile.replace(/\D/g, "").slice(-10);
     const affectedWorkshops = new Set<string>();
     const promotedRegistrationIds = new Set<string>();
@@ -84,8 +87,9 @@ async function promoteAttendanceWaitingRegistrations(attendance: AttendanceEntry
       if (registration.registrationStatus !== "waiting" || !["eligibility_pending", "attendance_pending", "session_mismatch"].includes(registration.waitingReason || "")) return registration;
       if (registration.mobile.replace(/\D/g, "").slice(-10) !== mobile) return registration;
       const form = forms.find((item) => item.workshopId === registration.workshopId);
-      if (!form?.requireAttendanceForConfirmation || form.requiredAttendanceSessionId !== attendance.sessionId) return registration;
-      const capacity = Math.max(0, Number(form.registrationCapacity ?? 0) || 0);
+      const attendanceSession = sessions.find((item) => item.id === attendance.sessionId);
+      if (!attendanceCanConfirmWaitingRegistration(attendance, registration, form, attendanceSession)) return registration;
+      const capacity = Math.max(0, Number(form?.registrationCapacity ?? 0) || 0);
       const confirmedCount = registrations.filter((item) => item.workshopId === registration.workshopId && item.registrationStatus !== "waiting" && item.id !== registration.id).length;
       const workshopPromotions = promotedByWorkshop.get(registration.workshopId) ?? 0;
       if (capacity > 0 && confirmedCount + workshopPromotions >= capacity) return { ...registration, attendanceMatched: true, waitingReason: "capacity" as const };
@@ -110,7 +114,12 @@ async function promoteAttendanceWaitingRegistrations(attendance: AttendanceEntry
       const mfwSync = await syncConfirmedRegistrationToMfw(registration);
       next = next.map((entry) => entry.id === registration.id ? { ...entry, ...mfwSync } : entry);
     }
-    if (promoted > 0) await client.query(`UPDATE app_state SET registrations = $1::jsonb, updated_at = NOW() WHERE id = 1`, [JSON.stringify(next)]);
+    if (promoted > 0) {
+      for (const registration of next.filter((entry) => promotedRegistrationIds.has(entry.id))) {
+        await upsertRegistrationRecord(client, registration as unknown as Record<string, unknown>);
+      }
+      await client.query(`UPDATE app_state SET registrations = $1::jsonb, updated_at = NOW() WHERE id = 1`, [JSON.stringify(next)]);
+    }
     await client.query("COMMIT");
     return promoted;
   } catch (error) {

@@ -1,4 +1,5 @@
 import type { AttendanceEntry, RegistrationEntry, WorkshopBatch } from "@/lib/types";
+import type { AttendanceSession, BuilderForm } from "@/lib/types";
 
 function normalized(value: unknown) {
   return String(value ?? "").trim().toLowerCase();
@@ -68,6 +69,22 @@ export function attendanceMatchesFinalRegistration(
   return Boolean(requiredSessionId)
     && attendance.sessionId === requiredSessionId
     && mobileDigits(attendance.mobile) === mobileDigits(registration.mobile);
+}
+
+export function attendanceCanConfirmWaitingRegistration(
+  attendance: Pick<AttendanceEntry, "mobile" | "sessionId" | "workshopId">,
+  registration: Pick<RegistrationEntry, "mobile" | "workshopId">,
+  form: Pick<BuilderForm, "requireAttendanceForConfirmation" | "requiredAttendanceSessionId"> | undefined,
+  session: Pick<AttendanceSession, "id" | "workshopId" | "published"> | undefined
+) {
+  if (!form?.requireAttendanceForConfirmation) return false;
+  if (mobileDigits(attendance.mobile) !== mobileDigits(registration.mobile)) return false;
+  const exactRequiredAttendance = Boolean(form.requiredAttendanceSessionId) && form.requiredAttendanceSessionId === attendance.sessionId;
+  const sameWorkshopIntroAttendance = attendance.workshopId === registration.workshopId
+    && session?.id === attendance.sessionId
+    && session.workshopId === registration.workshopId
+    && session.published !== false;
+  return exactRequiredAttendance || sameWorkshopIntroAttendance;
 }
 
 export function shouldAutoConfirmFromAttendance(registration: {

@@ -142,7 +142,7 @@ export async function POST(request: Request) {
         if (!value || typeof value !== "object") return false;
         return isDuplicateWorkshopRegistration(value as RegistrationEntry, sanitizedRegistration);
       });
-      if (duplicate && duplicate.registrationStatus !== "waiting" && form?.allowDuplicate !== true) {
+      if (duplicate && form?.allowDuplicate !== true) {
         await client.query("ROLLBACK");
         return NextResponse.json({
           code: "ALREADY_REGISTERED",

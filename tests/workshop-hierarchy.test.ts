@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { attendanceMatchesFinalRegistration, findRepeaterSource, isDuplicateWorkshopRegistration, registrationMatchesBatch, shouldAutoConfirmFromAttendance } from "../lib/workshop-hierarchy.ts";
+import { attendanceCanConfirmWaitingRegistration, attendanceMatchesFinalRegistration, findRepeaterSource, isDuplicateWorkshopRegistration, registrationMatchesBatch, shouldAutoConfirmFromAttendance } from "../lib/workshop-hierarchy.ts";
 
 const base = {
   workshopId: "workshop-growth",
@@ -28,6 +28,29 @@ test("final registration eligibility matches the exact attendance session and mo
   assert.equal(attendanceMatchesFinalRegistration({ mobile: "9876543210", sessionId: "intro-1" }, registration, "intro-1"), true);
   assert.equal(attendanceMatchesFinalRegistration({ mobile: "9999999999", sessionId: "intro-1" }, registration, "intro-1"), false);
   assert.equal(attendanceMatchesFinalRegistration({ mobile: "9876543210", sessionId: "intro-2" }, registration, "intro-1"), false);
+});
+
+test("future introduction attendance can confirm a waiting registration in the same workshop", () => {
+  const form = { requireAttendanceForConfirmation: true, requiredAttendanceSessionId: "intro-1" };
+  const registration = { mobile: "+91 98765 43210", workshopId: "workshop-growth" };
+  assert.equal(attendanceCanConfirmWaitingRegistration(
+    { mobile: "9876543210", sessionId: "intro-2", workshopId: "workshop-growth" },
+    registration,
+    form,
+    { id: "intro-2", workshopId: "workshop-growth", published: true }
+  ), true);
+  assert.equal(attendanceCanConfirmWaitingRegistration(
+    { mobile: "9876543210", sessionId: "intro-2", workshopId: "another-workshop" },
+    registration,
+    form,
+    { id: "intro-2", workshopId: "another-workshop", published: true }
+  ), false);
+  assert.equal(attendanceCanConfirmWaitingRegistration(
+    { mobile: "9876543210", sessionId: "intro-2", workshopId: "workshop-growth" },
+    registration,
+    form,
+    { id: "intro-2", workshopId: "workshop-growth", published: false }
+  ), false);
 });
 
 test("attendance-confirmed registration triggers follow-up confirmation", () => {
