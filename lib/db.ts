@@ -59,6 +59,27 @@ export function getDbPool() {
   return pool;
 }
 
+let registrationPool: Pool | null = null;
+
+// Reserve connections for submissions so admin exports and CRM work cannot
+// occupy every connection in the application's shared pool. Both use PRIMARY.
+export function getRegistrationDbPool() {
+  if (!process.env.DATABASE_URL) return null;
+  if (!registrationPool) {
+    const configured = Number(process.env.REGISTRATION_DB_POOL_MAX ?? 10);
+    registrationPool = new Pool({
+      connectionString: process.env.DATABASE_URL,
+      max: Number.isInteger(configured) && configured > 0 && configured <= 50 ? configured : 10,
+      connectionTimeoutMillis: 15_000,
+      idleTimeoutMillis: 30_000,
+      query_timeout: 10_000,
+      application_name: "cfl-registration"
+    });
+    registrationPool.on("error", (error) => console.error("Registration database idle connection error", error.message));
+  }
+  return registrationPool;
+}
+
 export async function isDbEnabled() {
   return Boolean(process.env.DATABASE_URL);
 }
@@ -209,18 +230,19 @@ export async function reserveRegistrationNumber(client: Pick<PoolClient, "query"
   return `REG-${String(result.rows[0].value).padStart(4, "0")}`;
 }
 
-export async function upsertRegistrationRecord(client: Pick<PoolClient, "query">, registration: Record<string, unknown>) {
+export async function upsertRegistrationRecord(client: Pick<PoolClient, "query">, registration: Record<string, unknown>, insertOnly = false) {
   const externalId = String(registration.id ?? "").trim();
   if (!externalId) throw new Error("Registration id is required.");
   const workshopId = String(registration.workshopId ?? registration.workshopTitle ?? "").trim();
   const batchKey = String(registration.batchId ?? "").trim() || String(registration.batch ?? "").trim().toLowerCase();
   const mobile = String(registration.mobile ?? "").replace(/\D/g, "").slice(-10);
   const createdAt = String(registration.createdAt ?? new Date().toISOString());
-  await client.query(`
+  const result = await client.query(`
     INSERT INTO cfl_registration_records (external_id, workshop_id, batch_key, mobile_normalized, created_at, payload, updated_at)
     VALUES ($1, $2, $3, $4, $5, $6::jsonb, NOW())
-    ON CONFLICT (external_id) DO UPDATE SET payload = EXCLUDED.payload, updated_at = NOW()
+    ${insertOnly ? "ON CONFLICT (external_id) DO NOTHING" : "ON CONFLICT (external_id) DO UPDATE SET payload = EXCLUDED.payload, updated_at = NOW()"}
   `, [externalId, workshopId, batchKey, mobile, createdAt, JSON.stringify(registration)]);
+  return result.rowCount === 1;
 }
 
 export async function replaceRegistrationRecords(registrations: unknown[]) {

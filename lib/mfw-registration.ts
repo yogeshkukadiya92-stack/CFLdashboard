@@ -1,5 +1,5 @@
 import type { RegistrationEntry } from "@/lib/types";
-import { getAppState } from "@/lib/db";
+import { getDbPool } from "@/lib/db";
 import {
   mfwEnrollmentMatches,
   normalizeMfwWorkshops,
@@ -49,14 +49,10 @@ export async function listMfwWorkshops() {
 }
 
 async function resolveWorkshopMapping(registration: RegistrationEntry) {
-  const state = await getAppState();
-  const workshops = Array.isArray(state?.workshops) ? state.workshops : [];
-  const workshop = workshops.find((entry: unknown) => {
-    if (!entry || typeof entry !== "object" || Array.isArray(entry)) return false;
-    const record = entry as { id?: unknown; name?: unknown };
-    return String(record.id ?? "") === registration.workshopId
-      || String(record.name ?? "").trim().toLocaleLowerCase() === registration.workshopTitle.trim().toLocaleLowerCase();
-  }) as MfwWorkshopMapping | undefined;
+  const result = await getDbPool()?.query(`SELECT w FROM app_state, jsonb_array_elements(workshops) w
+    WHERE id = 1 AND (w->>'id' = $1 OR lower(w->>'name') = lower($2)) LIMIT 1`,
+    [registration.workshopId, registration.workshopTitle]);
+  const workshop = result?.rows[0]?.w as MfwWorkshopMapping | undefined;
   return selectMfwWorkshopMapping(workshop, workshopMap()[registration.workshopId]);
 }
 
@@ -92,6 +88,7 @@ export async function syncConfirmedRegistrationToMfw(registration: RegistrationE
         workshopEventId
       }),
       headers: { "Content-Type": "application/json", "x-mfw-api-key": apiKey },
+      signal: AbortSignal.timeout(15_000),
       method: "POST"
     });
     const result = await response.json().catch(() => ({})) as MfwCustomerResponse;

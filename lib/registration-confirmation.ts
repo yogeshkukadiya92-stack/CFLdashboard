@@ -70,7 +70,8 @@ export async function sendRegistrationConfirmation(registration: RegistrationEnt
       Authorization: `Bearer ${authToken}`,
       authtoken: authToken
     },
-    method: "POST"
+    signal: AbortSignal.timeout(15_000),
+      method: "POST"
   });
 
   let sent = response.ok;
@@ -129,6 +130,7 @@ async function sendTemplateMessage(input: {
         Authorization: `Bearer ${authToken}`,
         authtoken: authToken
       },
+      signal: AbortSignal.timeout(15_000),
       method: "POST"
     });
     let sent = response.ok;
