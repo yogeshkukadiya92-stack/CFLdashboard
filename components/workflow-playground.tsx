@@ -115,39 +115,43 @@ function NodeIcon({ kind }: { kind: NodeKind }) {
   return <Icon className="size-4" />;
 }
 
-function nowLabel() {
-  return new Intl.DateTimeFormat("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date());
-}
-
-export function WorkflowPlayground() {
+export function WorkflowPlayground({ initialWorkflowId = "workshop-registration-onboarding", fullScreen = false, onExit, onOpenWorkflow }: {
+  initialWorkflowId?: string; fullScreen?: boolean; onExit?: () => void; onOpenWorkflow?: (id: string) => void;
+}) {
+  const storageKey = `${WORKFLOW_STORAGE_KEY}:${initialWorkflowId}`;
+  const [loadError, setLoadError] = useState("");
+  const [leaving, setLeaving] = useState(false);
+  const savedDocumentRef = useRef("");
+  const saveQueueRef = useRef<Promise<unknown>>(Promise.resolve());
+  const autosaveTimerRef = useRef<number | undefined>(undefined);
+  const documentRef = useRef("");
   const canvasRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const hydratedRef = useRef(false);
   const dragHistoryCapturedRef = useRef(false);
-  const runTimersRef = useRef<number[]>([]);
   const importRef = useRef<HTMLInputElement>(null);
 
   const [nodes, setNodes] = useState<WorkflowNode[]>(initialNodes);
   const [connections, setConnections] = useState<Connection[]>(initialConnections);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [workflowName, setWorkflowName] = useState("Workshop Registration & Onboarding");
-  const [active, setActive] = useState(true);
+  const [active, setActive] = useState(false);
   const [saveState, setSaveState] = useState<SaveState>("saved");
   const [testing, setTesting] = useState(false);
   const [zoom, setZoom] = useState(0.52);
   const [pan, setPan] = useState({ x: 14, y: 28 });
   const [query, setQuery] = useState("");
   const [pickerQuery, setPickerQuery] = useState("");
-  const [focusMode, setFocusMode] = useState(false);
+  const [focusMode, setFocusMode] = useState(fullScreen);
   // Keep the canvas as the default workspace. The full library remains available
   // as an optional panel, while the faster searchable picker is the primary way
   // to add a node.
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [inspectorOpen, setInspectorOpen] = useState(false);
-  const [executionsOpen, setExecutionsOpen] = useState(true);
+  const [executionsOpen, setExecutionsOpen] = useState(!fullScreen);
   const [minimapOpen, setMinimapOpen] = useState(true);
   const [snapEnabled, setSnapEnabled] = useState(true);
-  const [noteOpen, setNoteOpen] = useState(true);
+  const [noteOpen, setNoteOpen] = useState(!fullScreen);
   const [noteText, setNoteText] = useState("Batch operations\nIf capacity is full, preserve the source and send the waiting-list template.");
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>("parameters");
   const [connectingFrom, setConnectingFrom] = useState<string | null>(null);
@@ -164,7 +168,7 @@ export function WorkflowPlayground() {
   const [future, setFuture] = useState<Snapshot[]>([]);
   const [executionState, setExecutionState] = useState<Record<string, ExecutionNodeStatus>>({});
   const [runs, setRuns] = useState<RunRow[]>(initialRuns);
-  const [workflowId, setWorkflowId] = useState("workshop-registration-onboarding");
+  const [workflowId, setWorkflowId] = useState(initialWorkflowId);
   const [workflowVersion, setWorkflowVersion] = useState(0);
   const [salesPeople, setSalesPeople] = useState<WorkflowSalesPerson[]>([]);
   const [storageMode, setStorageMode] = useState<"loading" | "cloud" | "browser">("loading");
@@ -199,7 +203,7 @@ export function WorkflowPlayground() {
   useEffect(() => {
     let cancelled = false;
     try {
-      const value = JSON.parse(window.localStorage.getItem(WORKFLOW_STORAGE_KEY) || "null") as {
+      const value = JSON.parse(window.localStorage.getItem(storageKey) || "null") as {
         nodes?: WorkflowNode[];
         connections?: Connection[];
         name?: string;
@@ -217,11 +221,11 @@ export function WorkflowPlayground() {
     }
     async function hydrateFromServer() {
       try {
-        const response = await fetch("/api/workflows", { cache: "no-store" });
+        const response = await fetch(`/api/workflows?id=${encodeURIComponent(workflowId)}`, { cache: "no-store" });
         if (!response.ok) throw new Error("Workflow database unavailable");
         const payload = await response.json() as { workflow?: { id?: string; name?: string; status?: string; version?: number; nodes?: WorkflowNode[]; connections?: Connection[]; note?: string }; executions?: RunRow[]; salesPeople?: WorkflowSalesPerson[]; whatsapp?: WhatsAppAutomationOverview; attendance?: AttendanceAutomationOverview; payment?: PaymentAutomationOverview; crm?: CrmAutomationOverview; versions?: WorkflowVersionSummary[]; reliability?: WorkflowReliabilityOverview; schedules?: WorkflowScheduleOverview; governance?: WorkflowGovernanceOverview; incidents?: WorkflowIncidentOverview; enterprise?: WorkflowEnterpriseOverview };
         if (cancelled) return;
-        if (payload.workflow?.nodes?.length) {
+        if (payload.workflow && Array.isArray(payload.workflow.nodes)) {
           setNodes(payload.workflow.nodes);
           setConnections(Array.isArray(payload.workflow.connections) ? payload.workflow.connections : []);
           setWorkflowName(payload.workflow.name || "Workshop Registration & Onboarding");
@@ -229,8 +233,11 @@ export function WorkflowPlayground() {
           setNoteText(payload.workflow.note || "");
           setWorkflowId(payload.workflow.id || "workshop-registration-onboarding");
           setWorkflowVersion(Number(payload.workflow.version || 0));
+          savedDocumentRef.current = JSON.stringify({ id: payload.workflow.id || initialWorkflowId,
+            name: payload.workflow.name || "Workshop Registration & Onboarding", status: payload.workflow.status === "active" ? "active" : "draft",
+            nodes: payload.workflow.nodes, connections: payload.workflow.connections ?? [], note: payload.workflow.note || "" });
         }
-        if (payload.executions?.length) setRuns(payload.executions);
+        setRuns(payload.executions ?? []);
         setSalesPeople(Array.isArray(payload.salesPeople) ? payload.salesPeople : []);
         if (payload.whatsapp) setWhatsappOverview(payload.whatsapp);
         if (payload.attendance) setAttendanceOverview(payload.attendance);
@@ -244,7 +251,7 @@ export function WorkflowPlayground() {
         if (payload.enterprise) setEnterprise(payload.enterprise);
         setStorageMode("cloud");
       } catch {
-        if (!cancelled) setStorageMode("browser");
+        if (!cancelled) { setLoadError("Could not load this workflow. Your saved workflow has not been changed."); setStorageMode("browser"); }
       } finally {
         if (!cancelled) hydratedRef.current = true;
       }
@@ -253,31 +260,28 @@ export function WorkflowPlayground() {
     return () => { cancelled = true; };
   }, []);
 
+  const workflowDocument = JSON.stringify({ id: workflowId, name: workflowName, status: active ? "active" : "draft", nodes, connections, note: noteText });
+  documentRef.current = workflowDocument;
   useEffect(() => {
-    if (!hydratedRef.current) return;
+    if (!hydratedRef.current || loadError || storageMode !== "cloud" || workflowDocument === savedDocumentRef.current) return;
     setSaveState("unsaved");
-    const timer = window.setTimeout(() => {
-      setSaveState("saving");
-      window.localStorage.setItem(WORKFLOW_STORAGE_KEY, JSON.stringify({ nodes, connections, name: workflowName, active, note: noteText }));
-      if (storageMode !== "cloud") {
-        window.setTimeout(() => setSaveState("saved"), 260);
-        return;
-      }
-      void fetch("/api/workflows", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: workflowId, name: workflowName, status: active ? "active" : "draft", nodes, connections, note: noteText })
-      }).then(async (response) => {
-        if (!response.ok) throw new Error("Autosave failed");
-        const payload = await response.json() as { workflow?: { version?: number } };
-        if (payload.workflow?.version) setWorkflowVersion(payload.workflow.version);
-        setSaveState("saved");
-      }).catch(() => setSaveState("unsaved"));
-    }, 900);
-    return () => window.clearTimeout(timer);
-  }, [active, connections, nodes, noteText, storageMode, workflowId, workflowName]);
+    autosaveTimerRef.current = window.setTimeout(() => { void persistWorkflow(); }, 900);
+    return () => window.clearTimeout(autosaveTimerRef.current);
+  }, [workflowDocument, loadError, storageMode]);
 
-  useEffect(() => () => runTimersRef.current.forEach((timer) => window.clearTimeout(timer)), []);
+  useEffect(() => {
+    const warn = (event: BeforeUnloadEvent) => {
+      if (documentRef.current !== savedDocumentRef.current && hydratedRef.current && !loadError) { event.preventDefault(); event.returnValue = ""; }
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [loadError]);
+  useEffect(() => {
+    if (storageMode !== "cloud") return;
+    const frame = requestAnimationFrame(() => fitToView());
+    return () => cancelAnimationFrame(frame);
+  }, [storageMode]);
+
 
   const selectedId = selectedIds.at(-1) ?? "";
   const selected = nodes.find((node) => node.id === selectedId) ?? null;
@@ -317,27 +321,49 @@ export function WorkflowPlayground() {
   }
 
   async function persistWorkflow(nextActive = active, createVersion = false) {
+    window.clearTimeout(autosaveTimerRef.current);
+    if (storageMode !== "cloud" || loadError) return false;
+    const snapshot = JSON.stringify({ id: workflowId, name: workflowName, status: nextActive ? "active" : "draft", nodes, connections, note: noteText });
     setSaveState("saving");
-    window.localStorage.setItem(WORKFLOW_STORAGE_KEY, JSON.stringify({ nodes, connections, name: workflowName, active: nextActive, note: noteText }));
-    if (storageMode !== "cloud") {
-      window.setTimeout(() => setSaveState("saved"), 260);
-      return true;
-    }
+    // Serialize writes: a delayed autosave must never overwrite a newer explicit save.
+    const task = saveQueueRef.current.catch(() => undefined).then(async () => {
+      if (snapshot === savedDocumentRef.current && !createVersion) { setSaveState(documentRef.current === snapshot ? "saved" : "unsaved"); return true; }
+      try {
+        const response = await fetch("/api/workflows", { method: "PUT", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...JSON.parse(snapshot), createVersion }) });
+        if (!response.ok) throw new Error("Save failed");
+        const payload = await response.json() as { workflow?: { version?: number } };
+        if (payload.workflow?.version) setWorkflowVersion(payload.workflow.version);
+        savedDocumentRef.current = snapshot;
+        try { window.localStorage.setItem(storageKey, JSON.stringify({ nodes, connections, name: workflowName, active: nextActive, note: noteText })); } catch { /* Cloud save succeeded even when browser storage is full. */ }
+        setSaveState(documentRef.current === snapshot ? "saved" : "unsaved");
+        return true;
+      } catch { setSaveState("unsaved"); return false; }
+    });
+    saveQueueRef.current = task;
+    return task;
+  }
+
+  async function leaveEditor() {
+    if (leaving) return;
+    setLeaving(true);
+    if (loadError || await persistWorkflow()) onExit?.();
+    else setImportError("Could not save your latest changes. Please retry before leaving.");
+    setLeaving(false);
+  }
+
+  async function createCopy(name: string, nextNodes: WorkflowNode[], nextConnections: Connection[]) {
+    if (!onOpenWorkflow || leaving) return;
+    setLeaving(true);
     try {
-      const response = await fetch("/api/workflows", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: workflowId, name: workflowName, status: nextActive ? "active" : "draft", nodes, connections, note: noteText, createVersion })
-      });
-      if (!response.ok) throw new Error("Save failed");
-      const payload = await response.json() as { workflow?: { version?: number } };
-      if (payload.workflow?.version) setWorkflowVersion(payload.workflow.version);
-      setSaveState("saved");
-      return true;
-    } catch {
-      setSaveState("unsaved");
-      return false;
-    }
+      if (!await persistWorkflow()) throw new Error("Save your current workflow before creating another.");
+      const id = crypto.randomUUID();
+      const response = await fetch("/api/workflows", { method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({id, name, status:"draft", nodes:nextNodes, connections:nextConnections, note:""}) });
+      if (!response.ok) throw new Error("Could not create workflow. Please retry.");
+      onOpenWorkflow(id);
+    } catch(error) { setImportError(error instanceof Error ? error.message : "Could not create workflow."); }
+    finally { setLeaving(false); }
   }
 
   function activateWorkflow() {
@@ -349,45 +375,10 @@ export function WorkflowPlayground() {
     void persistWorkflow(true, true);
   }
 
-  function runBrowserTest() {
-    if (testing) return;
-    runTimersRef.current.forEach((timer) => window.clearTimeout(timer));
-    runTimersRef.current = [];
-    const preferred = ["registration", "validate", "route", "assign", "batch", "wait", "whatsapp", "followup"];
-    const order = preferred.filter((id) => nodeMap.has(id));
-    const executionOrder = order.length ? order : nodes.map((node) => node.id);
-    const runId = `EXE-${Date.now().toString().slice(-6)}`;
-    const row: RunRow = { id: runId, status: "running", started: nowLabel(), duration: "Running", trigger: "Manual test", participant: "Mock participant · Ahmedabad", progress: `0 / ${executionOrder.length} nodes`, detail: "Executing with safe mock data. No external message will be sent." };
-    setRuns((current) => [row, ...current]);
-    setExecutionState({});
-    setTesting(true);
-    executionOrder.forEach((id, index) => {
-      const timer = window.setTimeout(() => {
-        setExecutionState((current) => {
-          const next = { ...current };
-          if (index > 0) next[executionOrder[index - 1]] = "success";
-          next[id] = "running";
-          return next;
-        });
-        setRuns((current) => current.map((run) => run.id === runId ? { ...run, progress: `${index + 1} / ${executionOrder.length} nodes` } : run));
-      }, index * 420);
-      runTimersRef.current.push(timer);
-    });
-    const finishTimer = window.setTimeout(() => {
-      const last = executionOrder.at(-1);
-      if (last) setExecutionState((current) => ({ ...current, [last]: "success" }));
-      setRuns((current) => current.map((run) => run.id === runId ? { ...run, status: "success", duration: `${Math.max(1, executionOrder.length * 0.42).toFixed(1)}s`, progress: `${executionOrder.length} / ${executionOrder.length} nodes`, detail: "Mock execution completed. Salesperson, batch and messaging outputs were validated without external side effects." } : run));
-      setTesting(false);
-    }, executionOrder.length * 420 + 220);
-    runTimersRef.current.push(finishTimer);
-  }
-
   async function testWorkflow() {
     if (testing) return;
-    if (storageMode !== "cloud") {
-      runBrowserTest();
-      return;
-    }
+    if (storageMode !== "cloud" || loadError) return;
+    setImportError("");
     setTesting(true);
     setExecutionState({});
     try {
@@ -402,10 +393,8 @@ export function WorkflowPlayground() {
       setExecutionState(Object.fromEntries((payload.run.steps ?? []).map((step) => [step.nodeId, step.status === "skipped" ? "idle" : step.status])));
       setSelectedRun(payload.run);
       setExecutionsOpen(true);
-    } catch {
-      setTesting(false);
-      runBrowserTest();
-      return;
+    } catch (error) {
+      setImportError(error instanceof Error ? error.message : "Workflow test failed. Please retry.");
     } finally {
       setTesting(false);
     }
@@ -459,7 +448,7 @@ export function WorkflowPlayground() {
     try {
       const response = await fetch("/api/workflows/executions/replay", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ executionId: run.id }) });
       if (!response.ok) return;
-      const refresh = await fetch("/api/workflows", { cache: "no-store" });
+      const refresh = await fetch(`/api/workflows?id=${encodeURIComponent(workflowId)}`, { cache: "no-store" });
       const payload = await refresh.json() as { executions?: RunRow[]; reliability?: WorkflowReliabilityOverview };
       if (payload.executions) setRuns(payload.executions);
       if (payload.reliability) setReliability(payload.reliability);
@@ -576,6 +565,7 @@ export function WorkflowPlayground() {
   }
 
   function onCanvasPointerDown(event: ReactPointerEvent<HTMLDivElement>) {
+    if ((event.target as HTMLElement).closest("button, input, textarea, select")) return;
     if (event.button !== 0 && event.button !== 1) return;
     setSelectedIds([]);
     setPanning({ clientX: event.clientX, clientY: event.clientY, panX: pan.x, panY: pan.y });
@@ -633,6 +623,7 @@ export function WorkflowPlayground() {
   }
 
   function applyTemplate(template: WorkflowTemplate) {
+    if (onOpenWorkflow) { void createCopy(template.name, template.nodes, template.connections); return; }
     recordHistory();
     setWorkflowName(template.name);
     setNodes(template.nodes.map((item) => ({ ...item, config: { ...item.config } })));
@@ -682,24 +673,29 @@ export function WorkflowPlayground() {
 
   useEffect(() => { if (pickerContext) window.setTimeout(() => searchRef.current?.focus(), 30); }, [pickerContext]);
 
-  return <section className={`${focusMode ? "fixed inset-2 z-[80] flex flex-col overflow-hidden shadow-2xl" : "overflow-hidden shadow-panel"} rounded-[20px] border border-slate-200 bg-white`}>
+  if (storageMode === "loading" || loadError) return <div className="grid h-dvh place-items-center bg-slate-50 p-6"><div className="text-center"><p role={loadError ? "alert" : "status"} className="text-sm text-slate-600">{loadError || "Opening workflow…"}</p>{loadError ? <button className="workflow-button-secondary mt-4" onClick={onExit} type="button">Back to workflows</button> : null}</div></div>;
+
+  return <section className={`${fullScreen ? "fixed inset-0 z-[80] flex flex-col overflow-hidden !rounded-none" : focusMode ? "fixed inset-2 z-[80] flex flex-col overflow-hidden shadow-2xl" : "overflow-hidden shadow-panel"} rounded-[20px] border border-slate-200 bg-white`}>
     <header className="flex min-h-16 flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3">
       <div className="flex min-w-0 items-center gap-3">
+        {onExit ? <button className="workflow-button-secondary" disabled={leaving || testing} onClick={leaveEditor} type="button">{leaving ? "Saving…" : "← Workflows"}</button> : null}
         <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-slate-950 text-white shadow-sm"><Workflow className="size-5" /></span>
         <div className="min-w-0"><div className="mb-0.5 flex items-center gap-1 text-[10px] font-black uppercase tracking-[0.14em] text-slate-400"><span>Automation</span><ChevronRight className="size-3" /><span>Workflows</span><span className="ml-1 rounded bg-indigo-50 px-1.5 py-0.5 text-indigo-700">{workflowVersion ? `v${workflowVersion}` : "Draft"}</span><span className={`ml-1 rounded px-1.5 py-0.5 ${storageMode === "cloud" ? "bg-emerald-50 text-emerald-700" : storageMode === "browser" ? "bg-amber-50 text-amber-700" : "bg-slate-100 text-slate-500"}`}>{storageMode === "cloud" ? "Cloud saved" : storageMode === "browser" ? "Browser fallback" : "Connecting"}</span></div><input aria-label="Workflow name" className="w-[min(330px,58vw)] bg-transparent text-sm font-black text-slate-950 outline-none focus:text-indigo-700" onChange={(event) => setWorkflowName(event.target.value)} value={workflowName} /></div>
         <SaveIndicator state={saveState} />
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        <button aria-checked={active} className={`hidden items-center gap-2 rounded-lg px-2.5 py-2 text-[10px] font-black uppercase tracking-[0.12em] lg:inline-flex ${active ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`} onClick={() => active ? setActive(false) : activateWorkflow()} role="switch" type="button"><span className={`size-2 rounded-full ${active ? "bg-emerald-500" : "bg-amber-500"}`} />{storageMode === "cloud" ? "Production" : "Preview"} · {active ? "Active" : "Draft"}</button>
+        <button aria-checked={active} className={`inline-flex items-center gap-2 rounded-lg px-2.5 py-2 text-[10px] font-black uppercase tracking-[0.12em] lg:inline-flex ${active ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`} onClick={() => active ? setActive(false) : activateWorkflow()} role="switch" type="button"><span className={`size-2 rounded-full ${active ? "bg-emerald-500" : "bg-amber-500"}`} />{storageMode === "cloud" ? "Production" : "Preview"} · {active ? "Active" : "Draft"}</button>
         <button className="workflow-button-secondary" disabled={testing} onClick={testWorkflow} type="button">{testing ? <RefreshCw className="size-4 animate-spin" /> : <Play className="size-4" />}{testing ? "Running test" : "Test workflow"}</button>
-        <span className="hidden lg:inline-flex"><button className="workflow-button-secondary" onClick={() => persistWorkflow()} type="button"><Save className="size-4" />Save</button></span>
-        <span className="hidden lg:inline-flex"><button className="workflow-button-primary" onClick={activateWorkflow} type="button"><Sparkles className="size-4" />Save & activate</button></span>
+        <span className="inline-flex"><button className="workflow-button-secondary" onClick={() => persistWorkflow()} type="button"><Save className="size-4" />Save</button></span>
+        <span className="inline-flex"><button className="workflow-button-primary" onClick={activateWorkflow} type="button"><Sparkles className="size-4" />Save & activate</button></span>
+        {!fullScreen ? <>
         <button className="workflow-button-secondary hidden lg:inline-flex" onClick={() => setTemplatesOpen(true)} type="button"><Library className="size-4" />Templates</button>
         <button className="workflow-button-secondary hidden lg:inline-flex" onClick={() => setSchedulesOpen(true)} type="button"><Clock3 className="size-4" />Schedules <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[9px] text-amber-700">{scheduleOverview.active}</span></button>
         <button className="workflow-button-secondary hidden lg:inline-flex" onClick={() => setGovernanceOpen(true)} type="button"><ShieldCheck className="size-4" />Governance {governance.pending ? <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[9px] text-amber-700">{governance.pending}</span> : null}</button>
         <button className={`workflow-button-secondary hidden lg:inline-flex ${incidentOverview.open || incidentOverview.critical ? "!border-rose-200 !bg-rose-50 !text-rose-700" : ""}`} onClick={() => setIncidentsOpen(true)} type="button"><AlertCircle className="size-4" />Incidents <span className="rounded bg-white/80 px-1.5 py-0.5 text-[9px]">{incidentOverview.open + incidentOverview.acknowledged}</span></button>
         <button className="workflow-button-primary hidden lg:inline-flex" onClick={() => setEnterpriseOpen(true)} type="button"><Sparkles className="size-4" />Enterprise Hub</button>
-        <div className="relative hidden lg:block"><button aria-label="More workflow actions" className="grid size-10 place-items-center rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50" onClick={() => setMoreOpen((value) => !value)} type="button"><MoreHorizontal className="size-5" /></button>{moreOpen ? <div className="absolute right-0 top-12 z-50 w-56 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl"><MenuAction icon={Copy} label="Duplicate workflow" onClick={() => { setWorkflowName(`${workflowName} copy`); setActive(false); setMoreOpen(false); }} /><MenuAction icon={History} label="Version history" onClick={() => { setVersionsOpen(true); setMoreOpen(false); }} /><MenuAction icon={Upload} label="Import workflow JSON" onClick={() => importRef.current?.click()} /><MenuAction icon={Download} label="Export workflow JSON" onClick={exportWorkflow} /><MenuAction icon={Braces} label="Keyboard shortcuts" onClick={() => { setShortcutsOpen(true); setMoreOpen(false); }} /></div> : null}</div>
+        </> : null}
+        <div className="relative"><button aria-label="More workflow actions" className="grid size-10 place-items-center rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50" onClick={() => setMoreOpen((value) => !value)} type="button"><MoreHorizontal className="size-5" /></button>{moreOpen ? <div className="absolute right-0 top-12 z-50 w-56 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl">{fullScreen ? <><MenuAction icon={Library} label="Templates" onClick={() => { setTemplatesOpen(true); setMoreOpen(false); }} /><MenuAction icon={Clock3} label="Schedules" onClick={() => { setSchedulesOpen(true); setMoreOpen(false); }} /><MenuAction icon={ShieldCheck} label="Governance" onClick={() => { setGovernanceOpen(true); setMoreOpen(false); }} /><MenuAction icon={AlertCircle} label="Incidents" onClick={() => { setIncidentsOpen(true); setMoreOpen(false); }} /><MenuAction icon={Sparkles} label="Enterprise Hub" onClick={() => { setEnterpriseOpen(true); setMoreOpen(false); }} /></> : null}<MenuAction icon={Copy} label="Duplicate workflow" onClick={() => { void createCopy(`${workflowName} copy`, nodes, connections); setMoreOpen(false); }} /><MenuAction icon={History} label="Version history" onClick={() => { setVersionsOpen(true); setMoreOpen(false); }} /><MenuAction icon={Upload} label="Import workflow JSON" onClick={() => importRef.current?.click()} /><MenuAction icon={Download} label="Export workflow JSON" onClick={exportWorkflow} /><MenuAction icon={Braces} label="Keyboard shortcuts" onClick={() => { setShortcutsOpen(true); setMoreOpen(false); }} /></div> : null}</div>
         <input accept="application/json,.json" className="hidden" onChange={(event) => importWorkflow(event.target.files?.[0])} ref={importRef} type="file" />
       </div>
     </header>
@@ -712,7 +708,7 @@ export function WorkflowPlayground() {
       <ReliabilityHealthBar overview={reliability} />
     </> : null}
 
-    <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-3 py-2 lg:hidden"><p className="text-[11px] font-bold text-slate-600">Mobile run view · Open on a laptop to edit the canvas.</p><span className="rounded-lg bg-white px-2 py-1 text-[10px] font-black text-slate-500">READ ONLY</span></div>
+
 
     <div className={`relative flex min-w-0 ${focusMode ? "min-h-0 flex-1" : "min-h-[720px]"}`}>
       {libraryOpen ? <NodeLibrary filteredCatalog={filteredCatalog} onAdd={(item) => addNode(item)} onClose={() => setLibraryOpen(false)} onCustom={() => setPickerContext({ mode: "add" })} query={query} setQuery={setQuery} /> : null}
@@ -720,7 +716,7 @@ export function WorkflowPlayground() {
       <main className="flex min-w-0 flex-1 flex-col bg-slate-100">
         <div className="flex h-12 items-center justify-between gap-2 border-b border-slate-200 bg-white px-3">
           <div className="flex items-center gap-1"><ToolbarButton label="Search and add a node · /" onClick={() => setPickerContext({ mode: "add" })}><Search className="size-4" /></ToolbarButton>{!libraryOpen ? <ToolbarButton label="Pin node library" onClick={() => setLibraryOpen(true)}><LayoutGrid className="size-4" /></ToolbarButton> : null}<ToolbarButton disabled={!past.length} label="Undo · ⌘Z" onClick={undo}><Undo2 className="size-4" /></ToolbarButton><ToolbarButton disabled={!future.length} label="Redo · ⇧⌘Z" onClick={redo}><Redo2 className="size-4" /></ToolbarButton><span className="mx-1 h-5 w-px bg-slate-200" /><ToolbarButton active={snapEnabled} label="Snap to grid" onClick={() => setSnapEnabled((value) => !value)}><LayoutGrid className="size-4" /></ToolbarButton><ToolbarButton active={minimapOpen} label="Toggle minimap" onClick={() => setMinimapOpen((value) => !value)}><MousePointer2 className="size-4" /></ToolbarButton><ToolbarButton active={noteOpen} label="Add sticky note" onClick={() => setNoteOpen((value) => !value)}><StickyNote className="size-4" /></ToolbarButton></div>
-          <div className="flex items-center gap-1.5">{selectedIds.length > 1 ? <span className="hidden rounded-lg bg-indigo-50 px-2 py-1.5 text-[10px] font-black text-indigo-700 sm:inline">{selectedIds.length} selected</span> : null}<button className={`inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-[10px] font-black ${validationIssues.some((issue) => issue.level === "error") ? "border-rose-200 bg-rose-50 text-rose-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`} onClick={() => setValidationOpen((value) => !value)} type="button">{validationIssues.length ? <AlertCircle className="size-3.5" /> : <CheckCircle2 className="size-3.5" />}{validationIssues.length ? `${validationIssues.length} issue${validationIssues.length > 1 ? "s" : ""}` : "Workflow valid"}</button><ToolbarButton label={focusMode ? "Exit focus mode" : "Focus mode"} onClick={() => setFocusMode((value) => { const next = !value; if (next) { setExecutionsOpen(false); setLibraryOpen(false); setInspectorOpen(false); } return next; })}><Maximize2 className="size-4" /></ToolbarButton>{!inspectorOpen && selected ? <ToolbarButton label="Open node settings" onClick={() => setInspectorOpen(true)}><SlidersHorizontal className="size-4" /></ToolbarButton> : null}</div>
+          <div className="flex items-center gap-1.5">{selectedIds.length > 1 ? <span className="hidden rounded-lg bg-indigo-50 px-2 py-1.5 text-[10px] font-black text-indigo-700 sm:inline">{selectedIds.length} selected</span> : null}<button className={`inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-[10px] font-black ${validationIssues.some((issue) => issue.level === "error") ? "border-rose-200 bg-rose-50 text-rose-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`} onClick={() => setValidationOpen((value) => !value)} type="button">{validationIssues.length ? <AlertCircle className="size-3.5" /> : <CheckCircle2 className="size-3.5" />}{validationIssues.length ? `${validationIssues.length} issue${validationIssues.length > 1 ? "s" : ""}` : "Workflow valid"}</button><ToolbarButton label={fullScreen ? "Back to workflows" : focusMode ? "Exit focus mode" : "Focus mode"} onClick={() => fullScreen ? void leaveEditor() : setFocusMode((value) => { const next = !value; if (next) { setExecutionsOpen(false); setLibraryOpen(false); setInspectorOpen(false); } return next; })}><Maximize2 className="size-4" /></ToolbarButton>{!inspectorOpen && selected ? <ToolbarButton label="Open node settings" onClick={() => setInspectorOpen(true)}><SlidersHorizontal className="size-4" /></ToolbarButton> : null}</div>
         </div>
 
         <div className={`relative overflow-hidden ${focusMode ? "min-h-0 flex-1" : "h-[672px]"} ${spacePressed || panning ? "cursor-grabbing" : "cursor-grab"}`} onPointerDown={onCanvasPointerDown} onPointerMove={onCanvasPointerMove} onPointerUp={() => { setDragging(null); setPanning(null); dragHistoryCapturedRef.current = false; }} onWheel={onCanvasWheel} ref={canvasRef} style={{ touchAction: "none" }}>
@@ -732,6 +728,7 @@ export function WorkflowPlayground() {
             {noteOpen ? <div className="absolute left-[760px] top-5 z-10 w-[300px] rotate-[-1deg] rounded-xl border border-amber-300 bg-amber-50 p-3 shadow-sm"><div className="mb-1.5 flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.14em] text-amber-800"><StickyNote className="size-3.5" />Batch operations note<span className="ml-auto rounded bg-amber-100 px-1.5 py-0.5">#team-sync</span></div><textarea aria-label="Workflow sticky note" className="h-12 w-full resize-none bg-transparent text-[11px] font-semibold leading-4 text-amber-950 outline-none" onChange={(event) => setNoteText(event.target.value)} onPointerDown={(event) => event.stopPropagation()} value={noteText} /></div> : null}
             {nodes.map((node) => <CanvasNode connecting={Boolean(connectingFrom)} executionStatus={executionState[node.id] ?? "idle"} key={node.id} node={node} onConnect={() => setConnectingFrom(node.id)} onKeyboardSelect={() => selectNode(node.id, false)} onOpenPicker={() => setPickerContext({ mode: "connect", fromId: node.id })} onPointerDown={(event) => onNodePointerDown(event, node)} selected={selectedIds.includes(node.id)} />)}
           </div>
+          {!nodes.length ? <div className="absolute inset-0 grid place-items-center"><button className="workflow-button-primary" onClick={() => setPickerContext({ mode: "add" })} type="button"><Plus className="size-4" />Add first step</button></div> : null}
           <div className="absolute bottom-3 left-3 z-20 flex items-center overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg"><ToolbarButton label="Fit workflow" onClick={fitToView}><Maximize2 className="size-4" /></ToolbarButton><ToolbarButton label="Zoom out" onClick={() => setZoom((value) => Math.max(0.35, value - 0.1))}><Minus className="size-4" /></ToolbarButton><span className="grid h-9 min-w-12 place-items-center border-x border-slate-200 px-1 text-[10px] font-black text-slate-500">{Math.round(zoom * 100)}%</span><ToolbarButton label="Zoom in" onClick={() => setZoom((value) => Math.min(1.25, value + 0.1))}><Plus className="size-4" /></ToolbarButton></div>
           <div className="absolute bottom-3 left-1/2 hidden -translate-x-1/2 items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[9px] font-bold text-slate-500 shadow-sm sm:flex"><span><KeyCap>Space</KeyCap> drag to pan</span><span><KeyCap>⇧</KeyCap> select many</span><span><KeyCap>/</KeyCap> add node</span></div>
           {minimapOpen ? <MiniMap nodes={nodes} pan={pan} selectedIds={selectedIds} zoom={zoom} /> : null}
@@ -843,7 +840,7 @@ function Connections({ connections, executionState, nodeMap, onInsert }: { conne
 function CanvasNode({ connecting, executionStatus, node, onConnect, onKeyboardSelect, onOpenPicker, onPointerDown, selected }: { connecting: boolean; executionStatus: ExecutionNodeStatus; node: WorkflowNode; onConnect: () => void; onKeyboardSelect: () => void; onOpenPicker: () => void; onPointerDown: (event: ReactPointerEvent<HTMLDivElement>) => void; selected: boolean }) {
   const colors = colorByKind[node.kind];
   const statusClass = executionStatus === "success" ? "border-emerald-500 ring-4 ring-emerald-100" : executionStatus === "running" ? "border-indigo-500 ring-4 ring-indigo-100" : executionStatus === "failed" ? "border-rose-500 ring-4 ring-rose-100" : selected ? "border-indigo-500 ring-4 ring-indigo-100" : colors.border;
-  return <div aria-label={`${node.title} workflow node`} className={`group absolute h-[112px] w-[188px] select-none rounded-2xl border-2 bg-white shadow-[0_12px_30px_-18px_rgba(15,23,42,0.55)] transition-[box-shadow,border-color,transform] hover:-translate-y-0.5 hover:shadow-[0_18px_36px_-18px_rgba(15,23,42,0.5)] ${statusClass} ${connecting ? "cursor-crosshair" : "cursor-grab active:cursor-grabbing"}`} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onKeyboardSelect(); } }} onPointerDown={onPointerDown} role="button" style={{ left: node.x, top: node.y }} tabIndex={0}><div className="flex h-full flex-col p-3"><div className="flex items-start gap-2.5"><span className={`grid size-8 shrink-0 place-items-center rounded-lg ${colors.soft} ${colors.icon}`}><NodeIcon kind={node.kind} /></span><span className="min-w-0 flex-1"><span className="block truncate text-[11px] font-black text-slate-950">{node.title}</span><span className="mt-0.5 block truncate text-[9px] font-semibold text-slate-400">{node.subtitle}</span></span><GripVertical className="size-3.5 text-slate-300" /></div><div className="mt-auto flex items-center justify-between border-t border-slate-100 pt-2 text-[8px] font-black uppercase tracking-[0.1em]"><span className={executionStatus === "running" ? "text-indigo-700" : executionStatus === "success" ? "text-emerald-700" : executionStatus === "failed" ? "text-rose-700" : "text-slate-400"}><span className={`mr-1.5 inline-block size-1.5 rounded-full ${executionStatus === "running" ? "animate-pulse bg-indigo-500" : executionStatus === "success" ? "bg-emerald-500" : executionStatus === "failed" ? "bg-rose-500" : colors.dot}`} />{executionStatus === "idle" ? "Ready" : executionStatus}</span><span className="text-slate-400">{node.kind === "trigger" ? "124 runs/hr" : node.kind === "condition" ? "14ms" : "Configured"}</span></div></div>{node.kind !== "trigger" ? <span className="absolute -left-2 top-1/2 size-4 -translate-y-1/2 rounded-full border-[3px] border-white bg-slate-400 shadow-sm" /> : null}<button aria-label={`Connect from ${node.title}`} className={`absolute -right-2 top-1/2 size-4 -translate-y-1/2 rounded-full border-[3px] border-white shadow-sm hover:scale-125 ${connecting ? "animate-pulse bg-indigo-600" : "bg-slate-500 hover:bg-indigo-500"}`} onClick={(event) => { event.stopPropagation(); onConnect(); }} onPointerDown={(event) => event.stopPropagation()} type="button" /><button aria-label={`Add next node after ${node.title}`} className="absolute -bottom-3 left-1/2 hidden h-6 -translate-x-1/2 items-center gap-1 rounded-full border border-indigo-200 bg-white px-2 text-[8px] font-black text-indigo-700 shadow-sm group-hover:flex" onClick={(event) => { event.stopPropagation(); onOpenPicker(); }} onPointerDown={(event) => event.stopPropagation()} type="button"><Plus className="size-3" />Next</button></div>;
+  return <div aria-label={`${node.title} workflow node`} className={`group absolute h-[112px] w-[188px] select-none rounded-2xl border-2 bg-white shadow-[0_12px_30px_-18px_rgba(15,23,42,0.55)] transition-[box-shadow,border-color,transform] hover:-translate-y-0.5 hover:shadow-[0_18px_36px_-18px_rgba(15,23,42,0.5)] ${statusClass} ${connecting ? "cursor-crosshair" : "cursor-grab active:cursor-grabbing"}`} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onKeyboardSelect(); } }} onPointerDown={onPointerDown} role="button" style={{ left: node.x, top: node.y }} tabIndex={0}><div className="flex h-full flex-col p-3"><div className="flex items-start gap-2.5"><span className={`grid size-8 shrink-0 place-items-center rounded-lg ${colors.soft} ${colors.icon}`}><NodeIcon kind={node.kind} /></span><span className="min-w-0 flex-1"><span className="block truncate text-[11px] font-black text-slate-950">{node.title}</span><span className="mt-0.5 block truncate text-[9px] font-semibold text-slate-400">{node.subtitle}</span></span><GripVertical className="size-3.5 text-slate-300" /></div><div className="mt-auto flex items-center justify-between border-t border-slate-100 pt-2 text-[8px] font-black uppercase tracking-[0.1em]"><span className={executionStatus === "running" ? "text-indigo-700" : executionStatus === "success" ? "text-emerald-700" : executionStatus === "failed" ? "text-rose-700" : "text-slate-400"}><span className={`mr-1.5 inline-block size-1.5 rounded-full ${executionStatus === "running" ? "animate-pulse bg-indigo-500" : executionStatus === "success" ? "bg-emerald-500" : executionStatus === "failed" ? "bg-rose-500" : colors.dot}`} />{executionStatus === "idle" ? "Ready" : executionStatus}</span><span className="text-slate-400">{node.kind === "trigger" ? "Trigger" : node.kind === "condition" ? "Rule" : "Action"}</span></div></div>{node.kind !== "trigger" ? <span className="absolute -left-2 top-1/2 size-4 -translate-y-1/2 rounded-full border-[3px] border-white bg-slate-400 shadow-sm" /> : null}<button aria-label={`Connect from ${node.title}`} className={`absolute -right-2 top-1/2 size-4 -translate-y-1/2 rounded-full border-[3px] border-white shadow-sm hover:scale-125 ${connecting ? "animate-pulse bg-indigo-600" : "bg-slate-500 hover:bg-indigo-500"}`} onClick={(event) => { event.stopPropagation(); onConnect(); }} onPointerDown={(event) => event.stopPropagation()} type="button" /><button aria-label={`Add next node after ${node.title}`} className="absolute -bottom-3 left-1/2 hidden h-6 -translate-x-1/2 items-center gap-1 rounded-full border border-indigo-200 bg-white px-2 text-[8px] font-black text-indigo-700 shadow-sm group-hover:flex" onClick={(event) => { event.stopPropagation(); onOpenPicker(); }} onPointerDown={(event) => event.stopPropagation()} type="button"><Plus className="size-3" />Next</button></div>;
 }
 
 function Inspector({ node, onChange, onClose, onDelete, onDuplicate, onRename, onTab, onTest, salesPeople, status, tab }: { node: WorkflowNode; onChange: (key: string, value: ConfigValue) => void; onClose: () => void; onDelete: () => void; onDuplicate: () => void; onRename: (title: string) => void; onTab: (tab: InspectorTab) => void; onTest: () => void; salesPeople: WorkflowSalesPerson[]; status: ExecutionNodeStatus; tab: InspectorTab }) {

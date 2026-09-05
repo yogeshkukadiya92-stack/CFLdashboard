@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { AUTH_COOKIE_NAME, getAdminName, verifyAuthToken } from "@/lib/auth";
 import { getAppState } from "@/lib/db";
 import { initialConnections, initialNodes, type Connection, type WorkflowNode, type WorkflowSalesPerson } from "@/lib/workflow-studio";
-import { getWorkflow, getWorkflowEnterpriseOverview, getWorkflowGovernanceOverview, getWorkflowIncidentOverview, getWorkflowReliabilityOverview, getWorkflowScheduleOverview, listWorkflowExecutions, listWorkflowVersions, PRIMARY_WORKFLOW_ID, saveWorkflow } from "@/lib/workflow-db";
+import { listWorkflowLibrary, getWorkflow, getWorkflowEnterpriseOverview, getWorkflowGovernanceOverview, getWorkflowIncidentOverview, getWorkflowReliabilityOverview, getWorkflowScheduleOverview, listWorkflowExecutions, listWorkflowVersions, PRIMARY_WORKFLOW_ID, saveWorkflow } from "@/lib/workflow-db";
 import { getWhatsAppAutomationOverview } from "@/lib/whatsapp-automation";
 import { getAttendanceAutomationOverview } from "@/lib/attendance-automation";
 import { getPaymentAutomationOverview } from "@/lib/payment-automation";
@@ -29,19 +29,26 @@ function validGraph(nodes: unknown, connections: unknown): nodes is WorkflowNode
 export async function GET(request: NextRequest) {
   if (!(await isAdmin(request))) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   try {
+    if (request.nextUrl.searchParams.get("view") === "library") {
+      const offset = Math.max(0, Number(request.nextUrl.searchParams.get("offset")) || 0);
+      const status = request.nextUrl.searchParams.get("status") || "all";
+      return NextResponse.json(await listWorkflowLibrary(Math.floor(offset), request.nextUrl.searchParams.get("q") || "", ["active", "draft"].includes(status) ? status : "all"));
+    }
+    const workflowId = request.nextUrl.searchParams.get("id") || PRIMARY_WORKFLOW_ID;
     const [workflow, executions, state, whatsapp, paymentEvents, versions, reliability, schedules, governance, incidents, enterprise] = await Promise.all([
-      getWorkflow(),
-      listWorkflowExecutions(),
+      getWorkflow(workflowId),
+      listWorkflowExecutions(workflowId),
       getAppState(),
       getWhatsAppAutomationOverview(),
       getPaymentAutomationOverview([]),
-      listWorkflowVersions(),
-      getWorkflowReliabilityOverview(),
-      getWorkflowScheduleOverview(),
-      getWorkflowGovernanceOverview(),
-      getWorkflowIncidentOverview(),
-      getWorkflowEnterpriseOverview()
+      listWorkflowVersions(workflowId),
+      getWorkflowReliabilityOverview(workflowId),
+      getWorkflowScheduleOverview(new Date(), workflowId),
+      getWorkflowGovernanceOverview(workflowId),
+      getWorkflowIncidentOverview(workflowId),
+      getWorkflowEnterpriseOverview(workflowId)
     ]);
+    if (!workflow && request.nextUrl.searchParams.has("id")) return NextResponse.json({ error: "Workflow not found." }, { status: 404 });
     const people = Array.isArray(state?.salesPeople) ? state.salesPeople as Array<Record<string, unknown>> : [];
     const leads = Array.isArray(state?.leads) ? state.leads as Array<Record<string, unknown>> : [];
     const salesPeople: WorkflowSalesPerson[] = people.map((person) => {

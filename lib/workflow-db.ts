@@ -54,6 +54,22 @@ function mapWorkflow(row: Record<string, unknown>): PersistedWorkflow {
   };
 }
 
+export async function listWorkflowLibrary(offset = 0, query = "", status = "all") {
+  const db = await database();
+  const result = await db.query(`SELECT id, name, status, version, updated_at,
+    jsonb_array_length(nodes) AS node_count
+    FROM cfl_automation_workflows
+    WHERE ($1 = '' OR strpos(lower(name), lower($1)) > 0)
+      AND ($2 = 'all' OR status = $2)
+    ORDER BY updated_at DESC, id ASC LIMIT 51 OFFSET $3`, [query.slice(0, 160), status, offset]);
+  return {
+    workflows: result.rows.slice(0, 50).map(row => ({ id: String(row.id), name: String(row.name),
+      status: row.status === "active" ? "active" : "draft", version: Number(row.version),
+      nodeCount: Number(row.node_count), updatedAt: new Date(row.updated_at).toISOString() })),
+    hasMore: result.rows.length > 50
+  };
+}
+
 export async function getWorkflow(workflowId = PRIMARY_WORKFLOW_ID) {
   const db = await database();
   const result = await db.query(`SELECT * FROM cfl_automation_workflows WHERE id=$1 LIMIT 1`, [workflowId]);
@@ -349,11 +365,11 @@ export async function finishWorkflowSchedule(input: { workflowId: string; nodeId
   await db.query(`UPDATE cfl_automation_schedule_runs SET status=$4,execution_id=$5,error_message=$6,finished_at=NOW() WHERE workflow_id=$1 AND node_id=$2 AND scheduled_for=$3`, [input.workflowId, input.nodeId, input.scheduledFor, input.success ? "success" : "failed", input.executionId || null, input.error || null]);
 }
 
-export async function getWorkflowScheduleOverview(now = new Date()) {
+export async function getWorkflowScheduleOverview(now = new Date(), workflowId?: string) {
   const db = await database();
   const [workflows, history] = await Promise.all([
-    db.query(`SELECT * FROM cfl_automation_workflows WHERE status='active' ORDER BY updated_at DESC LIMIT 50`),
-    db.query(`SELECT workflow_id,node_id,scheduled_for,status,execution_id,error_message,created_at FROM cfl_automation_schedule_runs ORDER BY created_at DESC LIMIT 20`)
+    db.query(`SELECT * FROM cfl_automation_workflows WHERE status='active' AND ($1::text IS NULL OR id=$1) ORDER BY updated_at DESC LIMIT 50`, [workflowId ?? null]),
+    db.query(`SELECT workflow_id,node_id,scheduled_for,status,execution_id,error_message,created_at FROM cfl_automation_schedule_runs WHERE ($1::text IS NULL OR workflow_id=$1) ORDER BY created_at DESC LIMIT 20`, [workflowId ?? null])
   ]);
   const schedules = workflows.rows.flatMap((row) => { const workflow = mapWorkflow(row); return workflow.nodes.flatMap((node) => { const definition = scheduleDefinition(node); return definition ? [{ workflowId: workflow.id, workflowName: workflow.name, nodeId: node.id, title: node.title, frequency: definition.frequency, timezone: definition.timezone, nextRunAt: nextScheduleAt(node, now) }] : []; }); }).slice(0, 100);
   return { active: schedules.length, nextRunAt: schedules.map((item) => item.nextRunAt).filter((value): value is string => Boolean(value)).sort()[0] || null, schedules, history: history.rows.map((row) => ({ workflowId: String(row.workflow_id), nodeId: String(row.node_id), scheduledFor: new Date(row.scheduled_for).toISOString(), status: String(row.status), executionId: String(row.execution_id || ""), error: String(row.error_message || ""), createdAt: new Date(row.created_at).toISOString() })) };
