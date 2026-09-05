@@ -44,6 +44,9 @@ import {
   CircleDollarSign,
   Clock3,
   ShieldCheck,
+  Bot,
+  Database,
+  SendHorizontal,
 } from "lucide-react";
 import {
   type PointerEvent as ReactPointerEvent,
@@ -110,7 +113,7 @@ import { WorkflowEnterpriseHub } from "@/components/workflow-enterprise-hub";
 type SaveState = "saved" | "saving" | "unsaved";
 
 function NodeIcon({ kind }: { kind: NodeKind }) {
-  const icons = { trigger: Zap, condition: GitBranch, transform: Braces, crm: UserPlus, workshop: Workflow, attendance: UsersRound, message: MessageCircle, payment: CircleDollarSign, delay: Clock3, webhook: Webhook };
+  const icons = { trigger: Zap, condition: GitBranch, transform: Braces, crm: UserPlus, workshop: Workflow, attendance: UsersRound, message: MessageCircle, payment: CircleDollarSign, delay: Clock3, webhook: Webhook, ai: Bot, data: Database, telegram: SendHorizontal };
   const Icon = icons[kind];
   return <Icon className="size-4" />;
 }

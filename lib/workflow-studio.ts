@@ -12,6 +12,7 @@ import {
   ListFilter,
   MessageCircle,
   RefreshCw,
+  Search,
   Send,
   Tag,
   UserPlus,
@@ -19,9 +20,12 @@ import {
   Webhook,
   Workflow,
   Zap,
+  Bot,
+  Database,
+  SendHorizontal,
 } from "lucide-react";
 
-export type NodeKind = "trigger" | "condition" | "transform" | "crm" | "workshop" | "attendance" | "message" | "payment" | "delay" | "webhook";
+export type NodeKind = "trigger" | "condition" | "transform" | "crm" | "workshop" | "attendance" | "message" | "payment" | "delay" | "webhook" | "ai" | "data" | "telegram";
 export type RunStatus = "success" | "failed" | "running";
 export type ExecutionNodeStatus = "idle" | RunStatus;
 export type ConfigValue = unknown;
@@ -131,10 +135,20 @@ export const catalog: Array<{ category: string; color: string; items: CatalogIte
     { kind: "crm", title: "Reassign inactive lead", subtitle: "Workload recovery", icon: RefreshCw },
   ] },
   { category: "Workshop", color: "text-sky-700", items: [
+    { kind: "workshop", title: "Find waiting registration", subtitle: "Match existing or new registration", icon: Search },
+    { kind: "workshop", title: "Confirm waiting registration", subtitle: "Attendance-qualified promotion", icon: Check },
     { kind: "workshop", title: "Assign workshop", subtitle: "Workshop action", icon: Workflow },
     { kind: "workshop", title: "Assign batch", subtitle: "Batch action", icon: LayoutGrid },
     { kind: "workshop", title: "Add to waiting list", subtitle: "Capacity action", icon: UsersRound },
     { kind: "workshop", title: "Move to another batch", subtitle: "Batch transfer action", icon: RefreshCw },
+  ] },
+  { category: "AI & data", color: "text-fuchsia-700", items: [
+    { kind: "data", title: "Query dashboard data", subtitle: "Permission-aware read-only lookup", icon: Database },
+    { kind: "ai", title: "AI data agent", subtitle: "Understand question and compose answer", icon: Bot },
+  ] },
+  { category: "Telegram", color: "text-blue-700", items: [
+    { kind: "telegram", title: "Telegram message received", subtitle: "Bot command trigger", icon: SendHorizontal },
+    { kind: "telegram", title: "Send Telegram reply", subtitle: "Reply to authorized chat", icon: SendHorizontal },
   ] },
   { category: "Attendance", color: "text-teal-700", items: [
     { kind: "attendance", title: "Mark attendance", subtitle: "Attendance action", icon: Check },
@@ -206,6 +220,9 @@ export const colorByKind: Record<NodeKind, { border: string; icon: string; soft:
   payment: { border: "border-rose-400", icon: "text-rose-700", soft: "bg-rose-50", dot: "bg-rose-500" },
   delay: { border: "border-amber-400", icon: "text-amber-700", soft: "bg-amber-50", dot: "bg-amber-500" },
   webhook: { border: "border-slate-400", icon: "text-slate-700", soft: "bg-slate-100", dot: "bg-slate-500" },
+  ai: { border: "border-fuchsia-400", icon: "text-fuchsia-700", soft: "bg-fuchsia-50", dot: "bg-fuchsia-500" },
+  data: { border: "border-cyan-500", icon: "text-cyan-700", soft: "bg-cyan-50", dot: "bg-cyan-500" },
+  telegram: { border: "border-blue-400", icon: "text-blue-700", soft: "bg-blue-50", dot: "bg-blue-500" },
 };
 
 export function defaultConfigFor(kind: NodeKind): Record<string, ConfigValue> {
@@ -219,6 +236,9 @@ export function defaultConfigFor(kind: NodeKind): Record<string, ConfigValue> {
   if (kind === "delay") return { amount: 10, unit: "Minutes", businessHours: true };
   if (kind === "trigger") return { event: "New public registration", form: "All active forms", deduplicate: true };
   if (kind === "webhook") return { method: "POST", url: "https://", authentication: "Stored credential" };
+  if (kind === "data") return { scope: "Dashboard summary", access: "Read only", maxRows: 25, redactSensitive: true };
+  if (kind === "ai") return { provider: "Local Ollama", model: "From server settings", instruction: "Answer only from the connected dashboard data.", language: "Auto detect", citations: true };
+  if (kind === "telegram") return { credential: "Telegram bot · Primary", chatPolicy: "Approved chats only", message: "{{ai.answer}}" };
   return { action: "Update record", continueOnError: false };
 }
 
@@ -248,6 +268,10 @@ export function defaultConfigForItem(item: Pick<CatalogItem, "kind" | "title">) 
   if (item.title === "Reassign inactive lead") return { action: "Reassign lead", inactivityHours: 24, strategy: "Least active leads", preserveHistory: true };
   if (item.title === "Scheduled time") return { scheduleEnabled: true, frequency: "daily", time: "09:00", timezone: "Asia/Kolkata", weekdays: ["Mon", "Tue", "Wed", "Thu", "Fri"] };
   if (item.title === "Schedule for date") return { scheduleEnabled: true, frequency: "once", scheduledAt: "", timezone: "Asia/Kolkata" };
+  if (item.title === "Find waiting registration") return { ...config, workshop: "Healthy Forever", match: "Mobile number", registrationMode: "Existing or new", status: "Waiting only" };
+  if (item.title === "Confirm waiting registration") return { ...config, workshop: "Healthy Forever", capacity: "Respect capacity", action: "Confirm registration", confirmationSource: "Attendance" };
+  if (item.title === "Telegram message received") return { ...config, event: "Telegram message received", chatPolicy: "Approved chats only", deduplicate: true };
+  if (item.title === "Send Telegram reply") return { ...config, message: "{{ai.answer}}", parseMode: "Plain text", splitLongMessages: true };
   return config;
 }
 

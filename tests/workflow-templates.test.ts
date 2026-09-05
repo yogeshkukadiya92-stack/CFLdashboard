@@ -28,3 +28,19 @@ test("payment and attendance recipe nodes are recognized as live event triggers"
   assert.equal(workflowMatchesTriggers(payment.nodes, ["Payment failed"]), true);
   assert.equal(workflowMatchesTriggers(attendance.nodes, ["Attendance submitted"]), true);
 });
+
+test("advanced attendance and Telegram AI recipes include their safety gates", () => {
+  const attendance = workflowTemplates.find((item) => item.id === "attendance-cross-workshop-confirmation")!;
+  const telegram = workflowTemplates.find((item) => item.id === "telegram-ai-data-assistant")!;
+  assert.deepEqual(attendance.nodes.map((item) => item.title), [
+    "Attendance submitted",
+    "Check session attendance count",
+    "Find waiting registration",
+    "Confirm waiting registration",
+    "Send confirmation notice"
+  ]);
+  assert.equal(attendance.nodes.find((item) => item.id === "waiting")?.config.registrationMode, "Existing or new");
+  assert.equal(telegram.nodes.find((item) => item.id === "guard")?.config.operator, "Is approved");
+  assert.equal(telegram.nodes.find((item) => item.id === "query")?.config.access, "Read only");
+  assert.equal(telegram.nodes.find((item) => item.id === "query")?.config.redactSensitive, true);
+});

@@ -46,10 +46,12 @@ function conditionDetail(node: WorkflowNode, registration: RegistrationForAssign
   const actual = field.includes("city") ? String(registration.city ?? "")
     : field.includes("date") ? String(registration.createdAt ?? "")
     : field.includes("mobile") ? String((registration as Record<string, unknown>).mobile ?? "")
+    : field.includes("telegram chat") ? String((registration as Record<string, unknown>).telegramChatId ?? "")
     : "";
   const operator = String(node.config.operator ?? "Equals");
   const matched = operator === "Contains" ? actual.toLowerCase().includes(expected)
     : operator === "Is valid" ? actual.replace(/\D/g, "").slice(-10).length === 10
+    : operator === "Is approved" ? Boolean((registration as Record<string, unknown>).telegramChatApproved)
     : !expected || actual.toLowerCase() === expected;
   return { matched, detail: `${field || "condition"} ${matched ? "matched" : "did not match"}` };
 }
@@ -74,7 +76,7 @@ export function executeWorkflow(input: {
     let detail = "Configuration validated.";
     let output: Record<string, unknown> = {};
     let stepStatus: ExecutionStep["status"] = "success";
-    if (node.kind === "trigger") detail = `Accepted ${String(node.config.event ?? "workflow event")}.`;
+    if (node.kind === "trigger" || (node.kind === "telegram" && node.title.toLowerCase().includes("received"))) detail = `Accepted ${String(node.config.event ?? "workflow event")}.`;
     else if (node.kind === "condition") {
       const result = conditionDetail(node, input.registration);
       detail = result.detail;
@@ -121,6 +123,21 @@ export function executeWorkflow(input: {
     }
     else if (node.kind === "webhook") {
       detail = input.mode === "production" ? "HTTP action requires an approved outbound connector and was not dispatched inline." : "Endpoint and authentication settings validated; request suppressed in test mode.";
+      if (input.mode === "production") stepStatus = "skipped";
+    }
+    else if (node.kind === "data") {
+      detail = `${String(node.config.scope ?? "Dashboard summary")} query validated as read-only; sensitive fields ${node.config.redactSensitive === false ? "are visible to the authorized agent" : "will be redacted"}.`;
+      output = { scope: node.config.scope ?? "Dashboard summary", access: "read-only", maxRows: node.config.maxRows ?? 25, redacted: node.config.redactSensitive !== false };
+      if (input.mode === "production") stepStatus = "skipped";
+    }
+    else if (node.kind === "ai") {
+      detail = input.mode === "production" ? "AI request registered for asynchronous grounded generation." : `${String(node.config.provider ?? "Local Ollama")} agent configuration validated; generation suppressed in test mode.`;
+      output = { provider: node.config.provider ?? "Local Ollama", grounded: true, language: node.config.language ?? "Auto detect" };
+      if (input.mode === "production") stepStatus = "skipped";
+    }
+    else if (node.kind === "telegram") {
+      detail = input.mode === "production" ? "Telegram delivery registered for the approved bot connector." : "Telegram bot and approved-chat policy validated; delivery suppressed in test mode.";
+      output = { chatPolicy: node.config.chatPolicy ?? "Approved chats only", messageMapping: node.config.message ?? "{{ai.answer}}" };
       if (input.mode === "production") stepStatus = "skipped";
     }
     else if (node.kind === "crm") detail = `CRM action ${String(node.config.action ?? node.title)} validated.`;
