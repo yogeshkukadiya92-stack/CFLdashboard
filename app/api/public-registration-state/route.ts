@@ -98,12 +98,11 @@ export async function POST(request: Request) {
     const database = getDbPool();
     if (!database) return NextResponse.json({ error: "Database is not configured." }, { status: 500 });
     await ensureRegistrationRecordsTable();
-    const workflowAssignment = await getActiveWorkflowAssignmentSettings(sanitizedRegistration.workshopId).catch(() => null);
     const client = await database.connect();
     let released = false;
     try {
       await client.query("BEGIN");
-      const selected = await client.query(`SELECT forms, workshops, leads, sales_people, attendance_entries FROM app_state WHERE id = 1`);
+      const selected = await client.query(`SELECT forms, workshops, attendance_entries FROM app_state WHERE id = 1`);
       const state = selected.rows[0] ?? {};
       const forms = Array.isArray(state.forms) ? state.forms as Array<Record<string, unknown>> : [];
       const form = forms.find((value) => {
@@ -293,25 +292,6 @@ export async function POST(request: Request) {
         return String(workshop.id ?? "") === sanitizedRegistration.workshopId
           || String(workshop.name ?? "").trim().toLowerCase() === workshopTitle.toLowerCase();
       }) as { assignedSalesPersonId?: unknown; leadAssignmentRules?: WorkshopLeadAssignmentRule[]; transferLeadToCrm?: unknown } | undefined;
-      const assignmentRules = linkedWorkshop?.leadAssignmentRules?.length ? linkedWorkshop.leadAssignmentRules : workflowAssignment?.rules;
-      const salesPeople = Array.isArray(state.sales_people) ? state.sales_people : [];
-      const currentLeads = Array.isArray(state.leads) ? state.leads : [];
-      const assignedSalesPersonId = resolveWorkshopSalesPersonId(
-        finalRegistration,
-        assignmentRules,
-        linkedWorkshop?.assignedSalesPersonId || workflowAssignment?.defaultSalesPersonId,
-        salesPeople as Array<Record<string, unknown>>,
-        currentLeads as Array<Record<string, unknown>>,
-        workflowAssignment?.fallbackStrategy ?? "unassigned"
-      );
-      const leads = linkedWorkshop?.transferLeadToCrm === true
-        ? upsertLeadFromRegistration(
-            currentLeads,
-            finalRegistration,
-            salesPeople,
-            assignedSalesPersonId
-          )
-        : currentLeads;
 
       await upsertRegistrationRecord(client, finalRegistration as unknown as Record<string, unknown>);
       await client.query("COMMIT");
@@ -325,7 +305,40 @@ export async function POST(request: Request) {
       try {
         await upsertLiveRegistration(finalRegistration as unknown as Record<string, unknown>);
         if (linkedWorkshop?.transferLeadToCrm === true) {
-          await database.query(`UPDATE app_state SET leads = $1::jsonb, updated_at = NOW() WHERE id = 1`, [JSON.stringify(leads)]);
+          const workflowAssignment = await getActiveWorkflowAssignmentSettings(sanitizedRegistration.workshopId).catch(() => null);
+          const crmClient = await database.connect();
+          try {
+            await crmClient.query("BEGIN");
+            const crmResult = await crmClient.query(`SELECT leads, sales_people FROM app_state WHERE id = 1 FOR UPDATE`);
+            const crmState = crmResult.rows[0] ?? {};
+            const assignmentRules = linkedWorkshop?.leadAssignmentRules?.length ? linkedWorkshop.leadAssignmentRules : workflowAssignment?.rules;
+            const salesPeople = Array.isArray(crmState.sales_people) ? crmState.sales_people : [];
+            const currentLeads = Array.isArray(crmState.leads) ? crmState.leads : [];
+            const assignedSalesPersonId = resolveWorkshopSalesPersonId(
+              finalRegistration,
+              assignmentRules,
+              linkedWorkshop?.assignedSalesPersonId || workflowAssignment?.defaultSalesPersonId,
+              salesPeople as Array<Record<string, unknown>>,
+              currentLeads as Array<Record<string, unknown>>,
+              workflowAssignment?.fallbackStrategy ?? "unassigned"
+            );
+            const leads = linkedWorkshop?.transferLeadToCrm === true
+              ? upsertLeadFromRegistration(
+                  currentLeads,
+                  finalRegistration,
+                  salesPeople,
+                  assignedSalesPersonId
+                )
+              : currentLeads;
+
+            await crmClient.query(`UPDATE app_state SET leads = $1::jsonb, updated_at = NOW() WHERE id = 1`, [JSON.stringify(leads)]);
+            await crmClient.query("COMMIT");
+          } catch (error) {
+            await crmClient.query("ROLLBACK");
+            throw error;
+          } finally {
+            crmClient.release();
+          }
         }
       } catch {
         // The registration is durable. CRM projection failures must not turn a

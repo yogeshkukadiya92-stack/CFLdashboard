@@ -275,6 +275,50 @@ export async function beginPersistenceTransaction<Row extends Record<string, unk
   }
 }
 
+let analyticsTablePromise: Promise<unknown> | null = null;
+
+export async function ensureFormAnalyticsTable() {
+  const database = getDbPool();
+  if (!database) return;
+  if (!analyticsTablePromise) {
+    analyticsTablePromise = database.query(`CREATE TABLE IF NOT EXISTS cfl_form_analytics (
+      form_id TEXT PRIMARY KEY,
+      payload JSONB NOT NULL
+    )`).catch((error) => {
+      analyticsTablePromise = null;
+      throw error;
+    });
+  }
+  await analyticsTablePromise;
+}
+
+export async function recordFormAnalyticsEvent(input: {
+  formId: string; workshopId: string; workshopSlug: string; event: string; fieldId: string;
+}) {
+  const database = getDbPool();
+  if (!database) return;
+  await ensureFormAnalyticsTable();
+  // Seed historical totals once; each event updates only its own form row.
+  // PostgreSQL serializes concurrent increments without a read/overwrite race.
+  await database.query(`INSERT INTO cfl_form_analytics (form_id, payload)
+    SELECT $1, COALESCE(
+      (SELECT item FROM app_state, jsonb_array_elements(form_analytics) item
+        WHERE id = 1 AND item->>'formId' = $1 LIMIT 1),
+      jsonb_build_object('formId', $1::text, 'views', 0, 'starts', 0,
+        'completions', 0, 'dropOffByField', '{}'::jsonb))
+    WHERE NOT EXISTS (SELECT 1 FROM cfl_form_analytics WHERE form_id = $1)
+    ON CONFLICT (form_id) DO NOTHING`, [input.formId]);
+  const counter = input.event === "view" ? "views" : input.event === "start" ? "starts" : "completions";
+  await database.query(`UPDATE cfl_form_analytics SET payload =
+    (CASE WHEN $2 = 'drop_off' THEN
+      jsonb_set(payload, '{dropOffByField}', COALESCE(payload->'dropOffByField', '{}'::jsonb) ||
+        CASE WHEN $3 = '' THEN '{}'::jsonb ELSE
+          jsonb_build_object($3::text, COALESCE((payload->'dropOffByField'->>$3)::bigint, 0) + 1) END)
+    ELSE jsonb_set(payload, ARRAY[$4::text], to_jsonb(COALESCE((payload->>$4)::bigint, 0) + 1)) END)
+    || jsonb_build_object('workshopId', $5::text, 'workshopSlug', $6::text, 'updatedAt', NOW())
+    WHERE form_id = $1`, [input.formId, input.event, input.fieldId, counter, input.workshopId, input.workshopSlug]);
+}
+
 export async function getAppState() {
   const client = getDbPool();
   if (!client) return null;
@@ -314,6 +358,11 @@ export async function getAppState() {
     result = await readState();
   }
   if (!result.rows[0]) return emptyAppState;
+  await ensureFormAnalyticsTable();
+  const analytics = await client.query(`SELECT payload FROM cfl_form_analytics`);
+  const analyticsByForm = new Map((result.rows[0].formAnalytics ?? []).map((record: { formId: string }) => [record.formId, record]));
+  for (const row of analytics.rows) analyticsByForm.set(row.payload.formId, row.payload);
+  result.rows[0].formAnalytics = [...analyticsByForm.values()];
   try {
     const registrations = await readRegistrationRecords(client);
     return registrations.length ? { ...result.rows[0], registrations } : result.rows[0];

@@ -1,5 +1,4 @@
-import { getAppState, isDbEnabled, saveAppState } from "@/lib/db";
-import type { FormAnalyticsRecord } from "@/lib/types";
+import { isDbEnabled, recordFormAnalyticsEvent } from "@/lib/db";
 import { NextResponse } from "next/server";
 
 const analyticsEvents = new Set(["view", "start", "complete", "drop_off"]);
@@ -25,33 +24,7 @@ export async function POST(request: Request) {
     const workshopId = cleanIdentifier(body?.workshopId, formId);
     const workshopSlug = cleanIdentifier(body?.workshopSlug, workshopId);
     const fieldId = cleanIdentifier(body?.fieldId, "");
-    const state = await getAppState();
-    const current = Array.isArray(state?.formAnalytics) ? state.formAnalytics as FormAnalyticsRecord[] : [];
-    const existing = current.find((item) => item.formId === formId);
-    const record: FormAnalyticsRecord = existing
-      ? { ...existing, dropOffByField: { ...(existing.dropOffByField ?? {}) } }
-      : {
-          completions: 0,
-          dropOffByField: {},
-          formId,
-          starts: 0,
-          updatedAt: new Date().toISOString(),
-          views: 0,
-          workshopId,
-          workshopSlug
-        };
-
-    if (event === "view") record.views += 1;
-    if (event === "start") record.starts += 1;
-    if (event === "complete") record.completions += 1;
-    if (event === "drop_off" && fieldId) {
-      record.dropOffByField[fieldId] = (record.dropOffByField[fieldId] ?? 0) + 1;
-    }
-    record.updatedAt = new Date().toISOString();
-    record.workshopId = workshopId;
-    record.workshopSlug = workshopSlug;
-
-    await saveAppState({ formAnalytics: [record, ...current.filter((item) => item.formId !== formId)].slice(0, 1000) });
+    await recordFormAnalyticsEvent({ formId, workshopId, workshopSlug, fieldId, event });
     return NextResponse.json({ ok: true, dbEnabled: true });
   } catch {
     return NextResponse.json({ error: "Failed to save analytics event" }, { status: 500 });
