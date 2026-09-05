@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { parseWorkflowImport, workflowTemplates } from "../lib/workflow-templates.ts";
 import { workflowMatchesTriggers } from "../lib/workflow-db.ts";
+import { validateWorkflow } from "../lib/workflow-studio.ts";
 
 test("every bundled workflow recipe has a valid graph", () => {
   for (const template of workflowTemplates) {
@@ -41,6 +42,7 @@ test("advanced attendance and Telegram AI recipes include their safety gates", (
     "Send confirmation message"
   ]);
   assert.equal(attendance.nodes.find((item) => item.id === "waiting")?.config.registrationMode, "Existing or new");
+  assert.deepEqual(validateWorkflow(attendance.nodes, attendance.connections), []);
   assert.equal(telegram.nodes.find((item) => item.id === "guard")?.config.operator, "Is approved");
   assert.equal(telegram.nodes.find((item) => item.id === "query")?.config.access, "Read only");
   assert.equal(telegram.nodes.find((item) => item.id === "query")?.config.redactSensitive, true);

@@ -289,7 +289,7 @@ export function validateWorkflow(nodes: WorkflowNode[], connections: Connection[
   if (!nodes.some(isEventTrigger)) issues.push({ level: "error", text: "Add at least one trigger before activation." });
   const ids = new Set(nodes.map((node) => node.id));
   if (connections.some((connection) => !ids.has(connection.from) || !ids.has(connection.to))) issues.push({ level: "error", text: "One or more connections point to a missing node." });
-  const noInput = nodes.filter((node) => node.kind !== "trigger" && !connections.some((connection) => connection.to === node.id));
+  const noInput = nodes.filter((node) => !isEventTrigger(node) && !connections.some((connection) => connection.to === node.id));
   if (noInput.length) issues.push({ level: "warning", text: `${noInput.length} node${noInput.length > 1 ? "s are" : " is"} not connected to an input.` });
   if (nodes.some((node) => node.kind === "message" && !String(node.config.recipient ?? "").trim())) issues.push({ level: "error", text: "A message node is missing its recipient mapping." });
   return issues;
