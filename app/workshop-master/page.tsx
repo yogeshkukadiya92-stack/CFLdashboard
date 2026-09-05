@@ -856,8 +856,10 @@ export default function WorkshopMasterPage() {
     const lastSevenDaysRegistrations = selectedParticipants.filter((entry) => isWithinLastIndiaCalendarDays(entry.createdAt, 7));
     const lastSevenDaysWaiting = lastSevenDaysRegistrations.filter((entry) => entry.registrationStatus === "waiting").length;
     const lastSevenDaysConfirmed = lastSevenDaysRegistrations.length - lastSevenDaysWaiting;
+    const lastSevenDaysRepeaters = lastSevenDaysRegistrations.filter((entry) => entry.isRepeater).length;
     const totalWaiting = selectedParticipants.filter((entry) => entry.registrationStatus === "waiting").length;
     const totalConfirmed = selectedParticipants.length - totalWaiting;
+    const totalRepeaters = selectedParticipants.filter((entry) => entry.isRepeater).length;
     const updatedAt = new Date().toLocaleString("en-IN", {
       day: "2-digit",
       hour: "2-digit",
@@ -876,10 +878,12 @@ export default function WorkshopMasterPage() {
       `New Registrations: ${lastSevenDaysRegistrations.length}`,
       `Confirmed: ${lastSevenDaysConfirmed}`,
       `Waiting List: ${lastSevenDaysWaiting}`,
+      `Repeaters: ${lastSevenDaysRepeaters}`,
       "",
       `Total Registrations: ${selectedParticipants.length}`,
       `Total Confirmed: ${totalConfirmed}`,
       `Total Waiting: ${totalWaiting}`,
+      `Total Repeaters: ${totalRepeaters}`,
       "",
       `Updated: ${updatedAt}`
     ].join("\n");
