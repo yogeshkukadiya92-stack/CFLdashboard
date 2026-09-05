@@ -76,6 +76,7 @@ function registrationWhatsAppStatus(entry: RegistrationEntry) {
 type DiscountType = "percent" | "flat";
 type AnalyticsPanel = "cohort" | "overlap" | null;
 type FormWorkflowPanel = "basics" | "automation" | "fields" | "includes" | "preview" | null;
+type WorkshopWorkflowPanel = "info" | "mfw" | "pricing" | null;
 type RegistrationLinkConfig = {
   batch?: string;
   customBaseUrl?: string;
@@ -200,6 +201,7 @@ export default function WorkshopMasterPage() {
   const [mfwWorkshops, setMfwWorkshops] = useState<Array<{ id: string; title: string }>>([]);
   const [mfwLoading, setMfwLoading] = useState(false);
   const [mfwError, setMfwError] = useState("");
+  const [workshopWorkflowPanel, setWorkshopWorkflowPanel] = useState<WorkshopWorkflowPanel>(null);
   const [records, setRecords] = useState<WorkshopRecord[]>([]);
   const [workshopTypes, setWorkshopTypes] = useState<string[]>(defaultWorkshopTypes);
   const [facilitators, setFacilitators] = useState<string[]>(defaultFacilitators);
@@ -1273,6 +1275,23 @@ export default function WorkshopMasterPage() {
           <p className="mt-2 text-xs font-semibold text-slate-500">Create a workshop once, then manage every batch and introduction session below it.</p>
         </section>
 
+        <section className="mt-4 rounded-2xl border border-indigo-100 bg-indigo-50/40 p-3.5 md:p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-indigo-600">Workshop workflow</p>
+              <h3 className="mt-0.5 text-lg font-black text-slate-950">Core setup</h3>
+              <p className="mt-0.5 text-xs font-semibold text-slate-500">Open only the setup area you want to edit.</p>
+            </div>
+            <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-indigo-700">{editingId ? "Edit mode" : "New workshop"}</span>
+          </div>
+          <div className="mt-3 grid gap-2 md:grid-cols-3">
+            <FormWorkflowCard title="Workshop info" detail={name || "Workshop name"} meta={`${type || "Type"} · ${facilitator || "Facilitator"}`} onOpen={() => setWorkshopWorkflowPanel("info")} />
+            <FormWorkflowCard title="MFW" detail={mfwEnrollmentEnabled ? "Enrollment ON" : "Enrollment OFF"} meta={mfwWorkshopTitle || mfwWorkshopEventId || "No mapping"} onOpen={() => setWorkshopWorkflowPanel("mfw")} />
+            <FormWorkflowCard title="Pricing & CRM" detail={`${isPaid ? `Paid · INR ${feesWithTax || 0}` : "Free"} · CRM ${transferLeadToCrm ? "ON" : "OFF"}`} meta={`${leadAssignmentRules.length} lead rules`} onOpen={() => setWorkshopWorkflowPanel("pricing")} />
+          </div>
+        </section>
+
+        <div className="hidden">
         <div className="mt-6">
           <label className="mb-2 block text-sm font-bold text-slate-600">Workshop/Product Name</label>
           <input className={inputClass} onChange={(event) => setName(event.target.value)} placeholder="Enter workshop or product name" value={name} />
@@ -1456,6 +1475,140 @@ export default function WorkshopMasterPage() {
             </label>
           </div>
         </div>
+        </div>
+
+        {workshopWorkflowPanel ? (
+          <div
+            aria-labelledby="workshop-workflow-panel-title"
+            aria-modal="true"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-2 backdrop-blur-sm sm:p-4"
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget) setWorkshopWorkflowPanel(null);
+            }}
+            role="dialog"
+          >
+            <section className="flex max-h-[calc(100dvh-1rem)] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+              <header className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-indigo-600">Workshop workflow</p>
+                  <h4 className="text-lg font-black text-slate-950" id="workshop-workflow-panel-title">
+                    {workshopWorkflowPanel === "info" ? "Workshop info" : workshopWorkflowPanel === "mfw" ? "MFW enrollment" : "Pricing, CRM and order rules"}
+                  </h4>
+                </div>
+                <button aria-label="Close workshop workflow panel" className="grid size-9 place-items-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-950" onClick={() => setWorkshopWorkflowPanel(null)} type="button"><X className="size-4" /></button>
+              </header>
+              <div className="min-h-0 flex-1 overflow-y-auto p-4">
+                {workshopWorkflowPanel === "info" ? (
+                  <div className="grid gap-4 lg:grid-cols-3">
+                    <label className="block lg:col-span-3">
+                      <span className="mb-2 block text-sm font-bold text-slate-600">Workshop/Product Name</span>
+                      <input className={inputClass} onChange={(event) => setName(event.target.value)} placeholder="Enter workshop or product name" value={name} />
+                    </label>
+                    <SelectBox label="Workshop Type" onChange={setType} options={workshopTypes} value={type} />
+                    <SelectBox label="Default Facilitator" onChange={setFacilitator} options={facilitators} value={facilitator} />
+                    <SelectBox label="Product Group" onChange={setGroup} options={productGroups} value={group} />
+                    <label className="flex min-h-[54px] items-center gap-3 rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700">
+                      <input checked={isPaid} className="size-5 accent-indigo-600" onChange={(event) => setIsPaid(event.target.checked)} type="checkbox" />
+                      Is Paid?
+                    </label>
+                  </div>
+                ) : null}
+
+                {workshopWorkflowPanel === "mfw" ? (
+                  <div className={`rounded-2xl border p-4 md:p-5 ${mfwEnrollmentEnabled ? "border-emerald-200 bg-emerald-50/60" : "border-slate-200 bg-slate-50"}`}>
+                    <div className="flex flex-wrap items-start justify-between gap-4">
+                      <div className="max-w-2xl">
+                        <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-700">MFW Integration · Optional</p>
+                        <h3 className="mt-1 text-lg font-black text-slate-950">Enroll confirmed registrations in My Fitness World</h3>
+                        <p className="mt-1 text-sm font-semibold leading-6 text-slate-500">Confirmed users will be assigned to the selected MFW workshop.</p>
+                      </div>
+                      <label className="inline-flex min-h-[44px] items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-700">
+                        <input checked={mfwEnrollmentEnabled} className="size-5 accent-emerald-600" onChange={(event) => { setMfwEnrollmentEnabled(event.target.checked); if (!event.target.checked) setMfwError(""); }} type="checkbox" />
+                        Enable MFW enrollment
+                      </label>
+                    </div>
+                    {mfwEnrollmentEnabled ? (
+                      <div className="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+                        <label className="block">
+                          <span className="mb-2 block text-sm font-black text-slate-700">MFW Workshop</span>
+                          <select className={inputClass} disabled={mfwLoading} onChange={(event) => { const selected = mfwWorkshops.find((workshop) => workshop.id === event.target.value); setMfwWorkshopEventId(event.target.value); setMfwWorkshopTitle(selected?.title ?? (event.target.value === mfwWorkshopEventId ? mfwWorkshopTitle : "")); }} value={mfwWorkshopEventId}>
+                            <option value="">{mfwLoading ? "Loading MFW workshops..." : "Select MFW workshop"}</option>
+                            {mfwWorkshopEventId && !mfwWorkshops.some((workshop) => workshop.id === mfwWorkshopEventId) ? <option value={mfwWorkshopEventId}>{mfwWorkshopTitle || mfwWorkshopEventId} · Saved mapping</option> : null}
+                            {mfwWorkshops.map((workshop) => <option key={workshop.id} value={workshop.id}>{workshop.title}</option>)}
+                          </select>
+                        </label>
+                        <button className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-xl border border-emerald-300 bg-white px-4 text-sm font-black text-emerald-700 hover:bg-emerald-50 disabled:opacity-60" disabled={mfwLoading} onClick={() => void loadMfwWorkshops()} type="button">
+                          <RefreshCw className={`size-4 ${mfwLoading ? "animate-spin" : ""}`} />
+                          Refresh MFW
+                        </button>
+                        {mfwError ? <p className="text-sm font-bold text-rose-700 md:col-span-2" role="alert">{mfwError}</p> : null}
+                        {!mfwError && mfwWorkshopEventId ? <p className="text-xs font-bold text-emerald-700 md:col-span-2">Mapped to: {mfwWorkshopTitle || mfwWorkshopEventId}</p> : null}
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+
+                {workshopWorkflowPanel === "pricing" ? (
+                  <div className="grid gap-4">
+                    <label className="inline-flex min-h-[44px] w-fit items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700">
+                      <input checked={transferLeadToCrm} className="size-5 accent-indigo-600" onChange={(event) => setTransferLeadToCrm(event.target.checked)} type="checkbox" />
+                      Transfer lead to CRM
+                    </label>
+                    {transferLeadToCrm ? <div className="grid gap-3 rounded-xl border border-indigo-100 bg-indigo-50/60 p-4 md:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] md:items-center">
+                      <div>
+                        <p className="text-sm font-black text-slate-900">Assign new registrations to a sales person</p>
+                        <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">Leave it unassigned to route leads manually.</p>
+                      </div>
+                      <label className="block">
+                        <span className="sr-only">Assigned sales person</span>
+                        <select className={inputClass} onChange={(event) => setAssignedSalesPersonId(event.target.value)} value={assignedSalesPersonId}>
+                          <option value="">Keep new leads unassigned</option>
+                          {assignedSalesPersonId && !salesPeople.some((person) => person.id === assignedSalesPersonId) ? <option value={assignedSalesPersonId}>Saved sales person unavailable</option> : null}
+                          {salesPeople.filter((person) => person.isActive !== false).map((person) => <option key={person.id} value={person.id}>{person.name}{person.acceptingLeads === false ? " · Not accepting leads" : ""}</option>)}
+                        </select>
+                      </label>
+                    </div> : null}
+                    {transferLeadToCrm ? <div className="rounded-xl border border-slate-200 bg-white p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div><p className="text-sm font-black text-slate-900">Smart lead assignment rules</p><p className="mt-1 text-xs font-semibold leading-5 text-slate-500">Rules run from top to bottom.</p></div>
+                        <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-600">{leadAssignmentRules.length} rules</span>
+                      </div>
+                      {leadAssignmentRules.length ? <div className="mt-3 space-y-2">
+                        {leadAssignmentRules.map((rule, index) => {
+                          const person = salesPeople.find((item) => item.id === rule.salesPersonId);
+                          return <div className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-700" key={rule.id}><span className="text-indigo-600">#{index + 1}</span><span>{rule.city ? `City: ${rule.city}` : "Any city"}</span><span className="text-slate-300">•</span><span>{rule.startDate || rule.endDate ? `${rule.startDate || "Any date"} to ${rule.endDate || "Any date"}` : "Any date"}</span><span className="text-slate-300">→</span><span className="text-slate-950">{person?.name || "Unavailable sales person"}</span><div className="ml-auto flex items-center gap-1"><button aria-label={`Move rule ${index + 1} up`} className="rounded-md p-1.5 text-slate-500 hover:bg-white disabled:opacity-30" disabled={index === 0} onClick={() => setLeadAssignmentRules((rules) => { const next = [...rules]; [next[index - 1], next[index]] = [next[index], next[index - 1]]; return next; })} type="button"><ArrowUp className="size-4" /></button><button aria-label={`Move rule ${index + 1} down`} className="rounded-md p-1.5 text-slate-500 hover:bg-white disabled:opacity-30" disabled={index === leadAssignmentRules.length - 1} onClick={() => setLeadAssignmentRules((rules) => { const next = [...rules]; [next[index], next[index + 1]] = [next[index + 1], next[index]]; return next; })} type="button"><ArrowDown className="size-4" /></button><button aria-label={`Remove rule ${index + 1}`} className="rounded-md p-1.5 text-rose-600 hover:bg-rose-50" onClick={() => setLeadAssignmentRules((rules) => rules.filter((item) => item.id !== rule.id))} type="button"><Trash2 className="size-4" /></button></div></div>;
+                        })}
+                      </div> : null}
+                      <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                        <label className="block"><span className="mb-1 block text-xs font-bold text-slate-600">City (optional)</span><input className={inputClass} onChange={(event) => setRuleCity(event.target.value)} placeholder="e.g. Ahmedabad" value={ruleCity} /></label>
+                        <label className="block"><span className="mb-1 block text-xs font-bold text-slate-600">From date (optional)</span><input className={inputClass} onChange={(event) => setRuleStartDate(event.target.value)} type="date" value={ruleStartDate} /></label>
+                        <label className="block"><span className="mb-1 block text-xs font-bold text-slate-600">To date (optional)</span><input className={inputClass} min={ruleStartDate || undefined} onChange={(event) => setRuleEndDate(event.target.value)} type="date" value={ruleEndDate} /></label>
+                        <label className="block"><span className="mb-1 block text-xs font-bold text-slate-600">Assign to</span><select className={inputClass} onChange={(event) => setRuleSalesPersonId(event.target.value)} value={ruleSalesPersonId}><option value="">Select sales person</option>{salesPeople.filter((person) => person.isActive !== false).map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}</select></label>
+                      </div>
+                      <button className="mt-3 inline-flex min-h-[40px] items-center gap-2 rounded-lg bg-slate-900 px-4 text-sm font-black text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50" disabled={!ruleSalesPersonId || (!ruleCity.trim() && !ruleStartDate && !ruleEndDate) || (Boolean(ruleStartDate && ruleEndDate) && ruleEndDate < ruleStartDate)} onClick={() => { setLeadAssignmentRules((rules) => [...rules, { id: generateId(), city: ruleCity.trim() || undefined, startDate: ruleStartDate || undefined, endDate: ruleEndDate || undefined, salesPersonId: ruleSalesPersonId }]); setRuleCity(""); setRuleStartDate(""); setRuleEndDate(""); setRuleSalesPersonId(""); }} type="button"><Plus className="size-4" />Add assignment rule</button>
+                    </div> : null}
+                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                      <label className="block"><span className="mb-2 block text-sm font-bold text-slate-600">Batch</span><input className={inputClass} onChange={(event) => setBatch(event.target.value)} placeholder="Main Batch" value={batch} /></label>
+                      <label className="block"><span className="mb-2 block text-sm font-bold text-slate-600">Fees With Tax</span><input className={inputClass} disabled={!isPaid} inputMode="numeric" onChange={(event) => setFeesWithTax(event.target.value)} placeholder="0" value={feesWithTax} /></label>
+                      <label className="flex min-h-[74px] items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700"><input checked={isPartPaymentAllow} className="size-5 accent-indigo-600" disabled={!isPaid} onChange={(event) => setIsPartPaymentAllow(event.target.checked)} type="checkbox" />Is Part Payment Allow?</label>
+                      <label className="block"><span className="mb-2 block text-sm font-bold text-slate-600">Minimum Part Payment</span><input className={inputClass} disabled={!isPaid || !isPartPaymentAllow} inputMode="numeric" onChange={(event) => setMinimumPartPayment(event.target.value)} placeholder="0" value={minimumPartPayment} /></label>
+                      <label className="block"><span className="mb-2 block text-sm font-bold text-slate-600">Discount Code/EOD</span><input className={inputClass} onChange={(event) => setDiscountCodeEod(event.target.value)} placeholder="DISCOUNT10" value={discountCodeEod} /></label>
+                      <div><span className="mb-2 block text-sm font-bold text-slate-600">Discount Type</span><div className="flex min-h-[48px] items-center gap-4 rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold"><label className="inline-flex items-center gap-2"><input checked={discountType === "percent"} className="accent-indigo-600" onChange={() => setDiscountType("percent")} type="radio" />%</label><label className="inline-flex items-center gap-2"><input checked={discountType === "flat"} className="accent-indigo-600" onChange={() => setDiscountType("flat")} type="radio" />Flat Amount</label></div></div>
+                      <label className="block"><span className="mb-2 block text-sm font-bold text-slate-600">Discount Value</span><input className={inputClass} inputMode="numeric" onChange={(event) => setDiscountValue(event.target.value)} placeholder="0" value={discountValue} /></label>
+                      <label className="block md:col-span-2"><span className="mb-2 block text-sm font-bold text-slate-600">Discount Description</span><input className={inputClass} onChange={(event) => setDiscountDescription(event.target.value)} placeholder="Short note for offer" value={discountDescription} /></label>
+                      <label className="block"><span className="mb-2 block text-sm font-bold text-slate-600">Order Qty Title</span><input className={inputClass} onChange={(event) => setOrderQtyTitle(event.target.value)} placeholder="Seats" value={orderQtyTitle} /></label>
+                      <label className="block"><span className="mb-2 block text-sm font-bold text-slate-600">Min Order Qty</span><input className={inputClass} inputMode="numeric" onChange={(event) => setMinOrderQty(event.target.value)} placeholder="1" value={minOrderQty} /></label>
+                      <label className="block"><span className="mb-2 block text-sm font-bold text-slate-600">Max Order Qty</span><input className={inputClass} inputMode="numeric" onChange={(event) => setMaxOrderQty(event.target.value)} placeholder="10" value={maxOrderQty} /></label>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+              <footer className="flex shrink-0 justify-end border-t border-slate-100 bg-white px-4 py-3">
+                <button className="inline-flex min-h-9 items-center rounded-lg bg-slate-950 px-4 text-sm font-black text-white hover:bg-slate-800" onClick={() => setWorkshopWorkflowPanel(null)} type="button">Done</button>
+              </footer>
+            </section>
+          </div>
+        ) : null}
 
         {editingId ? (
           <WorkshopHierarchyManager
