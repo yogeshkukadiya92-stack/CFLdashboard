@@ -411,6 +411,16 @@ export default function WorkshopMasterPage() {
   const editingAnalytics = editingId
     ? formAnalytics.find((item) => item.workshopId === editingId || item.formId === `form-${editingId}-main`) ?? null
     : null;
+  const selectedReferenceAnswerKeys = useMemo(() => {
+    if (!selectedWorkshop) return [];
+    const forms = readLocalArray<BuilderForm>(FORMS_STORAGE_KEY);
+    const savedForm = forms.find((item) => item.workshopId === selectedWorkshop.id || item.workshopSlug === workshopSlug(selectedWorkshop.name));
+    return (savedForm?.fields ?? [])
+      .filter((field) => isReferenceNameField(field.label, field.placeholder))
+      .flatMap((field) => [field.label, field.placeholder ?? ""])
+      .map((value) => value.trim())
+      .filter(Boolean);
+  }, [selectedWorkshop]);
   const selectedParticipants = useMemo(() => {
     if (!selectedWorkshop) return [];
     const exactMatches = registrations.filter((entry) => entry.workshopId === selectedWorkshop.id);
@@ -1197,7 +1207,7 @@ export default function WorkshopMasterPage() {
       entry.email,
       entry.city,
       entry.source ?? "Registration Link",
-      referenceNameForRegistration(entry),
+      referenceNameForRegistration(entry, selectedReferenceAnswerKeys),
       entry.whatsappVerificationStatus ?? "Not Required",
       entry.confirmationStatus ?? "pending",
       entry.confirmationNote ?? "",
@@ -1238,7 +1248,7 @@ export default function WorkshopMasterPage() {
       entry.city,
       entry.batch ?? "Main Batch",
       entry.source ?? "Registration Link",
-      referenceNameForRegistration(entry),
+      referenceNameForRegistration(entry, selectedReferenceAnswerKeys),
       formatSubmittedAt(entry.createdAt)
     ]);
     const cell = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`;
@@ -2499,7 +2509,7 @@ export default function WorkshopMasterPage() {
                           </td>
                           <td className="min-w-[86px] px-2.5 py-2.5">{entry.city || "-"}</td>
                           <td className="px-2.5 py-2.5"><RegistrationSourceBadge source={entry.source} /></td>
-                          <td className="min-w-[130px] max-w-[190px] whitespace-normal px-2.5 py-2.5 text-[11px] font-bold leading-4 text-slate-700">{referenceNameForRegistration(entry) || "-"}</td>
+                          <td className="min-w-[130px] max-w-[190px] whitespace-normal px-2.5 py-2.5 text-[11px] font-bold leading-4 text-slate-700">{referenceNameForRegistration(entry, selectedReferenceAnswerKeys) || "-"}</td>
                           <td className="min-w-[130px] px-2.5 py-2.5">
                             <WhatsAppVerificationBadge status={entry.whatsappVerificationStatus} />
                             <div className="mt-1 flex items-center gap-1.5">
@@ -3869,11 +3879,30 @@ function submittedAtTimestamp(value?: string) {
   return Number.isNaN(timestamp) ? Number.MIN_SAFE_INTEGER : timestamp;
 }
 
-function referenceNameForRegistration(entry: RegistrationEntry) {
+function normalizeReferenceKey(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+function isReferenceNameField(label = "", placeholder = "") {
+  const normalized = normalizeReferenceKey(`${label} ${placeholder}`);
+  return (
+    (normalized.includes("reference") || normalized.includes("refrance") || normalized.includes("referrer") || normalized.includes("referred")) &&
+    (normalized.includes("name") || normalized.includes("fullname") || normalized.includes("by"))
+  );
+}
+
+function referenceNameForRegistration(entry: RegistrationEntry, referenceAnswerKeys: string[] = []) {
+  const answers = entry.answers ?? {};
+  const normalizedReferenceKeys = new Set(referenceAnswerKeys.map(normalizeReferenceKey));
+
+  for (const [key, value] of Object.entries(answers)) {
+    const text = String(value ?? "").trim();
+    if (!text) continue;
+    if (normalizedReferenceKeys.has(normalizeReferenceKey(key))) return text;
+  }
+
   if (entry.referrerName?.trim()) return entry.referrerName.trim();
 
-  const answers = entry.answers ?? {};
-  const normalize = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, "");
   const preferredKeys = new Set([
     "referencename",
     "refrancename",
@@ -3887,7 +3916,7 @@ function referenceNameForRegistration(entry: RegistrationEntry) {
   ]);
 
   for (const [key, value] of Object.entries(answers)) {
-    const normalizedKey = normalize(key);
+    const normalizedKey = normalizeReferenceKey(key);
     const text = String(value ?? "").trim();
     if (!text) continue;
     if (preferredKeys.has(normalizedKey)) return text;

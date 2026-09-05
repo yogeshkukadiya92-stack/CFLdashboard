@@ -175,6 +175,18 @@ function hasValidAnswer(field: BuilderField, answers: Record<string, string>) {
   return true;
 }
 
+function normalizeReferenceKey(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+function isReferenceNameField(field: BuilderField) {
+  const normalized = normalizeReferenceKey(`${field.label} ${field.placeholder ?? ""}`);
+  return (
+    (normalized.includes("reference") || normalized.includes("refrance") || normalized.includes("referrer") || normalized.includes("referred")) &&
+    (normalized.includes("name") || normalized.includes("fullname") || normalized.includes("by"))
+  );
+}
+
 function modelFromBuilderForm(form: BuilderForm, overrides?: Partial<Pick<FormModel, "batch" | "facilitator" | "fee" | "paid" | "partPayment" | "venue">>): FormModel {
   return {
     formId: form.id,
@@ -770,7 +782,9 @@ export default function RegistrationPage() {
     model.fields.forEach((field) => {
       if (field.type === "heading" || field.role || !isFieldVisible(field, answers)) return;
       const value = (answers[field.id] ?? "").trim();
-      if (value) extra[field.label] = value;
+      if (!value) return;
+      extra[field.label] = value;
+      if (isReferenceNameField(field) && field.placeholder?.trim()) extra[field.placeholder.trim()] = value;
     });
 
     const registrationScope = [batchIdParam, introductionSessionIdParam].filter(Boolean).join("-") || "main";
