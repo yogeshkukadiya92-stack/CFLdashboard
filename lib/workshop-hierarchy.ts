@@ -56,11 +56,8 @@ export function isDuplicateWorkshopRegistration(
   existing: Pick<RegistrationEntry, "workshopId" | "mobile" | "batch" | "batchId" | "introductionSessionId">,
   incoming: Pick<RegistrationEntry, "workshopId" | "mobile" | "batch" | "batchId" | "introductionSessionId">
 ) {
-  if (existing.workshopId !== incoming.workshopId || mobileDigits(existing.mobile) !== mobileDigits(incoming.mobile)) return false;
-  const sameBatch = existing.batchId || incoming.batchId
-    ? Boolean(existing.batchId && incoming.batchId && existing.batchId === incoming.batchId)
-    : normalized(existing.batch) === normalized(incoming.batch);
-  return sameBatch && normalized(existing.introductionSessionId) === normalized(incoming.introductionSessionId);
+  return existing.workshopId === incoming.workshopId
+    && mobileDigits(existing.mobile) === mobileDigits(incoming.mobile);
 }
 
 export function attendanceMatchesFinalRegistration(

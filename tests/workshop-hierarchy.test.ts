@@ -10,10 +10,10 @@ const base = {
   introductionSessionId: "intro-1"
 };
 
-test("blocks the same mobile only inside the same workshop, batch and introduction session", () => {
+test("blocks the same mobile inside the same workshop", () => {
   assert.equal(isDuplicateWorkshopRegistration(base, { ...base, mobile: "9876543210" }), true);
-  assert.equal(isDuplicateWorkshopRegistration(base, { ...base, batchId: "batch-sep-2026" }), false);
-  assert.equal(isDuplicateWorkshopRegistration(base, { ...base, introductionSessionId: "intro-2" }), false);
+  assert.equal(isDuplicateWorkshopRegistration(base, { ...base, batchId: "batch-sep-2026" }), true);
+  assert.equal(isDuplicateWorkshopRegistration(base, { ...base, introductionSessionId: "intro-2" }), true);
   assert.equal(isDuplicateWorkshopRegistration(base, { ...base, workshopId: "another-workshop" }), false);
 });
 

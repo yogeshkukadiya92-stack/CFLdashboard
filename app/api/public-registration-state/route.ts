@@ -1,4 +1,4 @@
-import { ensureRegistrationRecordsTable, getAppState, getDbPool, isDbEnabled, readRegistrationRecords, reserveRegistrationNumber, upsertRegistrationRecord } from "@/lib/db";
+import { ensureRegistrationRecordsTable, getDbPool, isDbEnabled, reserveRegistrationNumber, upsertRegistrationRecord } from "@/lib/db";
 import { upsertLiveRegistration } from "@/lib/crm-db";
 import { upsertLeadFromRegistration } from "@/lib/lead-utils";
 import { sendRegistrationStatusNotifications } from "@/lib/registration-confirmation";
@@ -8,6 +8,7 @@ import { attendanceMatchesFinalRegistration, findRepeaterSource, isDuplicateWork
 import { resolveWorkshopSalesPersonId, type WorkshopLeadAssignmentRule } from "@/lib/workshop-lead-assignment";
 import { getActiveWorkflowAssignmentSettings } from "@/lib/workflow-db";
 import { NextResponse } from "next/server";
+import { after } from "next/server";
 
 export async function GET() {
   if (!(await isDbEnabled())) {
@@ -15,7 +16,9 @@ export async function GET() {
   }
 
   try {
-    const state = await getAppState();
+    // Public forms do not need the registration history or CRM datasets.
+    const result = await getDbPool()!.query(`SELECT forms, landing_pages AS "landingPages", registration_links AS "registrationLinks", workshops FROM app_state WHERE id = 1`);
+    const state = result.rows[0];
     const publicForms = (Array.isArray(state?.forms) ? state.forms : []).map((value: unknown) => {
       if (!value || typeof value !== "object" || Array.isArray(value)) return value;
       const { referralCodes: _privateReferralCodes, ...publicForm } = value as Record<string, unknown>;
@@ -95,7 +98,9 @@ export async function POST(request: Request) {
     const database = getDbPool();
     if (!database) return NextResponse.json({ error: "Database is not configured." }, { status: 500 });
     await ensureRegistrationRecordsTable();
+    const workflowAssignment = await getActiveWorkflowAssignmentSettings(sanitizedRegistration.workshopId).catch(() => null);
     const client = await database.connect();
+    let released = false;
     try {
       await client.query("BEGIN");
       const selected = await client.query(`SELECT forms, workshops, leads, sales_people, attendance_entries FROM app_state WHERE id = 1`);
@@ -116,9 +121,23 @@ export async function POST(request: Request) {
       const needsCohortLock = Boolean(form?.waitingMode || form?.requireAttendanceForConfirmation || form?.allowReferralConfirmation
         || Number(form?.responseLimit ?? 0) > 0 || capacity > 0 || (Array.isArray(form?.repeaterSourceWorkshopIds) && form.repeaterSourceWorkshopIds.length));
       const cohortKey = `${sanitizedRegistration.workshopId}:${sanitizedRegistration.batchId ?? sanitizedRegistration.batch}:${sanitizedRegistration.introductionSessionId ?? ""}`;
-      await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [needsCohortLock ? cohortKey : `${cohortKey}:${mobileDigits}`]);
-      const current = await readRegistrationRecords(client) as RegistrationEntry[];
+      if (form?.allowDuplicate !== true) {
+        await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`${sanitizedRegistration.workshopId}:${mobileDigits}`]);
+      }
+      if (needsCohortLock) {
+        await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [cohortKey]);
+      }
+      const relevantRecords = await client.query(`SELECT payload FROM cfl_registration_records
+        WHERE workshop_id = $1 OR mobile_normalized = $2
+        ORDER BY created_at DESC, external_id DESC`, [sanitizedRegistration.workshopId, mobileDigits]);
+      const current = relevantRecords.rows.map((row) => row.payload) as RegistrationEntry[];
       const previousRegistration = current.find((value: unknown) => value && typeof value === "object" && (value as RegistrationEntry).id === sanitizedRegistration.id) as RegistrationEntry | undefined;
+      // A lost HTTP response must be safe to retry without allocating another
+      // registration number or dispatching the same notifications again.
+      if (previousRegistration && isDuplicateWorkshopRegistration(previousRegistration, sanitizedRegistration)) {
+        await client.query("COMMIT");
+        return NextResponse.json({ ok: true, dbEnabled: true, registration: previousRegistration });
+      }
       const duplicate = current.find((value: unknown) => {
         if (!value || typeof value !== "object") return false;
         return isDuplicateWorkshopRegistration(value as RegistrationEntry, sanitizedRegistration);
@@ -128,7 +147,7 @@ export async function POST(request: Request) {
         return NextResponse.json({
           code: "ALREADY_REGISTERED",
           duplicate: true,
-          error: "This mobile number is already registered for this batch and introduction session."
+          error: "This mobile number is already registered for this workshop."
         }, { status: 409 });
       }
       const responseLimit = Math.max(0, Number(form?.responseLimit ?? 0) || 0);
@@ -266,10 +285,6 @@ export async function POST(request: Request) {
         finalRegistration = { ...finalRegistration, registrationNumber: await reserveRegistrationNumber(client) };
         next = next.map((entry) => entry.id === finalRegistration.id ? finalRegistration : entry);
       }
-      if (attendanceMatched && !isWaiting) {
-        finalRegistration = { ...finalRegistration, ...(await syncConfirmedRegistrationToMfw(finalRegistration)) };
-        next = next.map((entry) => entry.id === finalRegistration.id ? finalRegistration : entry);
-      }
       const workshops = Array.isArray(state.workshops) ? state.workshops : [];
       const linkedWorkshop = workshops.find((value: unknown) => {
         if (!value || typeof value !== "object" || Array.isArray(value)) return false;
@@ -277,7 +292,6 @@ export async function POST(request: Request) {
         return String(workshop.id ?? "") === sanitizedRegistration.workshopId
           || String(workshop.name ?? "").trim().toLowerCase() === workshopTitle.toLowerCase();
       }) as { assignedSalesPersonId?: unknown; leadAssignmentRules?: WorkshopLeadAssignmentRule[]; transferLeadToCrm?: unknown } | undefined;
-      const workflowAssignment = await getActiveWorkflowAssignmentSettings(sanitizedRegistration.workshopId).catch(() => null);
       const assignmentRules = linkedWorkshop?.leadAssignmentRules?.length ? linkedWorkshop.leadAssignmentRules : workflowAssignment?.rules;
       const salesPeople = Array.isArray(state.sales_people) ? state.sales_people : [];
       const currentLeads = Array.isArray(state.leads) ? state.leads : [];
@@ -300,10 +314,17 @@ export async function POST(request: Request) {
 
       await upsertRegistrationRecord(client, finalRegistration as unknown as Record<string, unknown>);
       await client.query("COMMIT");
+      // CRM takes its own pool connection. Never wait for it while holding one:
+      // simultaneous submissions otherwise exhaust the pool and deadlock.
+      client.release();
+      released = true;
+      // The participant receives the committed record immediately. Next keeps
+      // the follow-up callback alive after sending the HTTP response.
+      after(async () => {
       try {
         await upsertLiveRegistration(finalRegistration as unknown as Record<string, unknown>);
         if (linkedWorkshop?.transferLeadToCrm === true) {
-          await client.query(`UPDATE app_state SET leads = $1::jsonb, updated_at = NOW() WHERE id = 1`, [JSON.stringify(leads)]);
+          await database.query(`UPDATE app_state SET leads = $1::jsonb, updated_at = NOW() WHERE id = 1`, [JSON.stringify(leads)]);
         }
       } catch {
         // The registration is durable. CRM projection failures must not turn a
@@ -311,30 +332,35 @@ export async function POST(request: Request) {
       }
       let savedRegistration = next.find((entry) => entry.id === sanitizedRegistration.id) as RegistrationEntry;
       try {
+        if (attendanceMatched && !isWaiting) {
+          savedRegistration = { ...savedRegistration, ...(await syncConfirmedRegistrationToMfw(savedRegistration)) };
+          await upsertRegistrationRecord(database, savedRegistration as unknown as Record<string, unknown>);
+        }
         const notificationPatch = await sendRegistrationStatusNotifications(savedRegistration, form as Partial<BuilderForm>);
         if (Object.keys(notificationPatch).length) {
           savedRegistration = { ...savedRegistration, ...notificationPatch };
           next = next.map((entry) => entry.id === savedRegistration.id ? savedRegistration : entry);
           await upsertLiveRegistration(savedRegistration as unknown as Record<string, unknown>);
-          await upsertRegistrationRecord(client, savedRegistration as unknown as Record<string, unknown>);
+          await upsertRegistrationRecord(database, savedRegistration as unknown as Record<string, unknown>);
         }
       } catch {
         // Registration is already committed; notification failures never roll it back.
       }
+      });
       return NextResponse.json({
         ok: true,
         dbEnabled: true,
-        registration: savedRegistration,
+        registration: finalRegistration,
         whatsapp: {
-          participant: savedRegistration.registrationStatus === "waiting" ? savedRegistration.waitingWhatsappStatus : savedRegistration.confirmationWhatsappStatus,
-          referrer: savedRegistration.referrerWaitingWhatsappStatus
+          participant: finalRegistration.registrationStatus === "waiting" ? finalRegistration.waitingWhatsappStatus : finalRegistration.confirmationWhatsappStatus,
+          referrer: finalRegistration.referrerWaitingWhatsappStatus
         }
       });
     } catch (error) {
-      await client.query("ROLLBACK").catch(() => undefined);
+      if (!released) await client.query("ROLLBACK").catch(() => undefined);
       throw error;
     } finally {
-      client.release();
+      if (!released) client.release();
     }
   } catch {
     return NextResponse.json({ error: "Failed to save registration" }, { status: 500 });

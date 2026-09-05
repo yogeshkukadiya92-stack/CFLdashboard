@@ -181,19 +181,34 @@ export async function hydratePublicRegistrationState(): Promise<LiveState | null
 }
 
 export async function savePublicRegistration(registration: unknown, registrations: unknown[]) {
+  // Serialize once: every retry carries the same registration identity.
+  const body = JSON.stringify({ registration });
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 20_000);
   try {
     const response = await fetch("/api/public-registration-state", {
-      body: JSON.stringify({ registration }),
+      body,
       credentials: "same-origin",
       headers: { "Content-Type": "application/json" },
       keepalive: true,
-      method: "POST"
+      method: "POST",
+      signal: controller.signal
     });
     const result = await response.json().catch(() => ({})) as Record<string, unknown>;
+    if ([408, 429, 500, 502, 503, 504].includes(response.status) && attempt < 2) {
+      await new Promise((resolve) => window.setTimeout(resolve, 1000 * (attempt + 1) + Math.random() * 500));
+      continue;
+    }
     if (!response.ok) return { ...result, ok: false, status: response.status };
-    writeLiveStateToLocalStorage({ registrations });
+    try { writeLiveStateToLocalStorage({ registrations }); } catch { /* Server save already succeeded. */ }
     return { ...result, ok: true, status: response.status };
   } catch {
-    return false;
+    if (attempt === 2) return false;
+    await new Promise((resolve) => window.setTimeout(resolve, 1000 * (attempt + 1) + Math.random() * 500));
+  } finally {
+    window.clearTimeout(timeout);
   }
+  }
+  return false;
 }

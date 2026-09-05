@@ -821,7 +821,7 @@ export default function RegistrationPage() {
       const saved = result && result.registration ? result.registration : payload;
       const savedIndex = current.findIndex((item) => item.id === registrationId);
       if (savedIndex >= 0) current[savedIndex] = saved;
-      writeLiveStateToLocalStorage({ registrations: current });
+      try { writeLiveStateToLocalStorage({ registrations: current }); } catch { /* Registration is durable even if browser storage is full. */ }
       setWaitingPosition(saved.registrationStatus === "waiting" ? saved.waitingPosition ?? 1 : null);
       setWaitingReason(saved.waitingReason);
       setRegistrationNumber(saved.registrationNumber ?? "");
