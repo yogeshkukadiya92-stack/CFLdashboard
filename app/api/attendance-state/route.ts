@@ -3,6 +3,7 @@ import { attendanceWindow } from "@/lib/attendance-window";
 import { assignRegistrationNumbers } from "@/lib/registration-confirmation";
 import { syncConfirmedRegistrationToMfw } from "@/lib/mfw-registration";
 import { executeWorkflow } from "@/lib/workflow-engine";
+import { confirmWorkflowWaiting } from "@/lib/workflow-waiting-confirmation";
 import { listActiveWorkflowsForTrigger, recordWorkflowExecution } from "@/lib/workflow-db";
 import { attendanceCanConfirmWaitingRegistration } from "@/lib/workshop-hierarchy";
 import type { AttendanceEntry, AttendanceSession, BuilderField, BuilderForm, RegistrationEntry } from "@/lib/types";
@@ -159,6 +160,7 @@ async function runAttendanceWorkflows(attendance: AttendanceEntry, promotedRegis
       leads: Array.isArray(state.leads) ? state.leads as Array<Record<string, unknown>> : [],
       mode: "production"
     });
+    await confirmWorkflowWaiting({ nodes: workflow.nodes, connections: workflow.connections, attendance, result, workflowId: workflow.id });
     await recordWorkflowExecution({
       id: `EXE-${crypto.randomUUID().slice(0, 8).toUpperCase()}`,
       workflowId: workflow.id,
@@ -295,7 +297,9 @@ export async function POST(request: Request) {
       }, { status: 409 });
     }
     const promotedRegistrations = await promoteAttendanceWaitingRegistrations(saved.entry).catch(() => 0);
-    after(() => runAttendanceWorkflows(saved.entry, promotedRegistrations).catch(() => undefined));
+    after(() => runAttendanceWorkflows(saved.entry, promotedRegistrations).catch((error) => {
+      console.error("Attendance workflow execution failed", error instanceof Error ? error.message : "Unknown error");
+    }));
     return NextResponse.json({ ...saved, ok: true, promotedRegistrations, ...responseMeta });
   } catch {
     return NextResponse.json({ error: "Failed to save attendance." }, { status: 500 });
