@@ -73,7 +73,9 @@ export async function GET(request: NextRequest) {
       .map((session) => ({
         id: session.id,
         label: `${session.workshopName} · ${session.title}${session.sessionDate ? ` · ${session.sessionDate}` : ""}`,
-        published: session.published !== false
+        published: session.published !== false,
+        workshopId: session.workshopId,
+        workshopName: session.workshopName
       }));
     const registrations = Array.isArray(state?.registrations) ? state.registrations as RegistrationEntry[] : [];
     const payment = {

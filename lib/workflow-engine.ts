@@ -126,8 +126,9 @@ export function executeWorkflow(input: {
       if (input.mode === "production") stepStatus = "skipped";
     }
     else if (node.kind === "data") {
-      detail = `${String(node.config.scope ?? "Dashboard summary")} query validated as read-only; sensitive fields ${node.config.redactSensitive === false ? "are visible to the authorized agent" : "will be redacted"}.`;
-      output = { scope: node.config.scope ?? "Dashboard summary", access: "read-only", maxRows: node.config.maxRows ?? 25, redacted: node.config.redactSensitive !== false };
+      const workshopId = String(node.config.workshopId ?? "");
+      detail = `${String(node.config.scope ?? "Dashboard summary")} query${workshopId ? ` for workshop ${workshopId}` : ""} validated as read-only; sensitive fields ${node.config.redactSensitive === false ? "are visible to the authorized agent" : "will be redacted"}.`;
+      output = { scope: node.config.scope ?? "Dashboard summary", workshopId: workshopId || undefined, access: "read-only", maxRows: node.config.maxRows ?? 25, redacted: node.config.redactSensitive !== false };
       if (input.mode === "production") stepStatus = "skipped";
     }
     else if (node.kind === "ai") {

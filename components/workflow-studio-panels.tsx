@@ -43,6 +43,9 @@ export function ParametersPanel({ node, onChange, onRename, onTest, salesPeople 
   salesPeople?: WorkflowSalesPerson[];
   attendanceSessions?: WorkflowAttendanceSession[];
 }) {
+  const workshops = useMemo(() => Array.from(new Map(attendanceSessions
+    .filter((session) => session.workshopId && session.workshopName)
+    .map((session) => [session.workshopId, { id: session.workshopId, name: session.workshopName }])).values()), [attendanceSessions]);
   const isAssignNode = node.kind === "crm" && !node.title.toLowerCase().includes("reassign") && node.title.toLowerCase().includes("assign");
   const isCrmAction = node.kind === "crm" && !isAssignNode;
   const isScheduleNode = node.kind === "delay" && (node.config.scheduleEnabled === true || ["Scheduled time", "Schedule for date"].includes(node.title));
@@ -144,6 +147,7 @@ export function ParametersPanel({ node, onChange, onRename, onTest, salesPeople 
 
     {node.kind === "data" ? <>
       <Field label="Allowed data"><select className="workflow-input" onChange={(event) => onChange("scope", event.target.value)} value={String(node.config.scope ?? "Dashboard summary")}><option>Dashboard summary</option><option>Workshop registrations</option><option>Attendance analytics</option><option>CRM pipeline</option><option>Payment summary</option></select></Field>
+      {String(node.config.scope ?? "Dashboard summary") === "Workshop registrations" ? <Field hint="Limit matching and export to one workshop" label="Workshop"><select className="workflow-input" onChange={(event) => onChange("workshopId", event.target.value)} value={String(node.config.workshopId ?? "")}><option value="">All selected workshops</option>{workshops.map((workshop) => <option key={workshop.id} value={workshop.id}>{workshop.name}</option>)}</select></Field> : null}
       <div className="grid grid-cols-2 gap-2"><Field label="Access"><select className="workflow-input" onChange={(event) => onChange("access", event.target.value)} value={String(node.config.access ?? "Read only")}><option>Read only</option></select></Field><Field label="Maximum rows"><input className="workflow-input" min="1" max="100" onChange={(event) => onChange("maxRows", Math.min(100, Math.max(1, Number(event.target.value))))} type="number" value={Number(node.config.maxRows ?? 25)} /></Field></div>
       <ToggleField checked={node.config.redactSensitive !== false} label="Hide phone, email and payment identifiers" onChange={(value) => onChange("redactSensitive", value)} />
     </> : null}

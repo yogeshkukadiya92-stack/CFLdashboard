@@ -71,6 +71,8 @@ export type WorkflowAttendanceSession = {
   id: string;
   label: string;
   published: boolean;
+  workshopId: string;
+  workshopName: string;
 };
 export type WhatsAppAutomationOverview = {
   counts: Record<string, number>;
