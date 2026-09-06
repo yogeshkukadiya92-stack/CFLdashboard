@@ -66,6 +66,12 @@ export type WorkflowSalesPerson = {
   activeLeadCount: number;
   maxActiveLeads?: number;
 };
+
+export type WorkflowAttendanceSession = {
+  id: string;
+  label: string;
+  published: boolean;
+};
 export type WhatsAppAutomationOverview = {
   counts: Record<string, number>;
   retryDue: number;

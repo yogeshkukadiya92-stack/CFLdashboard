@@ -69,6 +69,12 @@ export async function GET(request: NextRequest) {
       sessions: Array.isArray(state?.attendanceSessions) ? state.attendanceSessions as AttendanceSession[] : [],
       registrations: Array.isArray(state?.registrations) ? state.registrations as RegistrationEntry[] : []
     });
+    const attendanceSessions = (Array.isArray(state?.attendanceSessions) ? state.attendanceSessions as AttendanceSession[] : [])
+      .map((session) => ({
+        id: session.id,
+        label: `${session.workshopName} · ${session.title}${session.sessionDate ? ` · ${session.sessionDate}` : ""}`,
+        published: session.published !== false
+      }));
     const registrations = Array.isArray(state?.registrations) ? state.registrations as RegistrationEntry[] : [];
     const payment = {
       ...paymentEvents,
@@ -82,6 +88,7 @@ export async function GET(request: NextRequest) {
       salesPeople,
       whatsapp,
       attendance,
+      attendanceSessions,
       payment,
       crm,
       versions,

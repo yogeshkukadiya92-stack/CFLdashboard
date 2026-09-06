@@ -27,6 +27,7 @@ import {
   type RunRow,
   type RunStatus,
   type WorkflowSalesPerson,
+  type WorkflowAttendanceSession,
   type WorkflowNode,
   type WorkflowVersionSummary,
 } from "@/lib/workflow-studio";
@@ -34,12 +35,13 @@ import { resolveSmartLeadAssignment, type LeadAssignmentStrategy, type WorkshopL
 
 export type InspectorTab = "parameters" | "settings" | "output";
 
-export function ParametersPanel({ node, onChange, onRename, onTest, salesPeople = [] }: {
+export function ParametersPanel({ node, onChange, onRename, onTest, salesPeople = [], attendanceSessions = [] }: {
   node: WorkflowNode;
   onChange: (key: string, value: ConfigValue) => void;
   onRename: (value: string) => void;
   onTest: () => void;
   salesPeople?: WorkflowSalesPerson[];
+  attendanceSessions?: WorkflowAttendanceSession[];
 }) {
   const isAssignNode = node.kind === "crm" && !node.title.toLowerCase().includes("reassign") && node.title.toLowerCase().includes("assign");
   const isCrmAction = node.kind === "crm" && !isAssignNode;
@@ -98,7 +100,7 @@ export function ParametersPanel({ node, onChange, onRename, onTest, salesPeople 
     </> : null}
 
     {node.kind === "attendance" ? <>
-      <Field label="Attendance source"><select className="workflow-input" onChange={(event) => onChange("source", event.target.value)} value={String(node.config.source ?? "Workshop attendance")}><option>Workshop attendance</option><option>Introduction session</option><option>Selected attendance form</option></select></Field>
+      {node.title.toLowerCase().includes("select attendance forms") ? <Field hint="You can select more than one form" label="Workshop attendance forms"><div className="max-h-56 space-y-2 overflow-y-auto rounded-xl border border-slate-200 bg-slate-50 p-2">{attendanceSessions.length ? attendanceSessions.map((session) => { const selected = Array.isArray(node.config.sessionIds) && node.config.sessionIds.map(String).includes(session.id); return <label className={`flex cursor-pointer items-start gap-2 rounded-lg border p-2.5 ${selected ? "border-teal-300 bg-teal-50" : "border-slate-200 bg-white"}`} key={session.id}><input checked={selected} className="mt-0.5 size-4 accent-teal-600" onChange={() => { const current = Array.isArray(node.config.sessionIds) ? node.config.sessionIds.map(String) : []; onChange("sessionIds", selected ? current.filter((id) => id !== session.id) : [...current, session.id]); }} type="checkbox" /><span className="text-[10px] font-bold text-slate-700">{session.label}{session.published ? "" : " · Draft"}</span></label>; }) : <p className="px-2 py-6 text-center text-[10px] font-bold text-slate-500">No attendance forms found. Create and publish an attendance form first.</p>}</div></Field> : <Field label="Attendance source"><select className="workflow-input" onChange={(event) => onChange("source", event.target.value)} value={String(node.config.source ?? "Workshop attendance")}><option>Workshop attendance</option><option>Introduction session</option><option>Selected attendance form</option></select></Field>}
       <Field label="Match participant by"><select className="workflow-input" onChange={(event) => onChange("match", event.target.value)} value={String(node.config.match ?? "Mobile number")}><option>Mobile number</option><option>Registration ID</option><option>Email</option></select></Field>
       <Field label="Set status"><select className="workflow-input" onChange={(event) => onChange("status", event.target.value)} value={String(node.config.status ?? "Present")}><option>Present</option><option>Absent</option><option>Late</option></select></Field>
       <div className="grid grid-cols-2 gap-2"><Field hint="For no-show rules" label="Grace period"><input className="workflow-input" min="0" onChange={(event) => onChange("graceMinutes", Math.min(1440, Math.max(0, Number(event.target.value))))} type="number" value={Number(node.config.graceMinutes ?? 30)} /></Field><Field label="Minimum duration"><input className="workflow-input" min="0" onChange={(event) => onChange("minimumDurationMinutes", Math.min(1440, Math.max(0, Number(event.target.value))))} type="number" value={Number(node.config.minimumDurationMinutes ?? 0)} /></Field></div>
@@ -131,7 +133,11 @@ export function ParametersPanel({ node, onChange, onRename, onTest, salesPeople 
       <ToggleField checked={Boolean(node.config.deduplicate)} label="Ignore duplicate webhook events" onChange={(value) => onChange("deduplicate", value)} />
     </> : null}
 
-    {node.kind === "webhook" ? <>
+    {node.kind === "webhook" && node.title.toLowerCase().includes("download csv") ? <>
+      <Field label="File format"><select className="workflow-input" onChange={(event) => onChange("format", event.target.value)} value={String(node.config.format ?? "CSV")}><option>CSV</option></select></Field>
+      <Field label="Include records"><select className="workflow-input" onChange={(event) => onChange("include", event.target.value)} value={String(node.config.include ?? "Registered and not registered")}><option>Registered and not registered</option><option>Not registered only</option><option>Registered only</option></select></Field>
+      <p className="rounded-xl border border-teal-200 bg-teal-50 p-3 text-[10px] font-bold leading-4 text-teal-800">Run “Test workflow” after selecting forms. The matched output will be prepared as a CSV download.</p>
+    </> : node.kind === "webhook" ? <>
       <div className="grid grid-cols-[90px_1fr] gap-2"><Field label="Method"><select className="workflow-input" onChange={(event) => onChange("method", event.target.value)} value={String(node.config.method ?? "POST")}><option>POST</option><option>GET</option><option>PATCH</option></select></Field><Field label="Endpoint"><input className="workflow-input font-mono text-[10px]" onChange={(event) => onChange("url", event.target.value)} value={String(node.config.url ?? "https://")} /></Field></div>
       <Field label="Authentication"><select className="workflow-input" onChange={(event) => onChange("authentication", event.target.value)} value={String(node.config.authentication ?? "Stored credential")}><option>Stored credential</option><option>Bearer token</option><option>None</option></select></Field>
     </> : null}
