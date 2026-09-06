@@ -458,7 +458,10 @@ export default function WorkshopMasterPage() {
       "Payment Status": entry.status,
       Source: entry.source ?? "Registration Link"
     },
-    submittedAt: entry.createdAt
+    submittedAt: entry.createdAt,
+    confirmationStatus: entry.confirmationStatus ?? "pending",
+    mfwSyncStatus: entry.mfwSyncStatus ?? "not_required",
+    whatsappStatus: registrationWhatsAppStatus(entry).replace(" ", "_")
   })), [selectedParticipants]);
   const filteredParticipants = useMemo(() => applyResponseFilters(participantFilterRecords, responseFilters), [participantFilterRecords, responseFilters]);
   const searchedParticipants = useMemo(() => {

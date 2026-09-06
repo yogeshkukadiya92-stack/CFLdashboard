@@ -10,6 +10,9 @@ export type ResponseFilterState = {
   question: string;
   toDate: string;
   toTime: string;
+  confirmationStatus: string;
+  mfwSyncStatus: string;
+  whatsappStatus: string;
 };
 
 export const emptyResponseFilters: ResponseFilterState = {
@@ -20,12 +23,18 @@ export const emptyResponseFilters: ResponseFilterState = {
   fromTime: "",
   question: "",
   toDate: "",
-  toTime: ""
+  toTime: "",
+  confirmationStatus: "all",
+  mfwSyncStatus: "all",
+  whatsappStatus: "all"
 };
 
 export type FilterableResponse = {
   answers: Record<string, string>;
   submittedAt: string;
+  confirmationStatus?: string;
+  mfwSyncStatus?: string;
+  whatsappStatus?: string;
 };
 
 function startOfDay(date: Date) {
@@ -99,7 +108,12 @@ export function applyResponseFilters<T extends FilterableResponse>(items: T[], f
     const submitted = new Date(item.submittedAt);
     const validSubmittedAt = !Number.isNaN(submitted.getTime());
     if (!validSubmittedAt && (filters.datePreset !== "all" || filters.fromTime || filters.toTime)) return false;
-    return (!validSubmittedAt || (dateMatches(submitted, filters) && timeMatches(submitted, filters))) && answerMatches(item.answers[filters.question] ?? "", filters);
+    const confirmationMatches = !filters.confirmationStatus || filters.confirmationStatus === "all" || (item.confirmationStatus || "pending") === filters.confirmationStatus;
+    const mfwMatches = !filters.mfwSyncStatus || filters.mfwSyncStatus === "all" || (item.mfwSyncStatus || "not_required") === filters.mfwSyncStatus;
+    const whatsappMatches = !filters.whatsappStatus || filters.whatsappStatus === "all" || (item.whatsappStatus || "not_sent") === filters.whatsappStatus;
+    return (!validSubmittedAt || (dateMatches(submitted, filters) && timeMatches(submitted, filters)))
+      && answerMatches(item.answers[filters.question] ?? "", filters)
+      && confirmationMatches && mfwMatches && whatsappMatches;
   });
 }
 
@@ -108,5 +122,8 @@ export function responseQuestionOptions(items: FilterableResponse[]) {
 }
 
 export function activeResponseFilterCount(filters: ResponseFilterState) {
-  return Number(filters.datePreset !== "all") + Number(Boolean(filters.fromTime || filters.toTime)) + Number(Boolean(filters.question && filters.answer.trim()));
+  return Number(filters.datePreset !== "all") + Number(Boolean(filters.fromTime || filters.toTime)) + Number(Boolean(filters.question && filters.answer.trim()))
+    + Number(Boolean(filters.confirmationStatus && filters.confirmationStatus !== "all"))
+    + Number(Boolean(filters.mfwSyncStatus && filters.mfwSyncStatus !== "all"))
+    + Number(Boolean(filters.whatsappStatus && filters.whatsappStatus !== "all"));
 }

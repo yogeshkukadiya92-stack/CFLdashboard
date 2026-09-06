@@ -161,8 +161,11 @@ export function executeWorkflow(input: {
     steps.push({ nodeId, title: node.title, status: stepStatus, durationMs: Math.max(1, Math.round(performance.now() - stepStarted)), detail, output });
   }
 
+  const hasAssignmentNode = input.nodes.some((node) => node.kind === "crm" && !node.title.toLowerCase().includes("reassign") && node.title.toLowerCase().includes("assign"));
   const summary = assignment?.salesPersonId
     ? `Rule engine selected ${assignment.salesPersonName}.${input.mode === "production" ? " External connector actions were safely deferred." : " External actions stayed disabled in test mode."}`
-    : "Workflow logic completed. No eligible sales person was selected; review availability and fallback settings.";
+    : hasAssignmentNode
+      ? "Workflow logic completed. No eligible sales person was selected; review availability and fallback settings."
+      : "Workflow completed successfully.";
   return { status: "success", steps, assignment, summary, durationMs: Math.max(1, Math.round(performance.now() - started)) };
 }

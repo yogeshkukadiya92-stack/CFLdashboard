@@ -175,7 +175,7 @@ export function ParametersPanel({ node, onChange, onRename, onTest, salesPeople 
     </> : null}
 
     {!handled ? <><Field label="Action"><select className="workflow-input" onChange={(event) => onChange("action", event.target.value)} value={String(node.config.action ?? node.title)}><option>{node.title}</option><option>Update existing record</option><option>Create a new record</option></select></Field><Field label="Due / schedule"><input className="workflow-input" onChange={(event) => onChange("due", event.target.value)} value={String(node.config.due ?? "Tomorrow at 10:00 AM")} /></Field></> : null}
-    <button className="workflow-button-primary w-full justify-center" onClick={onTest} type="button"><Play className="size-4" />Test with mock data</button>
+    <button className="workflow-button-primary w-full justify-center" onClick={onTest} type="button"><Play className="size-4" />{node.kind === "webhook" && node.title.toLowerCase().includes("download csv") ? "Run & download CSV" : "Test with mock data"}</button>
   </div>;
 }
 

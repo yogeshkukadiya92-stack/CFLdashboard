@@ -396,12 +396,20 @@ export function WorkflowPlayground({ initialWorkflowId = "workshop-registration-
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: workflowId, name: workflowName, status: active ? "active" : "draft", nodes, connections, note: noteText })
       });
-      const payload = await response.json() as { run?: RunRow; error?: string };
+      const payload = await response.json() as { run?: RunRow; error?: string; download?: { filename: string; mimeType: string; content: string } };
       if (!response.ok || !payload.run) throw new Error(payload.error || "Execution failed");
       setRuns((current) => [payload.run!, ...current.filter((run) => run.id !== payload.run!.id)].slice(0, 50));
       setExecutionState(Object.fromEntries((payload.run.steps ?? []).map((step) => [step.nodeId, step.status === "skipped" ? "idle" : step.status])));
       setSelectedRun(payload.run);
       setExecutionsOpen(true);
+      if (payload.download) {
+        const url = URL.createObjectURL(new Blob([payload.download.content], { type: payload.download.mimeType }));
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = payload.download.filename;
+        anchor.click();
+        window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
+      }
     } catch (error) {
       setImportError(error instanceof Error ? error.message : "Workflow test failed. Please retry.");
     } finally {
