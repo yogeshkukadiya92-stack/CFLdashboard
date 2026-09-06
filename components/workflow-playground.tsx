@@ -385,6 +385,31 @@ export function WorkflowPlayground({ initialWorkflowId = "workshop-registration-
     void persistWorkflow(true, true);
   }
 
+  const [processingAttendance, setProcessingAttendance] = useState(false);
+  const [attendanceProcessMessage, setAttendanceProcessMessage] = useState("");
+  async function processExistingAttendance() {
+    if (processingAttendance) return;
+    setProcessingAttendance(true);
+    setAttendanceProcessMessage("Processing saved attendance…");
+    let processed = 0, confirmed = 0, cursor = "", cutoff = "", fingerprint = "";
+    try {
+      let hasMore = true;
+      while (hasMore) {
+        const response = await fetch("/api/workflows/process-attendance", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: workflowId, cursor, cutoff, fingerprint }) });
+        const data = await response.json();
+        confirmed += Number(data.confirmed || 0);
+        if (!response.ok) throw new Error(data.error || "Processing failed.");
+        processed += Number(data.processed || 0);
+        cursor = data.cursor; cutoff = data.cutoff; fingerprint = data.fingerprint; hasMore = data.hasMore;
+        setAttendanceProcessMessage(`${processed} attendance records processed · ${confirmed} registrations confirmed${hasMore ? " · Processing…" : " · Complete"}`);
+      }
+      const response = await fetch(`/api/workflows?id=${encodeURIComponent(workflowId)}`, { cache: "no-store" });
+      if (response.ok) { const data = await response.json(); setRuns(data.executions || []); }
+      setExecutionsOpen(true);
+    } catch (error) { setAttendanceProcessMessage(`${confirmed} confirmed so far. ${error instanceof Error ? error.message : "Processing failed."} You can retry safely.`); }
+    finally { setProcessingAttendance(false); }
+  }
+
   async function testWorkflow() {
     if (testing) return;
     if (storageMode !== "cloud" || loadError) return;
@@ -703,7 +728,9 @@ export function WorkflowPlayground({ initialWorkflowId = "workshop-registration-
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <button aria-checked={active} className={`inline-flex items-center gap-2 rounded-lg px-2.5 py-2 text-[10px] font-black uppercase tracking-[0.12em] lg:inline-flex ${active ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`} onClick={() => active ? setActive(false) : activateWorkflow()} role="switch" type="button"><span className={`size-2 rounded-full ${active ? "bg-emerald-500" : "bg-amber-500"}`} />{storageMode === "cloud" ? "Production" : "Preview"} · {active ? "Active" : "Draft"}</button>
-        <button className="workflow-button-secondary" disabled={testing} onClick={testWorkflow} type="button">{testing ? <RefreshCw className="size-4 animate-spin" /> : <Play className="size-4" />}{testing ? "Running test" : "Test workflow"}</button>
+        <button className="workflow-button-secondary" disabled={testing || processingAttendance} onClick={testWorkflow} type="button">{testing ? <RefreshCw className="size-4 animate-spin" /> : <Play className="size-4" />}{testing ? "Running test" : "Test workflow"}</button>
+        {nodes.some(node => node.kind === "workshop" && (node.config.action === "Confirm registration" || node.title === "Confirm waiting registration")) ? <button className="workflow-button-secondary" disabled={processingAttendance || !active || saveState !== "saved"} onClick={processExistingAttendance} title="Confirms matching waiting registrations using saved attendance and the saved active workflow" type="button">{processingAttendance ? "Processing attendance…" : "Process existing attendance"}</button> : null}
+        {attendanceProcessMessage ? <span role="status" className="max-w-xs text-xs text-slate-600">{attendanceProcessMessage}</span> : null}
         <span className="inline-flex"><button className="workflow-button-secondary" onClick={() => persistWorkflow()} type="button"><Save className="size-4" />Save</button></span>
         <span className="inline-flex"><button className="workflow-button-primary" onClick={activateWorkflow} type="button"><Sparkles className="size-4" />Save & activate</button></span>
         {!fullScreen ? <>

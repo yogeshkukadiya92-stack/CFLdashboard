@@ -197,7 +197,9 @@ export function executeWorkflow(input: {
   }
 
   const hasAssignmentNode = input.nodes.some((node) => node.kind === "crm" && !node.title.toLowerCase().includes("reassign") && node.title.toLowerCase().includes("assign"));
-  const summary = assignment?.salesPersonId
+  const summary = steps.length > 0 && steps.every(step => step.status === "skipped")
+    ? "No actions ran: the event did not match, or the actions were skipped. Test mode does not confirm registrations. Use Process existing attendance for saved submissions."
+    : assignment?.salesPersonId
     ? `Rule engine selected ${assignment.salesPersonName}.${input.mode === "production" ? " External connector actions were safely deferred." : " External actions stayed disabled in test mode."}`
     : hasAssignmentNode
       ? "Workflow logic completed. No eligible sales person was selected; review availability and fallback settings."
