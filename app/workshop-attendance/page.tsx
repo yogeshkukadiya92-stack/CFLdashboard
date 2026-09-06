@@ -119,6 +119,7 @@ export default function WorkshopAttendancePage() {
   const [entries, setEntries] = useState<AttendanceEntry[]>([]);
   const [registrations, setRegistrations] = useState<RegistrationEntry[]>([]);
   const [comparisonFilter, setComparisonFilter] = useState<ComparisonFilter>("absent");
+  const [comparisonQuery, setComparisonQuery] = useState("");
   const [hideDuplicates, setHideDuplicates] = useState(false);
   const [responseFilters, setResponseFilters] = useState<ResponseFilterState>({ ...emptyResponseFilters });
   const [query, setQuery] = useState("");
@@ -738,22 +739,37 @@ export default function WorkshopAttendancePage() {
                   </button>
                 </div>
 
-                <div className="mt-2 flex gap-1.5 overflow-x-auto pb-1" aria-label="Attendance comparison scope">
-                  {([
-                    ["registered", "Registered", comparison.registered.length],
-                    ["attended", "Attended", comparison.attended.length],
-                    ["absent", "Absent", comparison.absent.length],
-                    ["walk_ins", "Walk-ins", comparison.walkIns.length]
-                  ] as Array<[ComparisonFilter, string, number]>).map(([value, label, count]) => (
-                    <button aria-pressed={comparisonFilter === value} className={`shrink-0 rounded-lg px-2.5 py-1.5 text-[11px] font-black ${comparisonFilter === value ? "bg-slate-950 text-white" : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`} key={value} onClick={() => setComparisonFilter(value)} type="button">
-                      {label} <span className="ml-1 opacity-70">{count}</span>
-                    </button>
-                  ))}
+                <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <div className="flex gap-1.5 overflow-x-auto pb-1" aria-label="Attendance comparison scope">
+                    {([
+                      ["registered", "Registered", comparison.registered.length],
+                      ["attended", "Attended", comparison.attended.length],
+                      ["absent", "Absent", comparison.absent.length],
+                      ["walk_ins", "Walk-ins", comparison.walkIns.length]
+                    ] as Array<[ComparisonFilter, string, number]>).map(([value, label, count]) => (
+                      <button aria-pressed={comparisonFilter === value} className={`shrink-0 rounded-lg px-2.5 py-1.5 text-[11px] font-black ${comparisonFilter === value ? "bg-slate-950 text-white" : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`} key={value} onClick={() => setComparisonFilter(value)} type="button">
+                        {label} <span className="ml-1 opacity-70">{count}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <label className="relative ml-auto block w-full sm:max-w-xs">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-slate-400" />
+                    <input
+                      aria-label="Search comparison by name or mobile number"
+                      className="min-h-9 w-full rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-9 text-xs font-semibold outline-none placeholder:text-slate-400 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
+                      onChange={(event) => setComparisonQuery(event.target.value)}
+                      placeholder="Search name or mobile number"
+                      type="search"
+                      value={comparisonQuery}
+                    />
+                    {comparisonQuery ? <button aria-label="Clear comparison search" className="absolute right-1.5 top-1/2 grid size-7 -translate-y-1/2 place-items-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700" onClick={() => setComparisonQuery("")} type="button"><X className="size-3.5" /></button> : null}
+                  </label>
                 </div>
 
                 <ComparisonTable
                   comparison={comparison}
                   filter={comparisonFilter}
+                  query={comparisonQuery}
                   sessionTitle={selectedSession.title}
                   workshopName={selectedWorkshop?.name || selectedSession.workshopName}
                 />
@@ -1076,6 +1092,7 @@ export default function WorkshopAttendancePage() {
 function ComparisonTable({
   comparison,
   filter,
+  query,
   sessionTitle,
   workshopName
 }: {
@@ -1086,18 +1103,24 @@ function ComparisonTable({
     walkIns: AttendanceEntry[];
   };
   filter: ComparisonFilter;
+  query: string;
   sessionTitle: string;
   workshopName: string;
 }) {
-  const registrations = filter === "registered" ? comparison.registered : filter === "absent" ? comparison.absent : [];
-  const count = filter === "attended" ? comparison.attended.length : filter === "walk_ins" ? comparison.walkIns.length : registrations.length;
+  const search = query.trim().toLowerCase();
+  const mobileSearch = search.replace(/\D/g, "");
+  const matches = (name: string, mobile?: string) => !search || name.toLowerCase().includes(search) || Boolean(mobileSearch && normalizedMobile(mobile).includes(mobileSearch));
+  const registrations = (filter === "registered" ? comparison.registered : filter === "absent" ? comparison.absent : []).filter((registration) => matches(registration.fullName, registration.mobile));
+  const attendedRows = comparison.attended.filter(({ attendance, registration }) => matches(registration.fullName || attendance.attendeeName, registration.mobile || attendance.mobile));
+  const walkInRows = comparison.walkIns.filter((attendance) => matches(attendance.attendeeName, attendance.mobile));
+  const count = filter === "attended" ? attendedRows.length : filter === "walk_ins" ? walkInRows.length : registrations.length;
   const attendedRegistrationIds = new Set(comparison.attended.map((item) => item.registration.id));
   const followUpMessage = (name: string) => encodeURIComponent(`Hello ${name}, you registered for ${workshopName}, but we missed you in ${sessionTitle}. Please let us know if you need any help.`);
 
   if (count === 0) {
     return (
       <div className="mt-2 grid min-h-24 place-items-center rounded-lg border border-dashed border-slate-200 bg-slate-50 px-5 text-center">
-        <div><UserCheck className="mx-auto size-7 text-slate-300" /><p className="mt-2 text-sm font-black text-slate-700">No {filter === "walk_ins" ? "walk-ins" : filter} found</p></div>
+        <div><UserCheck className="mx-auto size-7 text-slate-300" /><p className="mt-2 text-sm font-black text-slate-700">{search ? "No matching person found" : `No ${filter === "walk_ins" ? "walk-ins" : filter} found`}</p>{search ? <p className="mt-1 text-xs font-semibold text-slate-500">Try another name or mobile number.</p> : null}</div>
       </div>
     );
   }
@@ -1110,7 +1133,7 @@ function ComparisonTable({
           <tr><th className="px-3 py-2">Name</th><th className="px-3 py-2">Mobile</th><th className="px-3 py-2">Email / City</th><th className="px-3 py-2">Status</th><th className="px-3 py-2">Date</th><th className="px-3 py-2">Follow-up</th></tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
-          {filter === "attended" ? comparison.attended.map(({ attendance, registration }) => {
+          {filter === "attended" ? attendedRows.map(({ attendance, registration }) => {
             const mobile = normalizedMobile(registration.mobile || attendance.mobile);
             return (
               <tr className="hover:bg-slate-50" key={registration.id}>
@@ -1122,7 +1145,7 @@ function ComparisonTable({
                 <td className="px-3 py-2"><ContactActions message={followUpMessage(registration.fullName)} mobile={mobile} name={registration.fullName} /></td>
               </tr>
             );
-          }) : filter === "walk_ins" ? comparison.walkIns.map((attendance) => {
+          }) : filter === "walk_ins" ? walkInRows.map((attendance) => {
             const mobile = normalizedMobile(attendance.mobile);
             return (
               <tr className="hover:bg-slate-50" key={attendance.id}>
