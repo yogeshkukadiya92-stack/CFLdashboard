@@ -77,6 +77,9 @@ export async function GET(request: NextRequest) {
         workshopId: session.workshopId,
         workshopName: session.workshopName
       }));
+    const workshops = (Array.isArray(state?.workshops) ? state.workshops as Array<Record<string, unknown>> : [])
+      .filter((workshop) => workshop.archived !== true && String(workshop.id ?? "") && String(workshop.name ?? ""))
+      .map((workshop) => ({ id: String(workshop.id), name: String(workshop.name) }));
     const registrations = Array.isArray(state?.registrations) ? state.registrations as RegistrationEntry[] : [];
     const payment = {
       ...paymentEvents,
@@ -91,6 +94,7 @@ export async function GET(request: NextRequest) {
       whatsapp,
       attendance,
       attendanceSessions,
+      workshops,
       payment,
       crm,
       versions,

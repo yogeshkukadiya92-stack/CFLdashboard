@@ -74,6 +74,7 @@ export type WorkflowAttendanceSession = {
   workshopId: string;
   workshopName: string;
 };
+export type WorkflowWorkshop = { id: string; name: string };
 export type WhatsAppAutomationOverview = {
   counts: Record<string, number>;
   retryDue: number;
@@ -143,6 +144,7 @@ export const catalog: Array<{ category: string; color: string; items: CatalogIte
     { kind: "crm", title: "Reassign inactive lead", subtitle: "Workload recovery", icon: RefreshCw },
   ] },
   { category: "Workshop", color: "text-sky-700", items: [
+    { kind: "workshop", title: "Find workshop repeater", subtitle: "Search repeaters in one workshop", icon: Search },
     { kind: "workshop", title: "Find waiting registration", subtitle: "Match existing or new registration", icon: Search },
     { kind: "workshop", title: "Confirm waiting registration", subtitle: "Attendance-qualified promotion", icon: Check },
     { kind: "workshop", title: "Assign workshop", subtitle: "Workshop action", icon: Workflow },
@@ -277,6 +279,7 @@ export function defaultConfigForItem(item: Pick<CatalogItem, "kind" | "title">) 
   if (item.title === "Scheduled time") return { scheduleEnabled: true, frequency: "daily", time: "09:00", timezone: "Asia/Kolkata", weekdays: ["Mon", "Tue", "Wed", "Thu", "Fri"] };
   if (item.title === "Schedule for date") return { scheduleEnabled: true, frequency: "once", scheduledAt: "", timezone: "Asia/Kolkata" };
   if (item.title === "Find waiting registration") return { ...config, workshop: "Healthy Forever", match: "Mobile number", registrationMode: "Existing or new", status: "Waiting only" };
+  if (item.title === "Find workshop repeater") return { workshopId: "", workshop: "", match: "Mobile number", repeaterOnly: true };
   if (item.title === "Confirm waiting registration") return { ...config, workshop: "Healthy Forever", capacity: "Respect capacity", action: "Confirm registration", confirmationSource: "Attendance" };
   if (item.title === "Telegram message received") return { ...config, event: "Telegram message received", chatPolicy: "Approved chats only", deduplicate: true };
   if (item.title === "Send Telegram reply") return { ...config, message: "{{ai.answer}}", parseMode: "Plain text", splitLongMessages: true };
@@ -300,5 +303,6 @@ export function validateWorkflow(nodes: WorkflowNode[], connections: Connection[
   const noInput = nodes.filter((node) => !isEventTrigger(node) && !connections.some((connection) => connection.to === node.id));
   if (noInput.length) issues.push({ level: "warning", text: `${noInput.length} node${noInput.length > 1 ? "s are" : " is"} not connected to an input.` });
   if (nodes.some((node) => node.kind === "message" && !String(node.config.recipient ?? "").trim())) issues.push({ level: "error", text: "A message node is missing its recipient mapping." });
+  if (nodes.some((node) => node.kind === "workshop" && node.config.repeaterOnly === true && !String(node.config.workshopId ?? "").trim())) issues.push({ level: "error", text: "Select a workshop for the repeater lookup node." });
   return issues;
 }

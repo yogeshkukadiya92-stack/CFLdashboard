@@ -28,6 +28,7 @@ import {
   type RunStatus,
   type WorkflowSalesPerson,
   type WorkflowAttendanceSession,
+  type WorkflowWorkshop,
   type WorkflowNode,
   type WorkflowVersionSummary,
 } from "@/lib/workflow-studio";
@@ -35,17 +36,19 @@ import { resolveSmartLeadAssignment, type LeadAssignmentStrategy, type WorkshopL
 
 export type InspectorTab = "parameters" | "settings" | "output";
 
-export function ParametersPanel({ node, onChange, onRename, onTest, salesPeople = [], attendanceSessions = [] }: {
+export function ParametersPanel({ node, onChange, onRename, onTest, salesPeople = [], attendanceSessions = [], workshops = [] }: {
   node: WorkflowNode;
   onChange: (key: string, value: ConfigValue) => void;
   onRename: (value: string) => void;
   onTest: () => void;
   salesPeople?: WorkflowSalesPerson[];
   attendanceSessions?: WorkflowAttendanceSession[];
+  workshops?: WorkflowWorkshop[];
 }) {
-  const workshops = useMemo(() => Array.from(new Map(attendanceSessions
+  const attendanceWorkshops = useMemo(() => Array.from(new Map(attendanceSessions
     .filter((session) => session.workshopId && session.workshopName)
     .map((session) => [session.workshopId, { id: session.workshopId, name: session.workshopName }])).values()), [attendanceSessions]);
+  const availableWorkshops = workshops.length ? workshops : attendanceWorkshops;
   const isAssignNode = node.kind === "crm" && !node.title.toLowerCase().includes("reassign") && node.title.toLowerCase().includes("assign");
   const isCrmAction = node.kind === "crm" && !isAssignNode;
   const isScheduleNode = node.kind === "delay" && (node.config.scheduleEnabled === true || ["Scheduled time", "Schedule for date"].includes(node.title));
@@ -93,7 +96,14 @@ export function ParametersPanel({ node, onChange, onRename, onTest, salesPeople 
       <ToggleField checked={Boolean(node.config.notifyManager)} label="Notify sales manager for missed SLA" onChange={(value) => onChange("notifyManager", value)} />
     </> : null}
 
-    {node.kind === "workshop" ? <>
+    {node.kind === "workshop" && node.config.repeaterOnly === true ? <>
+      <Field hint="Only repeater registrations from this workshop will match" label="Search in workshop"><select className="workflow-input" onChange={(event) => { const selected = availableWorkshops.find((workshop) => workshop.id === event.target.value); onChange("workshopId", event.target.value); onChange("workshop", selected?.name ?? ""); }} value={String(node.config.workshopId ?? "")}><option value="">Select workshop</option>{availableWorkshops.map((workshop) => <option key={workshop.id} value={workshop.id}>{workshop.name}</option>)}</select></Field>
+      {!availableWorkshops.length ? <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-[10px] font-bold text-amber-800">No active workshops found.</p> : null}
+      <Field label="Match registration by"><select className="workflow-input" onChange={(event) => onChange("match", event.target.value)} value={String(node.config.match ?? "Mobile number")}><option>Mobile number</option><option>Registration ID</option><option>Email</option></select></Field>
+      <ToggleField checked label="Repeater registrations only" onChange={() => onChange("repeaterOnly", true)} />
+    </> : null}
+
+    {node.kind === "workshop" && node.config.repeaterOnly !== true ? <>
       <Field label="Workshop"><select className="workflow-input" onChange={(event) => onChange("workshop", event.target.value)} value={String(node.config.workshop ?? "")}><option>Business Growth Blueprint</option><option>Healthy Forever</option><option>From registration source</option></select></Field>
       <Field label="Batch"><select className="workflow-input" onChange={(event) => onChange("batch", event.target.value)} value={String(node.config.batch ?? "")}><option>Best available batch</option><option>Selected batch</option><option>Main Batch</option><option>From registration link</option></select></Field>
       <Field label="Capacity behaviour"><select className="workflow-input" onChange={(event) => onChange("capacity", event.target.value)} value={String(node.config.capacity ?? "")}><option>Respect capacity</option><option>Waiting list</option><option>Allow overbooking</option></select></Field>
@@ -147,7 +157,7 @@ export function ParametersPanel({ node, onChange, onRename, onTest, salesPeople 
 
     {node.kind === "data" ? <>
       <Field label="Allowed data"><select className="workflow-input" onChange={(event) => onChange("scope", event.target.value)} value={String(node.config.scope ?? "Dashboard summary")}><option>Dashboard summary</option><option>Workshop registrations</option><option>Attendance analytics</option><option>CRM pipeline</option><option>Payment summary</option></select></Field>
-      {String(node.config.scope ?? "Dashboard summary") === "Workshop registrations" ? <Field hint="Limit matching and export to one workshop" label="Workshop"><select className="workflow-input" onChange={(event) => onChange("workshopId", event.target.value)} value={String(node.config.workshopId ?? "")}><option value="">All selected workshops</option>{workshops.map((workshop) => <option key={workshop.id} value={workshop.id}>{workshop.name}</option>)}</select></Field> : null}
+      {String(node.config.scope ?? "Dashboard summary") === "Workshop registrations" ? <Field hint="Limit matching and export to one workshop" label="Workshop"><select className="workflow-input" onChange={(event) => onChange("workshopId", event.target.value)} value={String(node.config.workshopId ?? "")}><option value="">All selected workshops</option>{availableWorkshops.map((workshop) => <option key={workshop.id} value={workshop.id}>{workshop.name}</option>)}</select></Field> : null}
       <div className="grid grid-cols-2 gap-2"><Field label="Access"><select className="workflow-input" onChange={(event) => onChange("access", event.target.value)} value={String(node.config.access ?? "Read only")}><option>Read only</option></select></Field><Field label="Maximum rows"><input className="workflow-input" min="1" max="100" onChange={(event) => onChange("maxRows", Math.min(100, Math.max(1, Number(event.target.value))))} type="number" value={Number(node.config.maxRows ?? 25)} /></Field></div>
       <ToggleField checked={node.config.redactSensitive !== false} label="Hide phone, email and payment identifiers" onChange={(value) => onChange("redactSensitive", value)} />
     </> : null}

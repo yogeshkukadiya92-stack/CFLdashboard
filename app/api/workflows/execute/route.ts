@@ -26,6 +26,7 @@ export async function POST(request: NextRequest) {
       registration,
       salesPeople: Array.isArray(state.salesPeople) ? state.salesPeople as Array<Record<string, unknown>> : [],
       leads: Array.isArray(state.leads) ? state.leads as Array<Record<string, unknown>> : []
+      , registrations: Array.isArray(state.registrations) ? state.registrations as Array<Record<string, unknown>> : []
     });
     const id = `EXE-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
     const participant = `${String(registration.fullName || registration.name || "Sample Lead")} · ${String(registration.city || "Unknown city")}`;

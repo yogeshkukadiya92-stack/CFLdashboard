@@ -49,3 +49,18 @@ test("workflow engine exposes payment context without performing external side e
   });
   assert.deepEqual(result.steps[0].output, { paymentStatus: "captured", amount: 2500, paymentId: "pay-1", registrationId: undefined });
 });
+
+test("workshop repeater lookup only matches repeaters in the selected workshop", () => {
+  const result = executeWorkflow({
+    nodes: [{ id: "repeater", kind: "workshop", title: "Find workshop repeater", subtitle: "", x: 0, y: 0, config: { workshopId: "w-2", workshop: "Workshop Two", match: "Mobile number", repeaterOnly: true } }],
+    connections: [],
+    registration: { id: "incoming", mobile: "98765 43210" },
+    registrations: [
+      { id: "right", workshopId: "w-2", mobile: "9876543210", isRepeater: true },
+      { id: "wrong-workshop", workshopId: "w-1", mobile: "9876543210", isRepeater: true },
+      { id: "not-repeater", workshopId: "w-2", mobile: "9876543210", isRepeater: false }
+    ],
+    salesPeople: [], leads: []
+  });
+  assert.deepEqual(result.steps[0].output, { found: true, matchCount: 1, workshopId: "w-2", registrationIds: ["right"] });
+});

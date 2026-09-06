@@ -62,6 +62,7 @@ export function executeWorkflow(input: {
   registration: RegistrationForAssignment & Record<string, unknown>;
   salesPeople: SalesPersonForAssignment[];
   leads: LeadForAssignment[];
+  registrations?: Array<Record<string, unknown>>;
   mode?: "test" | "production";
 }): WorkflowExecutionResult {
   const started = performance.now();
@@ -103,7 +104,22 @@ export function executeWorkflow(input: {
       detail = production ? "Message action deferred to the configured asynchronous WhatsApp delivery connector." : `Template ${String(node.config.template ?? "not selected")} validated; delivery suppressed in test mode.`;
       if (production) stepStatus = "skipped";
     } else if (node.kind === "delay") detail = input.mode === "production" ? "Delay policy registered for asynchronous execution." : "Delay policy validated; waiting suppressed in test mode.";
-    else if (node.kind === "workshop") {
+    else if (node.kind === "workshop" && node.config.repeaterOnly === true) {
+      const workshopId = String(node.config.workshopId ?? "").trim();
+      const matchBy = String(node.config.match ?? "Mobile number");
+      const key = matchBy === "Email" ? "email" : matchBy === "Registration ID" ? "id" : "mobile";
+      const expected = String(input.registration[key] ?? "").replace(key === "mobile" ? /\D/g : /$^/, "").toLowerCase();
+      const matches = (input.registrations ?? []).filter((registration) =>
+        String(registration.workshopId ?? "") === workshopId
+        && registration.isRepeater === true
+        && String(registration[key] ?? "").replace(key === "mobile" ? /\D/g : /$^/, "").toLowerCase() === expected
+      );
+      detail = workshopId
+        ? `${matches.length} repeater registration${matches.length === 1 ? "" : "s"} found in ${String(node.config.workshop || workshopId)} by ${matchBy.toLowerCase()}.`
+        : "Select a workshop before running the repeater lookup.";
+      output = { found: matches.length > 0, matchCount: matches.length, workshopId, registrationIds: matches.map((registration) => registration.id) };
+      if (!workshopId) stepStatus = "failed";
+    } else if (node.kind === "workshop") {
       const workshop = String(node.config.workshop ?? input.registration.workshopTitle ?? "source workshop");
       const batch = String(node.config.batch ?? input.registration.batch ?? "best available batch");
       detail = `${node.title}: ${workshop} · ${batch} · ${String(node.config.capacity ?? "Respect capacity")}.`;
