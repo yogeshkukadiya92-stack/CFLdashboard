@@ -74,7 +74,7 @@ export type WorkflowAttendanceSession = {
   workshopId: string;
   workshopName: string;
 };
-export type WorkflowWorkshop = { id: string; name: string };
+export type WorkflowWorkshop = { id: string; name: string; forms?: Array<{ id: string; title: string }>; batches?: Array<{ id: string; name: string }> };
 export type WhatsAppAutomationOverview = {
   counts: Record<string, number>;
   retryDue: number;

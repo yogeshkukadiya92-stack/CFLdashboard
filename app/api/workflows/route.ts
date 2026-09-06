@@ -79,7 +79,10 @@ export async function GET(request: NextRequest) {
       }));
     const workshops = (Array.isArray(state?.workshops) ? state.workshops as Array<Record<string, unknown>> : [])
       .filter((workshop) => workshop.archived !== true && String(workshop.id ?? "") && String(workshop.name ?? ""))
-      .map((workshop) => ({ id: String(workshop.id), name: String(workshop.name) }));
+      .map((workshop) => ({ id: String(workshop.id), name: String(workshop.name),
+        batches: (Array.isArray(workshop.batches) ? workshop.batches : []).map((batch) => ({ id: String(batch.id), name: String(batch.name) })),
+        forms: (Array.isArray(state?.forms) ? state.forms as Array<Record<string, unknown>> : []).filter((form) => form.workshopId === workshop.id).map((form) => ({ id: String(form.id), title: String(form.title || "Registration form") }))
+      }));
     const registrations = Array.isArray(state?.registrations) ? state.registrations as RegistrationEntry[] : [];
     const payment = {
       ...paymentEvents,

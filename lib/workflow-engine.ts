@@ -69,6 +69,9 @@ export function executeWorkflow(input: {
   const nodeMap = new Map(input.nodes.map((node) => [node.id, node]));
   const steps: ExecutionStep[] = [];
   let assignment: LeadAssignmentDecision | undefined;
+  const excluded = new Set<string>();
+  const rejectedEdges = new Set<string>();
+  const context = { ...input.registration };
 
   for (const nodeId of executionOrder(input.nodes, input.connections)) {
     const node = nodeMap.get(nodeId);
@@ -77,13 +80,32 @@ export function executeWorkflow(input: {
     let detail = "Configuration validated.";
     let output: Record<string, unknown> = {};
     let stepStatus: ExecutionStep["status"] = "success";
+    const incoming = input.connections.filter((edge) => edge.to === node.id);
+    const trigger = node.kind === "trigger" || Boolean(node.config.event);
+    const sessions = Array.isArray(node.config.sessionIds) ? node.config.sessionIds.map(String) : [];
+    const outsideScope = trigger && (
+      (Boolean(node.config.workshopId) && String(node.config.workshopId) !== String(input.registration.workshopId ?? ""))
+      || (Boolean(node.config.formId) && String(node.config.formId) !== String(input.registration.formId ?? ""))
+      || (sessions.length > 0 && !sessions.includes(String(input.registration.attendanceSessionId ?? "")))
+    );
+    if (outsideScope || (incoming.length > 0 && incoming.every((edge) => excluded.has(edge.from) || rejectedEdges.has(edge.id)))) {
+      excluded.add(node.id);
+      steps.push({ nodeId, title: node.title, status: "skipped", durationMs: 0, detail: outsideScope ? "Event does not match the selected workshop or form." : "Skipped because the connected input did not match." });
+      continue;
+    }
     if (node.kind === "trigger" || (node.kind === "telegram" && node.title.toLowerCase().includes("received"))) detail = `Accepted ${String(node.config.event ?? "workflow event")}.`;
     else if (node.kind === "condition") {
-      const result = conditionDetail(node, input.registration);
+      const result = conditionDetail(node, context);
       detail = result.detail;
       output = { matched: result.matched };
+      const selectedLabel = String(result.matched ? node.config.branchA ?? "Matches" : node.config.branchB ?? "Otherwise").toLowerCase();
+      for (const edge of input.connections.filter((edge) => edge.from === node.id)) {
+        if (edge.label && edge.label.toLowerCase() !== selectedLabel) rejectedEdges.add(edge.id);
+        if (!edge.label && !result.matched) rejectedEdges.add(edge.id);
+      }
     } else if (node.kind === "transform") {
-      output = applyTransform(input.registration, node.config);
+      output = applyTransform(context, node.config);
+      Object.assign(context, output);
       detail = `${node.title}: ${String(node.config.sourceField || "field")} mapped to ${String(node.config.targetField || "normalizedValue")}.`;
     } else if (node.kind === "crm" && !node.title.toLowerCase().includes("reassign") && node.title.toLowerCase().includes("assign")) {
       const rules = Array.isArray(node.config.assignmentRules) ? node.config.assignmentRules as WorkshopLeadAssignmentRule[] : [];
@@ -120,8 +142,8 @@ export function executeWorkflow(input: {
       output = { found: matches.length > 0, matchCount: matches.length, workshopId, registrationIds: matches.map((registration) => registration.id) };
       if (!workshopId) stepStatus = "failed";
     } else if (node.kind === "workshop") {
-      const workshop = String(node.config.workshop ?? input.registration.workshopTitle ?? "source workshop");
-      const batch = String(node.config.batch ?? input.registration.batch ?? "best available batch");
+      const workshop = String(node.config.workshopId || node.config.workshop || input.registration.workshopTitle || "source workshop");
+      const batch = String(node.config.batchId || node.config.batch || input.registration.batch || "best available batch");
       detail = `${node.title}: ${workshop} · ${batch} · ${String(node.config.capacity ?? "Respect capacity")}.`;
       output = { workshop, batch, capacityPolicy: node.config.capacity ?? "Respect capacity", action: node.title };
       if (input.mode === "production") stepStatus = "skipped";
@@ -143,6 +165,16 @@ export function executeWorkflow(input: {
     }
     else if (node.kind === "data") {
       const workshopId = String(node.config.workshopId ?? "");
+      if (node.config.scope === "Workshop registrations" && input.registrations) {
+        const records = input.registrations.filter((record) => !workshopId || record.workshopId === workshopId);
+        const maxRows = Math.max(1, Math.min(100, Number(node.config.maxRows) || 25));
+        const rows = records.slice(0, maxRows).map((record) => ({
+          id: record.id, fullName: record.fullName, workshopId: record.workshopId, registrationStatus: record.registrationStatus,
+          ...(node.config.redactSensitive === false ? { mobile: record.mobile, email: record.email } : {})
+        }));
+        steps.push({ nodeId, title: node.title, status: "success", durationMs: Math.max(1, Math.round(performance.now() - stepStarted)), detail: `${records.length} registrations found; returning ${rows.length} rows.`, output: { rows, total: records.length, workshopId } });
+        continue;
+      }
       detail = `${String(node.config.scope ?? "Dashboard summary")} query${workshopId ? ` for workshop ${workshopId}` : ""} validated as read-only; sensitive fields ${node.config.redactSensitive === false ? "are visible to the authorized agent" : "will be redacted"}.`;
       output = { scope: node.config.scope ?? "Dashboard summary", workshopId: workshopId || undefined, access: "read-only", maxRows: node.config.maxRows ?? 25, redacted: node.config.redactSensitive !== false };
       if (input.mode === "production") stepStatus = "skipped";
@@ -157,7 +189,10 @@ export function executeWorkflow(input: {
       output = { chatPolicy: node.config.chatPolicy ?? "Approved chats only", messageMapping: node.config.message ?? "{{ai.answer}}" };
       if (input.mode === "production") stepStatus = "skipped";
     }
-    else if (node.kind === "crm") detail = `CRM action ${String(node.config.action ?? node.title)} validated.`;
+    else if (node.kind === "crm") {
+      detail = input.mode === "production" ? "CRM action has no connected persistence handler; no record was changed." : `CRM action ${String(node.config.action ?? node.title)} validated; no record changed in test mode.`;
+      if (input.mode === "production") stepStatus = "skipped";
+    }
     steps.push({ nodeId, title: node.title, status: stepStatus, durationMs: Math.max(1, Math.round(performance.now() - stepStarted)), detail, output });
   }
 
