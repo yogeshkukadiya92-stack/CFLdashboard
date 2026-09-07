@@ -8,6 +8,7 @@ import { DuplicateResponseFilter } from "@/components/duplicate-response-filter"
 import { AdvancedResponseFilters } from "@/components/advanced-response-filters";
 import { WorkshopCohortCompare } from "@/components/workshop-cohort-compare";
 import { MultiWorkshopOverlap } from "@/components/multi-workshop-overlap";
+import { normalizeCoreFieldRequirements } from "@/lib/builder-field-normalization";
 import { AlertCircle, Archive, ArrowDown, ArrowUp, BarChart3, Bold, CalendarDays, Check, CheckSquare, ChevronDown, Circle, Copy, Download, Edit3, ExternalLink, Eye, EyeOff, Files, Heading, Image, Italic, LayoutList, Link2, List, ListOrdered, Mail, MessageCircle, Monitor, Palette, PhoneCall, Plus, QrCode, RefreshCw, Route, Save, Search, Share2, Smartphone, Sparkles, Trash2, Type, Underline, Upload, UsersRound, X } from "lucide-react";
 import { hydrateLiveState, readLocalArray, readLocalObject, saveLiveState } from "@/lib/live-state";
 import { buildRegistrationUrl, normalizeBaseUrl } from "@/lib/registration-url";
@@ -160,14 +161,6 @@ function defaultBuilderFields(): BuilderField[] {
     { id: generateId(), type: "email", label: "Email", placeholder: "you@example.com", required: false, role: "email" },
     { id: generateId(), type: "short_text", label: "City", placeholder: "Your city", required: false, role: "city" }
   ];
-}
-
-function normalizeCoreFieldRequirements(fields: BuilderField[]) {
-  return fields.map((field) => {
-    if (field.role === "name" || field.role === "mobile") return { ...field, required: true };
-    if (field.role === "email" || field.role === "city") return { ...field, required: false };
-    return field;
-  });
 }
 
 export default function WorkshopMasterPage() {

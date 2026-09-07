@@ -1,6 +1,7 @@
 "use client";
 
 import { HeightInput, isHeightField } from "@/components/height-input";
+import { normalizeCoreFieldRequirements } from "@/lib/builder-field-normalization";
 import { workshops as seedWorkshops } from "@/lib/data";
 import { hydratePublicRegistrationState, readLocalArray, readLocalObject, savePublicRegistration, writeLiveStateToLocalStorage } from "@/lib/live-state";
 import { sanitizeRichTextHtml } from "@/lib/rich-text";
@@ -94,14 +95,6 @@ function simpleFields(): BuilderField[] {
     { id: "country", type: "dropdown", label: "Country", required: true, options: [...COUNTRY_OPTIONS], role: "country" },
     { id: "city", type: "dropdown", label: "City", required: false, allowOther: true, role: "city" }
   ];
-}
-
-function normalizeCoreFieldRequirements(fields: BuilderField[]) {
-  return fields.map((field) => {
-    if (field.role === "name" || field.role === "mobile") return { ...field, required: true };
-    if (field.role === "email" || field.role === "city") return { ...field, required: false };
-    return field;
-  });
 }
 
 function slugify(value: string) {
