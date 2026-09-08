@@ -3,9 +3,11 @@ import cluster from 'node:cluster';
 import { availableParallelism } from 'node:os';
 import { createRequire } from 'node:module';
 const require=createRequire(import.meta.url);
-const count=Number(process.env.WEB_CONCURRENCY || 2);
+const count=Number(process.env.WEB_CONCURRENCY || 4);
 if(!Number.isInteger(count)||count<1||count>4)throw Error('WEB_CONCURRENCY must be between 1 and 4; check the database connection budget before increasing it');
 const workers=Math.min(count,availableParallelism());
+// Distribute new connections across workers consistently on every platform.
+cluster.schedulingPolicy=cluster.SCHED_RR;
 const args=['start',...process.argv.slice(2)];
 if(!args.some(a=>a==='--keepAliveTimeout'))args.push('--keepAliveTimeout','65000');
 cluster.setupPrimary({exec:require.resolve('next/dist/bin/next'),args});

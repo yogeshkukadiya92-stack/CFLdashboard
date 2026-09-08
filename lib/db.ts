@@ -45,6 +45,14 @@ const emptyAppState: AppState = {
   workshops: []
 };
 
+export function getPoolMax(name: "DB_POOL_MAX" | "REGISTRATION_DB_POOL_MAX") {
+  const value = Number(process.env[name] ?? 5);
+  if (!Number.isInteger(value) || value < 1 || value > 50) {
+    throw new Error(`${name} must be an integer between 1 and 50`);
+  }
+  return value;
+}
+
 export function getDbPool() {
   if (!process.env.DATABASE_URL) {
     return null;
@@ -52,9 +60,13 @@ export function getDbPool() {
   if (!pool) {
     pool = new Pool({
       connectionString: process.env.DATABASE_URL,
+      max: getPoolMax("DB_POOL_MAX"),
+      idleTimeoutMillis: 30_000,
+      application_name: "cfl-web",
       connectionTimeoutMillis: 5_000,
       query_timeout: 10_000
     });
+    pool.on("error", (error) => console.error("Web database idle connection error", error.message));
   }
   return pool;
 }
@@ -66,10 +78,9 @@ let registrationPool: Pool | null = null;
 export function getRegistrationDbPool() {
   if (!process.env.DATABASE_URL) return null;
   if (!registrationPool) {
-    const configured = Number(process.env.REGISTRATION_DB_POOL_MAX ?? 10);
     registrationPool = new Pool({
       connectionString: process.env.DATABASE_URL,
-      max: Number.isInteger(configured) && configured > 0 && configured <= 50 ? configured : 10,
+      max: getPoolMax("REGISTRATION_DB_POOL_MAX"),
       connectionTimeoutMillis: 15_000,
       idleTimeoutMillis: 30_000,
       query_timeout: 10_000,

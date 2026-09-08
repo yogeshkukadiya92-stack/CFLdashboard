@@ -39,6 +39,40 @@ NEXT_PUBLIC_APP_URL=https://your-domain.example
 
 `ADMIN_EMAIL`, `ADMIN_PASSWORD`, and `AUTH_SECRET` are required in production. The local development defaults are intentionally disabled for deployed builds.
 
+## Coolify: four workers on one server
+
+Build with `npm run build` and start with `npm run start` (not `next start`,
+which bypasses the worker supervisor). Route the Coolify proxy to port 3000.
+Use one application container with these runtime environment variables:
+
+```bash
+WEB_CONCURRENCY=4
+DB_POOL_MAX=5
+REGISTRATION_DB_POOL_MAX=5
+```
+
+Set these explicitly in Coolify: existing environment values override the new
+defaults, and `.env.example` is not loaded automatically. Redeploy to activate.
+Configure Coolify's HTTP health check as `/api/health` on port 3000; it returns
+200 only when the database and registration storage are ready. Allow startup
+time for database initialization before marking the container unhealthy.
+Allow at least four CPUs for the container; the supervisor caps workers to the
+CPUs available to it. Startup logs should show `CFL server: 4 web processes`.
+The supervisor distributes new connections across workers and restarts failed
+workers. Keep-alive requests may stay on their existing worker.
+
+The two database pools reserve up to 10 connections per worker: 40 per container,
+or 80 while old and new containers overlap during deployment. Leave additional
+database capacity for other clients and administration. Check the database's
+connection limit before deployment. Use a termination grace period of at least
+35 seconds to allow the supervisor's 30-second shutdown window.
+
+Validate on staging with representative registrations and dashboard requests,
+increasing concurrency gradually while monitoring latency, errors, CPU, memory,
+and database connections. More workers do not eliminate queues or database
+contention. This setup does not protect against failure of the physical server.
+Existing process-local login attempt limits remain per worker, not global.
+
 ## Historical Member Import
 
 The importer streams the oversized worksheet instead of loading all rows into browser memory. It is resumable and idempotent by file hash, source row, and normalized row hash.

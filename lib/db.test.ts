@@ -1,6 +1,25 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { beginPersistenceTransaction, isMissingPersistenceTableError, reserveRegistrationNumber } from "./db.ts";
+import { beginPersistenceTransaction, getPoolMax, isMissingPersistenceTableError, reserveRegistrationNumber } from "./db.ts";
+
+test("database pool limits default to a bounded four-worker budget and reject invalid settings", () => {
+  for (const name of ["DB_POOL_MAX", "REGISTRATION_DB_POOL_MAX"] as const) {
+    const previous = process.env[name];
+    try {
+      delete process.env[name];
+      assert.equal(getPoolMax(name), 5);
+      process.env[name] = "12";
+      assert.equal(getPoolMax(name), 12);
+      for (const invalid of ["", "0", "-1", "1.5", "51", "invalid"]) {
+        process.env[name] = invalid;
+        assert.throws(() => getPoolMax(name), /must be an integer/);
+      }
+    } finally {
+      if (previous === undefined) delete process.env[name];
+      else process.env[name] = previous;
+    }
+  }
+});
 
 test("only a missing app_state table triggers schema initialization on read", () => {
   assert.equal(isMissingPersistenceTableError({ code: "42P01" }), true);
