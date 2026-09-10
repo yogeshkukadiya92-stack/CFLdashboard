@@ -78,7 +78,7 @@ type DiscountType = "percent" | "flat";
 type AnalyticsPanel = "cohort" | "overlap" | null;
 type FormWorkflowPanel = "basics" | "automation" | "fields" | "includes" | "preview" | null;
 type WorkshopWorkflowPanel = "info" | "mfw" | "pricing" | null;
-type FollowUpScope = "needs_follow_up" | "completed" | "waiting" | "repeaters" | "all";
+type FollowUpScope = "needs_follow_up" | "completed" | "confirmed" | "waiting" | "repeaters" | "all";
 type RegistrationLinkConfig = {
   batch?: string;
   customBaseUrl?: string;
@@ -467,6 +467,7 @@ export default function WorkshopMasterPage() {
     );
   }, [filteredParticipants, participantSearch]);
   const followUpParticipants = useMemo(() => searchedParticipants.filter((entry) => {
+    if (followUpScope === "confirmed") return entry.registrationStatus !== "waiting";
     if (followUpScope === "waiting") return entry.registrationStatus === "waiting";
     if (followUpScope === "repeaters") return Boolean(entry.isRepeater);
     const completed = Boolean(entry.confirmationStatus && entry.confirmationStatus !== "pending" && entry.confirmationNote?.trim());
@@ -1260,6 +1261,43 @@ export default function WorkshopMasterPage() {
     link.remove();
     URL.revokeObjectURL(url);
     setMessage(`Downloaded ${waitingParticipants.length} waiting registrations.`);
+  }
+
+  function exportConfirmedRegistrations() {
+    if (!selectedWorkshop || !confirmedParticipants.length) return;
+    const headers = ["Registration / Unique ID", "Name", "Mobile", "Email", "City", "Batch", "Source", "Reference Name", "Confirmation", "Confirmed Via", "Confirmation Updated By", "Confirmation Updated At", "Call Note", "Payment Status", "Paid", "Due", "Submitted"];
+    const rows = confirmedParticipants.map((entry) => [
+      entry.registrationNumber ?? "",
+      entry.fullName,
+      entry.mobile,
+      entry.email,
+      entry.city,
+      entry.batch ?? "Main Batch",
+      entry.source ?? "Registration Link",
+      referenceNameForRegistration(entry, selectedReferenceAnswerKeys),
+      entry.confirmationStatus ?? "confirmed",
+      entry.confirmationSource?.replaceAll("_", " + ") ?? "",
+      entry.confirmationUpdatedBy ?? "",
+      entry.confirmationUpdatedAt ? formatSubmittedAt(entry.confirmationUpdatedAt) : "",
+      entry.confirmationNote ?? "",
+      entry.status,
+      entry.amountPaid,
+      entry.amountDue,
+      formatSubmittedAt(entry.createdAt)
+    ]);
+    const cell = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+    const csv = "\ufeff" + [headers, ...rows].map((row) => row.map(cell).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    const filename = selectedWorkshop.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "workshop";
+    link.href = url;
+    link.download = `${filename}-confirmed-registrations.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    setMessage(`Downloaded ${confirmedParticipants.length} confirmed registrations.`);
   }
 
   return (
@@ -2293,6 +2331,16 @@ export default function WorkshopMasterPage() {
                     <Download className="size-3.5" />
                     Waiting CSV
                   </button>
+                  <button
+                    className="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-50 px-2.5 text-[11px] font-black text-emerald-800 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled={!confirmedParticipants.length}
+                    onClick={exportConfirmedRegistrations}
+                    title="Download only confirmed registrations"
+                    type="button"
+                  >
+                    <Download className="size-3.5" />
+                    Confirmed CSV
+                  </button>
                   <a
                     className="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-indigo-200 bg-white px-2.5 text-[11px] font-black text-indigo-700 hover:bg-indigo-50"
                     href={`/process/import-data-workshop-wise?workshopId=${encodeURIComponent(selectedWorkshop.id)}`}
@@ -2325,7 +2373,18 @@ export default function WorkshopMasterPage() {
                 <OperationalStat label="Users" value={displayedParticipants.length} />
                 <OperationalStat label="Paid" tone="success" value={displayedParticipants.filter((entry) => entry.status === "Paid").length} />
                 <OperationalStat label="Due" value={displayedParticipants.filter((entry) => entry.status === "Due").length} />
-                <OperationalStat label="Confirmed" value={confirmedParticipants.length} tone="success" />
+                <OperationalStat
+                  active={followUpScope === "confirmed"}
+                  label="Confirmed"
+                  onClick={() => {
+                    setShowParticipants(true);
+                    setFollowUpScope("confirmed");
+                    setHideWaitingParticipants(false);
+                    setSelectedParticipantIds([]);
+                  }}
+                  value={confirmedParticipants.length}
+                  tone="success"
+                />
                 <OperationalStat label="Waiting" value={selectedParticipants.filter((entry) => entry.registrationStatus === "waiting").length} tone="warning" />
                 <OperationalStat label="Repeaters" value={repeaterParticipants.length} tone="info" />
                 {activeParticipantFilterCount ? <OperationalStat label="Saved filters" value={activeParticipantFilterCount} tone="info" /> : null}
@@ -2344,6 +2403,7 @@ export default function WorkshopMasterPage() {
                       {([
                         ["needs_follow_up", "Needs follow-up"],
                         ["completed", "Completed"],
+                        ["confirmed", `Confirmed (${confirmedParticipants.length})`],
                         ["waiting", `Waiting List (${waitingParticipants.length})`],
                         ["repeaters", `Repeaters (${repeaterParticipants.length})`],
                         ["all", "All responses"]
