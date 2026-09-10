@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getRazorpayConfig } from "@/lib/integrations";
+import { verifyRazorpayCheckoutSignature } from "@/lib/payment-automation";
 
 export async function POST(request: Request) {
   const { keyId, keySecret } = await getRazorpayConfig();
@@ -12,6 +13,15 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json().catch(() => ({}));
+  if (body?.action === "verify") {
+    const orderId = String(body.razorpay_order_id || "").trim();
+    const paymentId = String(body.razorpay_payment_id || "").trim();
+    const signature = String(body.razorpay_signature || "").trim();
+    if (!verifyRazorpayCheckoutSignature(orderId, paymentId, signature, keySecret)) {
+      return NextResponse.json({ error: "Payment verification failed." }, { status: 400 });
+    }
+    return NextResponse.json({ ok: true });
+  }
   const amount = Number(body?.amount);
   const currency = String(body?.currency || "INR").trim().toUpperCase();
   const receipt = String(body?.receipt || `receipt_${Date.now()}`).trim().slice(0, 40);
@@ -46,7 +56,7 @@ export async function POST(request: Request) {
     });
 
     const data = await response.json().catch(() => ({ error: "Invalid response from Razorpay." }));
-    return NextResponse.json(data, { status: response.status });
+    return NextResponse.json(response.ok ? { ...data, key: keyId } : data, { status: response.status });
   } catch {
     return NextResponse.json({ error: "Unable to create Razorpay order." }, { status: 502 });
   }

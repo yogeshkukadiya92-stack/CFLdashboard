@@ -36,6 +36,11 @@ export function verifyRazorpayWebhookSignature(rawBody: string, signature: strin
   return timingSafeEqual(Buffer.from(signature, "hex"), Buffer.from(expected, "hex"));
 }
 
+export function verifyRazorpayCheckoutSignature(orderId: string, paymentId: string, signature: string, secret: string) {
+  if (!orderId || !paymentId || !signature || !secret) return false;
+  return verifyRazorpayWebhookSignature(`${orderId}|${paymentId}`, signature, secret);
+}
+
 export function parseRazorpayPaymentEvent(payload: unknown): ParsedPaymentEvent | null {
   const root = object(payload);
   const eventName = String(root.event ?? "").trim().slice(0, 100);

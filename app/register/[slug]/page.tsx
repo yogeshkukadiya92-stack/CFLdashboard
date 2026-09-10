@@ -24,6 +24,14 @@ const BRAND_LOGO_SRC = "/brand/coach-for-life-logo-horizontal.png";
 
 type WorkshopMasterRecord = { archived?: boolean; batch?: string; id: string; name: string; facilitator?: string; isPaid?: boolean };
 type ClientRecord = { city?: string; email?: string; id: number | string; mobile?: string; name?: string };
+type RazorpaySuccess = { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string };
+type RazorpayCheckout = { open: () => void; on: (event: string, handler: (response: { error?: { description?: string } }) => void) => void };
+
+declare global {
+  interface Window {
+    Razorpay?: new (options: Record<string, unknown>) => RazorpayCheckout;
+  }
+}
 type RegistrationLinkConfig = {
   batch?: string;
   facilitator?: string;
@@ -178,6 +186,25 @@ function isReferenceNameField(field: BuilderField) {
     (normalized.includes("reference") || normalized.includes("refrance") || normalized.includes("referrer") || normalized.includes("referred")) &&
     (normalized.includes("name") || normalized.includes("fullname") || normalized.includes("by"))
   );
+}
+
+async function loadRazorpayCheckout() {
+  if (window.Razorpay) return;
+  await new Promise<void>((resolve, reject) => {
+    const existing = document.querySelector<HTMLScriptElement>('script[src="https://checkout.razorpay.com/v1/checkout.js"]');
+    if (existing) {
+      existing.addEventListener("load", () => resolve(), { once: true });
+      existing.addEventListener("error", () => reject(new Error("Could not load Razorpay checkout.")), { once: true });
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.async = true;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error("Could not load Razorpay checkout."));
+    document.head.appendChild(script);
+  });
+  if (!window.Razorpay) throw new Error("Razorpay checkout is unavailable.");
 }
 
 function modelFromBuilderForm(form: BuilderForm, overrides?: Partial<Pick<FormModel, "batch" | "facilitator" | "fee" | "paid" | "partPayment" | "venue">>): FormModel {
@@ -722,7 +749,7 @@ export default function RegistrationPage() {
       await sendOtp();
       return;
     }
-    submitRegistration(model.otpRequired ? "verified" : "not_required");
+    await submitRegistration(model.otpRequired ? "verified" : "not_required");
   }
 
   function persistDraftAtPage(pageIndex: number) {
@@ -755,7 +782,7 @@ export default function RegistrationPage() {
     const verified = await verifyOtp();
     if (!verified) return;
     setOtpModalOpen(false);
-    submitRegistration("verified");
+    await submitRegistration("verified");
   }
 
   async function submitRegistration(whatsappVerificationStatus: RegistrationEntry["whatsappVerificationStatus"] = "not_required") {
@@ -784,6 +811,56 @@ export default function RegistrationPage() {
     const responseSuffix = model.allowDuplicate ? `-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}` : "";
     const registrationId = `reg-${model.id}-${registrationScope}-${mobile || Date.now().toString(36)}${responseSuffix}`;
     const source = searchParams.get("source") === "landing-page" ? "landing_page" : "registration_link";
+    let payment: RazorpaySuccess | null = null;
+    if (model.paid) {
+      if (amountPaid < 1) {
+        setMessage("Please enter a valid payment amount.");
+        return;
+      }
+      setSubmitting(true);
+      setMessage("");
+      try {
+        const orderResponse = await fetch("/api/razorpay/order", {
+          body: JSON.stringify({ amount: amountPaid, notes: { registrationId, workshopId: model.id }, receipt: registrationId }),
+          headers: { "Content-Type": "application/json" },
+          method: "POST"
+        });
+        const order = await orderResponse.json() as { amount?: number; currency?: string; error?: string | { description?: string }; id?: string; key?: string };
+        if (!orderResponse.ok || !order.id || !order.key) {
+          const orderError = typeof order.error === "string" ? order.error : order.error?.description;
+          throw new Error(orderError || "Could not start payment. Please try again.");
+        }
+        await loadRazorpayCheckout();
+        payment = await new Promise<RazorpaySuccess>((resolve, reject) => {
+          const checkout = new window.Razorpay!({
+            amount: order.amount,
+            currency: order.currency || "INR",
+            description: model.title,
+            handler: resolve,
+            key: order.key,
+            modal: { ondismiss: () => reject(new Error("Payment was cancelled. Your registration has not been submitted.")) },
+            name: "Coach For Life",
+            notes: { registrationId, workshopId: model.id },
+            order_id: order.id,
+            prefill: { contact: mobile, email, name },
+            theme: { color: model.theme.accent }
+          });
+          checkout.on("payment.failed", (response) => reject(new Error(response.error?.description || "Payment failed. Please try again.")));
+          checkout.open();
+        });
+        const verifyResponse = await fetch("/api/razorpay/order", {
+          body: JSON.stringify({ action: "verify", ...payment }),
+          headers: { "Content-Type": "application/json" },
+          method: "POST"
+        });
+        if (!verifyResponse.ok) throw new Error("Payment could not be verified. Please contact support before paying again.");
+      } catch (reason) {
+        setMessage(reason instanceof Error ? reason.message : "Could not complete payment. Please try again.");
+        setSubmitting(false);
+        return;
+      }
+    }
+
     const payload: RegistrationEntry = {
       id: registrationId,
       workshopId: model.id,
@@ -806,7 +883,10 @@ export default function RegistrationPage() {
       batchId: batchIdParam || undefined,
       introductionSessionId: introductionSessionIdParam || undefined,
       referralCode: referralCode.replace(/\D/g, "").slice(0, 10) || undefined,
-      answers: Object.keys(extra).length ? extra : undefined
+      answers: Object.keys(extra).length || payment ? {
+        ...extra,
+        ...(payment ? { "Razorpay Order ID": payment.razorpay_order_id, "Razorpay Payment ID": payment.razorpay_payment_id } : {})
+      } : undefined
     };
 
     try {

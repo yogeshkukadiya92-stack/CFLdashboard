@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
 import test from "node:test";
-import { parseRazorpayPaymentEvent, verifyRazorpayWebhookSignature } from "../lib/payment-automation.ts";
+import { parseRazorpayPaymentEvent, verifyRazorpayCheckoutSignature, verifyRazorpayWebhookSignature } from "../lib/payment-automation.ts";
 
 test("Razorpay signature requires an exact SHA-256 HMAC", () => {
   const body = JSON.stringify({ event: "payment.captured" });
@@ -9,6 +9,12 @@ test("Razorpay signature requires an exact SHA-256 HMAC", () => {
   assert.equal(verifyRazorpayWebhookSignature(body, signature, "secret"), true);
   assert.equal(verifyRazorpayWebhookSignature(body, `${signature.slice(0, -1)}0`, "secret"), false);
   assert.equal(verifyRazorpayWebhookSignature(body, "bad", "secret"), false);
+});
+
+test("Razorpay checkout signature binds the payment to its order", () => {
+  const signature = createHmac("sha256", "secret").update("order_123|pay_456").digest("hex");
+  assert.equal(verifyRazorpayCheckoutSignature("order_123", "pay_456", signature, "secret"), true);
+  assert.equal(verifyRazorpayCheckoutSignature("order_other", "pay_456", signature, "secret"), false);
 });
 
 test("Razorpay parser normalizes paise and registration notes", () => {
