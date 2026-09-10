@@ -249,8 +249,8 @@ export default function WorkshopMasterPage() {
   const [selectedParticipantIds, setSelectedParticipantIds] = useState<string[]>([]);
   const [followUpTarget, setFollowUpTarget] = useState<RegistrationEntry | null>(null);
   const [shareSelectedOpen, setShareSelectedOpen] = useState(false);
-  const [promoteWaitingOpen, setPromoteWaitingOpen] = useState(false);
-  const [promotingWaiting, setPromotingWaiting] = useState(false);
+  const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
+  const [bulkConfirming, setBulkConfirming] = useState(false);
   const participantSearchRef = useRef<HTMLInputElement>(null);
   const workshopDialogRef = useRef<HTMLElement>(null);
   const workshopCloseButtonRef = useRef<HTMLButtonElement>(null);
@@ -429,7 +429,9 @@ export default function WorkshopMasterPage() {
     .sort((first, second) => (first.waitingPosition ?? Number.MAX_SAFE_INTEGER) - (second.waitingPosition ?? Number.MAX_SAFE_INTEGER)), [selectedParticipants]);
   const confirmedParticipants = useMemo(() => selectedParticipants.filter((entry) => entry.registrationStatus !== "waiting"), [selectedParticipants]);
   const repeaterParticipants = useMemo(() => selectedParticipants.filter((entry) => entry.isRepeater), [selectedParticipants]);
-  const selectedWaitingParticipants = useMemo(() => waitingParticipants.filter((entry) => selectedParticipantIds.includes(entry.id)), [selectedParticipantIds, waitingParticipants]);
+  const selectedConfirmableParticipants = useMemo(() => selectedParticipants.filter((entry) =>
+    selectedParticipantIds.includes(entry.id) && (entry.confirmationStatus !== "confirmed" || entry.registrationStatus === "waiting")
+  ), [selectedParticipantIds, selectedParticipants]);
   const duplicateParticipantIds = useMemo(() => {
     const { duplicates } = partitionDuplicateResponses(selectedParticipants, {
       email: (entry) => entry.email,
@@ -811,33 +813,33 @@ export default function WorkshopMasterPage() {
     }
   }
 
-  async function promoteSelectedWaitingRegistrations() {
-    if (!selectedWorkshop || !selectedWaitingParticipants.length || promotingWaiting) return;
-    setPromotingWaiting(true);
+  async function confirmSelectedRegistrations() {
+    if (!selectedWorkshop || !selectedConfirmableParticipants.length || bulkConfirming) return;
+    setBulkConfirming(true);
     try {
-      const response = await fetch("/api/admin/registration-waiting", {
+      const response = await fetch("/api/admin/registration-confirmations", {
         body: JSON.stringify({
-          responseScope: "workshop",
-          registrationIds: selectedWaitingParticipants.map((entry) => entry.id),
+          registrationIds: selectedConfirmableParticipants.map((entry) => entry.id),
           workshopId: selectedWorkshop.id
         }),
         headers: { "Content-Type": "application/json" },
         method: "PATCH"
       });
-      const result = await response.json().catch(() => ({})) as { error?: string; promoted?: number; scope?: string; registrations?: RegistrationEntry[] };
-      if (!response.ok || !Array.isArray(result.registrations)) throw new Error(result.error || "Promotion failed.");
+      const result = await response.json().catch(() => ({})) as { confirmed?: number; error?: string; scope?: string; registrations?: RegistrationEntry[] };
+      if (!response.ok || !Array.isArray(result.registrations)) throw new Error(result.error || "Confirmation failed.");
       const updatedRegistrations = result.scope === "workshop"
         ? [...registrations.filter(entry => entry.workshopId !== selectedWorkshop.id), ...result.registrations]
         : result.registrations;
       setRegistrations(updatedRegistrations);
       window.localStorage.setItem(REGISTRATION_STORAGE_KEY, JSON.stringify(updatedRegistrations));
       setSelectedParticipantIds([]);
-      setPromoteWaitingOpen(false);
-      setMessage(`${result.promoted ?? selectedWaitingParticipants.length} waiting registration${(result.promoted ?? selectedWaitingParticipants.length) === 1 ? "" : "s"} converted successfully.`);
-    } catch {
-      setMessage("Waiting registrations could not be converted. Please try again.");
+      setBulkConfirmOpen(false);
+      const count = result.confirmed ?? selectedConfirmableParticipants.length;
+      setMessage(`${count} participant${count === 1 ? "" : "s"} confirmed. MFW enrollment and WhatsApp are processing.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Selected registrations could not be confirmed. Please try again.");
     } finally {
-      setPromotingWaiting(false);
+      setBulkConfirming(false);
     }
   }
 
@@ -2499,10 +2501,10 @@ export default function WorkshopMasterPage() {
                       <p className="text-xs font-black text-emerald-900">{selectedParticipantIds.length} participant{selectedParticipantIds.length === 1 ? "" : "s"} selected</p>
                       <div className="flex flex-wrap gap-1.5">
                         <button className="min-h-8 rounded-lg border border-emerald-300 bg-white px-2.5 text-[11px] font-black text-emerald-800 hover:bg-emerald-100" onClick={() => setSelectedParticipantIds([])} type="button">Clear</button>
-                        {selectedWaitingParticipants.length ? (
-                          <button className="inline-flex min-h-8 items-center gap-1.5 rounded-lg bg-amber-600 px-2.5 text-[11px] font-black text-white hover:bg-amber-700" onClick={() => setPromoteWaitingOpen(true)} type="button">
+                        {selectedConfirmableParticipants.length ? (
+                          <button className="inline-flex min-h-8 items-center gap-1.5 rounded-lg bg-amber-600 px-2.5 text-[11px] font-black text-white hover:bg-amber-700" onClick={() => setBulkConfirmOpen(true)} type="button">
                             <CheckSquare className="size-3.5" />
-                            Confirm selected ({selectedWaitingParticipants.length})
+                            Confirm selected ({selectedConfirmableParticipants.length})
                           </button>
                         ) : null}
                         <button className="inline-flex min-h-8 items-center gap-1.5 rounded-lg bg-emerald-700 px-2.5 text-[11px] font-black text-white hover:bg-emerald-800" onClick={() => setShareSelectedOpen(true)} type="button"><Share2 className="size-3.5" />Share selected</button>
@@ -2635,16 +2637,16 @@ export default function WorkshopMasterPage() {
         />
       ) : null}
       <ConfirmDialog
-        confirmLabel={promotingWaiting ? "Converting..." : `Convert ${selectedWaitingParticipants.length} to Registration`}
-        description="Selected people, including repeaters under review, will leave the waiting list and become confirmed registrations. MFW enrollment and confirmation WhatsApp will run after confirmation."
+        confirmLabel={bulkConfirming ? "Confirming..." : `Confirm ${selectedConfirmableParticipants.length} Participants`}
+        description="Selected people will be marked confirmed. Waiting-list participants will also become registrations. MFW enrollment and confirmation WhatsApp will run after confirmation."
         onCancel={() => {
-          if (!promotingWaiting) setPromoteWaitingOpen(false);
+          if (!bulkConfirming) setBulkConfirmOpen(false);
         }}
-        onConfirm={() => void promoteSelectedWaitingRegistrations()}
-        open={promoteWaitingOpen}
-        title="Confirm selected waiting registrations?"
+        onConfirm={() => void confirmSelectedRegistrations()}
+        open={bulkConfirmOpen}
+        title="Confirm selected participants?"
       >
-        {selectedWaitingParticipants.length} selected waiting participant{selectedWaitingParticipants.length === 1 ? "" : "s"} will be confirmed.
+        {selectedConfirmableParticipants.length} selected participant{selectedConfirmableParticipants.length === 1 ? "" : "s"} will be confirmed.
       </ConfirmDialog>
       <ConfirmDialog
         confirmLabel="Delete Workshop"
