@@ -302,6 +302,9 @@ export interface RegistrationEntry {
   mfwUserId?: string;
   mfwParticipantId?: string;
   mfwWorkshopEventId?: string;
+  medicalReportStatus?: "yes" | "no";
+  medicalReportUpdatedAt?: string;
+  medicalReportUpdatedBy?: string;
 }
 
 export type RegistrationConfirmationStatus =

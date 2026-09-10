@@ -21,6 +21,7 @@ import type { AttendanceEntry, AttendanceSession, BuilderField, BuilderFieldType
 import { registrationMatchesBatch } from "@/lib/workshop-hierarchy";
 import { generateId } from "@/lib/utils";
 import { salesPersonCodeFromId } from "@/lib/sales-person-code";
+import { isHealthyForeverWorkshop } from "@/lib/healthy-forever";
 import type { WorkshopLeadAssignmentRule } from "@/lib/workshop-lead-assignment";
 import { type ClipboardEvent, type FormEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -253,6 +254,7 @@ export default function WorkshopMasterPage() {
   const [bulkConfirming, setBulkConfirming] = useState(false);
   const [bulkMfwOpen, setBulkMfwOpen] = useState(false);
   const [bulkMfwAssigning, setBulkMfwAssigning] = useState(false);
+  const [medicalReportSavingId, setMedicalReportSavingId] = useState<string | null>(null);
   const participantSearchRef = useRef<HTMLInputElement>(null);
   const workshopDialogRef = useRef<HTMLElement>(null);
   const workshopCloseButtonRef = useRef<HTMLButtonElement>(null);
@@ -403,6 +405,7 @@ export default function WorkshopMasterPage() {
   const freeCount = records.filter((record) => !record.isPaid && !record.paymentUnknown).length;
   const historicalCount = records.filter((record) => record.archived).length;
   const selectedWorkshop = records.find((record) => record.id === selectedWorkshopId) ?? null;
+  const showMedicalReport = isHealthyForeverWorkshop(selectedWorkshop?.name);
   const editingAnalytics = editingId
     ? formAnalytics.find((item) => item.workshopId === editingId || item.formId === `form-${editingId}-main`) ?? null
     : null;
@@ -894,6 +897,28 @@ export default function WorkshopMasterPage() {
     }
   }
 
+  async function updateMedicalReport(entry: RegistrationEntry, status: "yes" | "no") {
+    if (medicalReportSavingId) return;
+    setMedicalReportSavingId(entry.id);
+    try {
+      const response = await fetch("/api/admin/registration-medical-report", {
+        body: JSON.stringify({ registrationId: entry.id, status }),
+        headers: { "Content-Type": "application/json" },
+        method: "PATCH"
+      });
+      const result = await response.json().catch(() => ({})) as { error?: string; registration?: RegistrationEntry };
+      if (!response.ok || !result.registration) throw new Error(result.error || "Medical report status could not be updated.");
+      const next = registrations.map((item) => item.id === entry.id ? result.registration as RegistrationEntry : item);
+      setRegistrations(next);
+      window.localStorage.setItem(REGISTRATION_STORAGE_KEY, JSON.stringify(next));
+      setMessage(`Medical report marked ${status === "yes" ? "Yes" : "No"} for ${entry.fullName}.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Medical report status could not be updated.");
+    } finally {
+      setMedicalReportSavingId(null);
+    }
+  }
+
   function sendResponseSummaryOnWhatsApp() {
     if (!selectedWorkshop) return;
 
@@ -1228,6 +1253,7 @@ export default function WorkshopMasterPage() {
       "Call Note",
       "Confirmation Updated By",
       "Confirmation Updated At",
+      ...(showMedicalReport ? ["Medical Report"] : []),
       "Payment Status",
       "Paid",
       "Due",
@@ -1247,6 +1273,7 @@ export default function WorkshopMasterPage() {
       entry.confirmationNote ?? "",
       entry.confirmationUpdatedBy ?? "",
       entry.confirmationUpdatedAt ? formatSubmittedAt(entry.confirmationUpdatedAt) : "",
+      ...(showMedicalReport ? [entry.medicalReportStatus === "yes" ? "Yes" : entry.medicalReportStatus === "no" ? "No" : ""] : []),
       entry.status,
       entry.amountPaid,
       entry.amountDue,
@@ -2570,7 +2597,7 @@ export default function WorkshopMasterPage() {
                         </th>
                         <th className="sticky top-0 z-30 w-[76px] min-w-[76px] bg-slate-50 px-2 py-2.5 lg:left-10">Action</th>
                         <th className="sticky top-0 z-30 min-w-[190px] border-r border-slate-200 bg-slate-50 px-2.5 py-2.5 shadow-[8px_0_16px_-16px_rgba(15,23,42,0.65)] lg:left-[116px]">User</th>
-                        {["Contact", "City", "Source", "Reference", "WhatsApp", "Confirmation", "MFW", "Call note", "Payment", "Submitted"].map((head) => <th className="sticky top-0 z-20 bg-slate-50 px-2.5 py-2.5" key={head}>{head}</th>)}
+                        {["Contact", "City", "Source", "Reference", "WhatsApp", "Confirmation", "MFW", ...(showMedicalReport ? ["Medical Report"] : []), "Call note", "Payment", "Submitted"].map((head) => <th className="sticky top-0 z-20 bg-slate-50 px-2.5 py-2.5" key={head}>{head}</th>)}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -2623,6 +2650,24 @@ export default function WorkshopMasterPage() {
                             {entry.confirmationUpdatedBy ? <p className="mt-1 max-w-[150px] text-[10px] leading-4 text-slate-500">{entry.confirmationUpdatedBy}{entry.confirmationUpdatedAt ? ` · ${formatSubmittedAt(entry.confirmationUpdatedAt)}` : ""}</p> : null}
                           </td>
                           <td className="px-2.5 py-2.5"><MfwSyncBadge entry={entry} /></td>
+                          {showMedicalReport ? (
+                            <td className="min-w-[145px] px-2.5 py-2.5">
+                              <div aria-label={`Medical report status for ${entry.fullName}`} className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5">
+                                {(["yes", "no"] as const).map((status) => {
+                                  const active = entry.medicalReportStatus === status;
+                                  return <button
+                                    aria-pressed={active}
+                                    className={`min-h-7 rounded-md px-2.5 text-[10px] font-black transition disabled:cursor-wait disabled:opacity-60 ${active ? status === "yes" ? "bg-emerald-600 text-white shadow-sm" : "bg-rose-600 text-white shadow-sm" : "text-slate-600 hover:bg-white"}`}
+                                    disabled={medicalReportSavingId === entry.id}
+                                    key={status}
+                                    onClick={() => void updateMedicalReport(entry, status)}
+                                    type="button"
+                                  >{status === "yes" ? "Yes" : "No"}</button>;
+                                })}
+                              </div>
+                              {entry.medicalReportUpdatedAt ? <p className="mt-1 text-[9px] text-slate-400">Updated {formatSubmittedAt(entry.medicalReportUpdatedAt)}</p> : null}
+                            </td>
+                          ) : null}
                           <td className="min-w-[150px] max-w-[220px] whitespace-normal px-2.5 py-2.5 text-[11px] leading-4 text-slate-600">{entry.confirmationNote || "-"}</td>
                           <td className="min-w-[150px] px-2.5 py-2.5">
                             <span className={`rounded-full px-3 py-1 text-xs font-black ${entry.status === "Paid" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
@@ -2637,7 +2682,7 @@ export default function WorkshopMasterPage() {
                         </tr>
 	                      )) : (
 	                        <tr>
-	                          <td className="px-4 py-10 text-center text-slate-500" colSpan={13}>
+	                          <td className="px-4 py-10 text-center text-slate-500" colSpan={showMedicalReport ? 14 : 13}>
 	                            {participantSearch ? "No response found for this name or mobile number." : "No users registered in this workshop yet."}
 	                          </td>
 	                        </tr>
