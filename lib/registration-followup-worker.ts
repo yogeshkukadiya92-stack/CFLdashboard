@@ -12,6 +12,7 @@ export async function runRegistrationFollowup(registrationId: string) {
   const result = await database.query(`SELECT payload FROM cfl_registration_records WHERE external_id = $1`, [registrationId]);
   const finalRegistration = result.rows[0]?.payload as RegistrationEntry | undefined;
   if (!finalRegistration) return;
+  const mfwSyncOnly = finalRegistration.mfwSyncOnly === true;
   const settings = await database.query(`SELECT
     (SELECT f FROM jsonb_array_elements(forms) f WHERE f->>'workshopId' = $1
       ORDER BY (COALESCE(f->>'batch', '') = $2) DESC LIMIT 1) AS form,
@@ -25,8 +26,8 @@ export async function runRegistrationFollowup(registrationId: string) {
     await database.query(`UPDATE cfl_registration_records SET payload = payload || $2::jsonb, updated_at = NOW() WHERE external_id = $1`, [registrationId, JSON.stringify(patch)]);
   }
 
-  await upsertLiveRegistration(finalRegistration as unknown as Record<string, unknown>);
-  if (linkedWorkshop?.transferLeadToCrm === true) {
+  if (!mfwSyncOnly) await upsertLiveRegistration(finalRegistration as unknown as Record<string, unknown>);
+  if (!mfwSyncOnly && linkedWorkshop?.transferLeadToCrm === true) {
     const workflowAssignment = await getActiveWorkflowAssignmentSettings(finalRegistration.workshopId).catch(() => null);
     const crmClient = await database.connect();
     try {
@@ -65,9 +66,10 @@ export async function runRegistrationFollowup(registrationId: string) {
   let savedRegistration = finalRegistration;
   if (savedRegistration.registrationStatus === "confirmed" && savedRegistration.mfwSyncStatus !== "synced") {
     savedRegistration = { ...savedRegistration, ...(await syncConfirmedRegistrationToMfw(savedRegistration)) };
+    if (mfwSyncOnly && savedRegistration.mfwSyncStatus !== "failed") savedRegistration.mfwSyncOnly = false;
     await persistPatch(savedRegistration);
   }
-  const notificationPatch = await sendRegistrationStatusNotifications(savedRegistration, form);
+  const notificationPatch = mfwSyncOnly ? {} : await sendRegistrationStatusNotifications(savedRegistration, form);
   if (Object.keys(notificationPatch).length) {
     savedRegistration = { ...savedRegistration, ...notificationPatch };
     await persistPatch(savedRegistration);

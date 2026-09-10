@@ -3,9 +3,16 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const source = readFileSync(new URL("../app/api/admin/registration-follow-up/route.ts", import.meta.url), "utf8");
+const workerSource = readFileSync(new URL("../lib/registration-followup-worker.ts", import.meta.url), "utf8");
 
 test("confirmation runs MFW and WhatsApp provider calls in parallel", () => {
   const parallelBlock = source.match(/await Promise\.all\(\[([\s\S]*?)\]\)/)?.[1] ?? "";
   assert.match(parallelBlock, /syncConfirmedRegistrationToMfw/);
   assert.match(parallelBlock, /sendRegistrationConfirmation/);
+});
+
+test("MFW-only retries skip CRM and confirmation notifications", () => {
+  assert.match(workerSource, /if \(!mfwSyncOnly\) await upsertLiveRegistration/);
+  assert.match(workerSource, /if \(!mfwSyncOnly && linkedWorkshop\?\.transferLeadToCrm === true\)/);
+  assert.match(workerSource, /mfwSyncOnly \? \{\} : await sendRegistrationStatusNotifications/);
 });

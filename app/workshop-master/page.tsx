@@ -251,6 +251,8 @@ export default function WorkshopMasterPage() {
   const [shareSelectedOpen, setShareSelectedOpen] = useState(false);
   const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
   const [bulkConfirming, setBulkConfirming] = useState(false);
+  const [bulkMfwOpen, setBulkMfwOpen] = useState(false);
+  const [bulkMfwAssigning, setBulkMfwAssigning] = useState(false);
   const participantSearchRef = useRef<HTMLInputElement>(null);
   const workshopDialogRef = useRef<HTMLElement>(null);
   const workshopCloseButtonRef = useRef<HTMLButtonElement>(null);
@@ -431,6 +433,9 @@ export default function WorkshopMasterPage() {
   const repeaterParticipants = useMemo(() => selectedParticipants.filter((entry) => entry.isRepeater), [selectedParticipants]);
   const selectedConfirmableParticipants = useMemo(() => selectedParticipants.filter((entry) =>
     selectedParticipantIds.includes(entry.id) && (entry.confirmationStatus !== "confirmed" || entry.registrationStatus === "waiting")
+  ), [selectedParticipantIds, selectedParticipants]);
+  const selectedMfwAssignableParticipants = useMemo(() => selectedParticipants.filter((entry) =>
+    selectedParticipantIds.includes(entry.id) && entry.confirmationStatus === "confirmed" && entry.mfwSyncStatus !== "synced"
   ), [selectedParticipantIds, selectedParticipants]);
   const duplicateParticipantIds = useMemo(() => {
     const { duplicates } = partitionDuplicateResponses(selectedParticipants, {
@@ -840,6 +845,36 @@ export default function WorkshopMasterPage() {
       setMessage(error instanceof Error ? error.message : "Selected registrations could not be confirmed. Please try again.");
     } finally {
       setBulkConfirming(false);
+    }
+  }
+
+  async function assignSelectedParticipantsToMfw() {
+    if (!selectedWorkshop || !selectedMfwAssignableParticipants.length || bulkMfwAssigning) return;
+    setBulkMfwAssigning(true);
+    try {
+      const response = await fetch("/api/admin/registration-mfw", {
+        body: JSON.stringify({
+          registrationIds: selectedMfwAssignableParticipants.map((entry) => entry.id),
+          workshopId: selectedWorkshop.id
+        }),
+        headers: { "Content-Type": "application/json" },
+        method: "POST"
+      });
+      const result = await response.json().catch(() => ({})) as { error?: string; queued?: number; scope?: string; registrations?: RegistrationEntry[] };
+      if (!response.ok || !Array.isArray(result.registrations)) throw new Error(result.error || "MFW assignment failed.");
+      const updatedRegistrations = result.scope === "workshop"
+        ? [...registrations.filter((entry) => entry.workshopId !== selectedWorkshop.id), ...result.registrations]
+        : result.registrations;
+      setRegistrations(updatedRegistrations);
+      window.localStorage.setItem(REGISTRATION_STORAGE_KEY, JSON.stringify(updatedRegistrations));
+      setSelectedParticipantIds([]);
+      setBulkMfwOpen(false);
+      const count = result.queued ?? selectedMfwAssignableParticipants.length;
+      setMessage(`${count} participant${count === 1 ? "" : "s"} queued for MFW assignment.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Selected participants could not be assigned to MFW. Please try again.");
+    } finally {
+      setBulkMfwAssigning(false);
     }
   }
 
@@ -2507,6 +2542,12 @@ export default function WorkshopMasterPage() {
                             Confirm selected ({selectedConfirmableParticipants.length})
                           </button>
                         ) : null}
+                        {selectedMfwAssignableParticipants.length ? (
+                          <button className="inline-flex min-h-8 items-center gap-1.5 rounded-lg bg-indigo-600 px-2.5 text-[11px] font-black text-white hover:bg-indigo-700" onClick={() => setBulkMfwOpen(true)} type="button">
+                            <RefreshCw className="size-3.5" />
+                            Assign to MFW ({selectedMfwAssignableParticipants.length})
+                          </button>
+                        ) : null}
                         <button className="inline-flex min-h-8 items-center gap-1.5 rounded-lg bg-emerald-700 px-2.5 text-[11px] font-black text-white hover:bg-emerald-800" onClick={() => setShareSelectedOpen(true)} type="button"><Share2 className="size-3.5" />Share selected</button>
                       </div>
                     </div>
@@ -2647,6 +2688,18 @@ export default function WorkshopMasterPage() {
         title="Confirm selected participants?"
       >
         {selectedConfirmableParticipants.length} selected participant{selectedConfirmableParticipants.length === 1 ? "" : "s"} will be confirmed.
+      </ConfirmDialog>
+      <ConfirmDialog
+        confirmLabel={bulkMfwAssigning ? "Assigning..." : `Assign ${selectedMfwAssignableParticipants.length} to MFW`}
+        description="Selected confirmed participants will be queued for My Fitness World enrollment. Failed enrollments will be retried, and existing waiting-list inconsistencies will be repaired."
+        onCancel={() => {
+          if (!bulkMfwAssigning) setBulkMfwOpen(false);
+        }}
+        onConfirm={() => void assignSelectedParticipantsToMfw()}
+        open={bulkMfwOpen}
+        title="Assign selected participants to MFW?"
+      >
+        {selectedMfwAssignableParticipants.length} selected participant{selectedMfwAssignableParticipants.length === 1 ? "" : "s"} will be assigned to My Fitness World.
       </ConfirmDialog>
       <ConfirmDialog
         confirmLabel="Delete Workshop"
@@ -4021,7 +4074,10 @@ function MfwSyncBadge({ entry }: { entry: RegistrationEntry }) {
     return <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700" title={entry.mfwWorkshopEventId}>Enrolled</span>;
   }
   if (entry.mfwSyncStatus === "failed") {
-    return <span className="rounded-full bg-rose-50 px-3 py-1 text-xs font-black text-rose-700" title={entry.mfwSyncError}>Failed · confirm again to retry</span>;
+    return <span className="rounded-full bg-rose-50 px-3 py-1 text-xs font-black text-rose-700" title={entry.mfwSyncError}>Failed · select to retry</span>;
+  }
+  if (entry.mfwSyncStatus === "pending") {
+    return <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-black text-indigo-700">Assigning...</span>;
   }
   if (entry.confirmationStatus === "confirmed") {
     return <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-500">Not enabled</span>;
