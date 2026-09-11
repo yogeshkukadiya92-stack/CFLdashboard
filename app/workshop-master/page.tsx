@@ -934,47 +934,23 @@ export default function WorkshopMasterPage() {
   function sendResponseSummaryOnWhatsApp() {
     if (!selectedWorkshop) return;
 
-    const lastSevenDaysRegistrations = selectedParticipants.filter((entry) => isWithinLastIndiaCalendarDays(entry.createdAt, 7));
-    const lastSevenDaysWaiting = lastSevenDaysRegistrations.filter((entry) => entry.registrationStatus === "waiting").length;
-    const lastSevenDaysConfirmed = lastSevenDaysRegistrations.length - lastSevenDaysWaiting;
-    const lastSevenDaysConfirmedNonRepeaters = lastSevenDaysRegistrations.filter((entry) => entry.registrationStatus !== "waiting" && !entry.isRepeater).length;
-    const lastSevenDaysConfirmedRepeaters = lastSevenDaysRegistrations.filter((entry) => entry.registrationStatus !== "waiting" && entry.isRepeater).length;
-    const lastSevenDaysRepeaters = lastSevenDaysRegistrations.filter((entry) => entry.isRepeater).length;
-    const totalWaiting = selectedParticipants.filter((entry) => entry.registrationStatus === "waiting").length;
-    const totalConfirmed = selectedParticipants.length - totalWaiting;
-    const totalConfirmedNonRepeaters = selectedParticipants.filter((entry) => entry.registrationStatus !== "waiting" && !entry.isRepeater).length;
-    const totalConfirmedRepeaters = selectedParticipants.filter((entry) => entry.registrationStatus !== "waiting" && entry.isRepeater).length;
-    const totalRepeaters = selectedParticipants.filter((entry) => entry.isRepeater).length;
-    const updatedAt = new Date().toLocaleString("en-IN", {
-      day: "2-digit",
-      hour: "2-digit",
-      hour12: true,
-      minute: "2-digit",
-      month: "short",
-      timeZone: "Asia/Kolkata",
-      year: "numeric"
-    });
+    const regularParticipants = selectedParticipants.filter((entry) => !entry.isRepeater);
+    const regularWaiting = regularParticipants.filter((entry) => entry.registrationStatus === "waiting").length;
+    const repeaterHealthPartners = repeaterParticipants.filter((entry) => hasHealthPartnerReference(entry, selectedReferenceAnswerKeys)).length;
     const message = [
-      "📊 Workshop Registration Summary",
+      "Workshop Registration Summary",
       "",
       `Workshop: ${selectedWorkshop.name}`,
-      "Period: Last 7 Days",
       "",
-      `New Registrations: ${lastSevenDaysRegistrations.length}`,
-      `Confirmed: ${lastSevenDaysConfirmed}`,
-      `Confirmed (New / Excl. Repeaters): ${lastSevenDaysConfirmedNonRepeaters}`,
-      `Confirmed (Repeaters): ${lastSevenDaysConfirmedRepeaters}`,
-      `Waiting List: ${lastSevenDaysWaiting}`,
-      `Repeaters: ${lastSevenDaysRepeaters}`,
+      "Without Repeater:-",
+      `Total Registrations: ${regularParticipants.length}`,
+      `Total Confirmed: ${regularParticipants.length - regularWaiting}`,
+      `Total Waiting: ${regularWaiting}`,
       "",
-      `Total Registrations: ${selectedParticipants.length}`,
-      `Total Confirmed: ${totalConfirmed}`,
-      `New Confirmed (Excl. Repeaters): ${totalConfirmedNonRepeaters}`,
-      `Repeater Confirmed: ${totalConfirmedRepeaters}`,
-      `Total Waiting: ${totalWaiting}`,
-      `Total Repeaters: ${totalRepeaters}`,
-      "",
-      `Updated: ${updatedAt}`
+      "Repeater Data:-",
+      `Total Registrations: ${repeaterParticipants.length}`,
+      `Health Partner: ${repeaterHealthPartners}`,
+      `Without Health Partner: ${repeaterParticipants.length - repeaterHealthPartners}`
     ].join("\n");
 
     window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, "_blank", "noopener,noreferrer");
@@ -4204,26 +4180,16 @@ function referenceNameForRegistration(entry: RegistrationEntry, referenceAnswerK
   return "";
 }
 
-function isWithinLastIndiaCalendarDays(value: string | undefined, days: number) {
-  if (!value || days < 1) return false;
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return false;
+function hasHealthPartnerReference(entry: RegistrationEntry, referenceAnswerKeys: string[] = []) {
+  if (referenceNameForRegistration(entry, referenceAnswerKeys)) return true;
 
-  const indiaDateParts = (input: Date) => {
-    const parts = new Intl.DateTimeFormat("en-CA", {
-      day: "2-digit",
-      month: "2-digit",
-      timeZone: "Asia/Kolkata",
-      year: "numeric"
-    }).formatToParts(input);
-    const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-    return Date.UTC(Number(values.year), Number(values.month) - 1, Number(values.day));
-  };
-
-  const today = indiaDateParts(new Date());
-  const submittedDay = indiaDateParts(date);
-  const firstIncludedDay = today - (days - 1) * 24 * 60 * 60 * 1000;
-  return submittedDay >= firstIncludedDay && submittedDay <= today;
+  return Object.entries(entry.answers ?? {}).some(([key, value]) => {
+    if (!String(value ?? "").trim()) return false;
+    const normalizedKey = key.toLowerCase();
+    return (
+      normalizedKey.includes("healthy forever") && (normalizedKey.includes("about") || normalizedKey.includes("through"))
+    ) || normalizedKey.includes("माध्यम");
+  });
 }
 
 function WhatsAppVerificationBadge({ status }: { status?: RegistrationEntry["whatsappVerificationStatus"] }) {
