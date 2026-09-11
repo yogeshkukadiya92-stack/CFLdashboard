@@ -94,3 +94,24 @@ test("repeater waiting mode defaults on and can be turned off", () => {
   assert.equal(shouldSendRepeaterToWaiting({ repeaterWaitingMode: true }), true);
   assert.equal(shouldSendRepeaterToWaiting({ repeaterWaitingMode: false }), false);
 });
+
+test("accurately counts confirmed participants excluding repeaters", () => {
+  const registrations = [
+    { id: "1", registrationStatus: "confirmed", isRepeater: false },
+    { id: "2", registrationStatus: "confirmed", isRepeater: true },
+    { id: "3", registrationStatus: "confirmed", isRepeater: false },
+    { id: "4", registrationStatus: "waiting", isRepeater: false },
+    { id: "5", registrationStatus: "waiting", isRepeater: true }
+  ];
+  const confirmed = registrations.filter((r) => r.registrationStatus !== "waiting");
+  const confirmedNonRepeaters = confirmed.filter((r) => !r.isRepeater);
+  const confirmedRepeaters = confirmed.filter((r) => Boolean(r.isRepeater));
+  const waiting = registrations.filter((r) => r.registrationStatus === "waiting");
+  const repeaters = registrations.filter((r) => Boolean(r.isRepeater));
+
+  assert.equal(confirmed.length, 3);
+  assert.equal(confirmedNonRepeaters.length, 2);
+  assert.equal(confirmedRepeaters.length, 1);
+  assert.equal(waiting.length, 2);
+  assert.equal(repeaters.length, 2);
+});

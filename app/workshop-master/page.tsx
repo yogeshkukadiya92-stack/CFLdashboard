@@ -79,7 +79,7 @@ type DiscountType = "percent" | "flat";
 type AnalyticsPanel = "cohort" | "overlap" | null;
 type FormWorkflowPanel = "basics" | "automation" | "fields" | "includes" | "preview" | null;
 type WorkshopWorkflowPanel = "info" | "mfw" | "pricing" | null;
-type FollowUpScope = "needs_follow_up" | "completed" | "confirmed" | "waiting" | "repeaters" | "all";
+type FollowUpScope = "needs_follow_up" | "completed" | "confirmed" | "confirmed_new" | "waiting" | "repeaters" | "all";
 type RegistrationLinkConfig = {
   batch?: string;
   customBaseUrl?: string;
@@ -244,6 +244,7 @@ export default function WorkshopMasterPage() {
   const [removingDuplicates, setRemovingDuplicates] = useState(false);
   const [hideDuplicateParticipants, setHideDuplicateParticipants] = useState(false);
   const [hideWaitingParticipants, setHideWaitingParticipants] = useState(false);
+  const [hideRepeaterParticipants, setHideRepeaterParticipants] = useState(false);
   const [participantSearch, setParticipantSearch] = useState("");
   const [responseFilters, setResponseFilters] = useState<ResponseFilterState>({ ...emptyResponseFilters });
   const [followUpScope, setFollowUpScope] = useState<FollowUpScope>("needs_follow_up");
@@ -433,6 +434,8 @@ export default function WorkshopMasterPage() {
     .filter((entry) => entry.registrationStatus === "waiting")
     .sort((first, second) => (first.waitingPosition ?? Number.MAX_SAFE_INTEGER) - (second.waitingPosition ?? Number.MAX_SAFE_INTEGER)), [selectedParticipants]);
   const confirmedParticipants = useMemo(() => selectedParticipants.filter((entry) => entry.registrationStatus !== "waiting"), [selectedParticipants]);
+  const confirmedNonRepeaterParticipants = useMemo(() => confirmedParticipants.filter((entry) => !entry.isRepeater), [confirmedParticipants]);
+  const confirmedRepeaterParticipants = useMemo(() => confirmedParticipants.filter((entry) => Boolean(entry.isRepeater)), [confirmedParticipants]);
   const repeaterParticipants = useMemo(() => selectedParticipants.filter((entry) => entry.isRepeater), [selectedParticipants]);
   const selectedConfirmableParticipants = useMemo(() => selectedParticipants.filter((entry) =>
     selectedParticipantIds.includes(entry.id) && (entry.confirmationStatus !== "confirmed" || entry.registrationStatus === "waiting")
@@ -459,6 +462,7 @@ export default function WorkshopMasterPage() {
       Email: entry.email,
       City: entry.city,
       "Payment Status": entry.status,
+      Repeater: entry.isRepeater ? "Yes" : "No",
       Source: entry.source ?? "Registration Link"
     },
     submittedAt: entry.createdAt,
@@ -478,6 +482,7 @@ export default function WorkshopMasterPage() {
   }, [filteredParticipants, participantSearch]);
   const followUpParticipants = useMemo(() => searchedParticipants.filter((entry) => {
     if (followUpScope === "confirmed") return entry.registrationStatus !== "waiting";
+    if (followUpScope === "confirmed_new") return entry.registrationStatus !== "waiting" && !entry.isRepeater;
     if (followUpScope === "waiting") return entry.registrationStatus === "waiting";
     if (followUpScope === "repeaters") return Boolean(entry.isRepeater);
     const completed = Boolean(entry.confirmationStatus && entry.confirmationStatus !== "pending" && entry.confirmationNote?.trim());
@@ -489,38 +494,42 @@ export default function WorkshopMasterPage() {
     const withoutWaiting = hideWaitingParticipants
       ? followUpParticipants.filter((entry) => entry.registrationStatus !== "waiting")
       : followUpParticipants;
-    const visibleParticipants = hideDuplicateParticipants ? hideDuplicateResponses(withoutWaiting, {
+    const withoutRepeaters = hideRepeaterParticipants
+      ? withoutWaiting.filter((entry) => !entry.isRepeater)
+      : withoutWaiting;
+    const visibleParticipants = hideDuplicateParticipants ? hideDuplicateResponses(withoutRepeaters, {
       email: (entry) => entry.email,
       mobile: (entry) => entry.mobile,
       name: (entry) => entry.fullName,
       scope: (entry) => entry.workshopId || entry.workshopTitle,
       submittedAt: (entry) => entry.createdAt
-    }) : withoutWaiting;
+    }) : withoutRepeaters;
 
     return [...visibleParticipants].sort((first, second) =>
       submittedAtTimestamp(second.createdAt) - submittedAtTimestamp(first.createdAt)
     );
-  }, [followUpParticipants, hideDuplicateParticipants, hideWaitingParticipants]);
+  }, [followUpParticipants, hideDuplicateParticipants, hideRepeaterParticipants, hideWaitingParticipants]);
   const participantQuestions = useMemo(() => responseQuestionOptions(participantFilterRecords), [participantFilterRecords]);
-  const activeParticipantFilterCount = activeResponseFilterCount(responseFilters) + Number(hideDuplicateParticipants) + Number(hideWaitingParticipants);
+  const activeParticipantFilterCount = activeResponseFilterCount(responseFilters) + Number(hideDuplicateParticipants) + Number(hideWaitingParticipants) + Number(hideRepeaterParticipants);
 
   useEffect(() => {
     if (!selectedWorkshopId) return;
     try {
-      const saved = readLocalObject<Record<string, { filters?: ResponseFilterState; hideDuplicates?: boolean; hideWaiting?: boolean; showParticipants?: boolean }>>(WORKSHOP_RESPONSE_FILTERS_STORAGE_KEY);
+      const saved = readLocalObject<Record<string, { filters?: ResponseFilterState; hideDuplicates?: boolean; hideWaiting?: boolean; hideRepeaters?: boolean; showParticipants?: boolean }>>(WORKSHOP_RESPONSE_FILTERS_STORAGE_KEY);
       window.localStorage.setItem(WORKSHOP_RESPONSE_FILTERS_STORAGE_KEY, JSON.stringify({
         ...saved,
         [selectedWorkshopId]: {
           filters: responseFilters,
           hideDuplicates: hideDuplicateParticipants,
           hideWaiting: hideWaitingParticipants,
+          hideRepeaters: hideRepeaterParticipants,
           showParticipants
         }
       }));
     } catch {
       // Filters are convenience state; ignore storage issues.
     }
-  }, [hideDuplicateParticipants, hideWaitingParticipants, responseFilters, selectedWorkshopId, showParticipants]);
+  }, [hideDuplicateParticipants, hideRepeaterParticipants, hideWaitingParticipants, responseFilters, selectedWorkshopId, showParticipants]);
 
   useEffect(() => {
     if (!selectedWorkshop) return;
@@ -706,18 +715,21 @@ export default function WorkshopMasterPage() {
     setFollowUpScope("needs_follow_up");
     setSelectedParticipantIds([]);
     try {
-      const saved = readLocalObject<Record<string, { filters?: ResponseFilterState; hideDuplicates?: boolean; hideWaiting?: boolean; showParticipants?: boolean }>>(WORKSHOP_RESPONSE_FILTERS_STORAGE_KEY);
+      const saved = readLocalObject<Record<string, { filters?: ResponseFilterState; hideDuplicates?: boolean; hideWaiting?: boolean; hideRepeaters?: boolean; showParticipants?: boolean }>>(WORKSHOP_RESPONSE_FILTERS_STORAGE_KEY);
       const workshopState = saved[record.id];
       const hideWaiting = Boolean(workshopState?.hideWaiting);
+      const hideRepeaters = Boolean(workshopState?.hideRepeaters);
       setResponseFilters({ ...emptyResponseFilters, ...(workshopState?.filters ?? {}) });
       setHideDuplicateParticipants(Boolean(workshopState?.hideDuplicates));
       setHideWaitingParticipants(hideWaiting);
+      setHideRepeaterParticipants(hideRepeaters);
       setFollowUpScope(hideWaiting ? "all" : "needs_follow_up");
       setShowParticipants(true);
     } catch {
       setResponseFilters({ ...emptyResponseFilters });
       setHideDuplicateParticipants(false);
       setHideWaitingParticipants(false);
+      setHideRepeaterParticipants(false);
       setShowParticipants(true);
     }
     setSelectedWorkshopId(record.id);
@@ -925,9 +937,13 @@ export default function WorkshopMasterPage() {
     const lastSevenDaysRegistrations = selectedParticipants.filter((entry) => isWithinLastIndiaCalendarDays(entry.createdAt, 7));
     const lastSevenDaysWaiting = lastSevenDaysRegistrations.filter((entry) => entry.registrationStatus === "waiting").length;
     const lastSevenDaysConfirmed = lastSevenDaysRegistrations.length - lastSevenDaysWaiting;
+    const lastSevenDaysConfirmedNonRepeaters = lastSevenDaysRegistrations.filter((entry) => entry.registrationStatus !== "waiting" && !entry.isRepeater).length;
+    const lastSevenDaysConfirmedRepeaters = lastSevenDaysRegistrations.filter((entry) => entry.registrationStatus !== "waiting" && entry.isRepeater).length;
     const lastSevenDaysRepeaters = lastSevenDaysRegistrations.filter((entry) => entry.isRepeater).length;
     const totalWaiting = selectedParticipants.filter((entry) => entry.registrationStatus === "waiting").length;
     const totalConfirmed = selectedParticipants.length - totalWaiting;
+    const totalConfirmedNonRepeaters = selectedParticipants.filter((entry) => entry.registrationStatus !== "waiting" && !entry.isRepeater).length;
+    const totalConfirmedRepeaters = selectedParticipants.filter((entry) => entry.registrationStatus !== "waiting" && entry.isRepeater).length;
     const totalRepeaters = selectedParticipants.filter((entry) => entry.isRepeater).length;
     const updatedAt = new Date().toLocaleString("en-IN", {
       day: "2-digit",
@@ -946,11 +962,15 @@ export default function WorkshopMasterPage() {
       "",
       `New Registrations: ${lastSevenDaysRegistrations.length}`,
       `Confirmed: ${lastSevenDaysConfirmed}`,
+      `Confirmed (New / Excl. Repeaters): ${lastSevenDaysConfirmedNonRepeaters}`,
+      `Confirmed (Repeaters): ${lastSevenDaysConfirmedRepeaters}`,
       `Waiting List: ${lastSevenDaysWaiting}`,
       `Repeaters: ${lastSevenDaysRepeaters}`,
       "",
       `Total Registrations: ${selectedParticipants.length}`,
       `Total Confirmed: ${totalConfirmed}`,
+      `New Confirmed (Excl. Repeaters): ${totalConfirmedNonRepeaters}`,
+      `Repeater Confirmed: ${totalConfirmedRepeaters}`,
       `Total Waiting: ${totalWaiting}`,
       `Total Repeaters: ${totalRepeaters}`,
       "",
@@ -1329,7 +1349,7 @@ export default function WorkshopMasterPage() {
 
   function exportConfirmedRegistrations() {
     if (!selectedWorkshop || !confirmedParticipants.length) return;
-    const headers = ["Registration / Unique ID", "Name", "Mobile", "Email", "City", "Batch", "Source", "Reference Name", "Confirmation", "Confirmed Via", "Confirmation Updated By", "Confirmation Updated At", "Call Note", "Payment Status", "Paid", "Due", "Submitted"];
+    const headers = ["Registration / Unique ID", "Name", "Mobile", "Email", "City", "Batch", "Source", "Reference Name", "Repeater", "Confirmation", "Confirmed Via", "Confirmation Updated By", "Confirmation Updated At", "Call Note", "Payment Status", "Paid", "Due", "Submitted"];
     const rows = confirmedParticipants.map((entry) => [
       entry.registrationNumber ?? "",
       entry.fullName,
@@ -1339,6 +1359,7 @@ export default function WorkshopMasterPage() {
       entry.batch ?? "Main Batch",
       entry.source ?? "Registration Link",
       referenceNameForRegistration(entry, selectedReferenceAnswerKeys),
+      entry.isRepeater ? "Yes" : "No",
       entry.confirmationStatus ?? "confirmed",
       entry.confirmationSource?.replaceAll("_", " + ") ?? "",
       entry.confirmationUpdatedBy ?? "",
@@ -1362,6 +1383,44 @@ export default function WorkshopMasterPage() {
     link.remove();
     URL.revokeObjectURL(url);
     setMessage(`Downloaded ${confirmedParticipants.length} confirmed registrations.`);
+  }
+
+  function exportConfirmedNonRepeaterRegistrations() {
+    if (!selectedWorkshop || !confirmedNonRepeaterParticipants.length) return;
+    const headers = ["Registration / Unique ID", "Name", "Mobile", "Email", "City", "Batch", "Source", "Reference Name", "Repeater", "Confirmation", "Confirmed Via", "Confirmation Updated By", "Confirmation Updated At", "Call Note", "Payment Status", "Paid", "Due", "Submitted"];
+    const rows = confirmedNonRepeaterParticipants.map((entry) => [
+      entry.registrationNumber ?? "",
+      entry.fullName,
+      entry.mobile,
+      entry.email,
+      entry.city,
+      entry.batch ?? "Main Batch",
+      entry.source ?? "Registration Link",
+      referenceNameForRegistration(entry, selectedReferenceAnswerKeys),
+      entry.isRepeater ? "Yes" : "No",
+      entry.confirmationStatus ?? "confirmed",
+      entry.confirmationSource?.replaceAll("_", " + ") ?? "",
+      entry.confirmationUpdatedBy ?? "",
+      entry.confirmationUpdatedAt ? formatSubmittedAt(entry.confirmationUpdatedAt) : "",
+      entry.confirmationNote ?? "",
+      entry.status,
+      entry.amountPaid,
+      entry.amountDue,
+      formatSubmittedAt(entry.createdAt)
+    ]);
+    const cell = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+    const csv = "\ufeff" + [headers, ...rows].map((row) => row.map(cell).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    const filename = selectedWorkshop.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "workshop";
+    link.href = url;
+    link.download = `${filename}-new-confirmed-registrations.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    setMessage(`Downloaded ${confirmedNonRepeaterParticipants.length} new confirmed registrations (excluding repeaters).`);
   }
 
   return (
@@ -2405,6 +2464,16 @@ export default function WorkshopMasterPage() {
                     <Download className="size-3.5" />
                     Confirmed CSV
                   </button>
+                  <button
+                    className="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-teal-300 bg-teal-50 px-2.5 text-[11px] font-black text-teal-900 hover:bg-teal-100 disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled={!confirmedNonRepeaterParticipants.length}
+                    onClick={exportConfirmedNonRepeaterRegistrations}
+                    title="Download confirmed registrations excluding repeaters"
+                    type="button"
+                  >
+                    <Download className="size-3.5" />
+                    New Confirmed CSV
+                  </button>
                   <a
                     className="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-indigo-200 bg-white px-2.5 text-[11px] font-black text-indigo-700 hover:bg-indigo-50"
                     href={`/process/import-data-workshop-wise?workshopId=${encodeURIComponent(selectedWorkshop.id)}`}
@@ -2449,8 +2518,42 @@ export default function WorkshopMasterPage() {
                   value={confirmedParticipants.length}
                   tone="success"
                 />
-                <OperationalStat label="Waiting" value={selectedParticipants.filter((entry) => entry.registrationStatus === "waiting").length} tone="warning" />
-                <OperationalStat label="Repeaters" value={repeaterParticipants.length} tone="info" />
+                <OperationalStat
+                  active={followUpScope === "confirmed_new"}
+                  label="New Confirmed"
+                  onClick={() => {
+                    setShowParticipants(true);
+                    setFollowUpScope("confirmed_new");
+                    setHideWaitingParticipants(false);
+                    setSelectedParticipantIds([]);
+                  }}
+                  value={confirmedNonRepeaterParticipants.length}
+                  tone="success"
+                />
+                <OperationalStat
+                  active={followUpScope === "waiting"}
+                  label="Waiting"
+                  onClick={() => {
+                    setShowParticipants(true);
+                    setFollowUpScope("waiting");
+                    setHideWaitingParticipants(false);
+                    setSelectedParticipantIds([]);
+                  }}
+                  value={selectedParticipants.filter((entry) => entry.registrationStatus === "waiting").length}
+                  tone="warning"
+                />
+                <OperationalStat
+                  active={followUpScope === "repeaters"}
+                  label="Repeaters"
+                  onClick={() => {
+                    setShowParticipants(true);
+                    setFollowUpScope("repeaters");
+                    setHideWaitingParticipants(false);
+                    setSelectedParticipantIds([]);
+                  }}
+                  value={repeaterParticipants.length}
+                  tone="info"
+                />
                 {activeParticipantFilterCount ? <OperationalStat label="Saved filters" value={activeParticipantFilterCount} tone="info" /> : null}
                 {formWaitingMode ? (
                   <p className="ml-auto inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-black text-amber-900">
@@ -2468,6 +2571,7 @@ export default function WorkshopMasterPage() {
                         ["needs_follow_up", "Needs follow-up"],
                         ["completed", "Completed"],
                         ["confirmed", `Confirmed (${confirmedParticipants.length})`],
+                        ["confirmed_new", `New Confirmed (${confirmedNonRepeaterParticipants.length})`],
                         ["waiting", `Waiting List (${waitingParticipants.length})`],
                         ["repeaters", `Repeaters (${repeaterParticipants.length})`],
                         ["all", "All responses"]
@@ -2479,7 +2583,10 @@ export default function WorkshopMasterPage() {
                           onClick={() => {
                             setFollowUpScope(value);
                             if (value === "waiting") setHideWaitingParticipants(false);
-                            if (value === "repeaters") setHideWaitingParticipants(false);
+                            if (value === "repeaters") {
+                              setHideWaitingParticipants(false);
+                              setHideRepeaterParticipants(false);
+                            }
                             setSelectedParticipantIds([]);
                           }}
                           type="button"
@@ -2541,6 +2648,21 @@ export default function WorkshopMasterPage() {
                             />
                             <EyeOff className="size-3.5" />
                             Hide waiting list ({waitingParticipants.length})
+                          </label>
+                          <label className={`flex min-h-9 cursor-pointer items-center gap-2 rounded-lg border px-3 text-xs font-black ${hideRepeaterParticipants ? "border-violet-300 bg-violet-50 text-violet-900" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"}`}>
+                            <input
+                              checked={hideRepeaterParticipants}
+                              className="size-4 accent-violet-600"
+                              onChange={(event) => {
+                                const checked = event.target.checked;
+                                setHideRepeaterParticipants(checked);
+                                if (checked && followUpScope === "repeaters") setFollowUpScope("all");
+                                if (checked) setSelectedParticipantIds((current) => current.filter((id) => !repeaterParticipants.some((entry) => entry.id === id)));
+                              }}
+                              type="checkbox"
+                            />
+                            <EyeOff className="size-3.5" />
+                            Hide repeaters ({repeaterParticipants.length})
                           </label>
                           <div className="border-t border-slate-100 pt-2">
                             <button
