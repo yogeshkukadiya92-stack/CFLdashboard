@@ -38,6 +38,8 @@ type RegistrationLinkConfig = {
   fee?: number;
   id?: string;
   otpRequired?: boolean;
+  otpFallbackEnabled?: boolean;
+  otpFallbackCodeHash?: string;
   paid?: boolean;
   partPayment?: boolean;
   publishUntil?: string;
@@ -62,6 +64,8 @@ type FormModel = {
   fee: number;
   partPayment: boolean;
   otpRequired?: boolean;
+  otpFallbackEnabled?: boolean;
+  otpFallbackCodeHash?: string;
   tiers?: PaymentTier[];
   highlights?: string[];
   whatsappGroupUrl?: string;
@@ -223,6 +227,8 @@ function modelFromBuilderForm(form: BuilderForm, overrides?: Partial<Pick<FormMo
     fee: overrides?.fee ?? form.fee ?? 0,
     partPayment: overrides?.partPayment ?? Boolean(form.partPayment),
     otpRequired: Boolean(form.otpRequired),
+    otpFallbackEnabled: Boolean(form.otpFallbackEnabled),
+    otpFallbackCodeHash: form.otpFallbackCodeHash,
     tiers: form.tiers && form.tiers.length > 0 ? form.tiers : undefined,
     highlights: form.highlights && form.highlights.length > 0 ? form.highlights : undefined,
     whatsappGroupUrl: form.whatsappGroupUrl,
@@ -688,7 +694,7 @@ export default function RegistrationPage() {
     setOtpMessage("");
     try {
       const response = await fetch("/api/otp/send", {
-        body: JSON.stringify({ mobile: mobileDigits }),
+        body: JSON.stringify({ formId: model.formId, mobile: mobileDigits }),
         headers: { "Content-Type": "application/json" },
         method: "POST"
       });
@@ -697,7 +703,13 @@ export default function RegistrationPage() {
         setOtpMessage(data?.error || "Could not send OTP. Please try again.");
         return;
       }
-      setOtpMessage(data.setupOtp ? `Setup mode WhatsApp OTP: ${data.setupOtp}` : "OTP sent on WhatsApp to participant mobile.");
+      setOtpMessage(
+        data.setupOtp
+          ? `Setup mode WhatsApp OTP: ${data.setupOtp}`
+          : data.deliveryFailed && data.fallbackAvailable
+            ? "WhatsApp OTP could not be delivered. Enter the fallback OTP provided by the organizer."
+            : "OTP sent on WhatsApp to participant mobile."
+      );
     } catch {
       setOtpMessage("Could not send OTP. Please try again.");
     } finally {
@@ -715,7 +727,11 @@ export default function RegistrationPage() {
     setOtpMessage("");
     try {
       const response = await fetch("/api/otp/verify", {
-        body: JSON.stringify({ mobile: mobileDigits, otp: otpCode }),
+        body: JSON.stringify({
+          formId: model.formId,
+          mobile: mobileDigits,
+          otp: otpCode
+        }),
         headers: { "Content-Type": "application/json" },
         method: "POST"
       });

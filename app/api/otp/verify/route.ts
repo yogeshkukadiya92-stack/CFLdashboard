@@ -3,6 +3,9 @@ import { canUseManualOtpOverride } from "@/lib/otp-override";
 import { NextRequest, NextResponse } from "next/server";
 
 import { clearOtp, verifyStoredOtp } from "@/lib/otp-store";
+import { verifyWorkshopOtpFallbackHash } from "@/lib/workshop-otp-fallback";
+import { getAppState } from "@/lib/db";
+import type { BuilderForm } from "@/lib/types";
 
 function cleanMobile(value: unknown) {
   return String(value ?? "").replace(/\D/g, "").slice(-10);
@@ -17,7 +20,8 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const mobile = cleanMobile(body?.mobile);
     const otp = cleanOtp(body?.otp);
-    if (mobile.length !== 10 || otp.length !== 6) {
+    const formId = String(body?.formId ?? "").trim().slice(0, 200);
+    if (mobile.length !== 10 || otp.length !== 6 || !formId) {
       return NextResponse.json({ error: "Valid mobile and 6-digit OTP are required." }, { status: 400 });
     }
 
@@ -31,7 +35,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ manualOverride: true, ok: true });
     }
 
-    const result = await verifyStoredOtp(mobile, otp);
+    const state = await getAppState();
+    const form = (Array.isArray(state?.forms) ? state.forms : []).find((item: unknown) => String((item as BuilderForm)?.id) === formId) as BuilderForm | undefined;
+    const fallbackMatches = Boolean(form?.otpRequired && form?.otpFallbackEnabled) && verifyWorkshopOtpFallbackHash(formId, otp, form?.otpFallbackCodeHash);
+    const result = await verifyStoredOtp(mobile, otp, formId, fallbackMatches);
     if (result === "expired") return NextResponse.json({ error: "OTP expired. Please request a new OTP." }, { status: 400 });
     if (result === "locked") return NextResponse.json({ error: "Too many wrong attempts. Please request a new OTP." }, { status: 429 });
     if (result === "incorrect") return NextResponse.json({ error: "Incorrect OTP." }, { status: 400 });

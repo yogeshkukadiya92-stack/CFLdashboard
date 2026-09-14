@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 
 import { randomInt } from "node:crypto";
 import { saveOtp, clearOtp } from "@/lib/otp-store";
+import { getAppState } from "@/lib/db";
+import type { BuilderForm } from "@/lib/types";
 const OTP_TTL_MS = 5 * 60 * 1000;
 
 function cleanMobile(value: unknown) {
@@ -128,18 +130,25 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     const mobile = cleanMobile(body?.mobile);
+    const formId = String(body?.formId ?? "").trim().slice(0, 200);
     if (mobile.length !== 10 || !/^[6-9]/.test(mobile)) {
       return NextResponse.json({ error: "Valid 10-digit mobile number is required." }, { status: 400 });
     }
 
     const code = createOtp();
-    await saveOtp(mobile, code, OTP_TTL_MS);
+    if (!formId) return NextResponse.json({ error: "Registration form is required." }, { status: 400 });
+    const state = await getAppState();
+    const form = (Array.isArray(state?.forms) ? state.forms : []).find((item: unknown) => String((item as BuilderForm)?.id) === formId) as BuilderForm | undefined;
+    const fallbackAvailable = Boolean(form?.otpRequired && form?.otpFallbackEnabled && form?.otpFallbackCodeHash);
+    await saveOtp(mobile, code, OTP_TTL_MS, formId);
     const whatsapp = await sendWhatsAppOtp(mobile, code);
     if (!whatsapp.configured && process.env.NODE_ENV === "production") {
+      if (fallbackAvailable) return NextResponse.json({ deliveryFailed: true, fallbackAvailable: true, ok: true, expiresInSeconds: OTP_TTL_MS / 1000 });
       await clearOtp(mobile, code);
       return NextResponse.json({ error: "WhatsApp OTP service is not configured. Please contact admin or use a non-OTP form." }, { status: 503 });
     }
     if (whatsapp.configured && !whatsapp.sent) {
+      if (fallbackAvailable) return NextResponse.json({ deliveryFailed: true, fallbackAvailable: true, ok: true, expiresInSeconds: OTP_TTL_MS / 1000 });
       await clearOtp(mobile, code);
       return NextResponse.json({ error: "Could not send WhatsApp OTP. Please try again." }, { status: 502 });
     }

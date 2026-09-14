@@ -502,6 +502,8 @@ export interface BuilderForm {
   fee: number;
   partPayment: boolean;
   otpRequired?: boolean;
+  otpFallbackEnabled?: boolean;
+  otpFallbackCodeHash?: string;
   tiers?: PaymentTier[];
   highlights?: string[];
   whatsappGroupUrl?: string;

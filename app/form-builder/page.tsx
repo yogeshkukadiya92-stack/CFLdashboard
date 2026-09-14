@@ -158,6 +158,9 @@ export default function FormBuilderPage() {
   const [fee, setFee] = useState("");
   const [partPayment, setPartPayment] = useState(false);
   const [otpRequired, setOtpRequired] = useState(false);
+  const [otpFallbackEnabled, setOtpFallbackEnabled] = useState(false);
+  const [otpFallbackCode, setOtpFallbackCode] = useState("");
+  const [otpFallbackCodeHash, setOtpFallbackCodeHash] = useState("");
   const [tiers, setTiers] = useState<PaymentTier[]>([]);
   const [highlights, setHighlights] = useState<string[]>([]);
   const [whatsappGroupUrl, setWhatsappGroupUrl] = useState("");
@@ -222,6 +225,10 @@ export default function FormBuilderPage() {
     setWhatsappConfirmationTemplate(savedForm?.whatsappConfirmationTemplate || "");
     setWhatsappWaitingTemplate(savedForm?.whatsappWaitingTemplate || "");
     setWhatsappReferrerWaitingTemplate(savedForm?.whatsappReferrerWaitingTemplate || "");
+    setOtpRequired(Boolean(savedForm?.otpRequired));
+    setOtpFallbackEnabled(Boolean(savedForm?.otpFallbackEnabled));
+    setOtpFallbackCodeHash(savedForm?.otpFallbackCodeHash || "");
+    setOtpFallbackCode("");
   }, [workshopId]);
 
   const workshop = workshops.find((item) => item.id === workshopId) ?? null;
@@ -249,6 +256,8 @@ export default function FormBuilderPage() {
       fee: Number(fee) || 0,
       partPayment,
       otpRequired,
+      otpFallbackEnabled: otpRequired && otpFallbackEnabled,
+      otpFallbackCodeHash: otpRequired && otpFallbackEnabled ? otpFallbackCodeHash || existingForm?.otpFallbackCodeHash : undefined,
       tiers: tiers.length > 0 ? tiers : undefined,
       highlights: highlights.filter(Boolean).length > 0 ? highlights.filter(Boolean) : undefined,
       whatsappGroupUrl: whatsappGroupUrl.trim() || undefined,
@@ -274,7 +283,7 @@ export default function FormBuilderPage() {
       fields,
       updatedAt: new Date().toISOString()
     };
-  }, [accent, align, allowDuplicate, allowReferralConfirmation, bannerUrl, batch, closedMessage, description, eligibilityWaitingMessage, fee, fields, fontFamily, fontSize, highlights, logoUrl, otpRequired, paid, partPayment, referralCodes, registrationCapacity, requireAttendanceForConfirmation, requiredAttendanceSessionId, responseLimit, submitButtonText, tagline, tiers, title, titleBold, titleItalic, waitingMessage, waitingMode, waitingTitle, whatsappConfirmationEnabled, whatsappConfirmationTemplate, whatsappGroupUrl, whatsappReferrerWaitingTemplate, whatsappWaitingTemplate, workshop, workshopId]);
+  }, [accent, align, allowDuplicate, allowReferralConfirmation, bannerUrl, batch, closedMessage, description, eligibilityWaitingMessage, fee, fields, fontFamily, fontSize, highlights, logoUrl, otpFallbackCodeHash, otpFallbackEnabled, otpRequired, paid, partPayment, referralCodes, registrationCapacity, requireAttendanceForConfirmation, requiredAttendanceSessionId, responseLimit, submitButtonText, tagline, tiers, title, titleBold, titleItalic, waitingMessage, waitingMode, waitingTitle, whatsappConfirmationEnabled, whatsappConfirmationTemplate, whatsappGroupUrl, whatsappReferrerWaitingTemplate, whatsappWaitingTemplate, workshop, workshopId]);
 
   const link = useMemo(() => {
     if (typeof window === "undefined" || !workshopId) return "";
@@ -353,7 +362,7 @@ export default function FormBuilderPage() {
     setReferralCodes((current) => current.filter((item) => item.id !== id));
   }
 
-  function saveForm() {
+  async function saveForm() {
     if (!workshopId) {
       setSaved("Please select a workshop first.");
       return;
@@ -371,13 +380,31 @@ export default function FormBuilderPage() {
       setSaved("Add all three WhatsApp template names before enabling registration notifications.");
       return;
     }
+    if (otpRequired && otpFallbackEnabled && !otpFallbackCodeHash && otpFallbackCode.length !== 6) {
+      setSaved("Enter a 6-digit fallback OTP.");
+      return;
+    }
     try {
+      let formToSave = form;
+      if (otpRequired && otpFallbackEnabled && otpFallbackCode.length === 6) {
+        const response = await fetch("/api/otp/fallback-config", {
+          body: JSON.stringify({ code: otpFallbackCode, formId: form.id }),
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          method: "POST"
+        });
+        const result = await response.json();
+        if (!response.ok || !result?.hash) throw new Error(result?.error || "Could not secure fallback OTP.");
+        formToSave = { ...form, otpFallbackCodeHash: result.hash };
+        setOtpFallbackCodeHash(result.hash);
+        setOtpFallbackCode("");
+      }
       const list = readLocalArray<BuilderForm>(FORMS_STORAGE_KEY);
-      const next = [form, ...list.filter((item) => item.id !== form.id)];
-      void saveLiveState({ forms: next });
+      const next = [formToSave, ...list.filter((item) => item.id !== form.id)];
+      await saveLiveState({ forms: next });
       setSaved("Form saved. Copy the link below and share it with clients.");
-    } catch {
-      setSaved("Could not save the form locally.");
+    } catch (error) {
+      setSaved(error instanceof Error ? error.message : "Could not save the form.");
     }
   }
 
@@ -526,6 +553,30 @@ export default function FormBuilderPage() {
                 </span>
                 <input checked={otpRequired} className="size-5 shrink-0 accent-emerald-600" onChange={(event) => setOtpRequired(event.target.checked)} type="checkbox" />
               </label>
+              {otpRequired ? (
+                <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-4">
+                  <label className="flex min-h-[52px] items-center justify-between gap-4 rounded-lg bg-white px-3 py-2">
+                    <span><span className="block text-sm font-black text-slate-700">Workshop fallback OTP</span><span className="block text-xs font-semibold text-slate-400">Allow a fixed backup code after an OTP request. The saved code is never shown on the registration form.</span></span>
+                    <input checked={otpFallbackEnabled} className="size-5 accent-amber-600" onChange={(event) => setOtpFallbackEnabled(event.target.checked)} type="checkbox" />
+                  </label>
+                  {otpFallbackEnabled ? (
+                    <label className="mt-3 block">
+                      <span className="mb-2 block text-xs font-black text-slate-600">6-digit fallback OTP</span>
+                      <input
+                        autoComplete="new-password"
+                        className="w-full rounded-xl border border-amber-200 bg-white px-3.5 py-3 text-sm font-semibold outline-none"
+                        inputMode="numeric"
+                        maxLength={6}
+                        onChange={(event) => setOtpFallbackCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+                        placeholder={otpFallbackCodeHash ? "Configured — enter a new code to replace" : "Enter 6-digit code"}
+                        type="password"
+                        value={otpFallbackCode}
+                      />
+                      <span className="mt-1 block text-xs font-semibold text-slate-400">Expires with each 5-minute OTP request and locks after 5 wrong attempts.</span>
+                    </label>
+                  ) : null}
+                </div>
+              ) : null}
 
               <div className="rounded-xl border border-indigo-200 bg-indigo-50/60 p-4">
                 <p className="text-sm font-black text-slate-800">Response Controls</p>
