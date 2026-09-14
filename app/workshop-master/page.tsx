@@ -87,6 +87,7 @@ type RegistrationLinkConfig = {
   fee?: number;
   id?: string;
   otpRequired?: boolean;
+  otpFallbackEnabled?: boolean;
   paid?: boolean;
   partPayment?: boolean;
   publishUntil?: string;
@@ -3529,6 +3530,9 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
   const [publishUntil, setPublishUntil] = useState("");
   const [customBaseUrl, setCustomBaseUrl] = useState("");
   const [otpRequired, setOtpRequired] = useState(false);
+  const [otpFallbackEnabled, setOtpFallbackEnabled] = useState(false);
+  const [otpFallbackCode, setOtpFallbackCode] = useState("");
+  const [otpFallbackCodeHash, setOtpFallbackCodeHash] = useState("");
   const [waitingMode, setWaitingMode] = useState(false);
   const [waitingTitle, setWaitingTitle] = useState("Waiting List Registration");
   const [waitingMessage, setWaitingMessage] = useState("Seats are currently full. Your registration will be added to the waiting list.");
@@ -3568,6 +3572,9 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
         setCustomBaseUrl(existing.customBaseUrl || "");
       }
       setOtpRequired(resolveRegistrationOtpRequired(existing?.otpRequired, savedForm?.otpRequired));
+      setOtpFallbackEnabled(Boolean(savedForm?.otpFallbackEnabled));
+      setOtpFallbackCodeHash(savedForm?.otpFallbackCodeHash || "");
+      setOtpFallbackCode("");
       setWaitingMode(Boolean(savedForm?.waitingMode));
       setWaitingTitle(savedForm?.waitingTitle || "Waiting List Registration");
       setWaitingMessage(savedForm?.waitingMessage || "Seats are currently full. Your registration will be added to the waiting list.");
@@ -3597,6 +3604,31 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
     if (!linkSettingsLoaded) return false;
     try {
       setSaveStatus("saving");
+      const forms = readLocalArray<BuilderForm>(FORMS_STORAGE_KEY);
+      const existingForm = forms.find((item) => item.workshopId === workshop.id || item.workshopSlug === workshopSlug(workshop.name));
+      if (otpRequired && otpFallbackEnabled && !existingForm) {
+        setSaveStatus("failed");
+        return false;
+      }
+      if (otpRequired && otpFallbackEnabled && !otpFallbackCodeHash && otpFallbackCode.length !== 6) {
+        setSaveStatus("failed");
+        return false;
+      }
+      let securedFallbackHash = otpFallbackCodeHash;
+      if (otpRequired && otpFallbackEnabled && otpFallbackCode.length === 6 && existingForm) {
+        const response = await fetch("/api/otp/fallback-config", {
+          body: JSON.stringify({ code: otpFallbackCode, formId: existingForm.id }),
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          method: "POST"
+        });
+        const result = await response.json();
+        if (!response.ok || !result?.hash) {
+          setSaveStatus("failed");
+          return false;
+        }
+        securedFallbackHash = result.hash;
+      }
       const configs = readLocalObject<Record<string, RegistrationLinkConfig>>(REGISTRATION_LINK_CONFIG_STORAGE_KEY);
       configs[shortSlug] = {
         batch: batch.trim() || "Main Batch",
@@ -3605,6 +3637,7 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
         fee: paid ? Number(fee) || 0 : 0,
         id: workshop.id,
         otpRequired,
+        otpFallbackEnabled: otpRequired && otpFallbackEnabled,
         paid,
         partPayment,
         publishUntil: publishUntil || undefined,
@@ -3613,9 +3646,7 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
         title: workshop.name,
         venue: venue.trim() || "TBA"
       };
-      const forms = readLocalArray<BuilderForm>(FORMS_STORAGE_KEY);
-      const existingForm = forms.find((item) => item.workshopId === workshop.id || item.workshopSlug === workshopSlug(workshop.name));
-      const nextForms = existingForm ? [{ ...existingForm, otpRequired, waitingMode, waitingTitle: waitingTitle.trim() || undefined, waitingMessage: waitingMessage.trim() || undefined, updatedAt: new Date().toISOString() }, ...forms.filter((item) => item.id !== existingForm.id)] : forms;
+      const nextForms = existingForm ? [{ ...existingForm, otpRequired, otpFallbackEnabled: otpRequired && otpFallbackEnabled, otpFallbackCodeHash: otpRequired && otpFallbackEnabled ? securedFallbackHash : undefined, waitingMode, waitingTitle: waitingTitle.trim() || undefined, waitingMessage: waitingMessage.trim() || undefined, updatedAt: new Date().toISOString() }, ...forms.filter((item) => item.id !== existingForm.id)] : forms;
       const saved = await saveLiveState({ forms: nextForms, registrationLinks: configs });
       if (!saved) {
         setSaveStatus("failed");
@@ -3627,7 +3658,7 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
       setSaveStatus("failed");
       return false;
     }
-  }, [batch, customBaseUrl, fee, linkSettingsLoaded, onClose, otpRequired, paid, partPayment, publishUntil, published, shortSlug, venue, waitingMessage, waitingMode, waitingTitle, workshop]);
+  }, [batch, customBaseUrl, fee, linkSettingsLoaded, onClose, otpFallbackCode, otpFallbackCodeHash, otpFallbackEnabled, otpRequired, paid, partPayment, publishUntil, published, shortSlug, venue, waitingMessage, waitingMode, waitingTitle, workshop]);
 
   async function copyLink() {
     let copied = false;
@@ -3752,6 +3783,34 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
             </span>
             <input checked={otpRequired} className="size-5 shrink-0 accent-emerald-600" onChange={(event) => setOtpRequired(event.target.checked)} type="checkbox" />
           </label>
+
+          {otpRequired ? (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50/70 p-4">
+              <label className="flex min-h-[48px] items-center justify-between gap-4">
+                <span>
+                  <span className="block text-sm font-black text-slate-800">Workshop Fallback OTP</span>
+                  <span className="mt-0.5 block text-xs font-semibold text-slate-500">Use a private backup code when WhatsApp OTP is not delivered.</span>
+                </span>
+                <input checked={otpFallbackEnabled} className="size-5 shrink-0 accent-amber-600" onChange={(event) => setOtpFallbackEnabled(event.target.checked)} type="checkbox" />
+              </label>
+              {otpFallbackEnabled ? (
+                <label className="mt-3 block">
+                  <span className="mb-2 block text-sm font-bold text-slate-600">6-digit Fallback OTP</span>
+                  <input
+                    autoComplete="new-password"
+                    className={inputClass}
+                    inputMode="numeric"
+                    maxLength={6}
+                    onChange={(event) => setOtpFallbackCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+                    placeholder={otpFallbackCodeHash ? "Configured — enter a new code to replace" : "Enter 6-digit code"}
+                    type="password"
+                    value={otpFallbackCode}
+                  />
+                  <span className="mt-1 block text-xs font-semibold text-slate-500">The saved code is hidden and is valid only after an OTP request.</span>
+                </label>
+              ) : null}
+            </div>
+          ) : null}
 
           <div className="rounded-2xl border border-amber-200 bg-amber-50/70 p-4">
             <label className="flex min-h-[48px] items-center justify-between gap-4">
