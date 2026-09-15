@@ -9,19 +9,23 @@
     "preview": "node scripts/start-preview.mjs",
     "start": "node scripts/start-server.mjs",
     "typecheck": "tsc --noEmit",
-    "test:crm": "node --experimental-strip-types --test tests/*.test.ts"
+    "test:crm": "node --experimental-strip-types --test tests/*.test.ts",
+    "test:mcp": "node --experimental-strip-types --test tests/mcp.test.ts tests/mcp-oauth.test.ts"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "clsx": "^2.1.1",
+    "jose": "^6.2.12",
     "lucide-react": "^0.468.0",
-    "next": "^16.2.10",
+    "next": "16.3.3",
     "pg": "^8.20.0",
     "qrcode": "^1.5.4",
     "react": "latest",
     "react-dom": "latest",
     "react-hook-form": "^7.75.0",
     "recharts": "^3.8.1",
-    "xlsx": "^0.18.5"
+    "xlsx": "^0.18.5",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

@@ -25,6 +25,10 @@ const publicPrefixes = [
   "/api/razorpay/order",
   "/api/webhooks/razorpay",
   "/api/v1",
+  // MCP performs its own OAuth authentication; never accept dashboard cookies.
+  "/api/mcp",
+  // Built-in OAuth verifies the master session itself for consent/revocation.
+  "/api/mcp-oauth",
   "/_next",
   "/favicon.ico"
 ];

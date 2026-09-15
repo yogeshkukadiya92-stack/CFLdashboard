@@ -73,6 +73,16 @@ and database connections. More workers do not eliminate queues or database
 contention. This setup does not protect against failure of the physical server.
 Existing process-local login attempt limits remain per worker, not global.
 
+## Read-only MCP for ChatGPT and other compatible apps
+
+The optional `/api/mcp` endpoint is disabled by default. It exposes only approved
+workshop records and aggregate counts through OAuth-protected Streamable HTTP.
+It does not expose private client/health/payment data or allow arbitrary SQL.
+See [MCP setup](docs/mcp-setup.md) for database-role provisioning, OAuth setup,
+verification and deployment. Live access must be approved before enabling it.
+Built-in OAuth uses the existing master-admin login and explicit per-app consent;
+no external identity-provider account is required in `MCP_OAUTH_MODE=local`.
+
 ## Historical Member Import
 
 The importer streams the oversized worksheet instead of loading all rows into browser memory. It is resumable and idempotent by file hash, source row, and normalized row hash.
