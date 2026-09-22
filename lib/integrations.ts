@@ -88,6 +88,5 @@ export async function saveIntegrationSettings(input: Partial<IntegrationSettings
 }
 
 export async function getRazorpayConfig() {
-  const settings = await getIntegrationSettings();
-  return resolveRazorpayConfig(settings);
+  return resolveRazorpayConfig();
 }

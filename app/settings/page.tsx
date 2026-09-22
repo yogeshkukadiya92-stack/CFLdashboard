@@ -3,17 +3,13 @@
 import { AdminPlatformShell } from "@/components/admin-platform-shell";
 import { IntegrationHubPanel } from "@/components/integration-hub-panel";
 import { SettingsMenu } from "@/components/settings-menu";
-import { CheckCircle2, Copy, CreditCard, Eye, EyeOff, Globe2, Mail, MessageCircle, Plug, Plus, Save, ShieldCheck, Smartphone, Trash2, Webhook, type LucideIcon } from "lucide-react";
+import { CheckCircle2, Copy, CreditCard, Globe2, Mail, MessageCircle, Plug, Plus, Save, ShieldCheck, Smartphone, Trash2, Webhook, type LucideIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 
 type IntegrationSettings = {
   appUrl: string;
   emailFrom: string;
   registrationDomains: string[];
-  razorpayEnabled: boolean;
-  razorpayKeyId: string;
-  razorpayKeySecret: string;
-  razorpayWebhookSecret: string;
   resendKey: string;
   smsProvider: string;
   supabaseUrl: string;
@@ -24,10 +20,6 @@ const defaultSettings: IntegrationSettings = {
   appUrl: "",
   emailFrom: "",
   registrationDomains: [],
-  razorpayEnabled: false,
-  razorpayKeyId: "",
-  razorpayKeySecret: "",
-  razorpayWebhookSecret: "",
   resendKey: "",
   smsProvider: "",
   supabaseUrl: "",
@@ -38,7 +30,8 @@ export default function SettingsPage() {
   const [settings, setSettings] = useState(defaultSettings);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
-  const [showSecrets, setShowSecrets] = useState(false);
+  const [razorpayReady, setRazorpayReady] = useState(false);
+  const [razorpayWebhookReady, setRazorpayWebhookReady] = useState(false);
 
   useEffect(() => {
     async function loadSettings() {
@@ -46,6 +39,8 @@ export default function SettingsPage() {
         const response = await fetch("/api/integrations/settings", { cache: "no-store" });
         const data = await response.json();
         if (data?.settings) setSettings({ ...defaultSettings, ...data.settings });
+        setRazorpayReady(Boolean(data?.razorpay?.configured));
+        setRazorpayWebhookReady(Boolean(data?.razorpay?.webhookConfigured));
       } catch {
         setMessage("Could not load plugin settings.");
       } finally {
@@ -69,6 +64,8 @@ export default function SettingsPage() {
         return;
       }
       setSettings({ ...defaultSettings, ...data.settings });
+      setRazorpayReady(Boolean(data?.razorpay?.configured));
+      setRazorpayWebhookReady(Boolean(data?.razorpay?.webhookConfigured));
       setMessage(`Integration settings saved in ${data.persisted === "database" ? "database" : "server storage"}.`);
     } catch {
       setMessage("Could not save plugin settings.");
@@ -107,8 +104,6 @@ export default function SettingsPage() {
   }
 
   const webhookUrl = `${settings.appUrl || "https://your-domain.com"}/api/webhooks/razorpay`;
-  const razorpayReady = settings.razorpayEnabled && Boolean(settings.razorpayKeyId) && Boolean(settings.razorpayKeySecret);
-
   return (
     <AdminPlatformShell
       activeLabel="Settings"
@@ -123,8 +118,8 @@ export default function SettingsPage() {
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-700">App Plugins</p>
-                <h2 className="mt-1 text-2xl font-black text-slate-950">Install Razorpay from app</h2>
-                <p className="mt-1 text-sm text-slate-500">Save keys here. Deployment environment variables remain available as an optional fallback.</p>
+                <h2 className="mt-1 text-2xl font-black text-slate-950">Server integrations</h2>
+                <p className="mt-1 text-sm text-slate-500">Payment secrets are configured only on the deployment server and are never sent to this page.</p>
               </div>
               <button className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-bold text-white hover:bg-indigo-700" disabled={loading} onClick={save} type="button">
                 <Save className="size-4" />
@@ -145,26 +140,26 @@ export default function SettingsPage() {
                     <p className="mt-1 text-sm font-semibold text-slate-500">Enable online payment order creation and webhook verification.</p>
                   </div>
                 </div>
-                <label className="inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-white px-4 py-2 text-sm font-black text-slate-700">
-                  <input checked={settings.razorpayEnabled} className="size-5 accent-emerald-600" onChange={(event) => update("razorpayEnabled", event.target.checked)} type="checkbox" />
-                  Enabled
-                </label>
+                <span className={`rounded-full px-3 py-1 text-xs font-black ${razorpayReady ? "bg-emerald-600 text-white" : "bg-amber-100 text-amber-800"}`}>
+                  {razorpayReady ? "Configured on server" : "Server configuration required"}
+                </span>
               </div>
 
               <div className="mt-5 grid gap-4 md:grid-cols-2">
-                <Field icon={CreditCard} label="Razorpay Key ID" onChange={(value) => update("razorpayKeyId", value)} placeholder="rzp_live_xxxxx" value={settings.razorpayKeyId} />
-                <Field icon={ShieldCheck} label="Razorpay Key Secret" onChange={(value) => update("razorpayKeySecret", value)} placeholder="Keep secret" secret={!showSecrets} value={settings.razorpayKeySecret} />
-                <Field icon={Webhook} label="Webhook Secret" onChange={(value) => update("razorpayWebhookSecret", value)} placeholder="Webhook signing secret" secret={!showSecrets} value={settings.razorpayWebhookSecret} />
+                <div className="rounded-2xl border border-emerald-100 bg-white p-4 md:col-span-2">
+                  <p className="text-sm font-black text-slate-900">Coolify environment variables</p>
+                  <p className="mt-2 text-sm text-slate-600">Set <code>RAZORPAY_KEY_ID</code>, <code>RAZORPAY_KEY_SECRET</code>, and <code>RAZORPAY_WEBHOOK_SECRET</code> on the server, then redeploy.</p>
+                  <p className="mt-2 text-xs font-bold text-slate-500">Key values are never returned by the settings API or included in the browser bundle.</p>
+                </div>
                 <Field icon={Webhook} label="Live App URL" onChange={(value) => update("appUrl", value)} placeholder="https://dashboard.yourdomain.com" value={settings.appUrl} />
               </div>
 
               <div className="mt-4 flex flex-wrap items-center gap-2">
-                <button className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50" onClick={() => setShowSecrets((value) => !value)} type="button">
-                  {showSecrets ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-                  {showSecrets ? "Hide Secrets" : "Show Secrets"}
-                </button>
                 <span className={`rounded-full px-3 py-1 text-xs font-black ${razorpayReady ? "bg-emerald-600 text-white" : "bg-amber-100 text-amber-800"}`}>
-                  {razorpayReady ? "Ready" : "Needs keys"}
+                  Payments: {razorpayReady ? "Ready" : "Needs server keys"}
+                </span>
+                <span className={`rounded-full px-3 py-1 text-xs font-black ${razorpayWebhookReady ? "bg-emerald-600 text-white" : "bg-slate-100 text-slate-600"}`}>
+                  Webhook: {razorpayWebhookReady ? "Ready" : "Not configured"}
                 </span>
               </div>
             </div>
