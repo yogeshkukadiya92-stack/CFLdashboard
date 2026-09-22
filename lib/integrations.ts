@@ -1,6 +1,9 @@
 import { mkdir, readFile, writeFile } from "fs/promises";
 import path from "path";
 import { getAppState, isDbEnabled, saveAppState } from "@/lib/db";
+import { resolveRazorpayConfig } from "@/lib/razorpay-config";
+
+export { resolveRazorpayConfig } from "@/lib/razorpay-config";
 
 export type IntegrationSettings = {
   appUrl: string;
@@ -86,9 +89,5 @@ export async function saveIntegrationSettings(input: Partial<IntegrationSettings
 
 export async function getRazorpayConfig() {
   const settings = await getIntegrationSettings();
-  return {
-    keyId: process.env.RAZORPAY_KEY_ID || settings.razorpayKeyId,
-    keySecret: process.env.RAZORPAY_KEY_SECRET || settings.razorpayKeySecret,
-    webhookSecret: process.env.RAZORPAY_WEBHOOK_SECRET || settings.razorpayWebhookSecret
-  };
+  return resolveRazorpayConfig(settings);
 }
