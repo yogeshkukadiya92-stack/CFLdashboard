@@ -97,8 +97,12 @@ export default function WorkshopTagPage() {
     return { free, paid, regCount, total };
   }, [registrations, taggedWorkshops]);
 
+  function getWorkshopSlug(workshop: WorkshopRecord) {
+    return workshop.name.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "workshop";
+  }
+
   function copyRegistrationUrl(workshop: WorkshopRecord) {
-    const slug = workshop.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "workshop";
+    const slug = getWorkshopSlug(workshop);
     const url = `${window.location.origin}/register/${slug}`;
     void navigator.clipboard.writeText(url);
     setCopiedLink(workshop.id);
@@ -266,6 +270,8 @@ export default function WorkshopTagPage() {
                 {filteredWorkshops.length ? (
                   filteredWorkshops.map((record) => {
                     const allTags = extractWorkshopTags(record);
+                    const slug = getWorkshopSlug(record);
+                    const workshopUrl = `/register/${slug}`;
                     return (
                       <tr
                         className="transition hover:bg-indigo-50/40"
@@ -273,6 +279,16 @@ export default function WorkshopTagPage() {
                       >
                         <td className="px-4 py-4">
                           <div className="flex items-center gap-1.5">
+                            <a
+                              aria-label={`Open ${record.name} live page`}
+                              className="grid size-8 place-items-center rounded-lg border border-slate-200 bg-white text-slate-600 transition hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-700"
+                              href={workshopUrl}
+                              rel="noopener noreferrer"
+                              target="_blank"
+                              title="Open live workshop page"
+                            >
+                              <ExternalLink className="size-3.5" />
+                            </a>
                             <button
                               aria-label="Copy registration link"
                               className={`grid size-8 place-items-center rounded-lg border transition ${
@@ -287,9 +303,17 @@ export default function WorkshopTagPage() {
                               <Link2 className="size-3.5" />
                             </button>
                             <a
+                              aria-label="View responses in Workshop Master"
+                              className="grid size-8 place-items-center rounded-lg border border-slate-200 bg-white text-slate-600 transition hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700"
+                              href={`/workshop-master?workshopId=${encodeURIComponent(record.id)}`}
+                              title="View responses in Workshop Master"
+                            >
+                              <UsersRound className="size-3.5" />
+                            </a>
+                            <a
                               aria-label="Edit in Workshop Master"
                               className="grid size-8 place-items-center rounded-lg border border-slate-200 bg-white text-slate-600 transition hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-700"
-                              href={`/workshop-master`}
+                              href={`/workshop-master?edit=${encodeURIComponent(record.id)}`}
                               title="Edit in Workshop Master"
                             >
                               <Edit3 className="size-3.5" />
@@ -306,10 +330,14 @@ export default function WorkshopTagPage() {
                         </td>
                         <td className="px-4 py-4">
                           <a
-                            className="font-black text-indigo-700 hover:underline"
-                            href="/workshop-master"
+                            className="group inline-flex items-center gap-1.5 font-black text-indigo-700 hover:text-indigo-900 hover:underline"
+                            href={workshopUrl}
+                            rel="noopener noreferrer"
+                            target="_blank"
+                            title={`Open "${record.name}" live workshop page`}
                           >
-                            {record.name}
+                            <span>{record.name}</span>
+                            <ExternalLink className="size-3.5 text-slate-400 opacity-60 transition group-hover:opacity-100 group-hover:text-indigo-600" />
                           </a>
                         </td>
                         <td className="px-4 py-4">

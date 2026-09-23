@@ -818,6 +818,23 @@ export default function WorkshopMasterPage() {
     setShowParticipants(false);
   }
 
+  const handledUrlWorkshopRef = useRef(false);
+  useEffect(() => {
+    if (handledUrlWorkshopRef.current || !records.length) return;
+    const urlParams = new URLSearchParams(window.location.search);
+    const targetEditId = urlParams.get("edit");
+    const targetWorkshopId = urlParams.get("workshopId") || urlParams.get("id");
+    if (targetEditId) {
+      handledUrlWorkshopRef.current = true;
+      const found = records.find((r) => r.id === targetEditId);
+      if (found) editRecord(found);
+    } else if (targetWorkshopId) {
+      handledUrlWorkshopRef.current = true;
+      const found = records.find((r) => r.id === targetWorkshopId);
+      if (found) void openWorkshop(found);
+    }
+  }, [records]);
+
   function deleteRecord(id: string) {
     saveRecords(records.filter((record) => record.id !== id));
     deleteBuilderForm(id);
