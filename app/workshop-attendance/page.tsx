@@ -26,6 +26,8 @@ type WorkshopRecord = {
   facilitator?: string;
   id: string;
   name: string;
+  tag?: string;
+  tags?: string[];
 };
 
 const inputClass = "min-h-9 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100";
@@ -162,7 +164,12 @@ export default function WorkshopAttendancePage() {
 
   const filteredWorkshops = useMemo(() => {
     const value = query.trim().toLowerCase();
-    return workshops.filter((workshop) => !value || workshop.name.toLowerCase().includes(value));
+    return workshops.filter((workshop) => {
+      if (!value) return true;
+      const tagList = Array.isArray(workshop.tags) ? workshop.tags : [];
+      const tagStr = [workshop.tag ?? "", ...tagList].join(" ");
+      return workshop.name.toLowerCase().includes(value) || tagStr.toLowerCase().includes(value);
+    });
   }, [query, workshops]);
 
   const selectedWorkshop = workshops.find((item) => item.id === selectedWorkshopId) ?? filteredWorkshops[0] ?? null;

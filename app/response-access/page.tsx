@@ -6,7 +6,7 @@ import type { ResponseAccessGrantSummary, ResponseAccessPermissions } from "@/li
 import { Check, ClipboardCheck, Copy, ExternalLink, Eye, FileDown, KeyRound, Pencil, Plus, Search, ShieldCheck, Trash2, UserRoundCheck, X } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 
-type WorkshopOption = { id: string; name: string };
+type WorkshopOption = { id: string; name: string; tag?: string; tags?: string[] };
 type AccessDraft = {
   id?: string;
   recipientName: string;
@@ -71,7 +71,12 @@ export default function ResponseAccessPage() {
   }, [grants, search]);
   const filteredWorkshops = useMemo(() => {
     const value = workshopSearch.trim().toLowerCase();
-    return value ? workshops.filter((workshop) => workshop.name.toLowerCase().includes(value)) : workshops;
+    if (!value) return workshops;
+    return workshops.filter((workshop) => {
+      const tagList = Array.isArray(workshop.tags) ? workshop.tags : [];
+      const tagStr = [workshop.tag ?? "", ...tagList].join(" ");
+      return workshop.name.toLowerCase().includes(value) || tagStr.toLowerCase().includes(value);
+    });
   }, [workshopSearch, workshops]);
   const activeCount = grants.filter((grant) => accessStatus(grant) === "Active").length;
   const totalViews = grants.reduce((total, grant) => total + grant.accessCount, 0);

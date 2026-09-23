@@ -5,8 +5,8 @@ import type { ResponseAccessGrant, ResponseAccessPermissions } from "@/lib/types
 
 export const runtime = "nodejs";
 
-type WorkshopRecord = { archived?: boolean; id?: string; name?: string };
-type WorkshopOption = { id: string; name: string };
+type WorkshopRecord = { archived?: boolean; id?: string; name?: string; tag?: string; tags?: string[] };
+type WorkshopOption = { id: string; name: string; tag?: string; tags?: string[] };
 
 function cleanPermissions(value: unknown): ResponseAccessPermissions {
   const input = value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
@@ -26,7 +26,7 @@ function activeWorkshops(state: Awaited<ReturnType<typeof getAppState>>): Worksh
     if (!record || typeof record !== "object") continue;
     const item = record as WorkshopRecord;
     if (item.archived || typeof item.id !== "string" || !item.id || typeof item.name !== "string" || !item.name) continue;
-    workshops.push({ id: item.id, name: item.name });
+    workshops.push({ id: item.id, name: item.name, tag: item.tag, tags: item.tags });
   }
   return workshops;
 }

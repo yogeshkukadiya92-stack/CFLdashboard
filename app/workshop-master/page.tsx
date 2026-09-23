@@ -9,7 +9,7 @@ import { AdvancedResponseFilters } from "@/components/advanced-response-filters"
 import { WorkshopCohortCompare } from "@/components/workshop-cohort-compare";
 import { MultiWorkshopOverlap } from "@/components/multi-workshop-overlap";
 import { normalizeCoreFieldRequirements } from "@/lib/builder-field-normalization";
-import { AlertCircle, Archive, ArrowDown, ArrowUp, BarChart3, Bold, CalendarDays, Check, CheckSquare, ChevronDown, Circle, Copy, Download, Edit3, ExternalLink, Eye, EyeOff, Files, Heading, Image, Italic, LayoutList, Link2, List, ListOrdered, Mail, MessageCircle, Monitor, Palette, PhoneCall, Plus, QrCode, RefreshCw, Route, Save, Search, Share2, Smartphone, Sparkles, Trash2, Type, Underline, Upload, UsersRound, X } from "lucide-react";
+import { AlertCircle, Archive, ArrowDown, ArrowUp, BarChart3, Bold, CalendarDays, Check, CheckSquare, ChevronDown, Circle, Copy, Download, Edit3, ExternalLink, Eye, EyeOff, Files, Heading, Image, Italic, LayoutList, Link2, List, ListOrdered, Mail, MessageCircle, Monitor, Palette, PhoneCall, Plus, QrCode, RefreshCw, Route, Save, Search, Share2, Smartphone, Sparkles, Tag, Trash2, Type, Underline, Upload, UsersRound, X } from "lucide-react";
 import { hydrateLiveState, readLocalArray, readLocalObject, saveLiveState } from "@/lib/live-state";
 import { buildRegistrationUrl, normalizeBaseUrl } from "@/lib/registration-url";
 import { publicFormSlug } from "@/lib/public-slug";
@@ -23,6 +23,7 @@ import { generateId } from "@/lib/utils";
 import { salesPersonCodeFromId } from "@/lib/sales-person-code";
 import { isHealthyForeverWorkshop } from "@/lib/healthy-forever";
 import type { WorkshopLeadAssignmentRule } from "@/lib/workshop-lead-assignment";
+import { isWorkshopTagProvided, normalizeWorkshopTag, workshopMatchesSearch } from "@/lib/workshop-tags";
 import { type ClipboardEvent, type FormEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type WorkshopRecord = {
@@ -56,6 +57,8 @@ type WorkshopRecord = {
   assignedSalesPersonName?: string;
   assignedSalesPersonCode?: string;
   leadAssignmentRules?: WorkshopLeadAssignmentRule[];
+  tag?: string;
+  tags?: string[];
 };
 
 type SalesPersonRecord = {
@@ -168,6 +171,7 @@ function defaultBuilderFields(): BuilderField[] {
 export default function WorkshopMasterPage() {
   const [showData, setShowData] = useState(true);
   const [name, setName] = useState("");
+  const [tag, setTag] = useState("");
   const [type, setType] = useState("");
   const [facilitator, setFacilitator] = useState("");
   const [group, setGroup] = useState("");
@@ -228,7 +232,9 @@ export default function WorkshopMasterPage() {
   const [whatsappReferrerWaitingTemplate, setWhatsappReferrerWaitingTemplate] = useState("");
   const [message, setMessage] = useState("");
   const [search, setSearch] = useState("");
-  const [recordScope, setRecordScope] = useState<"all" | "active" | "historical">("active");
+  const [recordScope, setRecordScope] = useState<"all" | "active" | "historical" | "untagged">("active");
+  const [quickTagWorkshop, setQuickTagWorkshop] = useState<WorkshopRecord | null>(null);
+  const [quickTagValue, setQuickTagValue] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedWorkshopId, setSelectedWorkshopId] = useState<string | null>(null);
   const [analyticsPanel, setAnalyticsPanel] = useState<AnalyticsPanel>(null);
@@ -327,6 +333,12 @@ export default function WorkshopMasterPage() {
       setAttendanceSessions(readLocalArray<AttendanceSession>("cfl_attendance_sessions_v1"));
       setFormAnalytics(readLocalArray<FormAnalyticsRecord>("cfl_form_analytics_v1"));
       setSalesPeople(readLocalArray<SalesPersonRecord>("cfl_sales_people_v1"));
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlTag = urlParams.get("tag");
+      if (urlTag) {
+        setSearch(urlTag);
+        setTag(urlTag);
+      }
     }
 
     loadLocal();
@@ -389,23 +401,31 @@ export default function WorkshopMasterPage() {
     };
   }, []);
 
-  const progress = useMemo(() => Math.round(([name, type, facilitator, group].filter(Boolean).length / 4) * 100), [facilitator, group, name, type]);
+  const progress = useMemo(() => Math.round(([name, tag, type, facilitator, group].filter(Boolean).length / 5) * 100), [facilitator, group, name, tag, type]);
+  const availableTags = useMemo(() => {
+    const set = new Set<string>();
+    records.forEach((record) => {
+      if (record.tag) {
+        record.tag.split(",").map((s) => s.trim()).filter(Boolean).forEach((t) => set.add(t));
+      }
+      if (Array.isArray(record.tags)) {
+        record.tags.forEach((t) => { if (t?.trim()) set.add(t.trim()); });
+      }
+    });
+    return Array.from(set);
+  }, [records]);
   const filteredRecords = useMemo(() => {
-    const value = search.trim().toLowerCase();
     return records.filter((record) => {
       if (recordScope === "active" && record.archived) return false;
       if (recordScope === "historical" && !record.archived) return false;
-      if (!value) return true;
-      return (
-      [record.name, record.type, record.facilitator, record.productGroup, record.isPaid ? "paid" : "free"].some((item) =>
-        item.toLowerCase().includes(value)
-      )
-      );
+      if (recordScope === "untagged" && (record.tag || (Array.isArray(record.tags) && record.tags.length > 0))) return false;
+      return workshopMatchesSearch(record, search);
     });
   }, [recordScope, records, search]);
   const paidCount = records.filter((record) => record.isPaid).length;
   const freeCount = records.filter((record) => !record.isPaid && !record.paymentUnknown).length;
   const historicalCount = records.filter((record) => record.archived).length;
+  const untaggedCount = records.filter((record) => !record.tag && (!record.tags || record.tags.length === 0)).length;
   const selectedWorkshop = records.find((record) => record.id === selectedWorkshopId) ?? null;
   const showMedicalReport = isHealthyForeverWorkshop(selectedWorkshop?.name);
   const editingAnalytics = editingId
@@ -554,6 +574,38 @@ export default function WorkshopMasterPage() {
     return saveLiveState({ workshops: next });
   }
 
+  function openQuickTagModal(record: WorkshopRecord) {
+    setQuickTagWorkshop(record);
+    setQuickTagValue(record.tag || (Array.isArray(record.tags) ? record.tags.join(", ") : ""));
+  }
+
+  async function saveQuickTag() {
+    if (!quickTagWorkshop) return;
+    const trimmed = quickTagValue.trim();
+    if (!trimmed) {
+      setMessage("Tag cannot be empty. Please enter a valid tag (e.g., LP, BJS).");
+      return;
+    }
+    const splitTags = trimmed.split(/[,/]+/).map((t) => t.trim().toUpperCase()).filter(Boolean);
+    const primaryTag = splitTags[0] || trimmed.toUpperCase();
+    const updatedRecords = records.map((rec) => {
+      if (rec.id !== quickTagWorkshop.id) return rec;
+      return {
+        ...rec,
+        tag: primaryTag,
+        tags: splitTags.length > 0 ? splitTags : [primaryTag],
+      };
+    });
+    setRecords(updatedRecords);
+    const saved = await saveRecords(updatedRecords);
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event("storage"));
+    }
+    setQuickTagWorkshop(null);
+    setQuickTagValue("");
+    setMessage(saved ? `Tag "${primaryTag}" linked successfully to "${quickTagWorkshop.name}".` : "Tag saved locally.");
+  }
+
   async function loadMfwWorkshops() {
     setMfwLoading(true);
     setMfwError("");
@@ -575,6 +627,7 @@ export default function WorkshopMasterPage() {
 
   function clearForm(clearMessage = true) {
     setName("");
+    setTag("");
     setType("");
     setFacilitator("");
     setGroup("");
@@ -608,8 +661,8 @@ export default function WorkshopMasterPage() {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!name || !type || !facilitator || !group) {
-      setMessage("Please fill Workshop Name, Type, Facilitator and Product Group.");
+    if (!name || !tag.trim() || !type || !facilitator || !group) {
+      setMessage("Please fill Workshop Name, Tag, Type, Facilitator and Product Group.");
       return;
     }
     if (mfwEnrollmentEnabled && !mfwWorkshopEventId) {
@@ -638,6 +691,7 @@ export default function WorkshopMasterPage() {
 
   function editRecord(record: WorkshopRecord) {
     setName(record.name);
+    setTag(record.tag || (Array.isArray(record.tags) ? record.tags.join(", ") : ""));
     setType(record.type);
     setFacilitator(record.facilitator);
     setGroup(record.productGroup);
@@ -663,14 +717,19 @@ export default function WorkshopMasterPage() {
     loadBuilderForm(record);
     setShowData(false);
     setSelectedWorkshopId(null);
-    setShowParticipants(false);
-    setMessage("Editing selected workshop.");
+    if (!record.tag && (!record.tags || record.tags.length === 0)) {
+      setWorkshopWorkflowPanel("info");
+      setMessage("Editing workshop. Please assign a compulsory tag in Workshop Info.");
+    } else {
+      setMessage("Editing selected workshop.");
+    }
     window.requestAnimationFrame(() => window.scrollTo({ behavior: "smooth", top: 0 }));
   }
 
   function startDraftFromRecord(record: WorkshopRecord, mode: "full" | "form-only" = "full") {
     if (mode === "full") {
       setName(`${record.name} Copy`);
+      setTag(record.tag || (Array.isArray(record.tags) ? record.tags.join(", ") : ""));
       setType(record.type);
       setFacilitator(record.facilitator);
       setGroup(record.productGroup);
@@ -996,6 +1055,8 @@ export default function WorkshopMasterPage() {
       name,
       orderQtyTitle,
       productGroup: group,
+      tag: normalizeWorkshopTag(tag).tag,
+      tags: normalizeWorkshopTag(tag).tags,
       transferLeadToCrm,
       type
     };
@@ -1206,9 +1267,10 @@ export default function WorkshopMasterPage() {
   }
 
   function exportCsv() {
-    const headers = ["Workshop", "Type", "Facilitator", "Product Group", "Paid", "Batch", "Fee", "CRM"];
+    const headers = ["Workshop", "Tag", "Type", "Facilitator", "Product Group", "Paid", "Batch", "Fee", "CRM"];
     const rows = filteredRecords.map((record) => [
       record.name,
+      record.tag || (Array.isArray(record.tags) ? record.tags.join(", ") : ""),
       record.type,
       record.facilitator,
       record.productGroup,
@@ -1447,7 +1509,7 @@ export default function WorkshopMasterPage() {
             <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-indigo-700">{editingId ? "Edit mode" : "New workshop"}</span>
           </div>
           <div className="mt-3 grid gap-2 md:grid-cols-3">
-            <FormWorkflowCard title="Workshop info" detail={name || "Workshop name"} meta={`${type || "Type"} · ${facilitator || "Facilitator"}`} onOpen={() => setWorkshopWorkflowPanel("info")} />
+            <FormWorkflowCard title="Workshop info" detail={name || "Workshop name"} meta={`${tag ? `Tag: ${tag} · ` : ""}${type || "Type"} · ${facilitator || "Facilitator"}`} onOpen={() => setWorkshopWorkflowPanel("info")} />
             <FormWorkflowCard title="MFW" detail={mfwEnrollmentEnabled ? "Enrollment ON" : "Enrollment OFF"} meta={mfwWorkshopTitle || mfwWorkshopEventId || "No mapping"} onOpen={() => setWorkshopWorkflowPanel("mfw")} />
             <FormWorkflowCard title="Pricing & CRM" detail={`${isPaid ? `Paid · INR ${feesWithTax || 0}` : "Free"} · CRM ${transferLeadToCrm ? "ON" : "OFF"}`} meta={`${leadAssignmentRules.length} lead rules`} onOpen={() => setWorkshopWorkflowPanel("pricing")} />
           </div>
@@ -1455,8 +1517,18 @@ export default function WorkshopMasterPage() {
 
         <div className="hidden">
         <div className="mt-6">
-          <label className="mb-2 block text-sm font-bold text-slate-600">Workshop/Product Name</label>
+          <label className="mb-2 block text-sm font-bold text-slate-600">Workshop/Product Name <span className="text-rose-500">*</span></label>
           <input className={inputClass} onChange={(event) => setName(event.target.value)} placeholder="Enter workshop or product name" value={name} />
+        </div>
+
+        <div className="mt-4">
+          <label className="mb-2 block text-sm font-bold text-slate-600">Workshop Tag <span className="text-rose-500">*</span></label>
+          <input className={inputClass} list="workshop-tag-suggestions-hidden" onChange={(event) => setTag(event.target.value)} placeholder="e.g. LP, BJS" required value={tag} />
+          <datalist id="workshop-tag-suggestions-hidden">
+            {availableTags.map((t) => (
+              <option key={t} value={t} />
+            ))}
+          </datalist>
         </div>
 
         <div className="mt-5 grid gap-4 lg:grid-cols-[1fr_1fr_1fr_auto]">
@@ -1662,10 +1734,45 @@ export default function WorkshopMasterPage() {
               <div className="min-h-0 flex-1 overflow-y-auto p-4">
                 {workshopWorkflowPanel === "info" ? (
                   <div className="grid gap-4 lg:grid-cols-3">
-                    <label className="block lg:col-span-3">
-                      <span className="mb-2 block text-sm font-bold text-slate-600">Workshop/Product Name</span>
+                    <label className="block lg:col-span-2">
+                      <span className="mb-2 block text-sm font-bold text-slate-600">Workshop/Product Name <span className="text-rose-500">*</span></span>
                       <input className={inputClass} onChange={(event) => setName(event.target.value)} placeholder="Enter workshop or product name" value={name} />
                     </label>
+                    <label className="block">
+                      <div className="mb-2 flex items-center justify-between">
+                        <span className="text-sm font-bold text-slate-700">Workshop Tag <span className="text-rose-500">*</span></span>
+                        <span className="rounded-full bg-rose-50 px-2 py-0.5 text-[10px] font-black text-rose-600 uppercase tracking-wide">Compulsory</span>
+                      </div>
+                      <input
+                        className={`${inputClass} font-bold text-indigo-900 placeholder:font-normal`}
+                        list="workshop-tag-suggestions"
+                        onChange={(event) => setTag(event.target.value)}
+                        placeholder="e.g. LP, BJS, HFW"
+                        required
+                        value={tag}
+                      />
+                      <datalist id="workshop-tag-suggestions">
+                        {availableTags.map((t) => (
+                          <option key={t} value={t} />
+                        ))}
+                      </datalist>
+                      <p className="mt-1 text-[11px] text-slate-400">Used for search (e.g. searching LP or BJS).</p>
+                    </label>
+                    {availableTags.length > 0 ? (
+                      <div className="-mt-1 flex flex-wrap items-center gap-1.5 lg:col-span-3">
+                        <span className="text-xs font-semibold text-slate-400">Quick select tag:</span>
+                        {availableTags.map((t) => (
+                          <button
+                            className={`rounded-lg px-2.5 py-1 text-xs font-bold transition ${tag === t ? "bg-indigo-600 text-white shadow-sm" : "border border-slate-200 bg-slate-50 text-slate-700 hover:bg-indigo-50 hover:text-indigo-700"}`}
+                            key={t}
+                            onClick={() => setTag(t)}
+                            type="button"
+                          >
+                            {t}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
                     <SelectBox label="Workshop Type" onChange={setType} options={workshopTypes} value={type} />
                     <SelectBox label="Default Facilitator" onChange={setFacilitator} options={facilitators} value={facilitator} />
                     <SelectBox label="Product Group" onChange={setGroup} options={productGroups} value={group} />
@@ -2243,14 +2350,14 @@ export default function WorkshopMasterPage() {
           <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
             <div className="flex w-full flex-col gap-3 lg:max-w-3xl lg:flex-row">
               <div className="flex rounded-xl border border-slate-200 p-1">
-                {(["active", "historical", "all"] as const).map((scope) => (
+                {(["active", "historical", "all", "untagged"] as const).map((scope) => (
                   <button
                     className={`rounded-lg px-3 py-2 text-sm font-bold capitalize ${recordScope === scope ? "bg-slate-950 text-white" : "text-slate-600 hover:bg-slate-50"}`}
                     key={scope}
                     onClick={() => setRecordScope(scope)}
                     type="button"
                   >
-                    {scope}
+                    {scope === "untagged" ? `Untagged (${untaggedCount})` : scope}
                   </button>
                 ))}
               </div>
@@ -2259,7 +2366,7 @@ export default function WorkshopMasterPage() {
                 <input
                   className="w-full rounded-xl border border-slate-200 py-3 pl-10 pr-3 text-sm outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100"
                   onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Search workshop, type, facilitator..."
+                  placeholder="Search workshop, tag, type, facilitator..."
                   value={search}
                 />
               </label>
@@ -2283,7 +2390,7 @@ export default function WorkshopMasterPage() {
           <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200">
             <table className="min-w-[760px] w-full text-left text-sm">
               <thead className="bg-slate-50 text-xs uppercase text-slate-500">
-                <tr>{["Action", "Workshop", "Type", "Facilitator", "Group", "Paid", "Batch"].map((head) => <th className="px-4 py-3" key={head}>{head}</th>)}</tr>
+                <tr>{["Action", "Workshop", "Tag", "Type", "Facilitator", "Group", "Paid", "Batch"].map((head) => <th className="px-4 py-3" key={head}>{head}</th>)}</tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {filteredRecords.length ? filteredRecords.map((record) => (
@@ -2305,6 +2412,41 @@ export default function WorkshopMasterPage() {
                     <td className="px-4 py-4">
                       {record.archived ? <a className="text-left font-black text-amber-700 underline-offset-4 hover:underline" href="/historical-data">{record.name}</a> : <button className="text-left font-black text-indigo-700 underline-offset-4 hover:underline" onClick={() => openWorkshop(record)} type="button">{record.name}</button>}
                     </td>
+                    <td className="px-4 py-4">
+                      {record.tag || (record.tags && record.tags.length > 0) ? (
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {(record.tags && record.tags.length > 0 ? record.tags : [record.tag!]).map((t, idx) => (
+                            <button
+                              className="inline-flex items-center rounded-md border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-xs font-black text-indigo-700 transition hover:border-indigo-300 hover:bg-indigo-100"
+                              key={idx}
+                              onClick={() => setSearch(t)}
+                              title={`Filter by tag "${t}"`}
+                              type="button"
+                            >
+                              {t}
+                            </button>
+                          ))}
+                          <button
+                            className="inline-flex size-6 items-center justify-center rounded text-slate-400 transition hover:bg-indigo-50 hover:text-indigo-600"
+                            onClick={() => openQuickTagModal(record)}
+                            title="Edit tag"
+                            type="button"
+                          >
+                            <Edit3 className="size-3.5" />
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          className="inline-flex items-center gap-1 rounded-lg border border-dashed border-amber-300 bg-amber-50 px-2.5 py-1 text-xs font-black text-amber-700 transition hover:border-amber-400 hover:bg-amber-100"
+                          onClick={() => openQuickTagModal(record)}
+                          title="Assign tag to this workshop"
+                          type="button"
+                        >
+                          <Plus className="size-3" />
+                          <span>+ Add Tag</span>
+                        </button>
+                      )}
+                    </td>
                     <td className="px-4 py-4">{record.type}</td>
                     <td className="px-4 py-4">{record.facilitator}</td>
                     <td className="px-4 py-4">{record.productGroup}</td>
@@ -2315,7 +2457,7 @@ export default function WorkshopMasterPage() {
                     </td>
                     <td className="px-4 py-4">{record.legacyBatchCount ? `${record.legacyBatchCount} batches` : record.batch || "Main Batch"}</td>
                   </tr>
-                )) : <tr><td className="px-4 py-8 text-center text-slate-500" colSpan={7}>No workshop records yet.</td></tr>}
+                )) : <tr><td className="px-4 py-8 text-center text-slate-500" colSpan={8}>No workshop records yet.</td></tr>}
               </tbody>
             </table>
           </div>
@@ -2380,6 +2522,14 @@ export default function WorkshopMasterPage() {
                     <span>{selectedWorkshop.facilitator}</span>
                     <span aria-hidden="true" className="text-slate-300">•</span>
                     <span>{selectedWorkshop.productGroup}</span>
+                    {(selectedWorkshop.tag || (selectedWorkshop.tags && selectedWorkshop.tags.length > 0)) ? (
+                      <>
+                        <span aria-hidden="true" className="text-slate-300">•</span>
+                        <span className="inline-flex items-center rounded-md border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[10px] font-black text-indigo-700">
+                          Tag: {selectedWorkshop.tag || selectedWorkshop.tags?.join(", ")}
+                        </span>
+                      </>
+                    ) : null}
                     {selectedWorkshop.batches?.length ? (
                       <label className="inline-flex items-center gap-1.5 font-black text-slate-600">
                         <span>Batch</span>
@@ -2877,6 +3027,129 @@ export default function WorkshopMasterPage() {
       >
         This action affects only {selectedWorkshop?.name || "the selected workshop"} and cannot be undone.
       </ConfirmDialog>
+
+      {quickTagWorkshop ? (
+        <div
+          aria-labelledby="quick-tag-modal-title"
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              setQuickTagWorkshop(null);
+              setQuickTagValue("");
+            }
+          }}
+          role="dialog"
+        >
+          <div className="w-full max-w-md overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+            <header className="flex items-center justify-between border-b border-slate-100 bg-gradient-to-r from-indigo-50/60 via-purple-50/40 to-slate-50 px-5 py-4">
+              <div className="flex items-center gap-2.5">
+                <div className="grid size-9 place-items-center rounded-xl bg-indigo-600 text-white shadow-sm shadow-indigo-200">
+                  <Tag className="size-4" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-900" id="quick-tag-modal-title">
+                    {quickTagWorkshop.tag || (quickTagWorkshop.tags && quickTagWorkshop.tags.length > 0) ? "Edit Workshop Tag" : "Assign Workshop Tag"}
+                  </h3>
+                  <p className="max-w-[240px] truncate text-xs font-semibold text-slate-500">
+                    {quickTagWorkshop.name}
+                  </p>
+                </div>
+              </div>
+              <button
+                aria-label="Close tag modal"
+                className="grid size-8 place-items-center rounded-lg border border-slate-200 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                onClick={() => {
+                  setQuickTagWorkshop(null);
+                  setQuickTagValue("");
+                }}
+                type="button"
+              >
+                <X className="size-4" />
+              </button>
+            </header>
+
+            <form
+              className="p-5"
+              onSubmit={(e) => {
+                e.preventDefault();
+                void saveQuickTag();
+              }}
+            >
+              <label className="block">
+                <span className="text-xs font-black uppercase tracking-wider text-slate-600">
+                  Tag Identifier <span className="text-rose-500">*</span>
+                </span>
+                <input
+                  autoFocus
+                  className="mt-1.5 w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm font-bold uppercase text-slate-900 outline-none transition placeholder:font-normal placeholder:normal-case placeholder:text-slate-400 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100"
+                  onChange={(e) => setQuickTagValue(e.target.value)}
+                  placeholder="e.g. LP, BJS, HEALTH, ONLINE"
+                  value={quickTagValue}
+                />
+              </label>
+
+              {/* Quick Suggestion Chips */}
+              <div className="mt-3">
+                <p className="mb-1.5 text-[11px] font-bold text-slate-400">Common / Existing Tags:</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {Array.from(new Set(["LP", "BJS", ...availableTags])).map((tagChip) => (
+                    <button
+                      className={`inline-flex items-center rounded-lg border px-2.5 py-1 text-xs font-black transition ${
+                        quickTagValue.trim().toUpperCase() === tagChip.toUpperCase()
+                          ? "border-indigo-600 bg-indigo-600 text-white shadow-sm"
+                          : "border-slate-200 bg-slate-50 text-slate-700 hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700"
+                      }`}
+                      key={tagChip}
+                      onClick={() => setQuickTagValue(tagChip)}
+                      type="button"
+                    >
+                      {tagChip}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Preview Info Box */}
+              {quickTagValue.trim() ? (
+                <div className="mt-4 rounded-xl border border-indigo-100 bg-indigo-50/60 p-3">
+                  <p className="text-[11px] font-bold text-indigo-700">Preview & Instant Link:</p>
+                  <p className="mt-1 text-xs text-slate-600">
+                    Assigning will link this workshop to:{" "}
+                    <span className="inline-flex items-center rounded-md border border-indigo-200 bg-white px-2 py-0.5 text-xs font-black text-indigo-700 shadow-sm">
+                      {quickTagValue.trim().toUpperCase()}
+                    </span>
+                  </p>
+                  <p className="mt-1 text-[11px] text-slate-500">
+                    It will immediately show in dashboard tag counts and the dedicated <span className="font-semibold text-slate-700">/workshop-tag/{quickTagValue.trim().toUpperCase()}</span> page.
+                  </p>
+                </div>
+              ) : null}
+
+              <div className="mt-5 flex items-center justify-end gap-2 border-t border-slate-100 pt-4">
+                <button
+                  className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-bold text-slate-600 transition hover:bg-slate-50"
+                  onClick={() => {
+                    setQuickTagWorkshop(null);
+                    setQuickTagValue("");
+                  }}
+                  type="button"
+                >
+                  Cancel
+                </button>
+                <button
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-slate-950 px-5 py-2.5 text-sm font-black text-white shadow-sm transition hover:bg-slate-800 disabled:opacity-40"
+                  disabled={!quickTagValue.trim()}
+                  type="submit"
+                >
+                  <Check className="size-4" />
+                  <span>Save & Link Tag</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
     </AdminPlatformShell>
   );
 }

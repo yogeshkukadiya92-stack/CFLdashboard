@@ -129,6 +129,8 @@ export interface Workshop {
   waitlist: number;
   revenue: number;
   feedbackScore: number;
+  tag?: string;
+  tags?: string[];
 }
 
 export interface Batch {

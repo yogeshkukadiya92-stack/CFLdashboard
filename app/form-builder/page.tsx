@@ -69,6 +69,8 @@ type WorkshopMasterRecord = {
   name: string;
   facilitator?: string;
   isPaid?: boolean;
+  tag?: string;
+  tags?: string[];
 };
 
 const fontOptions = [
@@ -236,7 +238,11 @@ export default function FormBuilderPage() {
   const filteredWorkshops = useMemo(() => {
     const query = workshopSearch.trim().toLowerCase();
     if (!query) return workshops;
-    return workshops.filter((item) => item.name.toLowerCase().includes(query));
+    return workshops.filter((item) => {
+      const tagList = Array.isArray(item.tags) ? item.tags : [];
+      const tagStr = [item.tag ?? "", ...tagList].join(" ");
+      return item.name.toLowerCase().includes(query) || tagStr.toLowerCase().includes(query);
+    });
   }, [workshopSearch, workshops]);
 
   const form = useMemo<BuilderForm>(() => {

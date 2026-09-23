@@ -1,9 +1,10 @@
 "use client";
 
 import { AdminPlatformShell } from "@/components/admin-platform-shell";
-import { CalendarDays, ClipboardCheck, Download, FileSpreadsheet, IndianRupee, Plus, Target, TrendingUp, UserPlus, UsersRound } from "lucide-react";
+import { ArrowRight, CalendarDays, ClipboardCheck, Download, FileSpreadsheet, IndianRupee, Plus, Sparkles, Tag, Target, TrendingUp, UserPlus, UsersRound } from "lucide-react";
 import { buildDashboardSnapshot, type DashboardSnapshot } from "@/lib/dashboard-summary";
 import { LIVE_STATE_STORAGE_KEYS, readLocalArray, saveLiveState, type LiveStatePatch } from "@/lib/live-state";
+import { groupWorkshopsByTag } from "@/lib/workshop-tags";
 import { useEffect, useMemo, useState } from "react";
 
 type ClientRow = {
@@ -16,11 +17,14 @@ type ClientRow = {
 };
 
 type WorkshopRecord = {
+  archived?: boolean;
   facilitator: string;
   id: string;
   isPaid: boolean;
   name: string;
   productGroup: string;
+  tag?: string;
+  tags?: string[];
   type: string;
 };
 
@@ -131,10 +135,11 @@ export default function DashboardPage() {
     }
 
     function refresh() {
-      if (usesLocalFallback) load();
+      load();
       void loadRemoteSnapshot();
     }
 
+    load();
     void loadRemoteSnapshot();
     window.addEventListener("storage", refresh);
     window.addEventListener("focus", refresh);
@@ -149,6 +154,9 @@ export default function DashboardPage() {
     return buildDashboardSnapshot(clients, workshops, registrations, schedules);
   }, [clients, registrations, schedules, workshops]);
   const snapshot = remoteSnapshot ?? localSnapshot;
+  const tagGroups = useMemo(() => {
+    return groupWorkshopsByTag(workshops);
+  }, [workshops]);
   const conversion = snapshot.registrationCount
     ? Math.round((snapshot.paidRegistrations / snapshot.registrationCount) * 100)
     : 0;
@@ -245,6 +253,99 @@ export default function DashboardPage() {
             </div>
           );
         })}
+      </section>
+
+      {/* Workshop Tags & Dedicated Pages */}
+      <section className="rounded-3xl border border-slate-200/90 bg-white p-5 shadow-sm md:p-6">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <span className="grid size-11 place-items-center rounded-2xl bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200/70">
+              <Tag className="size-5" />
+            </span>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-xl font-black text-slate-950">Workshop Tags</h3>
+                {tagGroups.length > 0 ? (
+                  <span className="rounded-full bg-indigo-100 px-2.5 py-0.5 text-xs font-black text-indigo-800">
+                    {tagGroups.length} {tagGroups.length === 1 ? "Tag" : "Tags"}
+                  </span>
+                ) : null}
+              </div>
+              <p className="mt-0.5 text-xs font-semibold text-slate-500">
+                Click on any tag to open its dedicated page showing exclusively that tag&apos;s workshops.
+              </p>
+            </div>
+          </div>
+          <a
+            className="inline-flex items-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-xs font-black text-white hover:bg-slate-800 transition"
+            href="/workshop-master"
+          >
+            <Plus className="size-4" />
+            Manage All Workshops
+          </a>
+        </div>
+
+        {tagGroups.length > 0 ? (
+          <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {tagGroups.map((group) => (
+              <a
+                className="group relative flex flex-col justify-between overflow-hidden rounded-2xl border border-slate-200/80 bg-gradient-to-b from-white to-slate-50/60 p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-indigo-300 hover:bg-white hover:shadow-md hover:shadow-indigo-100/50"
+                href={`/workshop-tag/${encodeURIComponent(group.tag)}`}
+                key={group.tag}
+              >
+                <div>
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="inline-flex items-center gap-1.5 rounded-xl border border-indigo-200 bg-indigo-50/80 px-3 py-1 text-sm font-black text-indigo-700">
+                      <Tag className="size-3.5" />
+                      {group.tag}
+                    </span>
+                    <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-black text-slate-700">
+                      {group.count} {group.count === 1 ? "Workshop" : "Workshops"}
+                    </span>
+                  </div>
+
+                  <p className="mt-3 text-xs font-semibold text-slate-500">
+                    {group.paidCount > 0 ? `${group.paidCount} Paid` : ""}
+                    {group.paidCount > 0 && group.freeCount > 0 ? " · " : ""}
+                    {group.freeCount > 0 ? `${group.freeCount} Free` : ""}
+                  </p>
+
+                  <div className="mt-3 space-y-1">
+                    {group.workshops.slice(0, 3).map((w) => (
+                      <p className="truncate text-xs font-bold text-slate-800" key={w.id || w.name}>
+                        • {w.name}
+                      </p>
+                    ))}
+                    {group.workshops.length > 3 ? (
+                      <p className="text-[11px] font-semibold text-slate-400">
+                        +{group.workshops.length - 3} more
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+
+                <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3 text-xs font-bold text-indigo-600 transition group-hover:text-indigo-700">
+                  <span>Open {group.tag} workshops</span>
+                  <ArrowRight className="size-3.5 transition group-hover:translate-x-1" />
+                </div>
+              </a>
+            ))}
+          </div>
+        ) : (
+          <div className="mt-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50/50 p-8 text-center">
+            <Tag className="mx-auto size-8 text-slate-300" />
+            <h4 className="mt-2 text-sm font-bold text-slate-800">No workshop tags assigned yet</h4>
+            <p className="mt-1 text-xs text-slate-500">
+              Assign tags (such as LP, BJS) when creating or editing workshops in Workshop Master to organize them here.
+            </p>
+            <a
+              className="mt-3 inline-flex items-center gap-1.5 rounded-xl border border-indigo-200 bg-white px-3.5 py-2 text-xs font-black text-indigo-700 hover:bg-indigo-50 transition"
+              href="/workshop-master"
+            >
+              Go to Workshop Master
+            </a>
+          </div>
+        )}
       </section>
 
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-soft">
