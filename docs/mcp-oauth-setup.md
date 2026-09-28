@@ -1,5 +1,11 @@
 # Built-in OAuth for CFL MCP
 
+Current data scope: workshops, counts, all live/CRM registrations, attendance and
+payment events. See [business-record setup](mcp-business-records.md) for the new
+migration, filters, payment-balance handling and fresh OAuth consent. Earlier
+workshop-only rollout notes below are retained as historical deployment context.
+
+
 Implemented and disabled by default. Production schemas were provisioned with
 approval on 2026-09-15; the reader remains NOLOGIN pending private credential
 setup. Deployment and ChatGPT linking must be verified separately. This mode

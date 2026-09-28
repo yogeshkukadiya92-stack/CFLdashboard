@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "mcp": "node --experimental-strip-types scripts/start-mcp.ts",
     "build": "next build",
     "import:members": "node scripts/import-member-details.mjs",
     "preview": "node scripts/start-preview.mjs",

@@ -1,5 +1,11 @@
 # CFL read-only MCP
 
+Current data scope: workshops, counts, all live/CRM registrations, attendance and
+payment events. See [business-record setup](mcp-business-records.md) for the new
+migration, filters, payment-balance handling and fresh OAuth consent. Earlier
+workshop-only rollout notes below are retained as historical deployment context.
+
+
 Status: implemented locally, disabled by default. Not deployed or connected to
 ChatGPT yet. It requires an approved database role and OAuth configuration.
 The built-in master-admin login option needs no external identity-provider

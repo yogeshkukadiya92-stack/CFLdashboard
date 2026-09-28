@@ -47,7 +47,7 @@ export function getLocalOAuthSettings() {
     const url = new URL(uri);
     if ((url.protocol !== "https:" && !loopbackCallback(uri)) || url.username || url.password || url.hash) throw new Error("OAuth callbacks require HTTPS or an explicitly registered 127.0.0.1 native-client callback");
   }
-  const key = createHmac("sha256", process.env.AUTH_SECRET!.trim()).update("cfl-mcp-oauth-consent-v1").digest();
+  const key = createHmac("sha256", process.env.AUTH_SECRET!.trim()).update("cfl-mcp-oauth-consent-v2-business-records").digest();
   const adminStamp = createHmac("sha256", key).update(JSON.stringify([process.env.ADMIN_EMAIL.trim(), process.env.ADMIN_PASSWORD])).digest("hex");
   return { ...config, clients, key, adminStamp };
 }
@@ -229,11 +229,11 @@ export async function handleLocalOAuth(request: Request, action: string, store: 
     if (action === "connections") {
       const grants = await store.connections(settings.adminStamp);
       const ticket = await createOAuthConsent({ action: "connections" }, session, settings);
-      return html(`<h1>Connected apps</h1><p>Only approved workshop data and aggregate counts are shared. Revoking stops this connection immediately.</p>${grants.length ? grants.map(grant => `<section><h2>${escape(settings.clients.find(c => c.id === grant.client_id)?.name ?? grant.client_id)}</h2><p>Expires: ${escape(grant.expires_at)}</p><form method="post" action="/api/mcp-oauth/connections"><input type="hidden" name="ticket" value="${escape(ticket)}"><input type="hidden" name="grant_id" value="${escape(grant.id)}"><button>Revoke connection</button></form></section>`).join("") : "<p>No active connections.</p>"}<p><a href="/">Return to dashboard</a></p>`);
+      return html(`<h1>Connected apps</h1><p>Approved workshop, registration, attendance, contact and payment data are shared read-only. Revoking stops this connection immediately.</p>${grants.length ? grants.map(grant => `<section><h2>${escape(settings.clients.find(c => c.id === grant.client_id)?.name ?? grant.client_id)}</h2><p>Expires: ${escape(grant.expires_at)}</p><form method="post" action="/api/mcp-oauth/connections"><input type="hidden" name="ticket" value="${escape(ticket)}"><input type="hidden" name="grant_id" value="${escape(grant.id)}"><button>Revoke connection</button></form></section>`).join("") : "<p>No active connections.</p>"}<p><a href="/">Return to dashboard</a></p>`);
     }
     const client = settings.clients.find(c => c.id === intent!.client_id)!;
     const ticket = await createOAuthConsent(intent!, session, settings);
-    return html(`<h1>Connect ${escape(client.name)}?</h1><p>You are signed in as the CFL master admin.</p><p>This app will be able to read:</p><ul><li>Workshop catalogue</li><li>Total client, workshop and registration counts</li></ul><p>It cannot read personal, health or payment records, or change your database.</p><p>Callback: <code>${escape(intent!.redirect_uri)}</code></p><p>This permission expires in seven days. You can revoke it at any time from <a href="/api/mcp-oauth/connections">Connected apps</a>.</p><form method="post" action="/api/mcp-oauth/authorize"><input type="hidden" name="ticket" value="${escape(ticket)}"><button name="decision" value="approve">Allow read-only access</button><button name="decision" value="deny">Cancel</button></form>`);
+    return html(`<h1>Connect ${escape(client.name)}?</h1><p>You are signed in as the CFL master admin.</p><p>This app will be able to read:</p><ul><li>Workshop catalogue</li><li>Total client, workshop and registration counts</li><li>All live and CRM registrations, including names, mobile numbers, emails, confirmation status and payment balances</li><li>Attendance entries, session details and duration</li><li>Gateway payment events and transaction identifiers</li></ul><p>It cannot change your database. Passwords, integration secrets and raw webhook payloads are excluded.</p><p>Callback: <code>${escape(intent!.redirect_uri)}</code></p><p>This permission expires in seven days. You can revoke it at any time from <a href="/api/mcp-oauth/connections">Connected apps</a>.</p><form method="post" action="/api/mcp-oauth/authorize"><input type="hidden" name="ticket" value="${escape(ticket)}"><button name="decision" value="approve">Allow read-only access</button><button name="decision" value="deny">Cancel</button></form>`);
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
     const safe = ["invalid_request", "invalid_target", "invalid_scope", "invalid_grant", "unsupported_grant_type"];
