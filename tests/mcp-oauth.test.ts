@@ -61,7 +61,10 @@ async function approved(store: MemoryStore, session: string) {
   const page = await handleLocalOAuth(new Request(`${root}/api/mcp-oauth/authorize?${intentParams()}`, { headers: { cookie: `${AUTH_COOKIE_NAME}=${session}` } }), "authorize", store);
   assert.equal(page.status, 200);
   const text = await page.text();
-  assert.ok(text.includes("cannot read personal"));
+  assert.ok(text.includes("All live and CRM registrations"));
+  assert.ok(text.includes("Attendance entries"));
+  assert.ok(text.includes("Gateway payment events"));
+  assert.ok(text.includes("cannot change your database"));
   const ticket = /name="ticket" value="([^"]+)"/.exec(text)![1];
   const reply = await handleLocalOAuth(post("authorize", new URLSearchParams({ ticket, decision: "approve" }), session), "authorize", store);
   assert.equal(reply.status, 303);
