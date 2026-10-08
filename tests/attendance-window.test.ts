@@ -39,3 +39,18 @@ test("day and minute offsets are combined", () => {
   const configured = session({ openDaysBefore: 1, openMinutesBefore: 60 });
   assert.equal(attendanceWindow(configured, new Date("2026-08-26T14:00:00.000Z").getTime()).allowed, true);
 });
+
+test("overnight attendance stays open through the next day's closing grace period", () => {
+  const configured = session({ sessionDate: "2026-10-08", startTime: "19:30", endTime: "00:40", openDaysBefore: 2, closeMinutesAfter: 120 });
+  for (const time of ["2026-10-08T16:30:00+05:30", "2026-10-08T19:30:00+05:30", "2026-10-09T00:40:00+05:30", "2026-10-09T02:40:00+05:30"]) {
+    assert.equal(attendanceWindow(configured, Date.parse(time)).allowed, true, time);
+  }
+  assert.equal(attendanceWindow(configured, Date.parse("2026-10-09T02:40:00.001+05:30")).allowed, false);
+  assert.equal(attendanceWindow(configured, Date.parse("2026-10-06T18:29:59+05:30")).allowed, false);
+});
+
+test("same-day sessions still close after their configured grace period", () => {
+  const configured = session({ closeMinutesAfter: 30 });
+  assert.equal(attendanceWindow(configured, Date.parse("2026-08-27T23:00:00+05:30")).allowed, true);
+  assert.equal(attendanceWindow(configured, Date.parse("2026-08-27T23:00:01+05:30")).allowed, false);
+});

@@ -13,7 +13,11 @@ function sessionTimestamp(session: AttendanceSession, time?: string) {
 
 export function attendanceWindow(session: AttendanceSession, now = Date.now()) {
   const start = sessionTimestamp(session, session.startTime);
-  const end = sessionTimestamp(session, session.endTime);
+  const sameDayEnd = sessionTimestamp(session, session.endTime);
+  // An end time before the start belongs to the following day (IST).
+  const end = start !== null && sameDayEnd !== null && sameDayEnd < start
+    ? sameDayEnd + 24 * 60 * 60_000
+    : sameDayEnd;
   const openDays = cleanNumber(session.openDaysBefore, 0, 0, 30);
   const openMinutes = cleanNumber(session.openMinutesBefore, 60, 0, 1440);
   const lateMinutes = cleanNumber(session.lateAfterMinutes, 15, 0, 1440);
