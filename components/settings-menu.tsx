@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 const items = [
   { href: "/settings/profile", icon: UserRound, label: "My Profile", description: "Name and mobile number" },
   { href: "/settings/sales-access", icon: KeyRound, label: "CRM Team Access", description: "Roles and permissions" },
-  { href: "/settings/callflow-content", icon: Megaphone, label: "CallFlow Content", description: "Announcements and scripts" },
+  { href: "/settings/callflow-content", icon: Megaphone, label: "CallFlow Content", description: "Session statuses, announcements and scripts" },
   { href: "/settings", icon: Plug, label: "Plugins", description: "Payments and integrations" }
 ];
 

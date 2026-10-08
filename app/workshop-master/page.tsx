@@ -18,6 +18,7 @@ import { sanitizeRichTextHtml } from "@/lib/rich-text";
 import { hideDuplicateResponses, partitionDuplicateResponses } from "@/lib/response-dedupe";
 import { activeResponseFilterCount, applyResponseFilters, emptyResponseFilters, responseQuestionOptions, type ResponseFilterState } from "@/lib/response-filters";
 import type { AttendanceEntry, AttendanceSession, BuilderField, BuilderFieldType, BuilderForm, BuilderFormMode, BuilderTheme, FormAnalyticsRecord, RegistrationEntry, WorkshopBatch, WorkshopIntroductionSession } from "@/lib/types";
+import { defaultIntroductionStatuses, type IntroductionStatus } from "@/lib/introduction-statuses";
 import { registrationMatchesBatch } from "@/lib/workshop-hierarchy";
 import { generateId } from "@/lib/utils";
 import { salesPersonCodeFromId } from "@/lib/sales-person-code";
@@ -169,6 +170,8 @@ function defaultBuilderFields(): BuilderField[] {
 }
 
 export default function WorkshopMasterPage() {
+  const [statusOptions, setStatusOptions] = useState<IntroductionStatus[]>(defaultIntroductionStatuses);
+  useEffect(() => { fetch("/api/admin/callflow-content", { cache: "no-store" }).then(response => response.ok ? response.json() : null).then(data => { if (Array.isArray(data?.introductionStatuses)) setStatusOptions(data.introductionStatuses); }).catch(() => {}); }, []);
   const [showData, setShowData] = useState(true);
   const [name, setName] = useState("");
   const [tag, setTag] = useState("");
@@ -2912,7 +2915,7 @@ export default function WorkshopMasterPage() {
                             </div>
                           </td>
                           <td className="min-w-[130px] px-2.5 py-2.5">
-                            <RegistrationConfirmationBadge status={entry.confirmationStatus} />
+                            <RegistrationConfirmationBadge status={entry.confirmationStatus} statusOptions={statusOptions} />
                             {entry.confirmationUpdatedBy ? <p className="mt-1 max-w-[150px] text-[10px] leading-4 text-slate-500">{entry.confirmationUpdatedBy}{entry.confirmationUpdatedAt ? ` · ${formatSubmittedAt(entry.confirmationUpdatedAt)}` : ""}</p> : null}
                           </td>
                           <td className="px-2.5 py-2.5"><MfwSyncBadge entry={entry} /></td>
@@ -2976,7 +2979,7 @@ export default function WorkshopMasterPage() {
       ) : null}
 
       {linkWorkshop ? <RegistrationLinkModal workshop={linkWorkshop} onClose={() => setLinkWorkshop(null)} /> : null}
-      {followUpTarget ? <FollowUpModal entry={followUpTarget} onClose={() => setFollowUpTarget(null)} onSave={updateRegistrationFollowUp} /> : null}
+      {followUpTarget ? <FollowUpModal statusOptions={statusOptions} entry={followUpTarget} onClose={() => setFollowUpTarget(null)} onSave={updateRegistrationFollowUp} /> : null}
       {shareSelectedOpen && selectedWorkshop ? (
         <ShareSelectedResponsesModal
           entries={selectedParticipants.filter((entry) => selectedParticipantIds.includes(entry.id))}
@@ -3172,10 +3175,12 @@ export default function WorkshopMasterPage() {
 }
 
 function FollowUpModal({
+  statusOptions,
   entry,
   onClose,
   onSave
 }: {
+  statusOptions: IntroductionStatus[];
   entry: RegistrationEntry;
   onClose: () => void;
   onSave: (status: RegistrationEntry["confirmationStatus"], note: string) => Promise<void>;
@@ -3207,12 +3212,8 @@ function FollowUpModal({
           {error ? <p className="mb-4 rounded-lg bg-rose-50 px-4 py-3 text-sm font-bold text-rose-700">{error}</p> : null}
           <label className="block text-sm font-black text-slate-700">Confirmation
             <select className={`${inputClass} mt-2`} onChange={(event) => setStatus(event.target.value as RegistrationEntry["confirmationStatus"])} value={status}>
-              <option value="pending">Pending</option>
-              <option value="confirmed">Confirmed</option>
-              <option value="not_confirmed">Not confirmed</option>
-              <option value="no_answer">No answer</option>
-              <option value="callback">Call back</option>
-              <option value="cancelled">Cancelled</option>
+              {statusOptions.filter(option => option.active || option.id === status).map(option => <option key={option.id} value={option.id}>{option.label}{option.active ? "" : " (inactive)"}</option>)}
+              {!statusOptions.some(option => option.id === status) ? <option value={status}>{status}</option> : null}
             </select>
           </label>
           <label className="mt-4 block text-sm font-black text-slate-700">Call note
@@ -4567,8 +4568,8 @@ function MfwSyncBadge({ entry }: { entry: RegistrationEntry }) {
   return <span className="text-xs font-bold text-slate-400">After confirmation</span>;
 }
 
-function RegistrationConfirmationBadge({ status = "pending" }: { status?: RegistrationEntry["confirmationStatus"] }) {
-  const labels = {
+function RegistrationConfirmationBadge({ status = "pending", statusOptions }: { status?: RegistrationEntry["confirmationStatus"]; statusOptions: IntroductionStatus[] }) {
+  const labels: Record<string, string> = {
     callback: "Call back",
     cancelled: "Cancelled",
     carried_forward: "Carried forward",
@@ -4578,7 +4579,7 @@ function RegistrationConfirmationBadge({ status = "pending" }: { status?: Regist
     pending: "Pending",
     repeater: "Repeater"
   };
-  const tone = status === "confirmed"
+  const tone = statusOptions.some(option => option.id === status && option.isConfirmed)
     ? "bg-emerald-50 text-emerald-700"
     : status === "not_confirmed" || status === "cancelled"
       ? "bg-rose-50 text-rose-700"
@@ -4587,7 +4588,7 @@ function RegistrationConfirmationBadge({ status = "pending" }: { status?: Regist
         : status === "carried_forward"
           ? "bg-sky-50 text-sky-700"
           : "bg-amber-50 text-amber-700";
-  return <span className={`rounded-full px-2.5 py-1 text-xs font-black ${tone}`}>{labels[status]}</span>;
+  return <span className={`rounded-full px-2.5 py-1 text-xs font-black ${tone}`}>{statusOptions.find(option => option.id === status)?.label || labels[status] || status}</span>;
 }
 
 function RegistrationSourceBadge({ source }: { source?: RegistrationEntry["source"] }) {

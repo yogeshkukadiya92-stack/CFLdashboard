@@ -1,3 +1,4 @@
+import { introductionStatuses } from "@/lib/introduction-statuses";
 import { NextResponse } from "next/server";
 import { getAppState, isDbEnabled, saveAppState } from "@/lib/db";
 import type {
@@ -11,15 +12,6 @@ import { syncConfirmedRegistrationToMfw } from "@/lib/mfw-registration";
 
 export const runtime = "nodejs";
 
-const validStatuses: RegistrationConfirmationStatus[] = [
-  "pending",
-  "confirmed",
-  "not_confirmed",
-  "no_answer",
-  "callback",
-  "cancelled"
-];
-
 export async function PATCH(request: Request) {
   if (!(await isDbEnabled())) {
     return NextResponse.json({ error: "Database is required to update follow-up details." }, { status: 503 });
@@ -30,15 +22,17 @@ export async function PATCH(request: Request) {
     const registrationId = String(body.registrationId ?? "").trim();
     const status = String(body.status ?? "pending") as RegistrationConfirmationStatus;
     const note = String(body.note ?? "").trim().slice(0, 2000);
-    if (!registrationId || !validStatuses.includes(status)) {
+    const state = await getAppState();
+    const statusOptions = introductionStatuses(state?.integrations || {});
+    if (!registrationId || !statusOptions.some(option => option.id === status)) {
       return NextResponse.json({ error: "Registration and a valid confirmation status are required." }, { status: 400 });
     }
 
-    const state = await getAppState();
     const registrations = (Array.isArray(state?.registrations) ? state.registrations : []) as RegistrationEntry[];
     const current = registrations.find((entry) => entry.id === registrationId);
     if (!current) return NextResponse.json({ error: "Registration not found." }, { status: 404 });
 
+    if (!statusOptions.some(option => option.id === status && option.active) && current.confirmationStatus !== status) return NextResponse.json({ error: "Status is inactive" }, { status: 400 });
     const numberedRegistrations = assignRegistrationNumbers(registrations, current.workshopId);
     const numberedCurrent = numberedRegistrations.find((entry) => entry.id === registrationId) as RegistrationEntry;
     const now = new Date().toISOString();

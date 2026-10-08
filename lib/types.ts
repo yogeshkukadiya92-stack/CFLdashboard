@@ -317,7 +317,8 @@ export type RegistrationConfirmationStatus =
   | "callback"
   | "cancelled"
   | "carried_forward"
-  | "repeater";
+  | "repeater"
+  | (string & {});
 
 export interface RegistrationConfirmationActivity {
   id: string;
