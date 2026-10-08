@@ -16,7 +16,7 @@ import { publicFormSlug } from "@/lib/public-slug";
 import { resolveRegistrationOtpRequired } from "@/lib/registration-otp";
 import { sanitizeRichTextHtml } from "@/lib/rich-text";
 import { hideDuplicateResponses, partitionDuplicateResponses } from "@/lib/response-dedupe";
-import { activeResponseFilterCount, applyResponseFilters, emptyResponseFilters, responseQuestionOptions, type ResponseFilterState } from "@/lib/response-filters";
+import { activeResponseFilterCount, applyResponseFilters, emptyResponseFilters, responseDateRangeLabel, responseQuestionOptions, type ResponseFilterState } from "@/lib/response-filters";
 import type { AttendanceEntry, AttendanceSession, BuilderField, BuilderFieldType, BuilderForm, BuilderFormMode, BuilderTheme, FormAnalyticsRecord, RegistrationEntry, WorkshopBatch, WorkshopIntroductionSession } from "@/lib/types";
 import { defaultIntroductionStatuses, type IntroductionStatus } from "@/lib/introduction-statuses";
 import { registrationMatchesBatch } from "@/lib/workshop-hierarchy";
@@ -1014,13 +1014,18 @@ export default function WorkshopMasterPage() {
   function sendResponseSummaryOnWhatsApp() {
     if (!selectedWorkshop) return;
 
-    const regularParticipants = selectedParticipants.filter((entry) => !entry.isRepeater);
+    const regularParticipants = filteredParticipants.filter((entry) => !entry.isRepeater);
+    const summaryRepeaters = filteredParticipants.filter((entry) => entry.isRepeater);
     const regularWaiting = regularParticipants.filter((entry) => entry.registrationStatus === "waiting").length;
-    const repeaterHealthPartners = repeaterParticipants.filter((entry) => hasHealthPartnerReference(entry, selectedReferenceAnswerKeys)).length;
+    const repeaterHealthPartners = summaryRepeaters.filter((entry) => hasHealthPartnerReference(entry, selectedReferenceAnswerKeys)).length;
     const message = [
       "Workshop Registration Summary",
       "",
       `Workshop: ${selectedWorkshop.name}`,
+      `Registration dates: ${responseDateRangeLabel(responseFilters)}`,
+      ...(selectedParticipantBatchId !== "all" ? [`Batch: ${selectedWorkshop.batches?.find((batch) => batch.id === selectedParticipantBatchId)?.name || selectedParticipantBatchId}`] : []),
+      ...(responseFilters.fromTime || responseFilters.toTime ? [`Time filter: ${responseFilters.fromTime || "00:00"} to ${responseFilters.toTime || "23:59"}`] : []),
+      ...(activeResponseFilterCount(responseFilters) > 0 ? ["Summary based on applied advanced filters."] : []),
       "",
       "Without Repeater:-",
       `Total Registrations: ${regularParticipants.length}`,
@@ -1028,9 +1033,9 @@ export default function WorkshopMasterPage() {
       `Total Waiting: ${regularWaiting}`,
       "",
       "Repeater Data:-",
-      `Total Registrations: ${repeaterParticipants.length}`,
+      `Total Registrations: ${summaryRepeaters.length}`,
       `Health Partner: ${repeaterHealthPartners}`,
-      `Without Health Partner: ${repeaterParticipants.length - repeaterHealthPartners}`
+      `Without Health Partner: ${summaryRepeaters.length - repeaterHealthPartners}`
     ].join("\n");
 
     window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, "_blank", "noopener,noreferrer");

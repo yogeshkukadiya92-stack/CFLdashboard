@@ -55,6 +55,27 @@ function customBoundary(date: string, time: string, end: boolean) {
   return new Date(`${date}T${time || fallbackTime}`);
 }
 
+export function responseDateRangeLabel(filters: ResponseFilterState, now = new Date()) {
+  const format = (date: Date) => date.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+  if (filters.datePreset === "today") return format(now);
+  if (filters.datePreset === "yesterday") {
+    const yesterday = new Date(now);
+    yesterday.setDate(now.getDate() - 1);
+    return format(yesterday);
+  }
+  if (filters.datePreset === "last7") {
+    const start = new Date(now);
+    start.setDate(now.getDate() - 6);
+    return `${format(start)} to ${format(now)}`;
+  }
+  if (filters.datePreset === "custom") {
+    const from = filters.fromDate ? format(new Date(`${filters.fromDate}T00:00:00`)) : "Any date";
+    const to = filters.toDate ? format(new Date(`${filters.toDate}T00:00:00`)) : "Any date";
+    return `${from}${filters.fromDate && filters.fromTime ? ` ${filters.fromTime}` : ""} to ${to}${filters.toDate && filters.toTime ? ` ${filters.toTime}` : ""}`;
+  }
+  return "All dates";
+}
+
 function dateMatches(value: Date, filters: ResponseFilterState) {
   const now = new Date();
   if (filters.datePreset === "today") return value >= startOfDay(now) && value <= endOfDay(now);
