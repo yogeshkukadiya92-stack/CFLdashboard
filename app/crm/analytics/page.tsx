@@ -9,7 +9,7 @@ import type { Lead, LeadPriority, LeadStage } from "@/lib/types";
 import { AlertTriangle, BarChart3, Clock3, Download, PhoneCall, PhoneOff, Target, Timer, UsersRound } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 
-function dateInput(date: Date) { return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`; }
+function dateInput(date: Date) { return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit", day: "2-digit" }).format(date); }
 function duration(seconds: number) { const hours = Math.floor(seconds / 3600); const minutes = Math.floor(seconds % 3600 / 60); const rest = seconds % 60; return hours ? `${hours}h ${minutes}m` : minutes ? `${minutes}m ${rest}s` : `${rest}s`; }
 function displayDate(value: string) { return value ? new Intl.DateTimeFormat("en-IN", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value)) : "—"; }
 type SalesPersonLive = { acceptingLeads?: boolean; dailyCallTarget?: number; dailyConnectedTarget?: number; id: string; isActive?: boolean; name: string };
@@ -25,6 +25,8 @@ export default function CrmAnalyticsPage() {
   const [reviews, setReviews] = useState<CallReview[]>([]);
   const [reviewCallId, setReviewCallId] = useState(""); const [reviewUrl, setReviewUrl] = useState(""); const [reviewScore, setReviewScore] = useState("3"); const [reviewNote, setReviewNote] = useState(""); const [reviewMessage, setReviewMessage] = useState("");
   const [syncError, setSyncError] = useState("");
+  const [reportMessage, setReportMessage] = useState("");
+  const [refreshVersion, setRefreshVersion] = useState(0);
   const [loading, setLoading] = useState(true); const [reviewSaving, setReviewSaving] = useState(false);
   const [from, setFrom] = useState(today);
   const [to, setTo] = useState(today);
@@ -38,6 +40,7 @@ export default function CrmAnalyticsPage() {
   const [leadSearch, setLeadSearch] = useState("");
 
   useEffect(() => {
+    setLoading(true); setSyncError("");
     setLeads(readLocalArray<unknown>(LIVE_STATE_STORAGE_KEYS.leads).map(normalizeLead));
     let active = true;
     let refreshing = false;
@@ -56,12 +59,12 @@ export default function CrmAnalyticsPage() {
       setIntegrations(integrations || {});
       setReviews(Array.isArray((callflow as { callReviews?: unknown } | undefined)?.callReviews) ? (callflow as { callReviews: CallReview[] }).callReviews : []);
       setTeam(Array.isArray(state?.salesPeople) ? state.salesPeople as SalesPersonLive[] : []);
-      } finally { refreshing = false; if (active) setLoading(false); }
+      } catch { if (active) setSyncError("Could not load live CallFlow data. Retrying automatically…"); } finally { refreshing = false; if (active) setLoading(false); }
     }
     void refresh(true);
     const timer = window.setInterval(() => { if (!document.hidden) void refresh(); }, 15000);
     return () => { active = false; window.clearInterval(timer); };
-  }, []);
+  }, [refreshVersion]);
 
   const cities = useMemo(() => [...new Set(leads.map((lead) => lead.city.trim()).filter(Boolean))].sort(), [leads]);
   const filteredLeads = useMemo(() => {
@@ -74,12 +77,12 @@ export default function CrmAnalyticsPage() {
       if (stage && lead.stage !== stage) return false;
       if (minimum !== null && lead.score < minimum) return false;
       if (maximum !== null && lead.score > maximum) return false;
-      if (salesperson && lead.assignedTo !== salesperson) return false;
+      if (salesperson && lead.assignedSalesPersonId !== salesperson && lead.assignedTo !== (team.find((person) => person.id === salesperson)?.name || salesperson)) return false;
       if (!query) return true;
       return [lead.name, lead.mobile, lead.email, lead.city, lead.interest, lead.source, lead.assignedTo, ...(lead.tags ?? [])]
         .some((value) => String(value ?? "").toLowerCase().includes(query));
     });
-  }, [category, city, leadSearch, leads, maxMarks, minMarks, salesperson, stage]);
+  }, [category, city, leadSearch, leads, maxMarks, minMarks, salesperson, stage, team]);
   const hasLeadFilters = Boolean(city || category || stage || minMarks || maxMarks || leadSearch.trim());
   const matchingLeadIds = useMemo(() => new Set(filteredLeads.map((lead) => lead.id)), [filteredLeads]);
   const filtered = useMemo(() => {
@@ -90,7 +93,7 @@ export default function CrmAnalyticsPage() {
   const staff = useMemo(() => salespersonCallRows(filtered), [filtered]);
   const journeys = useMemo(() => leadJourneyRows(filtered), [filtered]);
   const hours = useMemo(() => hourlyConnectionRows(filtered), [filtered]);
-  const salespeople = [...new Set(records.map((record) => record.salespersonName).filter(Boolean))].sort();
+  const salespeople = [...new Map([...team.map((person) => [person.id, person.name] as const), ...records.map((record) => [record.salespersonId || record.salespersonName, record.salespersonName] as const)].filter(([id]) => id)).entries()].sort((a, b) => a[1].localeCompare(b[1]));
   const campaigns = [...new Set(records.map((record) => record.campaign).filter(Boolean))].sort();
   const wonLeadIds = new Set(leads.filter((lead) => lead.stage === "Won").map((lead) => lead.id));
   const converted = new Set(filtered.filter((record) => wonLeadIds.has(record.leadId)).map((record) => record.leadId)).size;
@@ -118,7 +121,15 @@ export default function CrmAnalyticsPage() {
   }
 
   function preset(days: number) { const end = new Date(); const start = new Date(); start.setDate(end.getDate() - days + 1); setFrom(dateInput(start)); setTo(dateInput(end)); }
-  function exportCsv() { const blob = new Blob([callRecordsCsv(filtered)], { type: "text/csv;charset=utf-8" }); const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.href = url; link.download = `callflow-report-${from}-to-${to}.csv`; link.click(); URL.revokeObjectURL(url); }
+  function exportCsv() {
+    if (loading || syncError || !from || !to || from > to) return;
+    const blob = new Blob(["\uFEFF", callRecordsCsv(filtered)], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob); const link = document.createElement("a");
+    const person = salespeople.find(([id]) => id === salesperson)?.[1] || "all-salespeople";
+    link.href = url; link.download = `call-report-${person.replace(/[^a-z0-9_-]/gi, "-")}-${from}-to-${to}.csv`;
+    document.body.appendChild(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setReportMessage(`${filtered.length} calls downloaded. Open the CSV in Excel or Google Sheets. Times are in UTC.`);
+  }
   function resetLeadFilters() { setCity(""); setCategory(""); setStage(""); setMinMarks(""); setMaxMarks(""); setLeadSearch(""); }
 
   return <AdminPlatformShell activeLabel="Call Analytics" description="Accurate Android call tracking, salesperson performance, conversion and lead-journey reporting." title="Call Analytics">
@@ -127,13 +138,14 @@ export default function CrmAnalyticsPage() {
       <div className="flex gap-2">{[[1,"Today"],[7,"7 days"],[30,"30 days"]].map(([days,label]) => <button className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-black hover:bg-slate-50" key={String(label)} onClick={() => preset(Number(days))}>{label}</button>)}</div>
       <Field label="From"><input className={inputClass} type="date" value={from} onChange={(event) => setFrom(event.target.value)} /></Field>
       <Field label="To"><input className={inputClass} type="date" value={to} onChange={(event) => setTo(event.target.value)} /></Field>
-      <Field label="Salesperson"><select className={inputClass} value={salesperson} onChange={(event) => setSalesperson(event.target.value)}><option value="">All salespeople</option>{salespeople.map((name) => <option key={name}>{name}</option>)}</select></Field>
+      <Field label="Salesperson"><select className={inputClass} value={salesperson} onChange={(event) => setSalesperson(event.target.value)}><option value="">All salespeople</option>{salespeople.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></Field>
       <Field label="Campaign"><select className={inputClass} value={campaign} onChange={(event) => setCampaign(event.target.value)}><option value="">All campaigns</option>{campaigns.map((name) => <option key={name}>{name}</option>)}</select></Field>
-      <button className="ml-auto inline-flex items-center gap-2 rounded-lg bg-slate-950 px-4 py-2.5 text-sm font-black text-white disabled:opacity-40" disabled={!filtered.length} onClick={exportCsv}><Download className="size-4" />Export CSV</button>
-    </div></section>
+      <button disabled={loading} onClick={() => setRefreshVersion((value) => value + 1)} className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-bold disabled:opacity-40">Refresh calls</button>
+      <button className="ml-auto inline-flex items-center gap-2 rounded-lg bg-slate-950 px-4 py-2.5 text-sm font-black text-white disabled:opacity-40" disabled={loading || Boolean(syncError) || !from || !to || from > to} onClick={exportCsv}><Download className="size-4" />Download call report</button>
+    </div><p className="mt-3 text-sm text-slate-600">Select a salesperson and dates to generate their call report automatically. Download call report saves the matching synced calls as an Excel-compatible CSV.</p>{from > to ? <p role="alert" className="mt-2 text-sm text-rose-700">From date must be before To date.</p> : null}{!loading && !filtered.length ? <p className="mt-2 text-sm text-slate-500">No synced calls match these filters. Try a wider date range or check phone sync.</p> : null}{reportMessage ? <p role="status" className="mt-2 text-sm font-semibold text-indigo-700">{reportMessage}</p> : null}</section>
 
     {syncError ? <p role="status" className="mt-4 rounded-xl bg-amber-50 p-4 text-sm font-bold text-amber-800">{syncError}</p> : null}
-    <section className="mt-5 overflow-hidden rounded-2xl border border-slate-200 bg-white"><Header title="CallFlow call report" subtitle="Status, conversation notes and exact talk time · refreshes every 15 seconds"/><div className="overflow-x-auto"><table className={tableClass}><thead><tr>{["Lead / phone", "Salesperson", "Call time", "Status", "Talk time (seconds)", "Conversation notes"].map((label) => <th key={label}>{label}</th>)}</tr></thead><tbody>{[...filtered].sort((a,b) => Date.parse(b.startedAt)-Date.parse(a.startedAt)).slice(0,500).map((record) => <tr key={`${record.salespersonId}-${record.id}`}><td><p className="font-black">{record.leadName}</p><p className="text-xs text-slate-500">{record.phone}</p></td><td>{record.salespersonName}</td><td>{displayDate(record.startedAt)}</td><td className="font-bold">{record.outcome}</td><td>{record.durationSeconds} seconds</td><td className="min-w-64 whitespace-pre-wrap break-words">{record.note || "No conversation note synced"}</td></tr>)}{!filtered.length ? <TableEmpty columns={6}/> : null}</tbody></table></div>{filtered.length > 500 ? <p className="p-4 text-sm text-slate-500">Showing the latest 500 calls. Export CSV for all matching calls.</p> : null}</section>
+    <section className="mt-5 overflow-hidden rounded-2xl border border-slate-200 bg-white"><Header title="CallFlow call report" subtitle="Status, conversation notes and exact talk time · refreshes every 15 seconds"/><div className="overflow-x-auto"><table className={tableClass}><thead><tr>{["Lead / phone", "Salesperson", "Call time", "Status", "Talk time (seconds)", "Conversation notes"].map((label) => <th key={label}>{label}</th>)}</tr></thead><tbody>{[...filtered].sort((a,b) => Date.parse(b.startedAt)-Date.parse(a.startedAt)).slice(0,500).map((record) => <tr key={`${record.salespersonId}-${record.id}`}><td><p className="font-black">{record.leadName}</p><p className="text-xs text-slate-500">{record.phone}</p></td><td>{record.salespersonName}</td><td>{displayDate(record.startedAt)}</td><td className="font-bold">{record.outcome}</td><td>{record.durationSeconds} seconds</td><td className="min-w-64 whitespace-pre-wrap break-words">{record.note || "No conversation note synced"}</td></tr>)}{!filtered.length ? <TableEmpty columns={6}/> : null}</tbody></table></div>{filtered.length > 500 ? <p className="p-4 text-sm text-slate-500">Showing the latest 500 calls. Download call report for all matching calls.</p> : null}</section>
 
     <section className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50/40 p-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><div><h2 className="font-black text-slate-950">Deep lead filters</h2><p className="text-xs font-semibold text-slate-500">Every selected filter is combined, so only leads matching all conditions are shown.</p></div><button className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-black disabled:opacity-40" disabled={!activeFilterCount} onClick={() => { resetLeadFilters(); setSalesperson(""); setCampaign(""); }}>Clear all filters</button></div>

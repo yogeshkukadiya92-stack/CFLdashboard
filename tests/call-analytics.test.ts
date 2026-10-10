@@ -30,6 +30,28 @@ test("CSV export includes raw call dimensions", () => {
   assert.match(csv, /INTERESTED/);
 });
 
+test("salesperson ID separates colleagues with the same display name", () => {
+  const sameName = records.map((record) => ({ ...record, salespersonName: "Same Name" }));
+  assert.deepEqual(filterCallRecords(sameName, { salesperson: "s2" }).map((record) => record.id), ["c3"]);
+});
+
+test("report dates use India midnight boundaries regardless of browser timezone", () => {
+  const values = [
+    { ...records[0], id: "before", startedAt: "2026-08-21T18:29:59.999Z" },
+    { ...records[0], id: "start", startedAt: "2026-08-21T18:30:00.000Z" },
+    { ...records[0], id: "end", startedAt: "2026-08-22T18:29:59.999Z" },
+    { ...records[0], id: "after", startedAt: "2026-08-22T18:30:00.000Z" },
+  ];
+  assert.deepEqual(filterCallRecords(values, { from: "2026-08-22", to: "2026-08-22" }).map((record) => record.id), ["start", "end"]);
+});
+
+test("CSV protects spreadsheet formulas and preserves quotes and Gujarati", () => {
+  const csv = callRecordsCsv([{ ...records[0], leadName: '=HYPERLINK("example")', salespersonName: "યોગેશ" }]);
+  assert.ok(csv.includes(`"'=HYPERLINK(""example"")"`));
+  assert.ok(csv.includes("યોગેશ"));
+  assert.equal(callRecordsCsv([]).split("\n").length, 1);
+});
+
 test("leaderboard rewards target progress and connection quality instead of raw volume only", () => {
   const board = leaderboardRows(records, [{ id: "s1", name: "Sales One", dailyCallTarget: 2, dailyConnectedTarget: 1 }, { id: "s2", name: "Sales Two", dailyCallTarget: 10, dailyConnectedTarget: 5 }]);
   assert.equal(board[0].name, "Sales One");

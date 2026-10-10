@@ -3,12 +3,12 @@ import type { CallFlowCallRecord } from "@/lib/callflow-connector";
 export type CallAnalyticsFilters = { from?: string; to?: string; salesperson?: string; campaign?: string };
 
 export function filterCallRecords(records: CallFlowCallRecord[], filters: CallAnalyticsFilters) {
-  const from = filters.from ? new Date(`${filters.from}T00:00:00`).getTime() : Number.NEGATIVE_INFINITY;
-  const to = filters.to ? new Date(`${filters.to}T23:59:59.999`).getTime() : Number.POSITIVE_INFINITY;
+  const from = filters.from ? new Date(`${filters.from}T00:00:00+05:30`).getTime() : Number.NEGATIVE_INFINITY;
+  const to = filters.to ? new Date(`${filters.to}T23:59:59.999+05:30`).getTime() : Number.POSITIVE_INFINITY;
   return records.filter((record) => {
     const at = Date.parse(record.startedAt);
     return at >= from && at <= to
-      && (!filters.salesperson || record.salespersonName === filters.salesperson)
+      && (!filters.salesperson || record.salespersonId === filters.salesperson || record.salespersonName === filters.salesperson)
       && (!filters.campaign || record.campaign === filters.campaign);
   });
 }
@@ -61,7 +61,11 @@ export function hourlyConnectionRows(records: CallFlowCallRecord[]) {
 }
 
 export function callRecordsCsv(records: CallFlowCallRecord[]) {
-  const escape = (value: unknown) => `"${String(value ?? "").replaceAll('"', '""')}"`;
+  const escape = (value: unknown) => {
+    const text = String(value ?? "");
+    const safe = /^[\s]*[=+@-]/.test(text) ? `'${text}` : text;
+    return `"${safe.replaceAll('"', '""')}"`;
+  };
   const headers = ["Call ID", "Lead", "Phone", "Salesperson", "Campaign", "Direction", "Started At", "Ended At", "Duration Seconds", "Connected", "Outcome", "Conversation Notes"];
   const rows = records.map((record) => [record.id, record.leadName, record.phone, record.salespersonName, record.campaign, record.direction, record.startedAt, record.endedAt, record.durationSeconds, record.connected ? "Yes" : "No", record.outcome, record.note || ""]);
   return [headers, ...rows].map((row) => row.map(escape).join(",")).join("\n");
