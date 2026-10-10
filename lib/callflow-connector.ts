@@ -69,6 +69,7 @@ export type CallFlowCallRecord = {
   durationSeconds: number;
   connected: boolean;
   outcome: string;
+  note?: string;
   source: string;
   simSlot?: number | null;
   simLabel?: string | null;

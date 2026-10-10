@@ -62,7 +62,7 @@ export function hourlyConnectionRows(records: CallFlowCallRecord[]) {
 
 export function callRecordsCsv(records: CallFlowCallRecord[]) {
   const escape = (value: unknown) => `"${String(value ?? "").replaceAll('"', '""')}"`;
-  const headers = ["Call ID", "Lead", "Phone", "Salesperson", "Campaign", "Direction", "Started At", "Ended At", "Duration Seconds", "Connected", "Outcome"];
-  const rows = records.map((record) => [record.id, record.leadName, record.phone, record.salespersonName, record.campaign, record.direction, record.startedAt, record.endedAt, record.durationSeconds, record.connected ? "Yes" : "No", record.outcome]);
+  const headers = ["Call ID", "Lead", "Phone", "Salesperson", "Campaign", "Direction", "Started At", "Ended At", "Duration Seconds", "Connected", "Outcome", "Conversation Notes"];
+  const rows = records.map((record) => [record.id, record.leadName, record.phone, record.salespersonName, record.campaign, record.direction, record.startedAt, record.endedAt, record.durationSeconds, record.connected ? "Yes" : "No", record.outcome, record.note || ""]);
   return [headers, ...rows].map((row) => row.map(escape).join(",")).join("\n");
 }

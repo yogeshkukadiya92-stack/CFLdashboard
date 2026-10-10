@@ -4,12 +4,12 @@ import { AdminPlatformShell } from "@/components/admin-platform-shell";
 import { callRecordsCsv, callSummary, filterCallRecords, hourlyConnectionRows, leadJourneyRows, leaderboardRows, salespersonCallRows } from "@/lib/call-analytics";
 import type { CallFlowCallRecord } from "@/lib/callflow-connector";
 import { normalizeLead } from "@/lib/lead-utils";
-import { hydrateLiveState, LIVE_STATE_STORAGE_KEYS, readLocalArray, saveLiveState } from "@/lib/live-state";
+import { fetchLiveState, hydrateLiveState, LIVE_STATE_STORAGE_KEYS, readLocalArray, saveLiveState } from "@/lib/live-state";
 import type { Lead, LeadPriority, LeadStage } from "@/lib/types";
 import { AlertTriangle, BarChart3, Clock3, Download, PhoneCall, PhoneOff, Target, Timer, UsersRound } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 
-function dateInput(date: Date) { return date.toISOString().slice(0, 10); }
+function dateInput(date: Date) { return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`; }
 function duration(seconds: number) { const hours = Math.floor(seconds / 3600); const minutes = Math.floor(seconds % 3600 / 60); const rest = seconds % 60; return hours ? `${hours}h ${minutes}m` : minutes ? `${minutes}m ${rest}s` : `${rest}s`; }
 function displayDate(value: string) { return value ? new Intl.DateTimeFormat("en-IN", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value)) : "—"; }
 type SalesPersonLive = { acceptingLeads?: boolean; dailyCallTarget?: number; dailyConnectedTarget?: number; id: string; isActive?: boolean; name: string };
@@ -24,6 +24,7 @@ export default function CrmAnalyticsPage() {
   const [integrations, setIntegrations] = useState<Record<string, unknown>>({});
   const [reviews, setReviews] = useState<CallReview[]>([]);
   const [reviewCallId, setReviewCallId] = useState(""); const [reviewUrl, setReviewUrl] = useState(""); const [reviewScore, setReviewScore] = useState("3"); const [reviewNote, setReviewNote] = useState(""); const [reviewMessage, setReviewMessage] = useState("");
+  const [syncError, setSyncError] = useState("");
   const [loading, setLoading] = useState(true); const [reviewSaving, setReviewSaving] = useState(false);
   const [from, setFrom] = useState(today);
   const [to, setTo] = useState(today);
@@ -38,15 +39,28 @@ export default function CrmAnalyticsPage() {
 
   useEffect(() => {
     setLeads(readLocalArray<unknown>(LIVE_STATE_STORAGE_KEYS.leads).map(normalizeLead));
-    void hydrateLiveState().then((state) => {
-      setLeads(readLocalArray<unknown>(LIVE_STATE_STORAGE_KEYS.leads).map(normalizeLead));
+    let active = true;
+    let refreshing = false;
+    async function refresh(initial = false) {
+      if (refreshing) return;
+      refreshing = true;
+      try {
+      const state = await (initial ? hydrateLiveState() : fetchLiveState());
+      if (!active) return;
+      if (!state?.dbEnabled || state.error) { setSyncError("Could not load live CallFlow data. Retrying automatically…"); return; }
+      setSyncError("");
+      if (Array.isArray(state.leads)) setLeads(state.leads.map(normalizeLead));
       const integrations = state?.integrations as Record<string, unknown> | undefined;
       const callflow = integrations?.callflow as { callRecords?: unknown } | undefined;
       setRecords(Array.isArray(callflow?.callRecords) ? callflow.callRecords as CallFlowCallRecord[] : []);
       setIntegrations(integrations || {});
       setReviews(Array.isArray((callflow as { callReviews?: unknown } | undefined)?.callReviews) ? (callflow as { callReviews: CallReview[] }).callReviews : []);
       setTeam(Array.isArray(state?.salesPeople) ? state.salesPeople as SalesPersonLive[] : []);
-    }).finally(() => setLoading(false));
+      } finally { refreshing = false; if (active) setLoading(false); }
+    }
+    void refresh(true);
+    const timer = window.setInterval(() => { if (!document.hidden) void refresh(); }, 15000);
+    return () => { active = false; window.clearInterval(timer); };
   }, []);
 
   const cities = useMemo(() => [...new Set(leads.map((lead) => lead.city.trim()).filter(Boolean))].sort(), [leads]);
@@ -117,6 +131,9 @@ export default function CrmAnalyticsPage() {
       <Field label="Campaign"><select className={inputClass} value={campaign} onChange={(event) => setCampaign(event.target.value)}><option value="">All campaigns</option>{campaigns.map((name) => <option key={name}>{name}</option>)}</select></Field>
       <button className="ml-auto inline-flex items-center gap-2 rounded-lg bg-slate-950 px-4 py-2.5 text-sm font-black text-white disabled:opacity-40" disabled={!filtered.length} onClick={exportCsv}><Download className="size-4" />Export CSV</button>
     </div></section>
+
+    {syncError ? <p role="status" className="mt-4 rounded-xl bg-amber-50 p-4 text-sm font-bold text-amber-800">{syncError}</p> : null}
+    <section className="mt-5 overflow-hidden rounded-2xl border border-slate-200 bg-white"><Header title="CallFlow call report" subtitle="Status, conversation notes and exact talk time · refreshes every 15 seconds"/><div className="overflow-x-auto"><table className={tableClass}><thead><tr>{["Lead / phone", "Salesperson", "Call time", "Status", "Talk time (seconds)", "Conversation notes"].map((label) => <th key={label}>{label}</th>)}</tr></thead><tbody>{[...filtered].sort((a,b) => Date.parse(b.startedAt)-Date.parse(a.startedAt)).slice(0,500).map((record) => <tr key={`${record.salespersonId}-${record.id}`}><td><p className="font-black">{record.leadName}</p><p className="text-xs text-slate-500">{record.phone}</p></td><td>{record.salespersonName}</td><td>{displayDate(record.startedAt)}</td><td className="font-bold">{record.outcome}</td><td>{record.durationSeconds} seconds</td><td className="min-w-64 whitespace-pre-wrap break-words">{record.note || "No conversation note synced"}</td></tr>)}{!filtered.length ? <TableEmpty columns={6}/> : null}</tbody></table></div>{filtered.length > 500 ? <p className="p-4 text-sm text-slate-500">Showing the latest 500 calls. Export CSV for all matching calls.</p> : null}</section>
 
     <section className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50/40 p-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><div><h2 className="font-black text-slate-950">Deep lead filters</h2><p className="text-xs font-semibold text-slate-500">Every selected filter is combined, so only leads matching all conditions are shown.</p></div><button className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-black disabled:opacity-40" disabled={!activeFilterCount} onClick={() => { resetLeadFilters(); setSalesperson(""); setCampaign(""); }}>Clear all filters</button></div>

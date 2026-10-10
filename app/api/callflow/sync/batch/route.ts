@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
     const connector = (integrations.callflow && typeof integrations.callflow === "object" ? integrations.callflow : {}) as Record<string, unknown>;
     const processed = new Set(Array.isArray(connector.processedEventIds) ? connector.processedEventIds.map(String) : []);
     const callRecords = Array.isArray(connector.callRecords) ? connector.callRecords as CallFlowCallRecord[] : [];
-    const callOutcomes = Array.isArray(connector.callOutcomes) ? connector.callOutcomes as Array<{ callId: string; leadId: string; outcome: string; at: string }> : [];
+    const callOutcomes = Array.isArray(connector.callOutcomes) ? connector.callOutcomes as Array<{ callId: string; leadId: string; outcome: string; note?: string; salespersonId?: string; at: string }> : [];
     const acceptedEventIds: string[] = [], failedEventIds: string[] = [];
     const now = Date.now();
     let leads = [...state.leads] as Lead[];
@@ -61,8 +61,8 @@ export async function POST(request: NextRequest) {
         processed.add(event.eventUuid); acceptedEventIds.push(event.eventUuid); continue;
       }
       if (index < 0) { failedEventIds.push(event.eventUuid); continue; }
-      if (event.entityType === "CALL" && event.operation === "UPDATE" && payload.leadId) {
-        const recordIndex = callRecords.findIndex((record) => record.id === String(payload.callId || event.entityId));
+      if (event.entityType === "CALL" && event.operation === "UPDATE" && payload.leadId && !payload.endedAt) {
+        const recordIndex = callRecords.findIndex((record) => record.salespersonId === identity.salesPersonId && record.id === String(payload.callId || event.entityId));
         if (recordIndex >= 0) callRecords[recordIndex] = {
           ...callRecords[recordIndex],
           leadId,
@@ -74,30 +74,37 @@ export async function POST(request: NextRequest) {
         processed.add(event.eventUuid); acceptedEventIds.push(event.eventUuid); continue;
       }
       leads[index] = applyCallFlowEvent(leads[index], event, user.name);
-      if (event.entityType === "CALL" && payload.endedAt && !callRecords.some((record) => record.eventUuid === event.eventUuid)) {
+      if (event.entityType === "CALL" && payload.endedAt) {
         const durationSeconds = Math.max(0, Number(payload.durationSeconds) || 0);
         const startedAtMs = Number(payload.startedAt) || now;
-        const recentOutcome = [...callOutcomes].reverse().find((item) => item.leadId === leadId && Math.abs(Date.parse(item.at) - startedAtMs) <= 24 * 60 * 60 * 1000);
-        callRecords.push({
+        const recentOutcome = [...callOutcomes].reverse().find((item) => item.callId === String(payload.callId || event.entityId) && (!item.salespersonId || item.salespersonId === identity.salesPersonId));
+        const existingIndex = callRecords.findIndex((record) => record.id === String(payload.callId || event.entityId) && record.salespersonId === identity.salesPersonId);
+        const existing = callRecords[existingIndex];
+        const record: CallFlowCallRecord = {
+          ...existing,
           id: String(payload.callId || event.entityId), eventUuid: event.eventUuid, leadId, leadName: leads[index].name,
           salespersonId: identity.salesPersonId, salespersonName: user.name, campaign: leads[index].source || "Unknown",
           phone: String(payload.phone || leads[index].mobile), direction: String(payload.direction).toUpperCase() === "INCOMING" ? "INCOMING" : "OUTGOING",
           startedAt: new Date(startedAtMs).toISOString(), endedAt: new Date(Number(payload.endedAt) || now).toISOString(),
-          durationSeconds, connected: durationSeconds > 0, outcome: recentOutcome?.outcome || (durationSeconds > 0 ? "Connected" : String(payload.direction).toUpperCase() === "INCOMING" ? "Missed" : "Not connected"),
+          durationSeconds, connected: durationSeconds > 0, outcome: recentOutcome?.outcome || existing?.outcome || (durationSeconds > 0 ? "Connected" : String(payload.direction).toUpperCase() === "INCOMING" ? "Missed" : "Not connected"),
+          note: recentOutcome?.note || existing?.note || String(payload.note || "").trim(),
           source: String(payload.source || "callflow"),
           simSlot: payload.simSlot != null && Number.isFinite(Number(payload.simSlot)) ? Number(payload.simSlot) : null,
           simLabel: payload.simLabel ? String(payload.simLabel) : null,
           phoneAccountId: payload.phoneAccountId ? String(payload.phoneAccountId) : null,
-        });
+        };
+        if (existingIndex >= 0) callRecords[existingIndex] = record;
+        else callRecords.push(record);
       }
       if (event.entityType === "CALL_DISPOSITION") {
         const callId = String(payload.callId || "");
         const outcome = String(payload.dispositionCode || payload.dispositionId || "Completed").replaceAll("_", " ");
-        callOutcomes.push({ callId, leadId, outcome, at: new Date(Number(payload.createdAt) || now).toISOString() });
-        const recordIndex = callRecords.findIndex((record) => record.id === callId);
+        const note = String(payload.note || "").trim();
+        callOutcomes.push({ callId, leadId, outcome, note, salespersonId: identity.salesPersonId, at: new Date(Number(payload.createdAt) || now).toISOString() });
+        const recordIndex = callRecords.findIndex((record) => record.salespersonId === identity.salesPersonId && record.id === callId);
         if (recordIndex >= 0) callRecords[recordIndex] = {
           ...callRecords[recordIndex],
-          outcome,
+          outcome, note,
         };
       }
       processed.add(event.eventUuid); acceptedEventIds.push(event.eventUuid);

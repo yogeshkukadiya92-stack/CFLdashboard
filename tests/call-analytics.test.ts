@@ -35,3 +35,10 @@ test("leaderboard rewards target progress and connection quality instead of raw 
   assert.equal(board[0].name, "Sales One");
   assert.equal(board[0].rank, 1);
 });
+
+ test("CSV preserves conversation notes, quoted text and exact talk seconds", () => {
+  const csv = callRecordsCsv([{ ...records[0], durationSeconds: 125, note: 'Discussed "coaching", follow up tomorrow\nSend brochure' }]);
+  assert.match(csv, /Conversation Notes/);
+  assert.match(csv, /"125"/);
+  assert.match(csv, /"Discussed ""coaching"", follow up tomorrow\nSend brochure"/);
+});
