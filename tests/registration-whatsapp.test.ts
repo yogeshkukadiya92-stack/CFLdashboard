@@ -54,6 +54,17 @@ test("routes confirmed and waiting WhatsApp messages only to allowed recipients"
     assert.equal(confirmedPatch.referrerWaitingWhatsappSentAt, undefined);
 
     requests.length = 0;
+    const hf39Patch = await sendRegistrationStatusNotifications({
+      ...baseRegistration,
+      registrationNumber: "REG-0039",
+      registrationStatus: "confirmed"
+    }, { ...form, whatsappConfirmationTemplate: "hf_39_confirmation" });
+    assert.equal(requests.length, 1);
+    assert.deepEqual(requests[0].data, ["Test Participant", "REG-0039"]);
+    assert.deepEqual(requests[0].BodyDynamicData, ["Test Participant", "REG-0039"]);
+    assert.equal(hf39Patch.confirmationWhatsappStatus, "sent");
+
+    requests.length = 0;
     const waitingPatch = await sendRegistrationStatusNotifications({
       ...baseRegistration,
       registrationStatus: "waiting",
@@ -104,6 +115,14 @@ test("routes confirmed and waiting WhatsApp messages only to allowed recipients"
       waitingWhatsappSentAt: "2026-08-29T01:00:00.000Z"
     }, form);
     assert.equal(requests.length, 0);
+
+    globalThis.fetch = (async () => new Response(JSON.stringify({ IsSuccess: true }), { status: 500 })) as typeof fetch;
+    const rejectedConfirmation = await sendRegistrationStatusNotifications({
+      ...baseRegistration, registrationStatus: "confirmed"
+    }, form);
+    assert.equal(rejectedConfirmation.confirmationWhatsappStatus, "failed");
+    assert.equal(rejectedConfirmation.confirmationWhatsappSentAt, undefined);
+    assert.match(rejectedConfirmation.confirmationWhatsappError || "", /500/);
 
     globalThis.fetch = (async () => new Response("provider error", { status: 500 })) as typeof fetch;
     const failedPatch = await sendRegistrationStatusNotifications({

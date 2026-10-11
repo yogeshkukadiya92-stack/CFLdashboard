@@ -31,61 +31,26 @@ export function assignRegistrationNumbers(registrations: RegistrationEntry[], wo
     }, [...registrations]);
 }
 
-export async function sendRegistrationConfirmation(registration: RegistrationEntry, form?: Partial<BuilderForm>) {
+export async function sendRegistrationConfirmation(registration: RegistrationEntry, form?: Partial<BuilderForm>): Promise<WhatsAppDeliveryResult> {
   if (!form?.whatsappConfirmationEnabled || registration.registrationStatus === "waiting" || registration.confirmationWhatsappSentAt) {
     return { configured: false, sent: false };
   }
 
-  const apiUrl = process.env.WHATSAPP_CONFIRMATION_API_URL || process.env.WHATSAPP_OTP_API_URL;
-  const authToken = process.env.WHATSAPP_CONFIRMATION_AUTH_TOKEN || process.env.WHATSAPP_OTP_AUTH_TOKEN;
   const templateName = form.whatsappConfirmationTemplate
     || process.env.WHATSAPP_CONFIRMATION_TEMPLATE_NAME
     || process.env.WHATSAPP_CONFIRMATION_TEMPLATE_ID;
-  if (!apiUrl || !authToken || !templateName) return { configured: false, sent: false };
-
-  const mobile = `91${registration.mobile.replace(/\D/g, "").slice(-10)}`;
-  const groupUrl = form.whatsappGroupUrl?.trim() || "-";
-  const values = [registration.fullName, registration.workshopTitle, registration.registrationNumber || "-", groupUrl];
-  const response = await fetch(apiUrl, {
-    body: JSON.stringify({
-      authToken,
-      data: values,
-      language: process.env.WHATSAPP_CONFIRMATION_LANGUAGE || "en",
-      name: registration.fullName,
-      originWebsite: process.env.WHATSAPP_OTP_ORIGIN_WEBSITE || "https://coachforlife.in/",
-      sendto: mobile,
-      templateName,
-      BodyDynamicData: values,
-      Name: registration.fullName,
-      PhoneNumber: mobile,
-      TemplateName: templateName,
-      mobile,
-      parameters: values,
-      templateId: templateName,
-      to: mobile,
-      variables: values
-    }),
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${authToken}`,
-      authtoken: authToken
-    },
-    signal: AbortSignal.timeout(15_000),
-      method: "POST"
+  // This approved template embeds the workshop and group URL as static text.
+  // Its two body placeholders are participant name, then registration number.
+  const values = templateName === "hf_39_confirmation"
+    ? [registration.fullName, registration.registrationNumber || "-"]
+    : [registration.fullName, registration.workshopTitle, registration.registrationNumber || "-", form.whatsappGroupUrl?.trim() || "-"];
+  return sendTemplateMessage({
+    mobile: registration.mobile,
+    name: registration.fullName,
+    registrationId: registration.id,
+    templateName,
+    values
   });
-
-  let sent = response.ok;
-  let messageId: string | undefined;
-  try {
-    const result = await response.clone().json();
-    messageId = readProviderMessageId(result);
-    if (typeof result?.IsSuccess === "boolean") sent = result.IsSuccess;
-    if (typeof result?.Status === "number") sent = sent && result.Status >= 200 && result.Status < 300;
-  } catch {
-    // Successful 11za responses are not guaranteed to be JSON.
-  }
-  await recordOutboundWhatsAppMessage({ providerMessageId: messageId, registrationId: registration.id, mobile, templateName, status: sent ? "sent" : "failed", error: sent ? undefined : `Provider returned HTTP ${response.status}` }).catch(() => undefined);
-  return { configured: true, sent };
 }
 
 type WhatsAppDeliveryResult = { configured: boolean; error?: string; messageId?: string; sent: boolean };
@@ -138,7 +103,7 @@ async function sendTemplateMessage(input: {
     try {
       const result = await response.clone().json();
       messageId = readProviderMessageId(result);
-      if (typeof result?.IsSuccess === "boolean") sent = result.IsSuccess;
+      if (typeof result?.IsSuccess === "boolean") sent = sent && result.IsSuccess;
       if (typeof result?.Status === "number") sent = sent && result.Status >= 200 && result.Status < 300;
     } catch {
       // Successful provider responses are not guaranteed to be JSON.
@@ -160,7 +125,7 @@ export async function sendRegistrationStatusNotifications(registration: Registra
     if (registration.confirmationWhatsappSentAt) return patch;
     const result = await sendRegistrationConfirmation(registration, form);
     patch.confirmationWhatsappStatus = result.sent ? "sent" : result.configured ? "failed" : "not_configured";
-    patch.confirmationWhatsappError = result.sent ? undefined : result.configured ? "WhatsApp confirmation delivery failed." : "Confirmation template or provider is not configured.";
+    patch.confirmationWhatsappError = result.sent ? undefined : result.configured ? result.error || "WhatsApp confirmation delivery failed." : "Confirmation template or provider is not configured.";
     if (result.sent) patch.confirmationWhatsappSentAt = now;
     return patch;
   }
