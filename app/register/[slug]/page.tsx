@@ -7,6 +7,7 @@ import { hydratePublicRegistrationState, readLocalArray, readLocalObject, savePu
 import { sanitizeRichTextHtml } from "@/lib/rich-text";
 import { COUNTRY_OPTIONS, citiesForCountry } from "@/lib/location-options";
 import { resolveRegistrationOtpRequired } from "@/lib/registration-otp";
+import { resolveRegistrationGroupUrl } from "@/lib/registration-group";
 import type { BuilderField, BuilderForm, BuilderFormMode, BuilderTheme, FormAnalyticsRecord, PaymentTier, RegistrationEntry } from "@/lib/types";
 import { decodeJsonParam, formatCurrency } from "@/lib/utils";
 import { AlertTriangle, ArrowLeft, ArrowRight, Check, CheckCircle2, Loader2, ShieldCheck } from "lucide-react";
@@ -452,6 +453,12 @@ export default function RegistrationPage() {
         }
       }
 
+      if (resolved) {
+        resolved = {
+          ...resolved,
+          whatsappGroupUrl: resolveRegistrationGroupUrl(readLocalArray<BuilderForm>(FORMS_STORAGE_KEY), resolved)
+        };
+      }
       setModel(linkBlocked ? null : resolved);
       setReady(true);
     }
