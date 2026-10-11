@@ -125,6 +125,14 @@ test("routes confirmed and waiting WhatsApp messages only to allowed recipients"
     assert.equal(rejectedConfirmation.confirmationWhatsappSentAt, undefined);
     assert.match(rejectedConfirmation.confirmationWhatsappError || "", /500/);
 
+    globalThis.fetch = (async () => new Response(JSON.stringify({ IsSuccess: false, Message: "Template parameter count mismatch test-token" }), { status: 400 })) as typeof fetch;
+    const providerRejection = await sendRegistrationStatusNotifications({
+      ...baseRegistration, registrationStatus: "confirmed"
+    }, form);
+    assert.equal(providerRejection.confirmationWhatsappStatus, "failed");
+    assert.match(providerRejection.confirmationWhatsappError || "", /400.*Template parameter count mismatch/);
+    assert.doesNotMatch(providerRejection.confirmationWhatsappError || "", /test-token/);
+
     globalThis.fetch = (async () => new Response("provider error", { status: 500 })) as typeof fetch;
     const failedPatch = await sendRegistrationStatusNotifications({
       ...baseRegistration,

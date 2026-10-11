@@ -103,15 +103,24 @@ async function sendTemplateMessage(input: {
     });
     let sent = response.ok;
     let messageId: string | undefined;
+    let providerReason: string | undefined;
     try {
       const result = await response.clone().json();
       messageId = readProviderMessageId(result);
       if (typeof result?.IsSuccess === "boolean") sent = sent && result.IsSuccess;
       if (typeof result?.Status === "number") sent = sent && result.Status >= 200 && result.Status < 300;
+      const reason = result?.error?.message ?? result?.ErrorMessage ?? result?.Message ?? result?.message ?? result?.error ?? result?.Error;
+      if (typeof reason === "string") {
+        providerReason = reason;
+        for (const privateValue of [authToken, input.mobile, mobile, mobileDigits, input.name]) {
+          if (privateValue) providerReason = providerReason.split(privateValue).join("[redacted]");
+        }
+        providerReason = providerReason.replace(/[\r\n\t]+/g, " ").slice(0, 500).trim();
+      }
     } catch {
       // Successful provider responses are not guaranteed to be JSON.
     }
-    const error = sent ? undefined : `WhatsApp provider returned ${response.status}.`;
+    const error = sent ? undefined : `WhatsApp provider returned ${response.status}.${providerReason ? ` ${providerReason}` : ""}`;
     await recordOutboundWhatsAppMessage({ providerMessageId: messageId, registrationId: input.registrationId, mobile, templateName: input.templateName, status: sent ? "sent" : "failed", error }).catch(() => undefined);
     return { configured: true, error, messageId, sent };
   } catch (error) {
