@@ -261,6 +261,9 @@ export default function WorkshopMasterPage() {
   const [selectedParticipantIds, setSelectedParticipantIds] = useState<string[]>([]);
   const [followUpTarget, setFollowUpTarget] = useState<RegistrationEntry | null>(null);
   const [shareSelectedOpen, setShareSelectedOpen] = useState(false);
+  const [bulkWhatsAppOpen, setBulkWhatsAppOpen] = useState(false);
+  const [bulkWhatsAppSending, setBulkWhatsAppSending] = useState(false);
+  const [bulkWhatsAppProgress, setBulkWhatsAppProgress] = useState(0);
   const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
   const [bulkConfirming, setBulkConfirming] = useState(false);
   const [bulkMfwOpen, setBulkMfwOpen] = useState(false);
@@ -463,6 +466,9 @@ export default function WorkshopMasterPage() {
   const repeaterParticipants = useMemo(() => selectedParticipants.filter((entry) => entry.isRepeater), [selectedParticipants]);
   const selectedConfirmableParticipants = useMemo(() => selectedParticipants.filter((entry) =>
     selectedParticipantIds.includes(entry.id) && (entry.confirmationStatus !== "confirmed" || entry.registrationStatus === "waiting")
+  ), [selectedParticipantIds, selectedParticipants]);
+  const selectedWhatsAppParticipants = useMemo(() => selectedParticipants.filter((entry) =>
+    selectedParticipantIds.includes(entry.id) && entry.confirmationStatus === "confirmed" && entry.registrationStatus !== "waiting"
   ), [selectedParticipantIds, selectedParticipants]);
   const selectedMfwAssignableParticipants = useMemo(() => selectedParticipants.filter((entry) =>
     selectedParticipantIds.includes(entry.id) && entry.confirmationStatus === "confirmed" && entry.mfwSyncStatus !== "synced"
@@ -970,6 +976,44 @@ export default function WorkshopMasterPage() {
       setMessage(error instanceof Error ? error.message : "Selected participants could not be assigned to MFW. Please try again.");
     } finally {
       setBulkMfwAssigning(false);
+    }
+  }
+
+  async function resendSelectedConfirmationWhatsApp() {
+    if (!selectedWorkshop || !selectedWhatsAppParticipants.length || bulkWhatsAppSending) return;
+    setBulkWhatsAppSending(true);
+    setBulkWhatsAppProgress(0);
+    let sent = 0;
+    const failedIds: string[] = [];
+    let lastError = "";
+    const recipients = [...selectedWhatsAppParticipants];
+    try {
+      for (const [index, entry] of recipients.entries()) {
+        try {
+          const response = await fetch("/api/admin/registration-whatsapp", {
+            body: JSON.stringify({ registrationId: entry.id, workshopId: selectedWorkshop.id, resendConfirmation: true }),
+            headers: { "Content-Type": "application/json" }, method: "POST"
+          });
+          const result = await response.json() as { error?: string; sent?: boolean; registration?: RegistrationEntry };
+          if (!response.ok || !result.registration) throw new Error(result.error || "WhatsApp resend failed.");
+          setRegistrations((current) => {
+            const next = current.map((item) => item.id === entry.id ? result.registration! : item);
+            writeLocalCache(REGISTRATION_STORAGE_KEY, next);
+            return next;
+          });
+          if (result.sent) sent++;
+          else { failedIds.push(entry.id); lastError = result.registration.confirmationWhatsappError || "Delivery failed."; }
+        } catch (error) {
+          failedIds.push(entry.id);
+          lastError = error instanceof Error ? error.message : "Delivery failed.";
+        }
+        setBulkWhatsAppProgress(index + 1);
+      }
+      setSelectedParticipantIds(failedIds);
+      setBulkWhatsAppOpen(false);
+      setMessage(`Confirmation WhatsApp: ${sent} sent, ${failedIds.length} failed.${failedIds.length ? ` Failed participants remain selected. ${lastError}` : ""}`);
+    } finally {
+      setBulkWhatsAppSending(false);
     }
   }
 
@@ -2832,11 +2876,17 @@ export default function WorkshopMasterPage() {
                       </details>
                     </div>
                   </div>
+                  <div className="shrink-0 border-b border-slate-200 px-3 py-2">
+                    <button className="min-h-8 rounded-lg border border-emerald-300 px-3 text-xs font-black text-emerald-800 disabled:opacity-50" disabled={bulkWhatsAppSending} onClick={() => setSelectedParticipantIds(selectedParticipants.filter((entry) => entry.confirmationStatus === "confirmed" && entry.registrationStatus !== "waiting").map((entry) => entry.id))} type="button">Select all confirmed</button>
+                  </div>
                   {selectedParticipantIds.length ? (
                     <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-emerald-200 bg-emerald-50 px-3 py-2">
                       <p className="text-xs font-black text-emerald-900">{selectedParticipantIds.length} participant{selectedParticipantIds.length === 1 ? "" : "s"} selected</p>
                       <div className="flex flex-wrap gap-1.5">
                         <button className="min-h-8 rounded-lg border border-emerald-300 bg-white px-2.5 text-[11px] font-black text-emerald-800 hover:bg-emerald-100" onClick={() => setSelectedParticipantIds([])} type="button">Clear</button>
+                        {selectedWhatsAppParticipants.length ? (
+                          <button className="inline-flex min-h-8 items-center gap-1.5 rounded-lg bg-emerald-700 px-2.5 text-[11px] font-black text-white disabled:opacity-50" disabled={bulkWhatsAppSending} onClick={() => setBulkWhatsAppOpen(true)} type="button"><MessageCircle className="size-3.5" />{bulkWhatsAppSending ? `Sending ${bulkWhatsAppProgress}/${selectedWhatsAppParticipants.length}...` : `Resend confirmation WhatsApp (${selectedWhatsAppParticipants.length})`}</button>
+                        ) : null}
                         {selectedConfirmableParticipants.length ? (
                           <button className="inline-flex min-h-8 items-center gap-1.5 rounded-lg bg-amber-600 px-2.5 text-[11px] font-black text-white hover:bg-amber-700" onClick={() => setBulkConfirmOpen(true)} type="button">
                             <CheckSquare className="size-3.5" />
@@ -2996,6 +3046,17 @@ export default function WorkshopMasterPage() {
           workshop={selectedWorkshop}
         />
       ) : null}
+      <ConfirmDialog
+        confirmDisabled={bulkWhatsAppSending || selectedWhatsAppParticipants.length === 0}
+        confirmLabel={bulkWhatsAppSending ? `Sending ${bulkWhatsAppProgress}...` : `Send to ${selectedWhatsAppParticipants.length} participants`}
+        description="Send the workshop confirmation template again, including to participants who already received it. Waiting-list participants are excluded. Keep this page open until sending finishes."
+        onCancel={() => { if (!bulkWhatsAppSending) setBulkWhatsAppOpen(false); }}
+        onConfirm={() => void resendSelectedConfirmationWhatsApp()}
+        open={bulkWhatsAppOpen}
+        title="Resend confirmation WhatsApp?"
+      >
+        {selectedWhatsAppParticipants.length} confirmed participants will receive the confirmation message again.
+      </ConfirmDialog>
       <ConfirmDialog
         confirmDisabled={bulkConfirming || selectedConfirmableParticipants.length === 0}
         confirmLabel={bulkConfirming ? "Confirming..." : `Confirm ${selectedConfirmableParticipants.length} Participants`}
