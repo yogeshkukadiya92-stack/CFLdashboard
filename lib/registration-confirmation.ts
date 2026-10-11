@@ -49,6 +49,7 @@ export async function sendRegistrationConfirmation(registration: RegistrationEnt
     name: registration.fullName,
     registrationId: registration.id,
     templateName,
+    buttonValues: templateName === "hf_39_confirmation" ? ["https://shorturl.at/Wgcr4"] : undefined,
     values
   });
 }
@@ -60,6 +61,7 @@ async function sendTemplateMessage(input: {
   name: string;
   registrationId?: string;
   templateName?: string;
+  buttonValues?: string[];
   values: string[];
 }): Promise<WhatsAppDeliveryResult> {
   const apiUrl = process.env.WHATSAPP_CONFIRMATION_API_URL || process.env.WHATSAPP_OTP_API_URL;
@@ -80,6 +82,7 @@ async function sendTemplateMessage(input: {
         originWebsite: process.env.WHATSAPP_OTP_ORIGIN_WEBSITE || "https://coachforlife.in/",
         sendto: mobile,
         templateName: input.templateName,
+        ...(input.buttonValues ? { buttonValue: input.buttonValues } : {}),
         BodyDynamicData: input.values,
         Name: input.name,
         PhoneNumber: mobile,

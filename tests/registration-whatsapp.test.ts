@@ -62,6 +62,7 @@ test("routes confirmed and waiting WhatsApp messages only to allowed recipients"
     assert.equal(requests.length, 1);
     assert.deepEqual(requests[0].data, ["Test Participant", "REG-0039"]);
     assert.deepEqual(requests[0].BodyDynamicData, ["Test Participant", "REG-0039"]);
+    assert.deepEqual(requests[0].buttonValue, ["https://shorturl.at/Wgcr4"]);
     assert.equal(hf39Patch.confirmationWhatsappStatus, "sent");
 
     requests.length = 0;
