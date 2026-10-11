@@ -1,6 +1,7 @@
 import { ensurePersistenceTable, ensureRegistrationRecordsTable, getAppState, getDbPool, isDbEnabled, mutateAttendanceEntries, readRegistrationRecords, upsertRegistrationRecord } from "@/lib/db";
 import { attendanceWindow } from "@/lib/attendance-window";
 import { assignRegistrationNumbers } from "@/lib/registration-confirmation";
+import { drainRegistrationJobs, ensureRegistrationJobs } from "@/lib/registration-jobs";
 import { syncConfirmedRegistrationToMfw } from "@/lib/mfw-registration";
 import { executeWorkflow } from "@/lib/workflow-engine";
 import { confirmWorkflowWaiting } from "@/lib/workflow-waiting-confirmation";
@@ -72,6 +73,7 @@ async function promoteAttendanceWaitingRegistrations(attendance: AttendanceEntry
   if (!database) return 0;
   await ensurePersistenceTable();
   await ensureRegistrationRecordsTable();
+  await ensureRegistrationJobs();
   const client = await database.connect();
   try {
     await client.query("BEGIN");
@@ -118,10 +120,16 @@ async function promoteAttendanceWaitingRegistrations(attendance: AttendanceEntry
     if (promoted > 0) {
       for (const registration of next.filter((entry) => promotedRegistrationIds.has(entry.id))) {
         await upsertRegistrationRecord(client, registration as unknown as Record<string, unknown>);
+        await client.query(`INSERT INTO cfl_registration_jobs(registration_id) VALUES($1)
+          ON CONFLICT(registration_id) DO UPDATE SET completed_at=NULL,available_at=NOW(),attempts=0,last_error=NULL,
+          revision=cfl_registration_jobs.revision+1`, [registration.id]);
       }
       await client.query(`UPDATE app_state SET registrations = $1::jsonb, updated_at = NOW() WHERE id = 1`, [JSON.stringify(next)]);
     }
     await client.query("COMMIT");
+    if (promoted > 0) {
+      after(() => process.env.REGISTRATION_WORKER_ENABLED === "false" ? Promise.resolve() : drainRegistrationJobs());
+    }
     return promoted;
   } catch (error) {
     await client.query("ROLLBACK").catch(() => undefined);
