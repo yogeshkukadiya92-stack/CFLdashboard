@@ -31,9 +31,27 @@ export type LiveState = LiveStatePatch & {
 
 const PUBLIC_STATE_TIMEOUT_MS = 8_000;
 
+// Browser storage is a cache. A full or unavailable cache must never block
+// server writes or leave readers using an older copy of successful updates.
+const memoryStorage = new Map<string, string>();
+
+export function writeLocalCache(key: string, value: unknown): void {
+  const serialized = JSON.stringify(value);
+  try {
+    window.localStorage.setItem(key, serialized);
+    memoryStorage.delete(key);
+  } catch {
+    memoryStorage.set(key, serialized);
+  }
+}
+
+function readLocalCache(key: string): string | null {
+  return memoryStorage.get(key) ?? window.localStorage.getItem(key);
+}
+
 export function readLocalArray<T>(key: string): T[] {
   try {
-    const raw = window.localStorage.getItem(key);
+    const raw = readLocalCache(key);
     return raw ? (JSON.parse(raw) as T[]) : [];
   } catch {
     return [];
@@ -42,7 +60,7 @@ export function readLocalArray<T>(key: string): T[] {
 
 export function readLocalObject<T extends Record<string, unknown>>(key: string): T {
   try {
-    const raw = window.localStorage.getItem(key);
+    const raw = readLocalCache(key);
     return raw ? (JSON.parse(raw) as T) : ({} as T);
   } catch {
     return {} as T;
@@ -53,7 +71,7 @@ export function writeLiveStateToLocalStorage(patch: LiveStatePatch) {
   Object.entries(LIVE_STATE_STORAGE_KEYS).forEach(([stateKey, storageKey]) => {
     const value = patch[stateKey as keyof LiveStatePatch];
     if (value === undefined) return;
-    window.localStorage.setItem(storageKey, JSON.stringify(value));
+    writeLocalCache(storageKey, value);
   });
 }
 

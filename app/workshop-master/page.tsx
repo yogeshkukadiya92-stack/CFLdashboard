@@ -10,7 +10,7 @@ import { WorkshopCohortCompare } from "@/components/workshop-cohort-compare";
 import { MultiWorkshopOverlap } from "@/components/multi-workshop-overlap";
 import { normalizeCoreFieldRequirements } from "@/lib/builder-field-normalization";
 import { AlertCircle, Archive, ArrowDown, ArrowUp, BarChart3, Bold, CalendarDays, Check, CheckSquare, ChevronDown, Circle, Copy, Download, Edit3, ExternalLink, Eye, EyeOff, Files, Heading, Image, Italic, LayoutList, Link2, List, ListOrdered, Mail, MessageCircle, Monitor, Palette, PhoneCall, Plus, QrCode, RefreshCw, Route, Save, Search, Share2, Smartphone, Sparkles, Tag, Trash2, Type, Underline, Upload, UsersRound, X } from "lucide-react";
-import { hydrateLiveState, readLocalArray, readLocalObject, saveLiveState } from "@/lib/live-state";
+import { hydrateLiveState, readLocalArray, readLocalObject, saveLiveState, writeLocalCache } from "@/lib/live-state";
 import { buildRegistrationUrl, normalizeBaseUrl } from "@/lib/registration-url";
 import { publicFormSlug } from "@/lib/public-slug";
 import { resolveRegistrationOtpRequired } from "@/lib/registration-otp";
@@ -376,7 +376,7 @@ export default function WorkshopMasterPage() {
         const state = await response.json() as { dbEnabled?: boolean; registrations?: RegistrationEntry[] };
         if (!state.dbEnabled || !Array.isArray(state.registrations)) return;
         etag = response.headers.get("etag") ?? "";
-        window.localStorage.setItem(REGISTRATION_STORAGE_KEY, JSON.stringify(state.registrations));
+        writeLocalCache(REGISTRATION_STORAGE_KEY, state.registrations);
         setRegistrations(state.registrations);
       } catch {
         // Keep the last successful list visible while the next sync retries.
@@ -806,7 +806,7 @@ export default function WorkshopMasterPage() {
       const result = await response.json() as { recovered?: number; registrations?: RegistrationEntry[] };
       if (Array.isArray(result.registrations)) {
         setRegistrations(result.registrations);
-        window.localStorage.setItem(REGISTRATION_STORAGE_KEY, JSON.stringify(result.registrations));
+        writeLocalCache(REGISTRATION_STORAGE_KEY, result.registrations);
       }
       if (result.recovered) setMessage(`${result.recovered} imported registrations restored and synced.`);
     } catch {
@@ -861,7 +861,7 @@ export default function WorkshopMasterPage() {
       ? result.registrations
       : registrations.filter((entry) => entry.id !== id);
     setRegistrations(next);
-    window.localStorage.setItem(REGISTRATION_STORAGE_KEY, JSON.stringify(next));
+    writeLocalCache(REGISTRATION_STORAGE_KEY, next);
     setDeleteResponseTarget(null);
     setMessage("Registration response deleted.");
   }
@@ -877,7 +877,7 @@ export default function WorkshopMasterPage() {
     if (!response.ok || !result.registration) throw new Error(result.error || "Could not update follow-up.");
     const next = registrations.map((entry) => entry.id === result.registration?.id ? result.registration : entry);
     setRegistrations(next);
-    window.localStorage.setItem(REGISTRATION_STORAGE_KEY, JSON.stringify(next));
+    writeLocalCache(REGISTRATION_STORAGE_KEY, next);
     setFollowUpTarget(null);
     setMessage(result.registration.mfwSyncStatus === "synced"
       ? "Confirmation updated and participant enrolled in MFW."
@@ -902,7 +902,7 @@ export default function WorkshopMasterPage() {
         ? result.registrations
         : registrations.filter((entry) => !removedIds.has(entry.id));
       setRegistrations(next);
-      window.localStorage.setItem(REGISTRATION_STORAGE_KEY, JSON.stringify(next));
+      writeLocalCache(REGISTRATION_STORAGE_KEY, next);
       setHideDuplicateParticipants(false);
       setRemoveDuplicatesOpen(false);
       setMessage(`${duplicateParticipantIds.length} duplicate registrations permanently removed.`);
@@ -931,7 +931,7 @@ export default function WorkshopMasterPage() {
         ? [...registrations.filter(entry => entry.workshopId !== selectedWorkshop.id), ...result.registrations]
         : result.registrations;
       setRegistrations(updatedRegistrations);
-      window.localStorage.setItem(REGISTRATION_STORAGE_KEY, JSON.stringify(updatedRegistrations));
+      writeLocalCache(REGISTRATION_STORAGE_KEY, updatedRegistrations);
       setSelectedParticipantIds([]);
       setBulkConfirmOpen(false);
       const count = result.confirmed ?? selectedConfirmableParticipants.length;
@@ -961,7 +961,7 @@ export default function WorkshopMasterPage() {
         ? [...registrations.filter((entry) => entry.workshopId !== selectedWorkshop.id), ...result.registrations]
         : result.registrations;
       setRegistrations(updatedRegistrations);
-      window.localStorage.setItem(REGISTRATION_STORAGE_KEY, JSON.stringify(updatedRegistrations));
+      writeLocalCache(REGISTRATION_STORAGE_KEY, updatedRegistrations);
       setSelectedParticipantIds([]);
       setBulkMfwOpen(false);
       const count = result.queued ?? selectedMfwAssignableParticipants.length;
@@ -1002,7 +1002,7 @@ export default function WorkshopMasterPage() {
       if (!response.ok || !result.registration) throw new Error(result.error || "Medical report status could not be updated.");
       const next = registrations.map((item) => item.id === entry.id ? result.registration as RegistrationEntry : item);
       setRegistrations(next);
-      window.localStorage.setItem(REGISTRATION_STORAGE_KEY, JSON.stringify(next));
+      writeLocalCache(REGISTRATION_STORAGE_KEY, next);
       setMessage(`Medical report marked ${status === "yes" ? "Yes" : "No"} for ${entry.fullName}.`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Medical report status could not be updated.");
@@ -2997,6 +2997,7 @@ export default function WorkshopMasterPage() {
         />
       ) : null}
       <ConfirmDialog
+        confirmDisabled={bulkConfirming || selectedConfirmableParticipants.length === 0}
         confirmLabel={bulkConfirming ? "Confirming..." : `Confirm ${selectedConfirmableParticipants.length} Participants`}
         description="Selected people will be marked confirmed. Waiting-list participants will also become registrations. MFW enrollment and confirmation WhatsApp will run after confirmation."
         onCancel={() => {

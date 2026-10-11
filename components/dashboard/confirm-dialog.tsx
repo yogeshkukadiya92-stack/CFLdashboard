@@ -7,6 +7,7 @@ export function ConfirmDialog({
   cancelLabel = "Cancel",
   children,
   confirmLabel = "Confirm",
+  confirmDisabled = false,
   description,
   onCancel,
   onConfirm,
@@ -16,6 +17,7 @@ export function ConfirmDialog({
   cancelLabel?: string;
   children?: ReactNode;
   confirmLabel?: string;
+  confirmDisabled?: boolean;
   description: string;
   onCancel: () => void;
   onConfirm: () => void;
@@ -60,7 +62,7 @@ export function ConfirmDialog({
           <button className="rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50" onClick={onCancel} type="button">
             {cancelLabel}
           </button>
-          <button className="rounded-xl bg-rose-600 px-4 py-3 text-sm font-bold text-white hover:bg-rose-700" onClick={onConfirm} type="button">
+          <button className="rounded-xl bg-rose-600 px-4 py-3 text-sm font-bold text-white hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50" disabled={confirmDisabled} onClick={onConfirm} type="button">
             {confirmLabel}
           </button>
         </div>
