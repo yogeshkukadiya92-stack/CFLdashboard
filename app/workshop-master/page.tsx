@@ -1,5 +1,7 @@
 "use client";
 
+import { DEFAULT_MANUAL_WHATSAPP_TEMPLATE, renderManualWhatsApp } from "@/lib/manual-whatsapp";
+import { ManualWhatsAppSettings, ManualWhatsAppComposer, type ManualWhatsAppDraft } from "@/components/manual-whatsapp";
 import { AdminPlatformShell } from "@/components/admin-platform-shell";
 import { OperationalStat } from "@/components/operational-stat";
 import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
@@ -228,6 +230,9 @@ export default function WorkshopMasterPage() {
   const [formRepeaterWaitingMode, setFormRepeaterWaitingMode] = useState(true);
   const [repeaterWorkshopQuery, setRepeaterWorkshopQuery] = useState("");
   const [formWorkflowPanel, setFormWorkflowPanel] = useState<FormWorkflowPanel>(null);
+  const [manualWhatsappTemplate, setManualWhatsappTemplate] = useState(DEFAULT_MANUAL_WHATSAPP_TEMPLATE);
+  const [manualWhatsappStartDate, setManualWhatsappStartDate] = useState("");
+  const [manualDrafts, setManualDrafts] = useState<ManualWhatsAppDraft[]>([]);
   const [whatsappGroupUrl, setWhatsappGroupUrl] = useState("");
   const [whatsappConfirmationEnabled, setWhatsappConfirmationEnabled] = useState(false);
   const [whatsappConfirmationTemplate, setWhatsappConfirmationTemplate] = useState("");
@@ -941,7 +946,7 @@ export default function WorkshopMasterPage() {
       setSelectedParticipantIds([]);
       setBulkConfirmOpen(false);
       const count = result.confirmed ?? selectedConfirmableParticipants.length;
-      setMessage(`${count} participant${count === 1 ? "" : "s"} confirmed. MFW enrollment and WhatsApp are processing.`);
+      setMessage(`${count} participant${count === 1 ? "" : "s"} confirmed. MFW enrollment is processing. WhatsApp follows the workshop delivery settings.`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Selected registrations could not be confirmed. Please try again.");
     } finally {
@@ -1015,6 +1020,19 @@ export default function WorkshopMasterPage() {
     } finally {
       setBulkWhatsAppSending(false);
     }
+  }
+
+  function participantWhatsAppForm(entry: RegistrationEntry) {
+    const forms = readLocalArray<BuilderForm>(FORMS_STORAGE_KEY);
+    return forms.find(form => form.workshopId === entry.workshopId && form.batch === entry.batch)
+      || forms.find(form => form.workshopId === entry.workshopId);
+  }
+
+  function openManualWhatsApp(entries: RegistrationEntry[]) {
+    setManualDrafts(entries.filter(entry => entry.confirmationStatus === "confirmed" && entry.registrationStatus !== "waiting").map(entry => ({
+      id: entry.id, name: entry.fullName, mobile: entry.mobile,
+      message: renderManualWhatsApp(entry, participantWhatsAppForm(entry))
+    })));
   }
 
   async function retryRegistrationWhatsApp(registrationId: string) {
@@ -1152,6 +1170,8 @@ export default function WorkshopMasterPage() {
     setFormRepeaterWaitingMode(true);
     setRepeaterWorkshopQuery("");
     setWhatsappGroupUrl("");
+    setManualWhatsappTemplate(DEFAULT_MANUAL_WHATSAPP_TEMPLATE);
+    setManualWhatsappStartDate("");
     setWhatsappConfirmationEnabled(false);
     setWhatsappConfirmationTemplate("");
     setWhatsappWaitingTemplate("");
@@ -1186,6 +1206,8 @@ export default function WorkshopMasterPage() {
       highlights: formHighlights.map((item) => item.trim()).filter(Boolean),
       whatsappGroupUrl: whatsappGroupUrl.trim() || undefined,
       whatsappConfirmationEnabled,
+      manualWhatsappTemplate: manualWhatsappTemplate.trim() || DEFAULT_MANUAL_WHATSAPP_TEMPLATE,
+      manualWhatsappStartDate: manualWhatsappStartDate.trim(),
       whatsappConfirmationTemplate: whatsappConfirmationTemplate.trim() || undefined,
       whatsappWaitingTemplate: whatsappWaitingTemplate.trim() || undefined,
       whatsappReferrerWaitingTemplate: whatsappReferrerWaitingTemplate.trim() || undefined,
@@ -1233,6 +1255,8 @@ export default function WorkshopMasterPage() {
         setFormRepeaterWaitingMode(true);
         setRepeaterWorkshopQuery("");
         setWhatsappGroupUrl("");
+        setManualWhatsappTemplate(DEFAULT_MANUAL_WHATSAPP_TEMPLATE);
+        setManualWhatsappStartDate("");
         setWhatsappConfirmationEnabled(false);
         setWhatsappConfirmationTemplate("");
         setWhatsappWaitingTemplate("");
@@ -1259,6 +1283,8 @@ export default function WorkshopMasterPage() {
       setFormRepeaterWaitingMode(savedForm.repeaterWaitingMode !== false);
       setRepeaterWorkshopQuery("");
       setWhatsappGroupUrl(savedForm.whatsappGroupUrl ?? "");
+      setManualWhatsappTemplate(savedForm.manualWhatsappTemplate || DEFAULT_MANUAL_WHATSAPP_TEMPLATE);
+      setManualWhatsappStartDate(savedForm.manualWhatsappStartDate ?? "");
       setWhatsappConfirmationEnabled(Boolean(savedForm.whatsappConfirmationEnabled));
       setWhatsappConfirmationTemplate(savedForm.whatsappConfirmationTemplate ?? "");
       setWhatsappWaitingTemplate(savedForm.whatsappWaitingTemplate ?? "");
@@ -1533,6 +1559,7 @@ export default function WorkshopMasterPage() {
 
   return (
     <AdminPlatformShell activeLabel="Workshop Master" description="Create workshop/product masters and configure registration fields in one platform." title="Manage Workshop">
+      {manualDrafts.length > 0 && <ManualWhatsAppComposer drafts={manualDrafts} onClose={() => setManualDrafts([])} />}
       {!showData ? (
       <div aria-labelledby="workshop-editor-title" aria-modal="true" className="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/60 p-1.5 backdrop-blur-sm sm:p-3" role="dialog">
       <button aria-label="Close workshop editor" className="fixed right-3 top-3 z-50 grid size-10 place-items-center rounded-xl border border-slate-200 bg-white text-slate-500 shadow-lg hover:bg-slate-50 hover:text-slate-950 sm:right-5 sm:top-5" onClick={() => setShowData(true)} title="Close workshop editor" type="button"><X className="size-5" /></button>
@@ -2010,6 +2037,7 @@ export default function WorkshopMasterPage() {
               <input className={inputClass} onChange={(event) => setWhatsappGroupUrl(event.target.value)} placeholder="https://chat.whatsapp.com/xxxxxxxx" value={whatsappGroupUrl} />
               <span className="mt-1 block text-xs font-semibold text-slate-400">After registration, the thank-you page can redirect to this group link after 5 seconds.</span>
             </label>
+            <ManualWhatsAppSettings template={manualWhatsappTemplate} startDate={manualWhatsappStartDate} onTemplate={setManualWhatsappTemplate} onStartDate={setManualWhatsappStartDate} />
             <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4 md:col-span-2">
               <label className="flex min-h-[48px] items-center justify-between gap-4">
                 <span>
@@ -2257,6 +2285,7 @@ export default function WorkshopMasterPage() {
                       <span className="mb-2 block text-sm font-bold text-slate-600">WhatsApp Group Invite Link</span>
                       <input className={inputClass} onChange={(event) => setWhatsappGroupUrl(event.target.value)} placeholder="https://chat.whatsapp.com/xxxxxxxx" value={whatsappGroupUrl} />
                     </label>
+                    <ManualWhatsAppSettings template={manualWhatsappTemplate} startDate={manualWhatsappStartDate} onTemplate={setManualWhatsappTemplate} onStartDate={setManualWhatsappStartDate} />
                     <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4">
                       <label className="flex min-h-[48px] items-center justify-between gap-4">
                         <span>
@@ -2885,7 +2914,7 @@ export default function WorkshopMasterPage() {
                       <div className="flex flex-wrap gap-1.5">
                         <button className="min-h-8 rounded-lg border border-emerald-300 bg-white px-2.5 text-[11px] font-black text-emerald-800 hover:bg-emerald-100" onClick={() => setSelectedParticipantIds([])} type="button">Clear</button>
                         {selectedWhatsAppParticipants.length ? (
-                          <button className="inline-flex min-h-8 items-center gap-1.5 rounded-lg bg-emerald-700 px-2.5 text-[11px] font-black text-white disabled:opacity-50" disabled={bulkWhatsAppSending} onClick={() => setBulkWhatsAppOpen(true)} type="button"><MessageCircle className="size-3.5" />{bulkWhatsAppSending ? `Sending ${bulkWhatsAppProgress}/${selectedWhatsAppParticipants.length}...` : `Resend confirmation WhatsApp (${selectedWhatsAppParticipants.length})`}</button>
+                          <button className="inline-flex min-h-8 items-center gap-1.5 rounded-lg bg-emerald-700 px-2.5 text-[11px] font-black text-white disabled:opacity-50" disabled={bulkWhatsAppSending} onClick={() => setBulkWhatsAppOpen(true)} type="button"><MessageCircle className="size-3.5" />{bulkWhatsAppSending ? `Sending ${bulkWhatsAppProgress}/${selectedWhatsAppParticipants.length}...` : `Resend via API (${selectedWhatsAppParticipants.length})`}</button>
                         ) : null}
                         {selectedConfirmableParticipants.length ? (
                           <button className="inline-flex min-h-8 items-center gap-1.5 rounded-lg bg-amber-600 px-2.5 text-[11px] font-black text-white hover:bg-amber-700" onClick={() => setBulkConfirmOpen(true)} type="button">
@@ -2893,6 +2922,7 @@ export default function WorkshopMasterPage() {
                             Confirm selected ({selectedConfirmableParticipants.length})
                           </button>
                         ) : null}
+                        {selectedWhatsAppParticipants.length ? <button type="button" className="min-h-8 rounded-lg border border-emerald-300 bg-white px-3 text-xs font-bold text-emerald-800" onClick={() => openManualWhatsApp(selectedWhatsAppParticipants)}>Manual WhatsApp ({selectedWhatsAppParticipants.length})</button> : null}
                         {selectedMfwAssignableParticipants.length ? (
                           <button className="inline-flex min-h-8 items-center gap-1.5 rounded-lg bg-indigo-600 px-2.5 text-[11px] font-black text-white hover:bg-indigo-700" onClick={() => setBulkMfwOpen(true)} type="button">
                             <RefreshCw className="size-3.5" />
@@ -2967,6 +2997,7 @@ export default function WorkshopMasterPage() {
                                 {registrationWhatsAppStatus(entry)}
                               </span>
                               {registrationWhatsAppStatus(entry) !== "sent" ? <button aria-label={`Retry WhatsApp for ${entry.fullName}`} className="grid size-7 place-items-center rounded-md bg-emerald-50 text-emerald-700 hover:bg-emerald-100" onClick={() => void retryRegistrationWhatsApp(entry.id)} title="Retry registration WhatsApp" type="button"><MessageCircle className="size-3.5" /></button> : null}
+                              {entry.confirmationStatus === "confirmed" && entry.registrationStatus !== "waiting" ? <button type="button" className="mt-1 rounded-lg border border-emerald-200 px-2 py-1 text-xs font-bold text-emerald-700" aria-label={`Send WhatsApp manually to ${entry.fullName}`} onClick={() => openManualWhatsApp([entry])}>Send WhatsApp</button> : null}
                             </div>
                           </td>
                           <td className="min-w-[130px] px-2.5 py-2.5">

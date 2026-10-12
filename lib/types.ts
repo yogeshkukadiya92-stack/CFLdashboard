@@ -511,6 +511,8 @@ export interface BuilderForm {
   highlights?: string[];
   whatsappGroupUrl?: string;
   whatsappConfirmationEnabled?: boolean;
+  manualWhatsappTemplate?: string;
+  manualWhatsappStartDate?: string;
   whatsappConfirmationTemplate?: string;
   whatsappWaitingTemplate?: string;
   whatsappReferrerWaitingTemplate?: string;
