@@ -39,11 +39,17 @@ export async function sendRegistrationConfirmation(registration: RegistrationEnt
   const templateName = form.whatsappConfirmationTemplate
     || process.env.WHATSAPP_CONFIRMATION_TEMPLATE_NAME
     || process.env.WHATSAPP_CONFIRMATION_TEMPLATE_ID;
-  // This approved template embeds the workshop and group URL as static text.
-  // Its two body placeholders are participant name, then registration number.
-  const values = templateName === "hf_39_confirmation"
+  // hf_39_confirmation has two body slots; the standard confirmation
+  // template has four: name, workshop, starting date, registration number.
+  // The group link is static text in the approved provider template.
+  const isFixedHf39Template = templateName === "hf_39_confirmation";
+  const startDate = form.manualWhatsappStartDate?.trim();
+  if (!isFixedHf39Template && !startDate) {
+    return { configured: true, sent: false, error: "Set the workshop starting date in Workshop Create / Edit before sending confirmation WhatsApp." };
+  }
+  const values = isFixedHf39Template
     ? [registration.fullName, registration.registrationNumber || "-"]
-    : [registration.fullName, registration.workshopTitle, registration.registrationNumber || "-", form.whatsappGroupUrl?.trim() || "-"];
+    : [registration.fullName, form.workshopName || registration.workshopTitle, `Starting from ${startDate}`, registration.registrationNumber || "-"];
   return sendTemplateMessage({
     mobile: registration.mobile,
     name: registration.fullName,

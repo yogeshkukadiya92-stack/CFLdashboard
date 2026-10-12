@@ -11,9 +11,9 @@ export function ManualWhatsAppSettings({ template, startDate, onTemplate, onStar
   return <div className="space-y-3 rounded-xl border border-emerald-200 bg-emerald-50/50 p-4">
     <p className="text-sm font-bold">Automatic API + Manual WhatsApp</p>
     <p className="text-xs text-slate-600">Automatic API messages follow the setting below. Manual Send WhatsApp is always available alongside them, even after an API message is sent.</p>
-    <label className="block text-sm font-bold">Workshop starting date (message text)<input className={fieldClass} value={startDate} placeholder="28th November" onChange={e => onStartDate(e.target.value)} /></label>
+    <label className="block text-sm font-bold">Workshop starting date (API + manual message)<input className={fieldClass} value={startDate} placeholder="28th November" onChange={e => onStartDate(e.target.value)} /></label>
     <label className="block text-sm font-bold">Manual confirmation message<textarea rows={12} className={fieldClass} value={template} onChange={e => onTemplate(e.target.value)} /></label>
-    <p className="text-xs text-slate-600">Personalize with {'{{name}}, {{workshop_name}}, {{start_date}}, {{registration_no}}, {{whatsapp_group_link}}'}. The group link comes from WhatsApp Group Invite Link above. Use *text* for WhatsApp bold.</p>
+    <p className="text-xs text-slate-600">Personalize with {'{{name}}, {{workshop_name}}, {{start_date}}, {{registration_no}}, {{whatsapp_group_link}}'}. The manual group link comes from WhatsApp Group Invite Link above. API message wording and its fixed group link come from the approved provider template. Use *text* for WhatsApp bold.</p>
   </div>;
 }
 

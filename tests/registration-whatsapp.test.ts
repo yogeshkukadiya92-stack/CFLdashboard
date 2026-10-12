@@ -5,6 +5,7 @@ import type { BuilderForm, RegistrationEntry } from "../lib/types.ts";
 
 const form = {
   whatsappConfirmationEnabled: true,
+  manualWhatsappStartDate: "28th November",
   whatsappConfirmationTemplate: "participant_confirmed",
   whatsappWaitingTemplate: "participant_waiting",
   whatsappReferrerWaitingTemplate: "referrer_waiting"
@@ -50,8 +51,19 @@ test("routes confirmed and waiting WhatsApp messages only to allowed recipients"
     assert.equal(requests.length, 1);
     assert.equal(requests[0].PhoneNumber, "919876543210");
     assert.equal(requests[0].TemplateName, "participant_confirmed");
+    for (const key of ["data", "BodyDynamicData", "parameters", "variables"]) {
+      assert.deepEqual(requests[0][key], ["Test Participant", "Healthy Forever", "Starting from 28th November", "REG-0001"]);
+    }
     assert.equal(confirmedPatch.confirmationWhatsappStatus, "sent");
     assert.equal(confirmedPatch.referrerWaitingWhatsappSentAt, undefined);
+
+    requests.length = 0;
+    const missingDatePatch = await sendRegistrationStatusNotifications({
+      ...baseRegistration, registrationNumber: "REG-9296", registrationStatus: "confirmed"
+    }, { ...form, manualWhatsappStartDate: "", whatsappGroupUrl: "https://chat.whatsapp.com/example" });
+    assert.equal(requests.length, 0);
+    assert.equal(missingDatePatch.confirmationWhatsappStatus, "failed");
+    assert.match(missingDatePatch.confirmationWhatsappError || "", /starting date/);
 
     requests.length = 0;
     const hf39Patch = await sendRegistrationStatusNotifications({
