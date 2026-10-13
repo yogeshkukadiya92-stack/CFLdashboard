@@ -2,6 +2,8 @@
 
 import { DEFAULT_MANUAL_WHATSAPP_TEMPLATE, renderManualWhatsApp } from "@/lib/manual-whatsapp";
 import { ManualWhatsAppSettings, ManualWhatsAppComposer, type ManualWhatsAppDraft } from "@/components/manual-whatsapp";
+import { WhatsAppTemplateButtons } from "@/components/whatsapp-template-buttons";
+import { WhatsAppSenderSelector } from "@/components/whatsapp-sender-selector";
 import { AdminPlatformShell } from "@/components/admin-platform-shell";
 import { OperationalStat } from "@/components/operational-stat";
 import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
@@ -234,9 +236,13 @@ export default function WorkshopMasterPage() {
   const [manualWhatsappStartDate, setManualWhatsappStartDate] = useState("");
   const [manualDrafts, setManualDrafts] = useState<ManualWhatsAppDraft[]>([]);
   const [whatsappGroupUrl, setWhatsappGroupUrl] = useState("");
+  const [whatsappSenderId, setWhatsappSenderId] = useState("");
   const [whatsappConfirmationEnabled, setWhatsappConfirmationEnabled] = useState(false);
+  const [whatsappConfirmationButtonValues, setWhatsappConfirmationButtonValues] = useState<string[] | undefined>(undefined);
   const [whatsappConfirmationTemplate, setWhatsappConfirmationTemplate] = useState("");
+  const [whatsappWaitingButtonValues, setWhatsappWaitingButtonValues] = useState<string[] | undefined>(undefined);
   const [whatsappWaitingTemplate, setWhatsappWaitingTemplate] = useState("");
+  const [whatsappReferrerWaitingButtonValues, setWhatsappReferrerWaitingButtonValues] = useState<string[] | undefined>(undefined);
   const [whatsappReferrerWaitingTemplate, setWhatsappReferrerWaitingTemplate] = useState("");
   const [message, setMessage] = useState("");
   const [search, setSearch] = useState("");
@@ -1172,9 +1178,13 @@ export default function WorkshopMasterPage() {
     setWhatsappGroupUrl("");
     setManualWhatsappTemplate(DEFAULT_MANUAL_WHATSAPP_TEMPLATE);
     setManualWhatsappStartDate("");
+    setWhatsappSenderId("");
     setWhatsappConfirmationEnabled(false);
+    setWhatsappConfirmationButtonValues(undefined);
     setWhatsappConfirmationTemplate("");
+    setWhatsappWaitingButtonValues(undefined);
     setWhatsappWaitingTemplate("");
+    setWhatsappReferrerWaitingButtonValues(undefined);
     setWhatsappReferrerWaitingTemplate("");
   }
 
@@ -1205,11 +1215,15 @@ export default function WorkshopMasterPage() {
       repeaterWaitingMode: formRepeaterWaitingMode,
       highlights: formHighlights.map((item) => item.trim()).filter(Boolean),
       whatsappGroupUrl: whatsappGroupUrl.trim() || undefined,
+      whatsappSenderId: whatsappSenderId || undefined,
       whatsappConfirmationEnabled,
       manualWhatsappTemplate: manualWhatsappTemplate.trim() || DEFAULT_MANUAL_WHATSAPP_TEMPLATE,
       manualWhatsappStartDate: manualWhatsappStartDate.trim(),
+      whatsappConfirmationButtonValues,
       whatsappConfirmationTemplate: whatsappConfirmationTemplate.trim() || undefined,
+      whatsappWaitingButtonValues,
       whatsappWaitingTemplate: whatsappWaitingTemplate.trim() || undefined,
+      whatsappReferrerWaitingButtonValues,
       whatsappReferrerWaitingTemplate: whatsappReferrerWaitingTemplate.trim() || undefined,
       submitButtonText: formSubmitButtonText.trim() || undefined,
       fields: normalizeCoreFieldRequirements(formFields),
@@ -1257,10 +1271,14 @@ export default function WorkshopMasterPage() {
         setWhatsappGroupUrl("");
         setManualWhatsappTemplate(DEFAULT_MANUAL_WHATSAPP_TEMPLATE);
         setManualWhatsappStartDate("");
-        setWhatsappConfirmationEnabled(false);
-        setWhatsappConfirmationTemplate("");
-        setWhatsappWaitingTemplate("");
-        setWhatsappReferrerWaitingTemplate("");
+        setWhatsappSenderId("");
+    setWhatsappConfirmationEnabled(false);
+        setWhatsappConfirmationButtonValues(undefined);
+    setWhatsappConfirmationTemplate("");
+        setWhatsappWaitingButtonValues(undefined);
+    setWhatsappWaitingTemplate("");
+        setWhatsappReferrerWaitingButtonValues(undefined);
+    setWhatsappReferrerWaitingTemplate("");
         return;
       }
       setFormTitle(savedForm.title || `${record.name} Registration`);
@@ -1285,9 +1303,13 @@ export default function WorkshopMasterPage() {
       setWhatsappGroupUrl(savedForm.whatsappGroupUrl ?? "");
       setManualWhatsappTemplate(savedForm.manualWhatsappTemplate || DEFAULT_MANUAL_WHATSAPP_TEMPLATE);
       setManualWhatsappStartDate(savedForm.manualWhatsappStartDate ?? "");
+      setWhatsappSenderId(savedForm.whatsappSenderId || "");
       setWhatsappConfirmationEnabled(Boolean(savedForm.whatsappConfirmationEnabled));
+      setWhatsappConfirmationButtonValues(savedForm?.whatsappConfirmationButtonValues);
       setWhatsappConfirmationTemplate(savedForm.whatsappConfirmationTemplate ?? "");
+      setWhatsappWaitingButtonValues(savedForm?.whatsappWaitingButtonValues);
       setWhatsappWaitingTemplate(savedForm.whatsappWaitingTemplate ?? "");
+      setWhatsappReferrerWaitingButtonValues(savedForm?.whatsappReferrerWaitingButtonValues);
       setWhatsappReferrerWaitingTemplate(savedForm.whatsappReferrerWaitingTemplate ?? "");
     } catch {
       resetBuilderForm();
@@ -2046,11 +2068,12 @@ export default function WorkshopMasterPage() {
                 </span>
                 <input checked={whatsappConfirmationEnabled} className="size-5 shrink-0 accent-emerald-600" onChange={(event) => setWhatsappConfirmationEnabled(event.target.checked)} type="checkbox" />
               </label>
+              <WhatsAppSenderSelector value={whatsappSenderId} onChange={setWhatsappSenderId} />
               {whatsappConfirmationEnabled ? (
                 <div className="mt-3 grid gap-3 md:grid-cols-3">
-                  <label className="block"><span className="mb-2 block text-xs font-bold text-slate-600">Participant Confirmation Template</span><input className={inputClass} onChange={(event) => setWhatsappConfirmationTemplate(event.target.value)} placeholder="registration_confirmed" value={whatsappConfirmationTemplate} /></label>
-                  <label className="block"><span className="mb-2 block text-xs font-bold text-slate-600">Participant Waiting Template</span><input className={inputClass} onChange={(event) => setWhatsappWaitingTemplate(event.target.value)} placeholder="registration_waiting" value={whatsappWaitingTemplate} /></label>
-                  <label className="block"><span className="mb-2 block text-xs font-bold text-slate-600">Referrer Waiting Template</span><input className={inputClass} onChange={(event) => setWhatsappReferrerWaitingTemplate(event.target.value)} placeholder="referrer_registration_waiting" value={whatsappReferrerWaitingTemplate} /></label>
+                  <label className="block"><span className="mb-2 block text-xs font-bold text-slate-600">Participant Confirmation Template</span><input className={inputClass} onChange={(event) => setWhatsappConfirmationTemplate(event.target.value)} placeholder="registration_confirmed" value={whatsappConfirmationTemplate} /><WhatsAppTemplateButtons values={whatsappConfirmationButtonValues ?? (whatsappConfirmationTemplate === "hf_39_confirmation" ? ["https://shorturl.at/Wgcr4"] : undefined)} onChange={setWhatsappConfirmationButtonValues} /></label>
+                  <label className="block"><span className="mb-2 block text-xs font-bold text-slate-600">Participant Waiting Template</span><input className={inputClass} onChange={(event) => setWhatsappWaitingTemplate(event.target.value)} placeholder="registration_waiting" value={whatsappWaitingTemplate} /><WhatsAppTemplateButtons values={whatsappWaitingButtonValues} onChange={setWhatsappWaitingButtonValues} /></label>
+                  <label className="block"><span className="mb-2 block text-xs font-bold text-slate-600">Referrer Waiting Template</span><input className={inputClass} onChange={(event) => setWhatsappReferrerWaitingTemplate(event.target.value)} placeholder="referrer_registration_waiting" value={whatsappReferrerWaitingTemplate} /><WhatsAppTemplateButtons values={whatsappReferrerWaitingButtonValues} onChange={setWhatsappReferrerWaitingButtonValues} /></label>
                 </div>
               ) : null}
             </div>
@@ -2294,11 +2317,12 @@ export default function WorkshopMasterPage() {
                         </span>
                         <input checked={whatsappConfirmationEnabled} className="size-5 shrink-0 accent-emerald-600" onChange={(event) => setWhatsappConfirmationEnabled(event.target.checked)} type="checkbox" />
                       </label>
-                      {whatsappConfirmationEnabled ? (
+                      <WhatsAppSenderSelector value={whatsappSenderId} onChange={setWhatsappSenderId} />
+              {whatsappConfirmationEnabled ? (
                         <div className="mt-3 grid gap-3 md:grid-cols-3">
-                          <label className="block"><span className="mb-2 block text-xs font-bold text-slate-600">Participant Confirmation Template</span><input className={inputClass} onChange={(event) => setWhatsappConfirmationTemplate(event.target.value)} placeholder="registration_confirmed" value={whatsappConfirmationTemplate} /></label>
-                          <label className="block"><span className="mb-2 block text-xs font-bold text-slate-600">Participant Waiting Template</span><input className={inputClass} onChange={(event) => setWhatsappWaitingTemplate(event.target.value)} placeholder="registration_waiting" value={whatsappWaitingTemplate} /></label>
-                          <label className="block"><span className="mb-2 block text-xs font-bold text-slate-600">Referrer Waiting Template</span><input className={inputClass} onChange={(event) => setWhatsappReferrerWaitingTemplate(event.target.value)} placeholder="referrer_registration_waiting" value={whatsappReferrerWaitingTemplate} /></label>
+                          <label className="block"><span className="mb-2 block text-xs font-bold text-slate-600">Participant Confirmation Template</span><input className={inputClass} onChange={(event) => setWhatsappConfirmationTemplate(event.target.value)} placeholder="registration_confirmed" value={whatsappConfirmationTemplate} /><WhatsAppTemplateButtons values={whatsappConfirmationButtonValues ?? (whatsappConfirmationTemplate === "hf_39_confirmation" ? ["https://shorturl.at/Wgcr4"] : undefined)} onChange={setWhatsappConfirmationButtonValues} /></label>
+                          <label className="block"><span className="mb-2 block text-xs font-bold text-slate-600">Participant Waiting Template</span><input className={inputClass} onChange={(event) => setWhatsappWaitingTemplate(event.target.value)} placeholder="registration_waiting" value={whatsappWaitingTemplate} /><WhatsAppTemplateButtons values={whatsappWaitingButtonValues} onChange={setWhatsappWaitingButtonValues} /></label>
+                          <label className="block"><span className="mb-2 block text-xs font-bold text-slate-600">Referrer Waiting Template</span><input className={inputClass} onChange={(event) => setWhatsappReferrerWaitingTemplate(event.target.value)} placeholder="referrer_registration_waiting" value={whatsappReferrerWaitingTemplate} /><WhatsAppTemplateButtons values={whatsappReferrerWaitingButtonValues} onChange={setWhatsappReferrerWaitingButtonValues} /></label>
                         </div>
                       ) : null}
                     </div>

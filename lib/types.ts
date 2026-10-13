@@ -510,12 +510,16 @@ export interface BuilderForm {
   tiers?: PaymentTier[];
   highlights?: string[];
   whatsappGroupUrl?: string;
+  whatsappSenderId?: string;
   whatsappConfirmationEnabled?: boolean;
   manualWhatsappTemplate?: string;
   manualWhatsappStartDate?: string;
   whatsappConfirmationTemplate?: string;
+  whatsappConfirmationButtonValues?: string[];
   whatsappWaitingTemplate?: string;
+  whatsappWaitingButtonValues?: string[];
   whatsappReferrerWaitingTemplate?: string;
+  whatsappReferrerWaitingButtonValues?: string[];
   submitButtonText?: string;
   allowDuplicate?: boolean;
   responseLimit?: number;

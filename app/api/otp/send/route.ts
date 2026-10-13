@@ -4,6 +4,7 @@ import { randomInt } from "node:crypto";
 import { saveOtp, clearOtp } from "@/lib/otp-store";
 import { getAppState } from "@/lib/db";
 import type { BuilderForm } from "@/lib/types";
+import { resolveWhatsAppAccount } from "@/lib/whatsapp-accounts";
 const OTP_TTL_MS = 5 * 60 * 1000;
 
 function cleanMobile(value: unknown) {
@@ -14,15 +15,16 @@ function createOtp() {
   return String(randomInt(100000,1000000));
 }
 
-async function sendWhatsAppOtp(mobile: string, code: string) {
-  const directApiUrl = process.env.WHATSAPP_OTP_API_URL;
-  const directAuthToken = process.env.WHATSAPP_OTP_AUTH_TOKEN;
-  const directTemplate = process.env.WHATSAPP_OTP_TEMPLATE_NAME || process.env.WHATSAPP_OTP_TEMPLATE_ID;
+async function sendWhatsAppOtp(mobile: string, code: string, senderId?: string) {
+  const account = await resolveWhatsAppAccount(senderId);
+  const directApiUrl = account ? account.apiUrl : process.env.WHATSAPP_OTP_API_URL;
+  const directAuthToken = account ? account.authToken : process.env.WHATSAPP_OTP_AUTH_TOKEN;
+  const directTemplate = account ? account.otpTemplate : process.env.WHATSAPP_OTP_TEMPLATE_NAME || process.env.WHATSAPP_OTP_TEMPLATE_ID;
   if (directApiUrl && directAuthToken && directTemplate) {
     const recipient = `91${mobile}`;
     const originWebsite = process.env.WHATSAPP_OTP_ORIGIN_WEBSITE || "https://coachforlife.in/";
-    const senderNumber = process.env.WHATSAPP_OTP_NUMBER || "916353531533";
-    const language = process.env.WHATSAPP_OTP_LANGUAGE || "en";
+    const senderNumber = account?.number || process.env.WHATSAPP_OTP_NUMBER || "916353531533";
+    const language = account?.language || process.env.WHATSAPP_OTP_LANGUAGE || "en";
     const payload = {
       authToken: directAuthToken,
       data: [code],
@@ -71,7 +73,7 @@ async function sendWhatsAppOtp(mobile: string, code: string) {
     let providerMessage = "";
     try {
       const result = await response.clone().json();
-      if (typeof result?.IsSuccess === "boolean") sent = result.IsSuccess;
+      if (typeof result?.IsSuccess === "boolean") sent = sent && result.IsSuccess;
       if (typeof result?.Status === "number") sent = sent && result.Status >= 200 && result.Status < 300;
       providerMessage = String(result?.Message || result?.message || result?.Error || result?.error || "");
     } catch {
@@ -88,6 +90,7 @@ async function sendWhatsAppOtp(mobile: string, code: string) {
     return { configured: true, sent, providerMessage };
   }
 
+  if (account) return { configured: false, sent: false };
   const webhookUrl = process.env.WHATSAPP_OTP_WEBHOOK_URL;
   const webhookToken = process.env.WHATSAPP_OTP_WEBHOOK_TOKEN;
   if (webhookUrl) {
@@ -141,8 +144,9 @@ export async function POST(request: Request) {
     const form = (Array.isArray(state?.forms) ? state.forms : []).find((item: unknown) => String((item as BuilderForm)?.id) === formId) as BuilderForm | undefined;
     const fallbackAvailable = Boolean(form?.otpRequired && form?.otpFallbackEnabled && form?.otpFallbackCodeHash);
     await saveOtp(mobile, code, OTP_TTL_MS, formId);
-    const whatsapp = await sendWhatsAppOtp(mobile, code);
-    if (!whatsapp.configured && process.env.NODE_ENV === "production") {
+    if (!form) return NextResponse.json({ error: "Registration form not found." }, { status: 404 });
+    const whatsapp = await sendWhatsAppOtp(mobile, code, form.whatsappSenderId);
+    if (!whatsapp.configured && (process.env.NODE_ENV === "production" || form.whatsappSenderId)) {
       if (fallbackAvailable) return NextResponse.json({ deliveryFailed: true, fallbackAvailable: true, ok: true, expiresInSeconds: OTP_TTL_MS / 1000 });
       await clearOtp(mobile, code);
       return NextResponse.json({ error: "WhatsApp OTP service is not configured. Please contact admin or use a non-OTP form." }, { status: 503 });

@@ -1,6 +1,8 @@
 import type { BuilderForm, RegistrationEntry } from "@/lib/types";
 import { recordOutboundWhatsAppMessage } from "./whatsapp-automation.ts";
 
+import { resolveWhatsAppAccount } from "./whatsapp-accounts.ts";
+
 const REGISTRATION_NUMBER_PATTERN = /^REG-(\d+)$/i;
 
 function readProviderMessageId(result: unknown) {
@@ -51,11 +53,12 @@ export async function sendRegistrationConfirmation(registration: RegistrationEnt
     ? [registration.fullName, registration.registrationNumber || "-"]
     : [registration.fullName, form.workshopName || registration.workshopTitle, `Starting from ${startDate}`, registration.registrationNumber || "-"];
   return sendTemplateMessage({
+    senderId: form.whatsappSenderId,
     mobile: registration.mobile,
     name: registration.fullName,
     registrationId: registration.id,
     templateName,
-    buttonValues: templateName === "hf_39_confirmation" ? ["https://shorturl.at/Wgcr4"] : undefined,
+    buttonValues: form.whatsappConfirmationButtonValues ?? (templateName === "hf_39_confirmation" ? ["https://shorturl.at/Wgcr4"] : undefined),
     values
   });
 }
@@ -63,6 +66,7 @@ export async function sendRegistrationConfirmation(registration: RegistrationEnt
 type WhatsAppDeliveryResult = { configured: boolean; error?: string; messageId?: string; sent: boolean };
 
 async function sendTemplateMessage(input: {
+  senderId?: string;
   mobile: string;
   name: string;
   registrationId?: string;
@@ -70,8 +74,11 @@ async function sendTemplateMessage(input: {
   buttonValues?: string[];
   values: string[];
 }): Promise<WhatsAppDeliveryResult> {
-  const apiUrl = process.env.WHATSAPP_CONFIRMATION_API_URL || process.env.WHATSAPP_OTP_API_URL;
-  const authToken = process.env.WHATSAPP_CONFIRMATION_AUTH_TOKEN || process.env.WHATSAPP_OTP_AUTH_TOKEN;
+  let account;
+  try { account = await resolveWhatsAppAccount(input.senderId); } catch { return { configured: true, sent: false, error: "Selected WhatsApp sender is unavailable." }; }
+  const apiUrl = account ? account.apiUrl : process.env.WHATSAPP_CONFIRMATION_API_URL || process.env.WHATSAPP_OTP_API_URL;
+  const authToken = account ? account.authToken : process.env.WHATSAPP_CONFIRMATION_AUTH_TOKEN || process.env.WHATSAPP_OTP_AUTH_TOKEN;
+  if (input.buttonValues?.some(value => typeof value !== "string" || !value.trim())) return { configured: true, sent: false, error: "Enter a value for each WhatsApp template button or remove the empty button." };
   const mobileDigits = input.mobile.replace(/\D/g, "").slice(-10);
   if (!apiUrl || !authToken || !input.templateName || mobileDigits.length !== 10) {
     return { configured: false, sent: false };
@@ -82,13 +89,14 @@ async function sendTemplateMessage(input: {
     const response = await fetch(apiUrl, {
       body: JSON.stringify({
         authToken,
+        ...(account ? { from: account.number, sender: account.number, whatsappNumber: account.number } : {}),
         data: input.values,
-        language: process.env.WHATSAPP_CONFIRMATION_LANGUAGE || "en",
+        language: account?.language || process.env.WHATSAPP_CONFIRMATION_LANGUAGE || "en",
         name: input.name,
         originWebsite: process.env.WHATSAPP_OTP_ORIGIN_WEBSITE || "https://coachforlife.in/",
         sendto: mobile,
         templateName: input.templateName,
-        ...(input.buttonValues ? { buttonValue: input.buttonValues } : {}),
+        ...(input.buttonValues?.length ? { buttonValue: input.buttonValues.map(value => value.trim()), ButtonValue: input.buttonValues.map(value => value.trim()) } : {}),
         BodyDynamicData: input.values,
         Name: input.name,
         PhoneNumber: mobile,
@@ -153,10 +161,12 @@ export async function sendRegistrationStatusNotifications(registration: Registra
       || process.env.WHATSAPP_WAITING_TEMPLATE_NAME
       || process.env.WHATSAPP_WAITING_TEMPLATE_ID;
     const participantResult = await sendTemplateMessage({
-      mobile: registration.mobile,
+      senderId: form.whatsappSenderId,
+    mobile: registration.mobile,
       name: registration.fullName,
       registrationId: registration.id,
       templateName: participantTemplate,
+      buttonValues: form.whatsappWaitingButtonValues,
       values: [
         registration.fullName,
         registration.workshopTitle,
@@ -176,10 +186,12 @@ export async function sendRegistrationStatusNotifications(registration: Registra
       || process.env.WHATSAPP_REFERRER_WAITING_TEMPLATE_NAME
       || process.env.WHATSAPP_REFERRER_WAITING_TEMPLATE_ID;
     const referrerResult = await sendTemplateMessage({
+      senderId: form.whatsappSenderId,
       mobile: referenceDigits,
       name: registration.referrerName || "Referrer",
       registrationId: registration.id,
       templateName: referrerTemplate,
+      buttonValues: form.whatsappReferrerWaitingButtonValues,
       values: [
         registration.referrerName || "Referrer",
         registration.fullName,
