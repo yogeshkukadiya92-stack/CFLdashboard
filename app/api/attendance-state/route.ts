@@ -1,8 +1,7 @@
-import { ensurePersistenceTable, ensureRegistrationRecordsTable, getAppState, getDbPool, isDbEnabled, mutateAttendanceEntries, readRegistrationRecords, upsertRegistrationRecord } from "@/lib/db";
+import { ensurePersistenceTable, ensureRegistrationRecordsTable, getAppState, getAttendanceFormState, getDbPool, isDbEnabled, mutateAttendanceEntries, readRegistrationRecords, upsertRegistrationRecord } from "@/lib/db";
 import { attendanceWindow } from "@/lib/attendance-window";
 import { assignRegistrationNumbers } from "@/lib/registration-confirmation";
 import { drainRegistrationJobs, ensureRegistrationJobs } from "@/lib/registration-jobs";
-import { syncConfirmedRegistrationToMfw } from "@/lib/mfw-registration";
 import { executeWorkflow } from "@/lib/workflow-engine";
 import { confirmWorkflowWaiting } from "@/lib/workflow-waiting-confirmation";
 import { listActiveWorkflowsForTrigger, recordWorkflowExecution } from "@/lib/workflow-db";
@@ -113,10 +112,8 @@ async function promoteAttendanceWaitingRegistrations(attendance: AttendanceEntry
       };
     });
     affectedWorkshops.forEach((workshopId) => { next = assignRegistrationNumbers(next, workshopId); });
-    for (const registration of next.filter((entry) => promotedRegistrationIds.has(entry.id))) {
-      const mfwSync = await syncConfirmedRegistrationToMfw(registration);
-      next = next.map((entry) => entry.id === registration.id ? { ...entry, ...mfwSync } : entry);
-    }
+    // The durable registration worker performs MFW sync after this transaction.
+    // Provider latency must never hold the shared app_state row lock.
     if (promoted > 0) {
       for (const registration of next.filter((entry) => promotedRegistrationIds.has(entry.id))) {
         await upsertRegistrationRecord(client, registration as unknown as Record<string, unknown>);
@@ -187,9 +184,8 @@ async function runAttendanceWorkflows(attendance: AttendanceEntry, promotedRegis
 export async function GET(request: Request) {
   if (!(await isDbEnabled())) return NextResponse.json({ dbEnabled: false });
   try {
-    const state = await getAppState();
+    const state = await getAttendanceFormState();
     const sessions = (Array.isArray(state?.attendanceSessions) ? state.attendanceSessions : []) as AttendanceSession[];
-    const entries = (Array.isArray(state?.attendanceEntries) ? state.attendanceEntries : []) as AttendanceEntry[];
     const slug = new URL(request.url).searchParams.get("slug")?.trim();
     if (slug) {
       const session = sessions.find((item) => item.slug === slug && item.published !== false);
@@ -197,7 +193,7 @@ export async function GET(request: Request) {
         ? NextResponse.json({
             attendanceSession: publicSession(session),
             dbEnabled: true,
-            responseCount: entries.filter((entry) => entry.sessionId === session.id).length
+            responseCount: Number(state?.responseCounts?.[session.id] ?? 0)
           })
         : NextResponse.json({ error: "Attendance link is not active." }, { status: 404 });
     }
@@ -219,17 +215,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid attendance entry." }, { status: 400 });
     }
 
-    const state = await getAppState();
+    const state = await getAttendanceFormState();
     const sessions = (Array.isArray(state?.attendanceSessions) ? state.attendanceSessions : []) as AttendanceSession[];
     const sessionId = cleanText(input.sessionId, 200);
     const sessionSlug = cleanText(input.sessionSlug, 200);
     const session = sessions.find((item) => item.id === sessionId && item.slug === sessionSlug && item.published !== false);
     if (!session) return NextResponse.json({ error: "Attendance session is not active." }, { status: 404 });
 
-    const currentEntries = (Array.isArray(state?.attendanceEntries) ? state.attendanceEntries : []) as AttendanceEntry[];
-    const sessionEntries = currentEntries.filter((entry) => entry.sessionId === session.id);
     const responseLimit = cleanNumber(session.responseLimit, 0, 0, 20_000);
-    if (responseLimit > 0 && sessionEntries.length >= responseLimit) {
+    if (responseLimit > 0 && Number(state?.responseCounts?.[session.id] ?? 0) >= responseLimit) {
       return NextResponse.json({ error: cleanText(session.closedMessage, 300) || "This attendance form is no longer accepting responses." }, { status: 403 });
     }
 
@@ -304,11 +298,18 @@ export async function POST(request: Request) {
         error: "This mobile number is already registered for this attendance session."
       }, { status: 409 });
     }
-    const promotedRegistrations = await promoteAttendanceWaitingRegistrations(saved.entry).catch(() => 0);
-    after(() => runAttendanceWorkflows(saved.entry, promotedRegistrations).catch((error) => {
-      console.error("Attendance workflow execution failed", error instanceof Error ? error.message : "Unknown error");
-    }));
-    return NextResponse.json({ ...saved, ok: true, promotedRegistrations, ...responseMeta });
+    // Attendance is committed before success is returned. Registration promotion
+    // and workflows run after the response, in that order, without delaying Zoom.
+    after(async () => {
+      const promotedRegistrations = await promoteAttendanceWaitingRegistrations(saved.entry).catch((error) => {
+        console.error("Attendance registration promotion failed", error instanceof Error ? error.message : "Unknown error");
+        return 0;
+      });
+      await runAttendanceWorkflows(saved.entry, promotedRegistrations).catch((error) => {
+        console.error("Attendance workflow execution failed", error instanceof Error ? error.message : "Unknown error");
+      });
+    });
+    return NextResponse.json({ ...saved, ok: true, ...responseMeta });
   } catch {
     return NextResponse.json({ error: "Failed to save attendance." }, { status: 500 });
   }

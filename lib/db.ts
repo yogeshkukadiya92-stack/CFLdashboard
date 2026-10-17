@@ -376,6 +376,29 @@ export async function recordFormAnalyticsEvent(input: {
     WHERE form_id = $1`, [input.formId, input.event, input.fieldId, counter, input.workshopId, input.workshopSlug]);
 }
 
+// Public attendance needs neither CRM records nor registration/analytics hydration.
+export async function getAttendanceFormState() {
+  const database = getDbPool();
+  if (!database) return null;
+  const read = () => database.query(`SELECT attendance_sessions AS "attendanceSessions",
+    COALESCE((SELECT jsonb_object_agg(session_id, total) FROM (
+      SELECT entry->>'sessionId' AS session_id, COUNT(*) AS total
+      FROM jsonb_array_elements(attendance_entries) entry
+      WHERE entry->>'sessionId' IS NOT NULL
+      GROUP BY entry->>'sessionId'
+    ) counts), '{}'::jsonb) AS "responseCounts"
+    FROM app_state WHERE id = 1`);
+  let result;
+  try {
+    result = await read();
+  } catch (error) {
+    if (!isMissingPersistenceTableError(error)) throw error;
+    await ensurePersistenceTable();
+    result = await read();
+  }
+  return result.rows[0] ?? { attendanceSessions: [], responseCounts: {} };
+}
+
 export async function getAppState() {
   const client = getDbPool();
   if (!client) return null;
