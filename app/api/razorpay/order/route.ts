@@ -1,3 +1,4 @@
+import { assignVerifiedCourseCheckout } from "@/lib/razorpay-course-checkout";
 import { courseOrderNotes } from "@/lib/course-order-enrollment";
 import { NextResponse } from "next/server";
 import { getRazorpayConfig } from "@/lib/integrations";
@@ -21,7 +22,14 @@ export async function POST(request: Request) {
     if (!verifyRazorpayCheckoutSignature(orderId, paymentId, signature, keySecret)) {
       return NextResponse.json({ error: "Payment verification failed." }, { status: 400 });
     }
-    return NextResponse.json({ ok: true });
+    try {
+      const enrollment = await assignVerifiedCourseCheckout(orderId, paymentId);
+      return NextResponse.json({ ok: true, courseAssigned: enrollment.assigned });
+    } catch {
+      // Keep paid registration intact; Razorpay webhook retries the same assignment.
+      console.error("Course checkout assignment pending", { orderId, paymentId });
+      return NextResponse.json({ ok: true, courseAssignmentPending: true });
+    }
   }
   const amount = Number(body?.amount);
   const currency = String(body?.currency || "INR").trim().toUpperCase();
