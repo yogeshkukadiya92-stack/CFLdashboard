@@ -1,3 +1,4 @@
+import { syncCoursePaymentToMfw } from "@/lib/mfw-course-payment";
 import { after, NextResponse } from "next/server";
 import { getAppState } from "@/lib/db";
 import { getRazorpayConfig } from "@/lib/integrations";
@@ -39,6 +40,14 @@ export async function POST(request: Request) {
   try { payload = JSON.parse(rawBody); } catch { return NextResponse.json({ error: "Invalid webhook payload." }, { status: 400 }); }
   const event = parseRazorpayPaymentEvent(payload);
   if (!event) return NextResponse.json({ error: "Unsupported payment event." }, { status: 400 });
+  // Run on duplicate deliveries too: an earlier MFW attempt may have failed.
+  if (event.eventName === "payment_link.paid") {
+    try {
+      await syncCoursePaymentToMfw(rawBody, request.headers.get("x-razorpay-signature") || "");
+    } catch {
+      return NextResponse.json({ error: "Course assignment pending. Retry this event." }, { status: 503 });
+    }
+  }
   const isNew = await recordPaymentEvent(event);
   const registration = await applyCapturedPayment(event);
   if (isNew) after(() => runPaymentWorkflows(event).catch(() => undefined));
