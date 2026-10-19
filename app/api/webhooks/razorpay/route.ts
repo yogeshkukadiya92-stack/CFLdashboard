@@ -41,7 +41,7 @@ export async function POST(request: Request) {
   const event = parseRazorpayPaymentEvent(payload);
   if (!event) return NextResponse.json({ error: "Unsupported payment event." }, { status: 400 });
   // Run on duplicate deliveries too: an earlier MFW attempt may have failed.
-  if (event.eventName === "payment_link.paid") {
+  if ((event.eventName === "payment_link.paid" || event.eventName === "order.paid")) {
     try {
       await syncCoursePaymentToMfw(rawBody, request.headers.get("x-razorpay-signature") || "");
     } catch {

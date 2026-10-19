@@ -1,3 +1,4 @@
+import { courseOrderNotes } from "@/lib/course-order-enrollment";
 import { NextResponse } from "next/server";
 import { getRazorpayConfig } from "@/lib/integrations";
 import { verifyRazorpayCheckoutSignature } from "@/lib/payment-automation";
@@ -45,7 +46,7 @@ export async function POST(request: Request) {
       body: JSON.stringify({
         amount: Math.round(amount * 100),
         currency,
-        notes,
+        notes: await courseOrderNotes(body, notes, amount),
         receipt
       }),
       headers: {

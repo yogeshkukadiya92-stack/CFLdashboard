@@ -4,6 +4,7 @@ import { KeyRound, Megaphone, Plug, UserRound } from "lucide-react";
 import { usePathname } from "next/navigation";
 
 const items = [
+  { href: "/settings/course-enrollment", icon: Plug, label: "Course Enrollment", description: "App access after payment" },
   { href: "/settings/profile", icon: UserRound, label: "My Profile", description: "Name and mobile number" },
   { href: "/settings/sales-access", icon: KeyRound, label: "CRM Team Access", description: "Roles and permissions" },
   { href: "/settings/callflow-content", icon: Megaphone, label: "CallFlow Content", description: "Session statuses, announcements and scripts" },

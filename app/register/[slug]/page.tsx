@@ -844,7 +844,7 @@ export default function RegistrationPage() {
       setMessage("");
       try {
         const orderResponse = await fetch("/api/razorpay/order", {
-          body: JSON.stringify({ amount: amountPaid, notes: { registrationId, workshopId: model.id }, receipt: registrationId }),
+          body: JSON.stringify({ amount: amountPaid, buyer: { name, email, mobile }, notes: { registrationId, workshopId: model.id }, receipt: registrationId }),
           headers: { "Content-Type": "application/json" },
           method: "POST"
         });
