@@ -103,7 +103,7 @@ export async function hydrateLiveState(): Promise<LiveState | null> {
     const storageKey = LIVE_STATE_STORAGE_KEYS[key];
     const value = state[key];
     if (Array.isArray(value)) {
-      if (value.length > 0 || !hasLocalArrayData(storageKey)) {
+      if (key === "salesPeople" || value.length > 0 || !hasLocalArrayData(storageKey)) {
         Object.assign(localPatch, { [key]: value });
       } else {
         Object.assign(repairPatch, { [key]: readLocalArray(storageKey) });
@@ -229,4 +229,17 @@ export async function savePublicRegistration(registration: unknown, registration
   }
   }
   return false;
+}
+
+// A scoped, read-only fetch avoids the legacy full-state hydration/repair path.
+export async function fetchLeadManagementState(signal?: AbortSignal): Promise<LiveState> {
+  const response = await fetch("/api/state?scope=lead-management", {
+    cache: "no-store", signal: signal ?? AbortSignal.timeout(20_000)
+  });
+  if (!response.ok) throw new Error("Could not load leads. Please retry.");
+  const state = await response.json() as LiveState;
+  if (!state.dbEnabled || state.error || !Array.isArray(state.leads)) {
+    throw new Error("Lead data is unavailable. Please retry.");
+  }
+  return state;
 }

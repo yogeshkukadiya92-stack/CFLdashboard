@@ -199,6 +199,8 @@ export default function WorkshopMasterPage() {
   const [salesPeople, setSalesPeople] = useState<SalesPersonRecord[]>([]);
   const [leadAssignmentRules, setLeadAssignmentRules] = useState<WorkshopLeadAssignmentRule[]>([]);
   const [ruleCity, setRuleCity] = useState("");
+  const [ruleState, setRuleState] = useState("");
+  const [rulePincode, setRulePincode] = useState("");
   const [ruleStartDate, setRuleStartDate] = useState("");
   const [ruleEndDate, setRuleEndDate] = useState("");
   const [ruleSalesPersonId, setRuleSalesPersonId] = useState("");
@@ -666,7 +668,7 @@ export default function WorkshopMasterPage() {
     setTransferLeadToCrm(false);
     setAssignedSalesPersonId("");
     setLeadAssignmentRules([]);
-    setRuleCity("");
+    setRuleCity(""); setRuleState(""); setRulePincode("");
     setRuleStartDate("");
     setRuleEndDate("");
     setRuleSalesPersonId("");
@@ -1138,7 +1140,7 @@ export default function WorkshopMasterPage() {
       id,
       isPaid,
       isPartPaymentAllow,
-      leadAssignmentRules: transferLeadToCrm ? leadAssignmentRules : [],
+      leadAssignmentRules: transferLeadToCrm ? leadAssignmentRules.map((rule, priority) => ({ ...rule, priority })) : [],
       maxOrderQty,
       mfwEnrollmentEnabled,
       mfwWorkshopEventId: mfwEnrollmentEnabled ? mfwWorkshopEventId : undefined,
@@ -1723,7 +1725,7 @@ export default function WorkshopMasterPage() {
 
           {transferLeadToCrm ? <div className="mt-4 grid gap-3 rounded-xl border border-indigo-100 bg-indigo-50/60 p-4 md:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] md:items-center">
             <div>
-              <p className="text-sm font-black text-slate-900">Assign new registrations to a sales person</p>
+              <p className="text-sm font-black text-slate-900">Default salesperson for this workshop</p>
               <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">Every new registration will appear as a lead in the selected sales person&apos;s CRM queue. Leave it unassigned to route leads manually.</p>
             </div>
             <label className="block">
@@ -1739,8 +1741,8 @@ export default function WorkshopMasterPage() {
           {transferLeadToCrm ? <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div>
-                <p className="text-sm font-black text-slate-900">Smart lead assignment rules</p>
-                <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">Rules run from top to bottom. City and date conditions must both match. If none match, the default sales person above is used.</p>
+                <p className="text-sm font-black text-slate-900">Auto lead assignment rules</p>
+                <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">Registration and workshop imports use these rules from top to bottom. All filled conditions must match. If none match, the default salesperson above is used. Existing lead owners are retained.</p>
               </div>
               <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-600">{leadAssignmentRules.length} rules</span>
             </div>
@@ -1749,7 +1751,7 @@ export default function WorkshopMasterPage() {
                 const person = salesPeople.find((item) => item.id === rule.salesPersonId);
                 return <div className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-700" key={rule.id}>
                   <span className="text-indigo-600">#{index + 1}</span>
-                  <span>{rule.city ? `City: ${rule.city}` : "Any city"}</span>
+                  <label className="inline-flex items-center gap-1"><input type="checkbox" aria-label={`Enable rule ${index + 1}`} checked={rule.enabled !== false} onChange={(event) => setLeadAssignmentRules((rules) => rules.map((item) => item.id === rule.id ? { ...item, enabled: event.target.checked } : item))} />Enabled</label><span>{rule.city ? `City: ${rule.city}` : "Any city"}</span>{rule.state ? <span>State: {rule.state}</span> : null}{rule.pincode ? <span>Pincode: {rule.pincode}</span> : null}
                   <span className="text-slate-300">•</span>
                   <span>{rule.startDate || rule.endDate ? `${rule.startDate || "Any date"} to ${rule.endDate || "Any date"}` : "Any date"}</span>
                   <span className="text-slate-300">→</span>
@@ -1764,13 +1766,15 @@ export default function WorkshopMasterPage() {
             </div> : null}
             <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               <label className="block"><span className="mb-1 block text-xs font-bold text-slate-600">City (optional)</span><input className={inputClass} onChange={(event) => setRuleCity(event.target.value)} placeholder="e.g. Ahmedabad" value={ruleCity} /></label>
+              <label className="block"><span className="mb-1 block text-xs font-bold text-slate-600">State (optional)</span><input className={inputClass} onChange={(event) => setRuleState(event.target.value)} placeholder="e.g. Gujarat" value={ruleState} /></label>
+              <label className="block"><span className="mb-1 block text-xs font-bold text-slate-600">Pincode (optional)</span><input className={inputClass} inputMode="numeric" maxLength={6} onChange={(event) => setRulePincode(event.target.value.replace(/\D/g, ""))} placeholder="e.g. 395007" value={rulePincode} /></label>
               <label className="block"><span className="mb-1 block text-xs font-bold text-slate-600">From date (optional)</span><input className={inputClass} onChange={(event) => setRuleStartDate(event.target.value)} type="date" value={ruleStartDate} /></label>
               <label className="block"><span className="mb-1 block text-xs font-bold text-slate-600">To date (optional)</span><input className={inputClass} min={ruleStartDate || undefined} onChange={(event) => setRuleEndDate(event.target.value)} type="date" value={ruleEndDate} /></label>
               <label className="block"><span className="mb-1 block text-xs font-bold text-slate-600">Assign to</span><select className={inputClass} onChange={(event) => setRuleSalesPersonId(event.target.value)} value={ruleSalesPersonId}><option value="">Select sales person</option>{salesPeople.filter((person) => person.isActive !== false).map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}</select></label>
             </div>
-            <button className="mt-3 inline-flex min-h-[40px] items-center gap-2 rounded-lg bg-slate-900 px-4 text-sm font-black text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50" disabled={!ruleSalesPersonId || (!ruleCity.trim() && !ruleStartDate && !ruleEndDate) || (Boolean(ruleStartDate && ruleEndDate) && ruleEndDate < ruleStartDate)} onClick={() => {
-              setLeadAssignmentRules((rules) => [...rules, { id: generateId(), city: ruleCity.trim() || undefined, startDate: ruleStartDate || undefined, endDate: ruleEndDate || undefined, salesPersonId: ruleSalesPersonId }]);
-              setRuleCity(""); setRuleStartDate(""); setRuleEndDate(""); setRuleSalesPersonId("");
+            <button className="mt-3 inline-flex min-h-[40px] items-center gap-2 rounded-lg bg-slate-900 px-4 text-sm font-black text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50" disabled={(Boolean(rulePincode) && !/^\d{6}$/.test(rulePincode)) || !ruleSalesPersonId || (!ruleCity.trim() && !ruleState.trim() && !rulePincode.trim() && !ruleStartDate && !ruleEndDate) || (Boolean(ruleStartDate && ruleEndDate) && ruleEndDate < ruleStartDate)} onClick={() => {
+              setLeadAssignmentRules((rules) => [...rules, { id: generateId(), city: ruleCity.trim() || undefined, state: ruleState.trim() || undefined, pincode: rulePincode.trim() || undefined, enabled: true, startDate: ruleStartDate || undefined, endDate: ruleEndDate || undefined, salesPersonId: ruleSalesPersonId }]);
+              setRuleCity(""); setRuleState(""); setRulePincode(""); setRuleStartDate(""); setRuleEndDate(""); setRuleSalesPersonId("");
             }} type="button"><Plus className="size-4" />Add assignment rule</button>
           </div> : null}
 
@@ -1943,7 +1947,7 @@ export default function WorkshopMasterPage() {
                     </label>
                     {transferLeadToCrm ? <div className="grid gap-3 rounded-xl border border-indigo-100 bg-indigo-50/60 p-4 md:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] md:items-center">
                       <div>
-                        <p className="text-sm font-black text-slate-900">Assign new registrations to a sales person</p>
+                        <p className="text-sm font-black text-slate-900">Default salesperson for this workshop</p>
                         <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">Leave it unassigned to route leads manually.</p>
                       </div>
                       <label className="block">
@@ -1957,22 +1961,24 @@ export default function WorkshopMasterPage() {
                     </div> : null}
                     {transferLeadToCrm ? <div className="rounded-xl border border-slate-200 bg-white p-4">
                       <div className="flex flex-wrap items-start justify-between gap-2">
-                        <div><p className="text-sm font-black text-slate-900">Smart lead assignment rules</p><p className="mt-1 text-xs font-semibold leading-5 text-slate-500">Rules run from top to bottom.</p></div>
+                        <div><p className="text-sm font-black text-slate-900">Auto lead assignment rules</p><p className="mt-1 text-xs font-semibold leading-5 text-slate-500">Registration and workshop imports use these rules from top to bottom. All filled conditions must match. Otherwise, the default salesperson is used. Existing lead owners are retained.</p></div>
                         <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-600">{leadAssignmentRules.length} rules</span>
                       </div>
                       {leadAssignmentRules.length ? <div className="mt-3 space-y-2">
                         {leadAssignmentRules.map((rule, index) => {
                           const person = salesPeople.find((item) => item.id === rule.salesPersonId);
-                          return <div className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-700" key={rule.id}><span className="text-indigo-600">#{index + 1}</span><span>{rule.city ? `City: ${rule.city}` : "Any city"}</span><span className="text-slate-300">•</span><span>{rule.startDate || rule.endDate ? `${rule.startDate || "Any date"} to ${rule.endDate || "Any date"}` : "Any date"}</span><span className="text-slate-300">→</span><span className="text-slate-950">{person?.name || "Unavailable sales person"}</span><div className="ml-auto flex items-center gap-1"><button aria-label={`Move rule ${index + 1} up`} className="rounded-md p-1.5 text-slate-500 hover:bg-white disabled:opacity-30" disabled={index === 0} onClick={() => setLeadAssignmentRules((rules) => { const next = [...rules]; [next[index - 1], next[index]] = [next[index], next[index - 1]]; return next; })} type="button"><ArrowUp className="size-4" /></button><button aria-label={`Move rule ${index + 1} down`} className="rounded-md p-1.5 text-slate-500 hover:bg-white disabled:opacity-30" disabled={index === leadAssignmentRules.length - 1} onClick={() => setLeadAssignmentRules((rules) => { const next = [...rules]; [next[index], next[index + 1]] = [next[index + 1], next[index]]; return next; })} type="button"><ArrowDown className="size-4" /></button><button aria-label={`Remove rule ${index + 1}`} className="rounded-md p-1.5 text-rose-600 hover:bg-rose-50" onClick={() => setLeadAssignmentRules((rules) => rules.filter((item) => item.id !== rule.id))} type="button"><Trash2 className="size-4" /></button></div></div>;
+                          return <div className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-700" key={rule.id}><span className="text-indigo-600">#{index + 1}</span><label className="inline-flex items-center gap-1"><input type="checkbox" aria-label={`Enable rule ${index + 1}`} checked={rule.enabled !== false} onChange={(event) => setLeadAssignmentRules((rules) => rules.map((item) => item.id === rule.id ? { ...item, enabled: event.target.checked } : item))} />Enabled</label><span>{rule.city ? `City: ${rule.city}` : "Any city"}</span>{rule.state ? <span>State: {rule.state}</span> : null}{rule.pincode ? <span>Pincode: {rule.pincode}</span> : null}<span className="text-slate-300">•</span><span>{rule.startDate || rule.endDate ? `${rule.startDate || "Any date"} to ${rule.endDate || "Any date"}` : "Any date"}</span><span className="text-slate-300">→</span><span className="text-slate-950">{person?.name || "Unavailable sales person"}</span><div className="ml-auto flex items-center gap-1"><button aria-label={`Move rule ${index + 1} up`} className="rounded-md p-1.5 text-slate-500 hover:bg-white disabled:opacity-30" disabled={index === 0} onClick={() => setLeadAssignmentRules((rules) => { const next = [...rules]; [next[index - 1], next[index]] = [next[index], next[index - 1]]; return next; })} type="button"><ArrowUp className="size-4" /></button><button aria-label={`Move rule ${index + 1} down`} className="rounded-md p-1.5 text-slate-500 hover:bg-white disabled:opacity-30" disabled={index === leadAssignmentRules.length - 1} onClick={() => setLeadAssignmentRules((rules) => { const next = [...rules]; [next[index], next[index + 1]] = [next[index + 1], next[index]]; return next; })} type="button"><ArrowDown className="size-4" /></button><button aria-label={`Remove rule ${index + 1}`} className="rounded-md p-1.5 text-rose-600 hover:bg-rose-50" onClick={() => setLeadAssignmentRules((rules) => rules.filter((item) => item.id !== rule.id))} type="button"><Trash2 className="size-4" /></button></div></div>;
                         })}
                       </div> : null}
                       <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                         <label className="block"><span className="mb-1 block text-xs font-bold text-slate-600">City (optional)</span><input className={inputClass} onChange={(event) => setRuleCity(event.target.value)} placeholder="e.g. Ahmedabad" value={ruleCity} /></label>
-                        <label className="block"><span className="mb-1 block text-xs font-bold text-slate-600">From date (optional)</span><input className={inputClass} onChange={(event) => setRuleStartDate(event.target.value)} type="date" value={ruleStartDate} /></label>
+                        <label className="block"><span className="mb-1 block text-xs font-bold text-slate-600">State (optional)</span><input className={inputClass} onChange={(event) => setRuleState(event.target.value)} placeholder="e.g. Gujarat" value={ruleState} /></label>
+              <label className="block"><span className="mb-1 block text-xs font-bold text-slate-600">Pincode (optional)</span><input className={inputClass} inputMode="numeric" maxLength={6} onChange={(event) => setRulePincode(event.target.value.replace(/\D/g, ""))} placeholder="e.g. 395007" value={rulePincode} /></label>
+              <label className="block"><span className="mb-1 block text-xs font-bold text-slate-600">From date (optional)</span><input className={inputClass} onChange={(event) => setRuleStartDate(event.target.value)} type="date" value={ruleStartDate} /></label>
                         <label className="block"><span className="mb-1 block text-xs font-bold text-slate-600">To date (optional)</span><input className={inputClass} min={ruleStartDate || undefined} onChange={(event) => setRuleEndDate(event.target.value)} type="date" value={ruleEndDate} /></label>
                         <label className="block"><span className="mb-1 block text-xs font-bold text-slate-600">Assign to</span><select className={inputClass} onChange={(event) => setRuleSalesPersonId(event.target.value)} value={ruleSalesPersonId}><option value="">Select sales person</option>{salesPeople.filter((person) => person.isActive !== false).map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}</select></label>
                       </div>
-                      <button className="mt-3 inline-flex min-h-[40px] items-center gap-2 rounded-lg bg-slate-900 px-4 text-sm font-black text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50" disabled={!ruleSalesPersonId || (!ruleCity.trim() && !ruleStartDate && !ruleEndDate) || (Boolean(ruleStartDate && ruleEndDate) && ruleEndDate < ruleStartDate)} onClick={() => { setLeadAssignmentRules((rules) => [...rules, { id: generateId(), city: ruleCity.trim() || undefined, startDate: ruleStartDate || undefined, endDate: ruleEndDate || undefined, salesPersonId: ruleSalesPersonId }]); setRuleCity(""); setRuleStartDate(""); setRuleEndDate(""); setRuleSalesPersonId(""); }} type="button"><Plus className="size-4" />Add assignment rule</button>
+                      <button className="mt-3 inline-flex min-h-[40px] items-center gap-2 rounded-lg bg-slate-900 px-4 text-sm font-black text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50" disabled={(Boolean(rulePincode) && !/^\d{6}$/.test(rulePincode)) || !ruleSalesPersonId || (!ruleCity.trim() && !ruleState.trim() && !rulePincode.trim() && !ruleStartDate && !ruleEndDate) || (Boolean(ruleStartDate && ruleEndDate) && ruleEndDate < ruleStartDate)} onClick={() => { setLeadAssignmentRules((rules) => [...rules, { id: generateId(), city: ruleCity.trim() || undefined, state: ruleState.trim() || undefined, pincode: rulePincode.trim() || undefined, enabled: true, startDate: ruleStartDate || undefined, endDate: ruleEndDate || undefined, salesPersonId: ruleSalesPersonId }]); setRuleCity(""); setRuleState(""); setRulePincode(""); setRuleStartDate(""); setRuleEndDate(""); setRuleSalesPersonId(""); }} type="button"><Plus className="size-4" />Add assignment rule</button>
                     </div> : null}
                     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                       <label className="block"><span className="mb-2 block text-sm font-bold text-slate-600">Batch</span><input className={inputClass} onChange={(event) => setBatch(event.target.value)} placeholder="Main Batch" value={batch} /></label>

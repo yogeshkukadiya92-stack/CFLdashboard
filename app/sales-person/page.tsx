@@ -3,7 +3,7 @@
 import { AdminPlatformShell } from "@/components/admin-platform-shell";
 import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
 import { Check, Edit3, Eye, RefreshCw, Save, Trash2, UserPlus } from "lucide-react";
-import { hydrateLiveState, readLocalArray, saveLiveState } from "@/lib/live-state";
+import { hydrateLiveState, readLocalArray } from "@/lib/live-state";
 import { generateId } from "@/lib/utils";
 import { salesPersonCodeFromId } from "@/lib/sales-person-code";
 import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
@@ -79,16 +79,15 @@ export default function SalesPersonPage() {
       const stored = readLocalArray<SalesPersonRecord>(SALES_STORAGE_KEY);
       const normalized = stored.map((record) => ({ ...record, salesPersonCode: record.salesPersonCode || salesPersonCodeFromId(record.id) }));
       setRecords(normalized);
-      if (stored.some((record) => !record.salesPersonCode)) void saveLiveState({ salesPeople: normalized });
     }
 
     loadLocal();
     hydrateLiveState().then(loadLocal);
   }, []);
 
-  function saveRecords(next: SalesPersonRecord[]) {
-    setRecords(next);
-    void saveLiveState({ salesPeople: next });
+  async function refreshRecords() {
+    const state = await hydrateLiveState();
+    if (Array.isArray(state?.salesPeople)) setRecords(state.salesPeople as SalesPersonRecord[]);
   }
 
   function clearForm() {
@@ -191,7 +190,7 @@ export default function SalesPersonPage() {
       setError(error instanceof Error ? error.message : "Could not save salesperson login.");
       return;
     }
-    saveRecords(editingSalesId ? records.map((record) => record.id === editingSalesId ? payload : record) : [payload, ...records]);
+    await refreshRecords();
     setSaved(true);
     setShowData(true);
     clearForm();
@@ -222,8 +221,18 @@ export default function SalesPersonPage() {
     window.requestAnimationFrame(() => window.scrollTo({ behavior: "smooth", top: 0 }));
   }
 
-  function deleteSalesPerson(record: SalesPersonRecord) {
-    saveRecords(records.filter((item) => item.id !== record.id));
+  async function deleteSalesPerson(record: SalesPersonRecord) {
+    try {
+      const response = await fetch("/api/admin/sales-people", {
+        method: "DELETE", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: record.id })
+      });
+      if (!response.ok) throw new Error("Could not delete salesperson.");
+      await refreshRecords();
+    } catch {
+      setError("Could not delete salesperson. Please try again.");
+      return;
+    }
     if (editingSalesId === record.id) clearForm();
     setDeleteTarget(null);
   }

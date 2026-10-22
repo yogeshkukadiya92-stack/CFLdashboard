@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { AUTH_COOKIE_NAME, verifyAuthToken } from "@/lib/auth";
-import { getAppState, isDbEnabled, saveAppState } from "@/lib/db";
+import { getAppState, getLeadManagementState, isDbEnabled, saveAppState } from "@/lib/db";
 import { readSalesSession, SALES_SESSION_COOKIE } from "@/lib/sales-session";
 import type { Lead, SalesTeamUser } from "@/lib/types";
 
@@ -39,10 +39,11 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ dbEnabled: false });
   }
   try {
-    const state = await getAppState();
-    if (!state) return NextResponse.json({ dbEnabled: true });
     const access = await getRequestRole(request);
     if (access.role === "none") return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+    const state = request.nextUrl.searchParams.get("scope") === "lead-management"
+      ? await getLeadManagementState() : await getAppState();
+    if (!state) return NextResponse.json({ dbEnabled: true });
     if (access.role === "sales") {
       const users = state.salesTeamUsers as SalesTeamUser[];
       const user = users.find((item) => item.id === access.session.userId && item.active);

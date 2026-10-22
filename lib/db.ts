@@ -1,3 +1,4 @@
+import { reconcileSalesPeople } from "./sales-person-reconciliation.ts";
 import { Pool, type PoolClient, type QueryResult } from "pg";
 
 let pool: Pool | null = null;
@@ -399,6 +400,25 @@ export async function getAttendanceFormState() {
   return result.rows[0] ?? { attendanceSessions: [], responseCounts: {} };
 }
 
+// CRM list reads must not wait for registration history or form analytics.
+export async function getLeadManagementState() {
+  const client = getDbPool();
+  if (!client) return null;
+  const read = () => client.query(`SELECT leads, clients, workshops,
+    sales_people AS "salesPeople", sales_team_users AS "salesTeamUsers"
+    FROM app_state WHERE id = 1 LIMIT 1`);
+  let result;
+  try { result = await read(); }
+  catch (error) {
+    if (!isMissingPersistenceTableError(error)) throw error;
+    await ensurePersistenceTable();
+    result = await read();
+  }
+  const state = result.rows[0] ?? { leads: [], clients: [], workshops: [], salesPeople: [], salesTeamUsers: [] };
+  state.salesPeople = reconcileSalesPeople(state.salesPeople, state.salesTeamUsers);
+  return state;
+}
+
 export async function getAppState() {
   const client = getDbPool();
   if (!client) return null;
@@ -438,6 +458,7 @@ export async function getAppState() {
     result = await readState();
   }
   if (!result.rows[0]) return emptyAppState;
+  result.rows[0].salesPeople = reconcileSalesPeople(result.rows[0].salesPeople, result.rows[0].salesTeamUsers);
   await ensureFormAnalyticsTable();
   const analytics = await client.query(`SELECT payload FROM cfl_form_analytics`);
   const analyticsByForm = new Map((result.rows[0].formAnalytics ?? []).map((record: { formId: string }) => [record.formId, record]));
@@ -516,4 +537,16 @@ export async function mutateAttendanceEntries<T>(
   } finally {
     client.release();
   }
+}
+
+// Remove only this identity, together with its login, without replacing another
+// administrator's concurrent changes to the salesperson list.
+export async function deleteSalesPersonAndLogin(id: string) {
+  const database = getDbPool();
+  if (!database) throw new Error("Database unavailable.");
+  await ensurePersistenceTable();
+  await database.query(`UPDATE app_state SET
+    sales_people = COALESCE((SELECT jsonb_agg(person) FROM jsonb_array_elements(sales_people) person WHERE person->>'id' IS DISTINCT FROM $1), '[]'::jsonb),
+    sales_team_users = COALESCE((SELECT jsonb_agg(account) FROM jsonb_array_elements(sales_team_users) account WHERE account->>'salesPersonId' IS DISTINCT FROM $1), '[]'::jsonb),
+    updated_at = NOW() WHERE id = 1`, [id]);
 }

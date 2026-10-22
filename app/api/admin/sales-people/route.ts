@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getAppState, saveAppState } from "@/lib/db";
+import { deleteSalesPersonAndLogin, getAppState, saveAppState } from "@/lib/db";
 import { hashSalesPassword } from "@/lib/sales-auth";
 import type { SalesTeamUser } from "@/lib/types";
 import { normalizeCrmTeamRoles, permissionsAllowedForRoles } from "@/lib/sales-permissions";
@@ -16,4 +16,15 @@ export async function POST(request: Request) {
     await saveAppState({salesPeople:[salesPerson,...state.salesPeople.filter((item:any)=>String(item?.id)!==String(salesPerson.id))],salesTeamUsers:[user,...users.filter((u)=>u.id!==user.id)]});
     return NextResponse.json({ok:true,user:{...user,passwordHash:undefined}});
   } catch { return NextResponse.json({error:"Could not save salesperson login."},{status:500}); }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    const body = await request.json();
+    if (typeof body.id !== "string" || !body.id.trim()) return NextResponse.json({ error: "Salesperson ID required." }, { status: 400 });
+    await deleteSalesPersonAndLogin(body.id);
+    return NextResponse.json({ ok: true });
+  } catch {
+    return NextResponse.json({ error: "Could not delete salesperson." }, { status: 500 });
+  }
 }

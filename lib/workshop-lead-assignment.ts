@@ -17,6 +17,7 @@ export type WorkshopLeadAssignmentRule = {
 };
 
 export type RegistrationForAssignment = {
+  answers?: Record<string, unknown>;
   id?: unknown;
   city?: unknown;
   state?: unknown;
@@ -83,12 +84,17 @@ function activeLeadCounts(leads: LeadForAssignment[], salesPeople: SalesPersonFo
   return counts;
 }
 
+function answerValue(registration: RegistrationForAssignment, names: string[]) {
+  const entry = Object.entries(registration.answers ?? {}).find(([key]) => names.includes(normalize(key).replace(/[^a-z]/g, "")));
+  return entry?.[1];
+}
+
 function ruleMatches(registration: RegistrationForAssignment, rule: WorkshopLeadAssignmentRule) {
   if (rule.enabled === false) return false;
   const day = registrationDay(registration.createdAt);
   if (rule.city && normalize(rule.city) !== normalize(registration.city)) return false;
-  if (rule.state && normalize(rule.state) !== normalize(registration.state)) return false;
-  if (rule.pincode && normalizePincode(rule.pincode) !== normalizePincode(registration.pincode ?? registration.postalCode)) return false;
+  if (rule.state && normalize(rule.state) !== normalize(registration.state || answerValue(registration, ["state"]))) return false;
+  if (rule.pincode && normalizePincode(rule.pincode) !== normalizePincode(registration.pincode || registration.postalCode || answerValue(registration, ["pincode", "postalcode", "zipcode"]))) return false;
   if (rule.source && normalize(rule.source) !== normalize(registration.source)) return false;
   if (rule.workshopId && ![registration.workshopId, registration.workshopTitle].some((value) => normalize(value) === normalize(rule.workshopId))) return false;
   if (rule.startDate && day < rule.startDate) return false;

@@ -3,8 +3,9 @@
 import { AdminPlatformShell } from "@/components/admin-platform-shell";
 import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
 import { createLeadActivity, createLeadId, nextPendingFollowUp, normalizeLead, normalizeLeadMobile } from "@/lib/lead-utils";
-import { hydrateLiveState, LIVE_STATE_STORAGE_KEYS, readLocalArray, saveLiveState } from "@/lib/live-state";
+import { fetchLeadManagementState, saveLiveState } from "@/lib/live-state";
 import type { Lead, LeadFollowUp, LeadPriority, LeadStage } from "@/lib/types";
+import { resolveSmartLeadAssignment, type WorkshopLeadAssignmentRule } from "@/lib/workshop-lead-assignment";
 import { findSalesPersonByCode, salesPersonCodeFromId } from "@/lib/sales-person-code";
 import {
   ArrowLeft,
@@ -29,10 +30,10 @@ import {
   UsersRound,
   X
 } from "lucide-react";
-import { type ChangeEvent, type FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
-type SalesPerson = { id: string; isActive: boolean; name: string; salesPersonCode?: string };
-type Workshop = { id: string; name: string };
+type SalesPerson = { id: string; acceptingLeads?: boolean; isActive: boolean; name: string; salesPersonCode?: string };
+type Workshop = { id: string; name: string; transferLeadToCrm?: boolean; assignedSalesPersonId?: string; leadAssignmentRules?: WorkshopLeadAssignmentRule[] };
 type ClientRecord = {
   city: string;
   country: string;
@@ -67,7 +68,11 @@ const stageStyle: Record<LeadStage, string> = {
   Won: "bg-emerald-50 text-emerald-700"
 };
 export default function LeadsPage() {
-  const importRef = useRef<HTMLInputElement>(null);
+  const [importOpen, setImportOpen] = useState(false);
+  const [importWorkshopId, setImportWorkshopId] = useState("");
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importBusy, setImportBusy] = useState(false);
+  const [importError, setImportError] = useState("");
   const [leads, setLeads] = useState<Lead[]>([]);
   const [salesPeople, setSalesPeople] = useState<SalesPerson[]>([]);
   const [workshops, setWorkshops] = useState<Workshop[]>([]);
@@ -93,15 +98,33 @@ export default function LeadsPage() {
   const [pasteOpen, setPasteOpen] = useState(false);
   const [pasteText, setPasteText] = useState("");
 
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [reloadKey, setReloadKey] = useState(0);
+  const [page, setPage] = useState(1);
+
   useEffect(() => {
-    function load() {
-      setLeads(readLocalArray<unknown>(LIVE_STATE_STORAGE_KEYS.leads).map(normalizeLead));
-      setSalesPeople(readLocalArray<SalesPerson>(LIVE_STATE_STORAGE_KEYS.salesPeople).filter((person) => person.isActive !== false));
-      setWorkshops(readLocalArray<Workshop>(LIVE_STATE_STORAGE_KEYS.workshops));
-      setClients(readLocalArray<ClientRecord>(LIVE_STATE_STORAGE_KEYS.clients));
-    }
-    void hydrateLiveState().then(load);
-  }, []);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 20_000);
+    let disposed = false;
+    setLoading(true);
+    setLoadError("");
+    void fetchLeadManagementState(controller.signal).then((state) => {
+      if (disposed) return;
+      setLeads(state.leads!.map(normalizeLead));
+      setSalesPeople((state.salesPeople as SalesPerson[] ?? []).filter((person) => person.isActive !== false));
+      setWorkshops(state.workshops as Workshop[] ?? []);
+      setClients(state.clients as ClientRecord[] ?? []);
+    }).catch(() => {
+      if (!disposed) setLoadError("Could not load leads. Please retry.");
+    }).finally(() => {
+      clearTimeout(timeout);
+      if (!disposed) setLoading(false);
+    });
+    return () => { disposed = true; clearTimeout(timeout); controller.abort(); };
+  }, [reloadKey]);
+
+  useEffect(() => { setPage(1); }, [search, stageFilter, ownerFilter, scope, dateType, fromDate, toDate]);
 
   const selectedLead = leads.find((lead) => lead.id === selectedId) ?? null;
   const todayCount = leads.filter((lead) => isToday(lead.createdAt)).length;
@@ -128,10 +151,15 @@ export default function LeadsPage() {
     });
   }, [dateType, fromDate, leads, ownerFilter, scope, search, stageFilter, toDate]);
 
+  const pageCount = Math.max(1, Math.ceil(filteredLeads.length / 100));
+  const currentPage = Math.min(page, pageCount);
+  const visibleLeads = filteredLeads.slice((currentPage - 1) * 100, currentPage * 100);
+
   const pastedRows = useMemo(() => parsePastedRows(pasteText), [pasteText]);
   const pastedSummary = useMemo(() => summarizeImportRows(pastedRows, leads), [leads, pastedRows]);
 
   async function persist(next: Lead[], successMessage?: string) {
+    if (loading || loadError) return;
     setLeads(next);
     if (successMessage) setMessage(successMessage);
     await saveLiveState({ leads: next });
@@ -324,7 +352,7 @@ export default function LeadsPage() {
     setMessage("Lead import sample downloaded.");
   }
 
-  async function processImportRows(rows: Record<string, unknown>[], importSource: "Excel Paste" | "Spreadsheet Import") {
+  async function processImportRows(rows: Record<string, unknown>[], importSource: "Excel Paste" | "Spreadsheet Import", workshop?: Workshop) {
     const byMobile = new Map(leads.map((lead) => [normalizeLeadMobile(lead.mobile), lead]));
     let processed = 0;
     let invalid = 0;
@@ -332,17 +360,24 @@ export default function LeadsPage() {
       const mobile = normalizeLeadMobile(pickImportValue(row, ["mobile", "phone", "contact", "mobile no"]));
       const name = pickImportValue(row, ["name", "full name", "lead name"]);
       const salespersonCode = pickImportValue(row, ["salesperson id", "sales person id", "salesperson code", "owner id"]);
-      const codeOwner = findSalesPersonByCode(salesPeople, salespersonCode);
+      const decision = workshop?.transferLeadToCrm ? resolveSmartLeadAssignment({
+        id: mobile, city: pickImportValue(row, ["city"]), state: pickImportValue(row, ["state"]),
+        pincode: pickImportValue(row, ["pincode", "pin code", "postal code"]),
+        workshopId: workshop.id, workshopTitle: workshop.name, source: importSource,
+        createdAt: new Date().toISOString()
+      }, workshop.leadAssignmentRules, salesPeople, Array.from(byMobile.values()), workshop.assignedSalesPersonId, "unassigned") : undefined;
+      const codeOwner = decision ? salesPeople.find((person) => person.id === decision.salesPersonId) : findSalesPersonByCode(salesPeople, salespersonCode);
+      const importedOwner = decision ? codeOwner?.name || "" : codeOwner?.name || pickImportValue(row, ["assigned to", "owner", "sales person"]);
       if (mobile.length !== 10 || !name) { invalid += 1; return; }
       const existing = byMobile.get(mobile);
       if (existing) {
         byMobile.set(mobile, normalizeLead({
           ...existing,
-          assignedSalesPersonCode: existing.assignedSalesPersonCode || codeOwner?.salesPersonCode || (codeOwner ? salesPersonCodeFromId(codeOwner.id) : undefined),
-          assignedSalesPersonId: existing.assignedSalesPersonId || codeOwner?.id,
-          assignedTo: existing.assignedTo || codeOwner?.name || pickImportValue(row, ["assigned to", "owner", "sales person"]),
+          assignedSalesPersonCode: existing.assignedTo ? existing.assignedSalesPersonCode : codeOwner?.salesPersonCode || (codeOwner ? salesPersonCodeFromId(codeOwner.id) : undefined),
+          assignedSalesPersonId: existing.assignedTo ? existing.assignedSalesPersonId : codeOwner?.id,
+          assignedTo: existing.assignedTo || importedOwner,
           city: existing.city || pickImportValue(row, ["city"]), email: existing.email || pickImportValue(row, ["email", "email id"]),
-          interest: existing.interest || pickImportValue(row, ["interest", "workshop"]),
+          interest: workshop?.name || existing.interest || pickImportValue(row, ["interest", "workshop"]),
           sourceDetails: [...new Set([importSource, ...(existing.sourceDetails ?? [])])], updatedAt: new Date().toISOString()
         }));
       } else {
@@ -350,42 +385,49 @@ export default function LeadsPage() {
         byMobile.set(mobile, normalizeLead({
           activities: [createLeadActivity("created", `Lead imported from ${importSource.toLowerCase()}.`)],
           assignedSalesPersonCode: codeOwner?.salesPersonCode || (codeOwner ? salesPersonCodeFromId(codeOwner.id) : undefined), assignedSalesPersonId: codeOwner?.id,
-          assignedTo: codeOwner?.name || pickImportValue(row, ["assigned to", "owner", "sales person"]), city: pickImportValue(row, ["city"]),
+          assignedTo: importedOwner, city: pickImportValue(row, ["city"]),
           country: pickImportValue(row, ["country"]) || "India", createdAt: now, email: pickImportValue(row, ["email", "email id"]), id: createLeadId(),
-          interest: pickImportValue(row, ["interest", "workshop"]), mobile, name, priority: normalizePriority(pickImportValue(row, ["priority", "temperature"])),
+          interest: workshop?.name || pickImportValue(row, ["interest", "workshop"]), mobile, name, priority: normalizePriority(pickImportValue(row, ["priority", "temperature"])),
           source: pickImportValue(row, ["source"]) || importSource, sourceDetails: [importSource], stage: normalizeStage(pickImportValue(row, ["stage", "status"])), updatedAt: now
         }));
       }
       processed += 1;
     });
-    await persist(Array.from(byMobile.values()), `${processed} rows processed${invalid ? ` · ${invalid} invalid rows skipped` : ""}. Duplicate mobiles were safely merged.`);
+    if (!processed) throw new Error("No valid leads found. Include Name and a valid 10-digit Mobile column.");
+    const next = Array.from(byMobile.values());
+    if (!await saveLiveState({ leads: next })) throw new Error("Could not save imported leads. Please retry.");
+    setLeads(next);
+    setMessage(`${processed} rows processed${workshop ? ` for ${workshop.name}` : ""}${invalid ? ` · ${invalid} invalid rows skipped` : ""}. Duplicate mobiles were merged.`);
   }
 
-  async function importLeads(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) return;
+  async function importLeads() {
+    const workshop = workshops.find((item) => String(item.id) === importWorkshopId);
+    if (!workshop || !importFile || importBusy) return;
+    setImportBusy(true);
+    setImportError("");
     try {
       const XLSX = await import("xlsx");
-      const workbook = XLSX.read(await file.arrayBuffer(), { type: "array" });
+      const workbook = XLSX.read(await importFile.arrayBuffer(), { type: "array" });
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
       const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "" }).slice(0, 10_000);
-      await processImportRows(rows, "Spreadsheet Import");
-    } catch {
-      setMessage("Lead import failed. Use a valid CSV or Excel file with Name and Mobile columns.");
-    } finally {
-      if (importRef.current) importRef.current.value = "";
-    }
+      await processImportRows(rows, "Spreadsheet Import", workshop);
+      setImportOpen(false);
+      setImportFile(null);
+      setImportWorkshopId("");
+    } catch (error) {
+      setImportError(error instanceof Error ? error.message : "Lead import failed. Check your CSV or Excel file.");
+    } finally { setImportBusy(false); }
   }
 
   return (
     <AdminPlatformShell activeLabel="Lead Management" description="Capture, assign, follow up and convert every enquiry from one sales pipeline." title="Lead Management">
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
-        <Metric icon={UsersRound} label="Total Leads" value={leads.length} />
-        <Metric icon={Plus} label="New Today" value={todayCount} tone="emerald" />
-        <Metric icon={CalendarClock} label="Overdue" value={overdueCount} tone={overdueCount ? "rose" : "slate"} />
-        <Metric icon={UserRound} label="Unassigned" value={unassignedCount} tone="amber" />
-        <Metric icon={Ban} label="Blocked" value={blockedCount} tone="rose" />
-        <Metric icon={CircleDollarSign} label="Open Value" value={formatInr(openPipelineValue)} tone="indigo" />
+        <Metric icon={UsersRound} label="Total Leads" value={loading || loadError ? "—" : leads.length} />
+        <Metric icon={Plus} label="New Today" value={loading || loadError ? "—" : todayCount} tone="emerald" />
+        <Metric icon={CalendarClock} label="Overdue" value={loading || loadError ? "—" : overdueCount} tone={overdueCount ? "rose" : "slate"} />
+        <Metric icon={UserRound} label="Unassigned" value={loading || loadError ? "—" : unassignedCount} tone="amber" />
+        <Metric icon={Ban} label="Blocked" value={loading || loadError ? "—" : blockedCount} tone="rose" />
+        <Metric icon={CircleDollarSign} label="Open Value" value={loading || loadError ? "—" : formatInr(openPipelineValue)} tone="indigo" />
       </section>
 
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -393,20 +435,19 @@ export default function LeadsPage() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="text-xl font-black text-slate-950">Sales Pipeline</h2>
-              <p className="mt-1 text-sm font-semibold text-slate-500">{filteredLeads.length} leads match the current view.</p>
+              <p className="mt-1 text-sm font-semibold text-slate-500">{loading ? "Loading leads…" : loadError ? "Lead data unavailable" : `${filteredLeads.length} leads match the current view.`}</p>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <fieldset disabled={loading || Boolean(loadError)} className="flex flex-wrap gap-2 disabled:opacity-50">
               <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1">
                 <ModeButton active={viewMode === "list"} icon={List} label="List" onClick={() => setViewMode("list")} />
                 <ModeButton active={viewMode === "pipeline"} icon={KanbanSquare} label="Pipeline" onClick={() => setViewMode("pipeline")} />
               </div>
               <button className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-black text-slate-700 hover:bg-slate-50" onClick={exportCsv} type="button"><Download className="size-4" />Export</button>
               <button className="inline-flex items-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-sm font-black text-indigo-700 hover:bg-indigo-100" onClick={downloadImportSample} type="button"><Download className="size-4" />Download Sample</button>
-              <input accept=".csv,.xlsx,.xls" className="hidden" onChange={(event) => void importLeads(event)} ref={importRef} type="file" />
-              <button className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-black text-slate-700 hover:bg-slate-50" onClick={() => importRef.current?.click()} type="button"><Upload className="size-4" />Import</button>
+              <button className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-black text-slate-700 hover:bg-slate-50" onClick={() => { setImportWorkshopId(""); setImportFile(null); setImportError(""); setImportOpen(true); }} type="button"><Upload className="size-4" />Import</button>
               <button className="inline-flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-black text-emerald-700 hover:bg-emerald-100" onClick={() => setPasteOpen(true)} type="button"><Upload className="size-4" />Paste Excel Data</button>
               <button className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-black text-white hover:bg-emerald-700" onClick={() => setCreateOpen(true)} type="button"><Plus className="size-4" />Add Lead</button>
-            </div>
+            </fieldset>
           </div>
 
           <div className="mt-4 grid gap-3 xl:grid-cols-[minmax(240px,1fr)_180px_200px_auto]">
@@ -437,12 +478,14 @@ export default function LeadsPage() {
           {selectedLeadIds.length ? <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50 p-3"><span className="mr-auto text-sm font-black text-indigo-900">{selectedLeadIds.length} selected</span><select className="rounded-lg border border-indigo-200 bg-white px-3 py-2 text-sm font-bold" onChange={(event) => setBulkOwnerId(event.target.value)} value={bulkOwnerId}><option value="">Move to Unassigned</option>{salesPeople.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}</select><button className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-black text-white" onClick={bulkAssign} type="button">Assign / Transfer</button><button className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-black text-white" onClick={bulkBlock} type="button">Block selected</button><button className="rounded-lg px-3 py-2 text-sm font-black text-slate-600" onClick={() => setSelectedLeadIds([])} type="button">Clear</button></div> : null}
         </header>
 
-        {viewMode === "list" ? (
-          <LeadTable leads={filteredLeads} onDelete={setDeleteTarget} onOpen={setSelectedId} onQuickStage={changeStage} onSelectionChange={setSelectedLeadIds} selectedIds={selectedLeadIds} />
+        {loading ? <p role="status" className="p-10 text-center font-semibold text-slate-500">Loading leads…</p> : loadError ? <div role="alert" className="p-10 text-center"><p>{loadError}</p><button className="mt-3 rounded-lg bg-emerald-600 px-4 py-2 font-bold text-white" onClick={() => setReloadKey((key) => key + 1)} type="button">Retry</button></div> : viewMode === "list" ? (
+          <LeadTable leads={visibleLeads} onDelete={setDeleteTarget} onOpen={setSelectedId} onQuickStage={changeStage} onSelectionChange={setSelectedLeadIds} selectedIds={selectedLeadIds} />
         ) : (
-          <Pipeline leads={filteredLeads} onMove={moveStage} onOpen={setSelectedId} />
+          <Pipeline leads={visibleLeads} onMove={moveStage} onOpen={setSelectedId} />
         )}
       </section>
+
+      {!loading && !loadError && pageCount > 1 ? <nav aria-label="Lead pages" className="flex items-center justify-end gap-4"><button disabled={currentPage === 1} onClick={() => setPage(currentPage - 1)} type="button">Previous</button><span>Page {currentPage} of {pageCount} · 100 leads per page</span><button disabled={currentPage === pageCount} onClick={() => setPage(currentPage + 1)} type="button">Next</button></nav> : null}
 
       {selectedLead ? (
         <LeadDrawer
@@ -467,7 +510,19 @@ export default function LeadsPage() {
       ) : null}
 
       {createOpen ? <CreateLeadModal leads={leads} onClose={() => setCreateOpen(false)} onSave={(lead) => { void persist([lead, ...leads], "Lead created and added to the pipeline."); setCreateOpen(false); setSelectedId(lead.id); }} salesPeople={salesPeople} workshops={workshops} /> : null}
-      {pasteOpen ? <PasteImportModal onClose={() => { setPasteOpen(false); setPasteText(""); }} onImport={() => { void processImportRows(pastedRows, "Excel Paste").then(() => { setPasteOpen(false); setPasteText(""); }); }} rows={pastedRows} setText={setPasteText} summary={pastedSummary} text={pasteText} /> : null}
+      {importOpen ? <div role="dialog" aria-modal="true" aria-labelledby="import-leads-title" className="fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-4" onKeyDown={(event) => { if (event.key === "Escape" && !importBusy) setImportOpen(false); }}>
+        <form className="w-full max-w-lg space-y-5 rounded-2xl bg-white p-6 shadow-xl" onSubmit={(event) => { event.preventDefault(); void importLeads(); }}>
+          <div className="flex items-center justify-between"><h2 id="import-leads-title" className="text-xl font-black">Import leads</h2><button aria-label="Close import" type="button" disabled={importBusy} onClick={() => setImportOpen(false)}><X className="size-5" /></button></div>
+          <label className="block text-sm font-bold">Select workshop *<select autoFocus required disabled={importBusy} className={`${inputClass} mt-2`} value={importWorkshopId} onChange={(event) => setImportWorkshopId(event.target.value)}><option value="">Select workshop</option>{workshops.map((workshop) => <option key={workshop.id} value={workshop.id}>{workshop.name}</option>)}</select></label>
+          {!workshops.length ? <p className="text-sm text-amber-700">No workshops available. Add a workshop before importing leads.</p> : null}
+          <p className="text-sm text-slate-500">All imported leads will use this workshop, including matching mobile numbers already in the CRM. This replaces any workshop entered in the file. When CRM transfer is enabled, workshop assignment rules select the salesperson for new or unassigned leads. Existing owners are retained.</p>
+          <label className="block text-sm font-bold">CSV or Excel file *<input required disabled={importBusy} accept=".csv,.xlsx,.xls" type="file" className={`${inputClass} mt-2`} onChange={(event) => setImportFile(event.target.files?.[0] ?? null)} /></label>
+          {importError ? <p role="alert" className="text-sm font-semibold text-red-600">{importError}</p> : null}
+          <div className="flex justify-end gap-3"><button type="button" disabled={importBusy} onClick={() => setImportOpen(false)}>Cancel</button><button type="submit" disabled={importBusy || !importFile || !importWorkshopId} className="rounded-lg bg-emerald-600 px-4 py-3 font-bold text-white disabled:opacity-50">{importBusy ? "Importing…" : "Import leads"}</button></div>
+        </form>
+      </div> : null}
+
+      {pasteOpen ? <PasteImportModal onClose={() => { setPasteOpen(false); setPasteText(""); }} onImport={() => { void processImportRows(pastedRows, "Excel Paste").then(() => { setPasteOpen(false); setPasteText(""); }).catch((error) => setMessage(error instanceof Error ? error.message : "Import failed.")); }} rows={pastedRows} setText={setPasteText} summary={pastedSummary} text={pasteText} /> : null}
       <ConfirmDialog confirmLabel="Delete Lead" description="This removes the lead and its complete activity history." onCancel={() => setDeleteTarget(null)} onConfirm={deleteLead} open={Boolean(deleteTarget)} title="Delete lead?">{deleteTarget ? `${deleteTarget.name} · ${deleteTarget.mobile}` : null}</ConfirmDialog>
     </AdminPlatformShell>
   );
