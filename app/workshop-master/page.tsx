@@ -275,6 +275,9 @@ export default function WorkshopMasterPage() {
   const [responseFilters, setResponseFilters] = useState<ResponseFilterState>({ ...emptyResponseFilters });
   const [followUpScope, setFollowUpScope] = useState<FollowUpScope>("needs_follow_up");
   const [selectedParticipantIds, setSelectedParticipantIds] = useState<string[]>([]);
+  const [responseSalesPersonId, setResponseSalesPersonId] = useState("");
+  const [assigningResponseSales, setAssigningResponseSales] = useState(false);
+  const [responseSalesMessage, setResponseSalesMessage] = useState("");
   const [followUpTarget, setFollowUpTarget] = useState<RegistrationEntry | null>(null);
   const [shareSelectedOpen, setShareSelectedOpen] = useState(false);
   const [bulkWhatsAppOpen, setBulkWhatsAppOpen] = useState(false);
@@ -793,7 +796,32 @@ export default function WorkshopMasterPage() {
     window.requestAnimationFrame(() => window.scrollTo({ behavior: "smooth", top: 0 }));
   }
 
+  async function assignSelectedResponsesToSales() {
+    if (!selectedWorkshop || !responseSalesPersonId || assigningResponseSales) return;
+    const ids = selectedParticipants.filter((entry) => selectedParticipantIds.includes(entry.id)).map((entry) => entry.id);
+    if (!ids.length) return;
+    setAssigningResponseSales(true);
+    setResponseSalesMessage("");
+    try {
+      const response = await fetch("/api/admin/registration-sales-assignment", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ workshopId: selectedWorkshop.id, registrationIds: ids, salesPersonId: responseSalesPersonId })
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Could not assign selected responses.");
+      setResponseSalesMessage(`${result.assigned} lead${result.assigned === 1 ? "" : "s"} assigned to ${result.salesPersonName}.${result.created ? ` ${result.created} new CRM lead${result.created === 1 ? "" : "s"} created.` : ""}`);
+      setSelectedParticipantIds((current) => current.filter((id) => !ids.includes(id)));
+    } catch (error) {
+      setResponseSalesMessage(error instanceof Error ? error.message : "Could not assign selected responses. Please try again.");
+    } finally {
+      setAssigningResponseSales(false);
+    }
+  }
+
   async function openWorkshop(record: WorkshopRecord) {
+    setResponseSalesMessage("");
+    setResponseSalesPersonId("");
     setRegistrations(readLocalArray<RegistrationEntry>(REGISTRATION_STORAGE_KEY));
     setSelectedParticipantBatchId("all");
     setParticipantSearch("");
@@ -2941,6 +2969,21 @@ export default function WorkshopMasterPage() {
                   <div className="shrink-0 border-b border-slate-200 px-3 py-2">
                     <button className="min-h-8 rounded-lg border border-emerald-300 px-3 text-xs font-black text-emerald-800 disabled:opacity-50" disabled={bulkWhatsAppSending} onClick={() => setSelectedParticipantIds(selectedParticipants.filter((entry) => entry.confirmationStatus === "confirmed" && entry.registrationStatus !== "waiting").map((entry) => entry.id))} type="button">Select all confirmed</button>
                   </div>
+                  {responseSalesMessage ? <p className="shrink-0 border-b border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-800" role="status">{responseSalesMessage}</p> : null}
+                  {selectedParticipantIds.length ? (
+                    <div className="shrink-0 border-b border-indigo-200 bg-indigo-50 px-3 py-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <label className="text-xs font-black text-indigo-950" htmlFor="response-sales-person">Assign selected to</label>
+                        <select id="response-sales-person" className="min-h-9 rounded-lg border border-indigo-200 bg-white px-3 text-sm font-semibold" disabled={assigningResponseSales} value={responseSalesPersonId} onChange={(event) => setResponseSalesPersonId(event.target.value)}>
+                          <option value="">Select sales person</option>
+                          {salesPeople.filter((person) => person.isActive !== false).map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}
+                        </select>
+                        <button className="inline-flex min-h-9 items-center gap-2 rounded-lg bg-indigo-600 px-3 text-xs font-black text-white hover:bg-indigo-700 disabled:opacity-50" disabled={assigningResponseSales || !responseSalesPersonId} onClick={assignSelectedResponsesToSales} type="button"><UsersRound className="size-4" />{assigningResponseSales ? "Assigning…" : `Assign selected (${selectedParticipantIds.length})`}</button>
+                      </div>
+                      <p className="mt-2 text-xs text-indigo-900">Existing CRM leads will transfer to this sales person. New responses will be added as leads.</p>
+                      {!salesPeople.some((person) => person.isActive !== false) ? <p className="mt-1 text-xs font-bold text-amber-800">Add an active sales person in Sales Person settings first.</p> : null}
+                    </div>
+                  ) : null}
                   {selectedParticipantIds.length ? (
                     <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-emerald-200 bg-emerald-50 px-3 py-2">
                       <p className="text-xs font-black text-emerald-900">{selectedParticipantIds.length} participant{selectedParticipantIds.length === 1 ? "" : "s"} selected</p>

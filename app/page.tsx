@@ -183,78 +183,6 @@ export default function DashboardPage() {
       description="Live workspace for workshops, clients, registrations, schedules and exports. Add real data in modules and this dashboard updates automatically."
       title="Business Dashboard"
     >
-      <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
-        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-soft">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <p className="text-sm font-black text-slate-500">Paid Session Health</p>
-              <p className="mt-3 text-4xl font-black tracking-tight text-slate-950">{snapshot.registrationCount}</p>
-              <p className="mt-1 text-sm font-semibold text-slate-500">Total registrations tracked across saved workshops.</p>
-            </div>
-            <div className="grid size-36 place-items-center rounded-full bg-slate-100">
-              <div
-                className="grid size-36 place-items-center rounded-full"
-                style={{ background: `conic-gradient(#10b981 0 ${conversion}%, #e2e8f0 ${conversion}% 100%)` }}
-              >
-                <div className="grid size-24 place-items-center rounded-full bg-white shadow-inner">
-                  <span className="text-xl font-black text-slate-950">{conversion}%</span>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div className="mt-5 grid gap-2 sm:grid-cols-3">
-            {[
-              ["Paid", snapshot.paidRegistrations, "bg-emerald-500"],
-              ["Due", snapshot.registrationCount - snapshot.paidRegistrations, "bg-amber-500"],
-              ["Clients", snapshot.clientCount, "bg-rose-500"]
-            ].map(([label, value, dot]) => (
-              <div className="rounded-xl border border-slate-200 px-3 py-3 text-sm font-bold text-slate-700" key={label}>
-                <span className={`mr-2 inline-block size-2 rounded-full ${dot}`} />
-                {label}: {value}
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-soft">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-xl font-black text-slate-950">Next Event</p>
-              <p className="mt-1 text-sm font-semibold text-slate-500">Pulled from saved schedule/workshop data.</p>
-            </div>
-            <a className="grid size-10 place-items-center rounded-lg bg-slate-950 text-white" href="/workshop-scheduling-admin">
-              <Plus className="size-4" />
-            </a>
-          </div>
-          <div className="mt-5 rounded-xl border border-emerald-100 bg-emerald-50 p-5">
-            <span className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-black text-white">
-              {snapshot.nextEvent ? "Ready" : "Setup Needed"}
-            </span>
-            <h3 className="mt-5 text-2xl font-black text-slate-950">{snapshot.nextEvent || "No upcoming event"}</h3>
-            <p className="mt-2 text-sm font-semibold text-slate-600">Facilitator: {snapshot.nextFacilitator}</p>
-            <a className="mt-5 inline-flex rounded-lg bg-slate-950 px-4 py-3 text-sm font-bold text-white" href="/workshop-master">
-              {snapshot.nextEvent ? "Manage Workshop" : "Create Workshop"}
-            </a>
-          </div>
-        </section>
-      </div>
-
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        {stats.map((stat) => {
-          const Icon = stat.icon;
-          return (
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-soft" key={stat.label}>
-              <span className={`grid size-11 place-items-center rounded-lg ${stat.tone}`}>
-                <Icon className="size-5" />
-              </span>
-              <p className="mt-5 text-2xl font-black text-slate-950">{stat.value}</p>
-              <p className="mt-1 text-sm font-bold text-slate-700">{stat.label}</p>
-              <p className="mt-1 text-xs font-semibold text-slate-500">{stat.helper}</p>
-            </div>
-          );
-        })}
-      </section>
-
       {/* Workshop Tags & Dedicated Pages */}
       <section className="rounded-3xl border border-slate-200/90 bg-white p-5 shadow-sm md:p-6">
         <div className="flex flex-wrap items-center justify-between gap-4">
@@ -346,6 +274,78 @@ export default function DashboardPage() {
             </a>
           </div>
         )}
+      </section>
+
+      <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-soft">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p className="text-sm font-black text-slate-500">Paid Session Health</p>
+              <p className="mt-3 text-4xl font-black tracking-tight text-slate-950">{snapshot.registrationCount}</p>
+              <p className="mt-1 text-sm font-semibold text-slate-500">Total registrations tracked across saved workshops.</p>
+            </div>
+            <div className="grid size-36 place-items-center rounded-full bg-slate-100">
+              <div
+                className="grid size-36 place-items-center rounded-full"
+                style={{ background: `conic-gradient(#10b981 0 ${conversion}%, #e2e8f0 ${conversion}% 100%)` }}
+              >
+                <div className="grid size-24 place-items-center rounded-full bg-white shadow-inner">
+                  <span className="text-xl font-black text-slate-950">{conversion}%</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="mt-5 grid gap-2 sm:grid-cols-3">
+            {[
+              ["Paid", snapshot.paidRegistrations, "bg-emerald-500"],
+              ["Due", snapshot.registrationCount - snapshot.paidRegistrations, "bg-amber-500"],
+              ["Clients", snapshot.clientCount, "bg-rose-500"]
+            ].map(([label, value, dot]) => (
+              <div className="rounded-xl border border-slate-200 px-3 py-3 text-sm font-bold text-slate-700" key={label}>
+                <span className={`mr-2 inline-block size-2 rounded-full ${dot}`} />
+                {label}: {value}
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-soft">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-xl font-black text-slate-950">Next Event</p>
+              <p className="mt-1 text-sm font-semibold text-slate-500">Pulled from saved schedule/workshop data.</p>
+            </div>
+            <a className="grid size-10 place-items-center rounded-lg bg-slate-950 text-white" href="/workshop-scheduling-admin">
+              <Plus className="size-4" />
+            </a>
+          </div>
+          <div className="mt-5 rounded-xl border border-emerald-100 bg-emerald-50 p-5">
+            <span className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-black text-white">
+              {snapshot.nextEvent ? "Ready" : "Setup Needed"}
+            </span>
+            <h3 className="mt-5 text-2xl font-black text-slate-950">{snapshot.nextEvent || "No upcoming event"}</h3>
+            <p className="mt-2 text-sm font-semibold text-slate-600">Facilitator: {snapshot.nextFacilitator}</p>
+            <a className="mt-5 inline-flex rounded-lg bg-slate-950 px-4 py-3 text-sm font-bold text-white" href="/workshop-master">
+              {snapshot.nextEvent ? "Manage Workshop" : "Create Workshop"}
+            </a>
+          </div>
+        </section>
+      </div>
+
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {stats.map((stat) => {
+          const Icon = stat.icon;
+          return (
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-soft" key={stat.label}>
+              <span className={`grid size-11 place-items-center rounded-lg ${stat.tone}`}>
+                <Icon className="size-5" />
+              </span>
+              <p className="mt-5 text-2xl font-black text-slate-950">{stat.value}</p>
+              <p className="mt-1 text-sm font-bold text-slate-700">{stat.label}</p>
+              <p className="mt-1 text-xs font-semibold text-slate-500">{stat.helper}</p>
+            </div>
+          );
+        })}
       </section>
 
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-soft">
