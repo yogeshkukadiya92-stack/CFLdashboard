@@ -24,7 +24,8 @@ export async function POST(request: NextRequest) {
         continue;
       }
       const form = forms.find((candidate) => candidate.workshopId === registration.workshopId);
-      const patch = await sendRegistrationStatusNotifications(registration, form);
+      const workshop = state.workshops.find((item: unknown) => (item as { id?: string }).id === registration.workshopId) as { type?: string } | undefined;
+      const patch = await sendRegistrationStatusNotifications(registration, form, workshop?.type);
       const status = registration.registrationStatus === "waiting" ? patch.waitingWhatsappStatus : patch.confirmationWhatsappStatus;
       const success = status === "sent";
       if (Object.keys(patch).length) registrations = registrations.map((entry) => entry.id === registration.id ? { ...entry, ...patch } : entry);

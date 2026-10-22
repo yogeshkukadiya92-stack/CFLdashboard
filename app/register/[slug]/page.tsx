@@ -884,6 +884,12 @@ export default function RegistrationPage() {
       }
     }
 
+    const trackingAnswers: Record<string, string> = {};
+    for (const [parameter, label] of [["utm_source", "UTM Source"], ["utm_medium", "UTM Medium"], ["utm_campaign", "UTM Campaign"]]) {
+      const value = searchParams.get(parameter)?.trim().slice(0, 200);
+      if (value) trackingAnswers[label] = value;
+    }
+
     const payload: RegistrationEntry = {
       id: registrationId,
       workshopId: model.id,
@@ -906,8 +912,9 @@ export default function RegistrationPage() {
       batchId: batchIdParam || undefined,
       introductionSessionId: introductionSessionIdParam || undefined,
       referralCode: referralCode.replace(/\D/g, "").slice(0, 10) || undefined,
-      answers: Object.keys(extra).length || payment ? {
+      answers: Object.keys(extra).length || Object.keys(trackingAnswers).length || payment ? {
         ...extra,
+        ...trackingAnswers,
         ...(payment ? { "Razorpay Order ID": payment.razorpay_order_id, "Razorpay Payment ID": payment.razorpay_payment_id } : {})
       } : undefined
     };

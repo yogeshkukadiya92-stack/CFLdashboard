@@ -28,10 +28,12 @@ export async function POST(request: Request) {
       }
       const settings = await database.query(`SELECT
         (SELECT f FROM jsonb_array_elements(forms) f WHERE f->>'workshopId'=$1
-        ORDER BY (COALESCE(f->>'batch', '')=$2) DESC LIMIT 1) AS form FROM app_state WHERE id=1`, [workshopId, entry.batch ?? ""]);
+        ORDER BY (COALESCE(f->>'batch', '')=$2) DESC LIMIT 1) AS form,
+        (SELECT w->>'type' FROM jsonb_array_elements(workshops) w WHERE w->>'id'=$1 LIMIT 1) AS workshop_type
+        FROM app_state WHERE id=1`, [workshopId, entry.batch ?? ""]);
       const form = settings.rows[0]?.form as BuilderForm | undefined;
       if (!form?.whatsappConfirmationEnabled) return NextResponse.json({ error: "Enable confirmation WhatsApp in the workshop registration form first." }, { status: 400 });
-      const patch = await sendRegistrationStatusNotifications({ ...entry, confirmationWhatsappSentAt: undefined }, form);
+      const patch = await sendRegistrationStatusNotifications({ ...entry, confirmationWhatsappSentAt: undefined }, form, settings.rows[0]?.workshop_type);
       const updated = await database.query<{ payload: RegistrationEntry }>(`UPDATE cfl_registration_records
         SET payload=(payload - 'confirmationWhatsappError') || $3::jsonb, updated_at=NOW()
         WHERE external_id=$1 AND workshop_id=$2 RETURNING payload`, [registrationId, workshopId, JSON.stringify(patch)]);
@@ -44,7 +46,8 @@ export async function POST(request: Request) {
     if (!registration) return NextResponse.json({ error: "Registration not found." }, { status: 404 });
     const form = (Array.isArray(state?.forms) ? state.forms : [])
       .find((item: BuilderForm) => item.workshopId === registration.workshopId) as BuilderForm | undefined;
-    const patch = await sendRegistrationStatusNotifications(registration, form);
+    const workshop = (state?.workshops ?? []).find((item: unknown) => (item as { id?: string }).id === registration.workshopId) as { type?: string } | undefined;
+    const patch = await sendRegistrationStatusNotifications(registration, form, workshop?.type);
     const saved = { ...registration, ...patch };
     const next = registrations.map((entry) => entry.id === registrationId ? saved : entry);
     await saveAppState({ registrations: next });

@@ -89,6 +89,9 @@ type FormWorkflowPanel = "basics" | "automation" | "fields" | "includes" | "prev
 type WorkshopWorkflowPanel = "info" | "mfw" | "pricing" | null;
 type FollowUpScope = "needs_follow_up" | "completed" | "confirmed" | "confirmed_new" | "waiting" | "repeaters" | "all";
 type RegistrationLinkConfig = {
+  utmSource?: string;
+  utmMedium?: string;
+  utmCampaign?: string;
   batch?: string;
   customBaseUrl?: string;
   facilitator?: string;
@@ -3948,6 +3951,9 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
   const [published, setPublished] = useState(true);
   const [publishUntil, setPublishUntil] = useState("");
   const [customBaseUrl, setCustomBaseUrl] = useState("");
+  const [utmSource, setUtmSource] = useState("");
+  const [utmMedium, setUtmMedium] = useState("");
+  const [utmCampaign, setUtmCampaign] = useState("");
   const [otpRequired, setOtpRequired] = useState(false);
   const [otpFallbackEnabled, setOtpFallbackEnabled] = useState(false);
   const [otpFallbackCode, setOtpFallbackCode] = useState("");
@@ -3963,8 +3969,12 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
 
   const link = useMemo(() => {
     if (typeof window === "undefined") return "";
-    return buildRegistrationUrl({ baseUrl: customBaseUrl, slug: shortSlug });
-  }, [customBaseUrl, shortSlug]);
+    const query = new URLSearchParams();
+    if (utmSource.trim()) query.set("utm_source", utmSource.trim());
+    if (utmMedium.trim()) query.set("utm_medium", utmMedium.trim());
+    if (utmCampaign.trim()) query.set("utm_campaign", utmCampaign.trim());
+    return buildRegistrationUrl({ baseUrl: customBaseUrl, slug: shortSlug, query: query.toString() });
+  }, [customBaseUrl, shortSlug, utmSource, utmMedium, utmCampaign]);
   const qrUrl = link ? `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=12&data=${encodeURIComponent(link)}` : "";
   const linkExpired = publishUntil ? new Date(publishUntil).getTime() <= Date.now() : false;
   const linkStatus = !published ? "Unpublished" : linkExpired ? "Expired" : "Published";
@@ -3989,6 +3999,9 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
         setPublished(existing.published !== false);
         setPublishUntil(existing.publishUntil || "");
         setCustomBaseUrl(existing.customBaseUrl || "");
+        setUtmSource(existing.utmSource || "");
+        setUtmMedium(existing.utmMedium || "");
+        setUtmCampaign(existing.utmCampaign || "");
       }
       setOtpRequired(resolveRegistrationOtpRequired(existing?.otpRequired, savedForm?.otpRequired));
       setOtpFallbackEnabled(Boolean(savedForm?.otpFallbackEnabled));
@@ -4050,6 +4063,9 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
       }
       const configs = readLocalObject<Record<string, RegistrationLinkConfig>>(REGISTRATION_LINK_CONFIG_STORAGE_KEY);
       configs[shortSlug] = {
+        utmSource: utmSource.trim() || undefined,
+        utmMedium: utmMedium.trim() || undefined,
+        utmCampaign: utmCampaign.trim() || undefined,
         batch: batch.trim() || "Main Batch",
         customBaseUrl: normalizeBaseUrl(customBaseUrl) || undefined,
         facilitator: workshop.facilitator || "CFL Facilitator",
@@ -4077,7 +4093,7 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
       setSaveStatus("failed");
       return false;
     }
-  }, [batch, customBaseUrl, fee, linkSettingsLoaded, onClose, otpFallbackCode, otpFallbackCodeHash, otpFallbackEnabled, otpRequired, paid, partPayment, publishUntil, published, shortSlug, venue, waitingMessage, waitingMode, waitingTitle, workshop]);
+  }, [utmSource, utmMedium, utmCampaign, batch, customBaseUrl, fee, linkSettingsLoaded, onClose, otpFallbackCode, otpFallbackCodeHash, otpFallbackEnabled, otpRequired, paid, partPayment, publishUntil, published, shortSlug, venue, waitingMessage, waitingMode, waitingTitle, workshop]);
 
   async function copyLink() {
     let copied = false;
@@ -4247,6 +4263,25 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
               <label className="block">
                 <span className="mb-2 block text-sm font-bold text-slate-600">Waiting Message</span>
                 <textarea className={`${inputClass} resize-none`} maxLength={240} onChange={(event) => setWaitingMessage(event.target.value)} rows={3} value={waitingMessage} />
+              </label>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-emerald-100 bg-emerald-50/60 p-4">
+            <p className="text-sm font-black text-slate-800">UTM Tracking Link</p>
+            <p className="mt-1 text-xs font-semibold text-slate-500">Add a source to track where registrations come from. The shareable link and QR update automatically. Leave blank for a standard link.</p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              <label className="block">
+                <span className="mb-2 block text-sm font-bold text-slate-600">UTM Source</span>
+                <input className={inputClass} maxLength={200} onChange={(event) => setUtmSource(event.target.value)} placeholder="instagram, whatsapp" value={utmSource} />
+              </label>
+              <label className="block">
+                <span className="mb-2 block text-sm font-bold text-slate-600">UTM Medium (optional)</span>
+                <input className={inputClass} maxLength={200} onChange={(event) => setUtmMedium(event.target.value)} placeholder="social, paid, email" value={utmMedium} />
+              </label>
+              <label className="block">
+                <span className="mb-2 block text-sm font-bold text-slate-600">UTM Campaign (optional)</span>
+                <input className={inputClass} maxLength={200} onChange={(event) => setUtmCampaign(event.target.value)} placeholder="fat_loss_october" value={utmCampaign} />
               </label>
             </div>
           </div>

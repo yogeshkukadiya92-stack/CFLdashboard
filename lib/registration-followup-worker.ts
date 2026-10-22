@@ -19,7 +19,7 @@ export async function runRegistrationFollowup(registrationId: string) {
     (SELECT w FROM jsonb_array_elements(workshops) w WHERE w->>'id' = $1 LIMIT 1) AS workshop
     FROM app_state WHERE id = 1`, [finalRegistration.workshopId, finalRegistration.batch]);
   const form = settings.rows[0]?.form as Partial<BuilderForm>;
-  const linkedWorkshop = settings.rows[0]?.workshop as { assignedSalesPersonId?: unknown; leadAssignmentRules?: WorkshopLeadAssignmentRule[]; transferLeadToCrm?: unknown } | undefined;
+  const linkedWorkshop = settings.rows[0]?.workshop as { type?: string; assignedSalesPersonId?: unknown; leadAssignmentRules?: WorkshopLeadAssignmentRule[]; transferLeadToCrm?: unknown } | undefined;
   async function persistPatch(updated: RegistrationEntry) {
     const patch = Object.fromEntries(Object.entries(updated).filter(([key]) =>
       key.startsWith("mfw") || key.startsWith("confirmationWhatsapp") || key.startsWith("waitingWhatsapp") || key.startsWith("referrerWaitingWhatsapp")));
@@ -69,7 +69,7 @@ export async function runRegistrationFollowup(registrationId: string) {
     if (mfwSyncOnly && savedRegistration.mfwSyncStatus !== "failed") savedRegistration.mfwSyncOnly = false;
     await persistPatch(savedRegistration);
   }
-  const notificationPatch = mfwSyncOnly ? {} : await sendRegistrationStatusNotifications(savedRegistration, form);
+  const notificationPatch = mfwSyncOnly ? {} : await sendRegistrationStatusNotifications(savedRegistration, form, linkedWorkshop?.type);
   if (Object.keys(notificationPatch).length) {
     savedRegistration = { ...savedRegistration, ...notificationPatch };
     await persistPatch(savedRegistration);

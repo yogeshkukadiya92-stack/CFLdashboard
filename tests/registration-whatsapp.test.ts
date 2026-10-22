@@ -66,6 +66,19 @@ test("routes confirmed and waiting WhatsApp messages only to allowed recipients"
     assert.match(missingDatePatch.confirmationWhatsappError || "", /starting date/);
 
     requests.length = 0;
+    for (const workshopType of ["Pre Recorded", "pre-recorded", "PreRecorded"]) {
+      const recordedPatch = await sendRegistrationStatusNotifications({
+        ...baseRegistration, registrationNumber: "REG-9296", registrationStatus: "confirmed"
+      }, { ...form, manualWhatsappStartDate: "" }, workshopType);
+      assert.equal(recordedPatch.confirmationWhatsappStatus, "sent");
+      assert.equal(recordedPatch.confirmationWhatsappError, undefined);
+      for (const key of ["data", "BodyDynamicData", "parameters", "variables"]) {
+        assert.deepEqual(requests.at(-1)?.[key], ["Test Participant"]);
+      }
+      assert.equal(requests.at(-1)?.TemplateName, form.whatsappConfirmationTemplate);
+      assert.equal(requests.at(-1)?.buttonValue, undefined);
+    }
+    requests.length = 0;
     const hf39Patch = await sendRegistrationStatusNotifications({
       ...baseRegistration,
       registrationNumber: "REG-0039",

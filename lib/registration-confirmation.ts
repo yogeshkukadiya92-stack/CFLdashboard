@@ -33,7 +33,7 @@ export function assignRegistrationNumbers(registrations: RegistrationEntry[], wo
     }, [...registrations]);
 }
 
-export async function sendRegistrationConfirmation(registration: RegistrationEntry, form?: Partial<BuilderForm>): Promise<WhatsAppDeliveryResult> {
+export async function sendRegistrationConfirmation(registration: RegistrationEntry, form?: Partial<BuilderForm>, workshopType?: string): Promise<WhatsAppDeliveryResult> {
   if (!form?.whatsappConfirmationEnabled || registration.registrationStatus === "waiting" || registration.confirmationWhatsappSentAt) {
     return { configured: false, sent: false };
   }
@@ -41,17 +41,21 @@ export async function sendRegistrationConfirmation(registration: RegistrationEnt
   const templateName = form.whatsappConfirmationTemplate
     || process.env.WHATSAPP_CONFIRMATION_TEMPLATE_NAME
     || process.env.WHATSAPP_CONFIRMATION_TEMPLATE_ID;
+  // The approved pre-recorded course template has one body slot: name.
   // hf_39_confirmation has two body slots; the standard confirmation
   // template has four: name, workshop, starting date, registration number.
   // The group link is static text in the approved provider template.
   const isFixedHf39Template = templateName === "hf_39_confirmation";
   const startDate = form.manualWhatsappStartDate?.trim();
-  if (!isFixedHf39Template && !startDate) {
+  const isPreRecorded = (workshopType || "").replace(/[\s_-]+/g, "").toLowerCase() === "prerecorded";
+  if (!isFixedHf39Template && !isPreRecorded && !startDate) {
     return { configured: true, sent: false, error: "Set the workshop starting date in Workshop Create / Edit before sending confirmation WhatsApp." };
   }
   const values = isFixedHf39Template
     ? [registration.fullName, registration.registrationNumber || "-"]
-    : [registration.fullName, form.workshopName || registration.workshopTitle, `Starting from ${startDate}`, registration.registrationNumber || "-"];
+    : isPreRecorded
+      ? [registration.fullName]
+      : [registration.fullName, form.workshopName || registration.workshopTitle, `Starting from ${startDate}`, registration.registrationNumber || "-"];
   return sendTemplateMessage({
     senderId: form.whatsappSenderId,
     mobile: registration.mobile,
@@ -142,14 +146,14 @@ async function sendTemplateMessage(input: {
   }
 }
 
-export async function sendRegistrationStatusNotifications(registration: RegistrationEntry, form?: Partial<BuilderForm>) {
+export async function sendRegistrationStatusNotifications(registration: RegistrationEntry, form?: Partial<BuilderForm>, workshopType?: string) {
   const patch: Partial<RegistrationEntry> = {};
   if (!form?.whatsappConfirmationEnabled) return patch;
   const now = new Date().toISOString();
 
   if (registration.registrationStatus !== "waiting") {
     if (registration.confirmationWhatsappSentAt) return patch;
-    const result = await sendRegistrationConfirmation(registration, form);
+    const result = await sendRegistrationConfirmation(registration, form, workshopType);
     patch.confirmationWhatsappStatus = result.sent ? "sent" : result.configured ? "failed" : "not_configured";
     patch.confirmationWhatsappError = result.sent ? undefined : result.configured ? result.error || "WhatsApp confirmation delivery failed." : "Confirmation template or provider is not configured.";
     if (result.sent) patch.confirmationWhatsappSentAt = now;
