@@ -3,7 +3,7 @@
 import { AdminPlatformShell } from "@/components/admin-platform-shell";
 import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
 import { createLeadActivity, createLeadId, nextPendingFollowUp, normalizeLead, normalizeLeadMobile } from "@/lib/lead-utils";
-import { fetchLeadManagementState, saveLiveState } from "@/lib/live-state";
+import { fetchLeadManagementState, saveLiveState, writeLiveStateToLocalStorage } from "@/lib/live-state";
 import type { Lead, LeadFollowUp, LeadPriority, LeadStage } from "@/lib/types";
 import { resolveSmartLeadAssignment, type WorkshopLeadAssignmentRule } from "@/lib/workshop-lead-assignment";
 import { findSalesPersonByCode, salesPersonCodeFromId } from "@/lib/sales-person-code";
@@ -84,6 +84,9 @@ export default function LeadsPage() {
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [bulkDeleteIds, setBulkDeleteIds] = useState<string[]>([]);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<Lead | null>(null);
   const [selectedLeadIds, setSelectedLeadIds] = useState<string[]>([]);
   const [bulkOwnerId, setBulkOwnerId] = useState("");
@@ -203,6 +206,29 @@ export default function LeadsPage() {
     void persist(next, `${selectedLeadIds.length} leads ${patch.assignedTo ? `transferred to ${patch.assignedTo}` : "moved to Unassigned"}.`);
     setSelectedLeadIds([]);
     setBulkOwnerId("");
+  }
+
+  async function deleteSelectedLeads() {
+    if (deleting || !bulkDeleteIds.length) return;
+    setDeleting(true);
+    setDeleteError("");
+    try {
+      const response = await fetch("/api/state", {
+        method: "DELETE", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ leadIds: bulkDeleteIds })
+      });
+      if (!response.ok) throw new Error("Could not delete leads. Please retry.");
+      const deleted = new Set(bulkDeleteIds);
+      const next = leads.filter((lead) => !deleted.has(lead.id));
+      setLeads(next);
+      writeLiveStateToLocalStorage({ leads: next });
+      setSelectedLeadIds((ids) => ids.filter((id) => !deleted.has(id)));
+      if (selectedId && deleted.has(selectedId)) setSelectedId(null);
+      setMessage(`${bulkDeleteIds.length} selected leads deleted.`);
+      setBulkDeleteIds([]);
+    } catch {
+      setDeleteError("Could not delete leads. Please retry.");
+    } finally { setDeleting(false); }
   }
 
   function bulkBlock() {
@@ -475,7 +501,7 @@ export default function LeadsPage() {
             <button className="self-end rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-600" onClick={() => { setFromDate(""); setToDate(""); }} type="button">Clear dates</button>
           </div>
           {message ? <div className="mt-3 flex items-center justify-between gap-3 rounded-lg bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700"><span>{message}</span><button aria-label="Dismiss message" onClick={() => setMessage("")} type="button"><X className="size-4" /></button></div> : null}
-          {selectedLeadIds.length ? <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50 p-3"><span className="mr-auto text-sm font-black text-indigo-900">{selectedLeadIds.length} selected</span><select className="rounded-lg border border-indigo-200 bg-white px-3 py-2 text-sm font-bold" onChange={(event) => setBulkOwnerId(event.target.value)} value={bulkOwnerId}><option value="">Move to Unassigned</option>{salesPeople.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}</select><button className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-black text-white" onClick={bulkAssign} type="button">Assign / Transfer</button><button className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-black text-white" onClick={bulkBlock} type="button">Block selected</button><button className="rounded-lg px-3 py-2 text-sm font-black text-slate-600" onClick={() => setSelectedLeadIds([])} type="button">Clear</button></div> : null}
+          {selectedLeadIds.length ? <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50 p-3"><span className="mr-auto text-sm font-black text-indigo-900">{selectedLeadIds.length} selected</span><select className="rounded-lg border border-indigo-200 bg-white px-3 py-2 text-sm font-bold" onChange={(event) => setBulkOwnerId(event.target.value)} value={bulkOwnerId}><option value="">Move to Unassigned</option>{salesPeople.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}</select><button className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-black text-white" onClick={bulkAssign} type="button">Assign / Transfer</button><button className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-black text-white" onClick={bulkBlock} type="button">Block selected</button><button className="inline-flex items-center gap-2 rounded-lg border border-rose-300 bg-white px-4 py-2 text-sm font-black text-rose-700" onClick={() => { setDeleteError(""); setBulkDeleteIds(selectedLeadIds.filter((id) => leads.some((lead) => lead.id === id))); }} type="button"><Trash2 className="size-4" />Delete selected</button><button className="rounded-lg px-3 py-2 text-sm font-black text-slate-600" onClick={() => setSelectedLeadIds([])} type="button">Clear</button></div> : null}
         </header>
 
         {loading ? <p role="status" className="p-10 text-center font-semibold text-slate-500">Loading leads…</p> : loadError ? <div role="alert" className="p-10 text-center"><p>{loadError}</p><button className="mt-3 rounded-lg bg-emerald-600 px-4 py-2 font-bold text-white" onClick={() => setReloadKey((key) => key + 1)} type="button">Retry</button></div> : viewMode === "list" ? (
@@ -523,6 +549,7 @@ export default function LeadsPage() {
       </div> : null}
 
       {pasteOpen ? <PasteImportModal onClose={() => { setPasteOpen(false); setPasteText(""); }} onImport={() => { void processImportRows(pastedRows, "Excel Paste").then(() => { setPasteOpen(false); setPasteText(""); }).catch((error) => setMessage(error instanceof Error ? error.message : "Import failed.")); }} rows={pastedRows} setText={setPasteText} summary={pastedSummary} text={pasteText} /> : null}
+      <ConfirmDialog open={bulkDeleteIds.length > 0} title={`Delete ${bulkDeleteIds.length} selected leads?`} description="This permanently removes the selected leads and their activity history. This cannot be undone." confirmLabel={deleting ? "Deleting…" : `Delete ${bulkDeleteIds.length} leads`} confirmDisabled={deleting} onCancel={() => { if (!deleting) setBulkDeleteIds([]); }} onConfirm={() => void deleteSelectedLeads()}>{deleteError ? <p role="alert" className="text-rose-600">{deleteError}</p> : <p>Only the selected leads will be deleted.</p>}</ConfirmDialog>
       <ConfirmDialog confirmLabel="Delete Lead" description="This removes the lead and its complete activity history." onCancel={() => setDeleteTarget(null)} onConfirm={deleteLead} open={Boolean(deleteTarget)} title="Delete lead?">{deleteTarget ? `${deleteTarget.name} · ${deleteTarget.mobile}` : null}</ConfirmDialog>
     </AdminPlatformShell>
   );

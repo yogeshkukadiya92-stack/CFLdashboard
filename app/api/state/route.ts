@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { AUTH_COOKIE_NAME, verifyAuthToken } from "@/lib/auth";
-import { getAppState, getLeadManagementState, isDbEnabled, saveAppState } from "@/lib/db";
+import { deleteLeadRecords, getAppState, getLeadManagementState, isDbEnabled, saveAppState } from "@/lib/db";
 import { readSalesSession, SALES_SESSION_COOKIE } from "@/lib/sales-session";
 import type { Lead, SalesTeamUser } from "@/lib/types";
 
@@ -102,5 +102,21 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true, dbEnabled: true });
   } catch {
     return NextResponse.json({ ok: false, error: "Failed to save DB state" }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const access = await getRequestRole(request);
+    if (access.role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    const body = await request.json();
+    if (!Array.isArray(body.leadIds) || !body.leadIds.length || body.leadIds.length > 10000 ||
+      body.leadIds.some((id: unknown) => typeof id !== "string" || !id.trim())) {
+      return NextResponse.json({ error: "Select valid leads to delete." }, { status: 400 });
+    }
+    await deleteLeadRecords([...new Set<string>(body.leadIds)]);
+    return NextResponse.json({ ok: true });
+  } catch {
+    return NextResponse.json({ error: "Could not delete leads. Please retry." }, { status: 500 });
   }
 }

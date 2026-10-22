@@ -14,9 +14,9 @@ export function reconcileSalesPeople(people: unknown[], users: SalesTeamUser[]):
       name: user.name, mobile: user.mobile, email: user.email,
       isActive: user.active, canViewOther: user.canViewOther,
       group: "Other", commissions: [],
-      // Workshop rules cannot be reconstructed from a login account.
-      // Keep automatic assignment paused until the administrator reviews them.
-      acceptingLeads: false,
+      // Recovery must not invent a pause for an active login. Existing profiles
+      // (including explicit pauses) are preserved above.
+      acceptingLeads: user.active,
       dailyCallTarget: 50, dailyConnectedTarget: 20
     });
     ids.add(user.salesPersonId);

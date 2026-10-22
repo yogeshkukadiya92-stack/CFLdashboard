@@ -55,6 +55,7 @@ export default function SalesPersonPage() {
   const [group, setGroup] = useState("");
   const [canViewOther, setCanViewOther] = useState(true);
   const [isActive, setIsActive] = useState(true);
+  const [acceptingLeads, setAcceptingLeads] = useState(true);
   const [generalAssign, setGeneralAssign] = useState("");
   const [directClient, setDirectClient] = useState("");
   const [dailyCallTarget, setDailyCallTarget] = useState("50");
@@ -100,6 +101,7 @@ export default function SalesPersonPage() {
     setGroup("");
     setCanViewOther(true);
     setIsActive(true);
+    setAcceptingLeads(true);
     setGeneralAssign("");
     setDirectClient("");
     setDailyCallTarget("50");
@@ -164,9 +166,10 @@ export default function SalesPersonPage() {
     const personId = editingSalesId ?? generateId();
     const existingRecord = records.find((record) => record.id === editingSalesId);
     const payload: SalesPersonRecord = {
-      acceptingLeads: existingRecord?.acceptingLeads,
-      assignmentPausedAt: existingRecord?.assignmentPausedAt,
-      assignmentAvailabilityUpdatedAt: existingRecord?.assignmentAvailabilityUpdatedAt,
+      acceptingLeads,
+      assignmentPausedAt: acceptingLeads ? undefined : existingRecord?.assignmentPausedAt || new Date().toISOString(),
+      assignmentAvailabilityUpdatedAt: (existingRecord?.acceptingLeads !== false) !== acceptingLeads
+        ? new Date().toISOString() : existingRecord?.assignmentAvailabilityUpdatedAt,
       dailyCallTarget: Math.max(1, Number(dailyCallTarget) || 50),
       dailyConnectedTarget: Math.max(1, Number(dailyConnectedTarget) || 20),
       whatsappTemplate: whatsappTemplate.trim(),
@@ -208,6 +211,7 @@ export default function SalesPersonPage() {
     setGroup(record.group);
     setCanViewOther(record.canViewOther);
     setIsActive(record.isActive);
+    setAcceptingLeads(record.acceptingLeads !== false);
     setGeneralAssign(record.generalAssign ?? "");
     setDirectClient(record.directClient ?? "");
     setDailyCallTarget(String(record.dailyCallTarget || 50));
@@ -284,6 +288,11 @@ export default function SalesPersonPage() {
               <input checked={isActive} className="size-5 accent-indigo-600" onChange={(event) => setIsActive(event.target.checked)} type="checkbox" />
               Is Active?
             </label>
+            <label className="flex items-center gap-3 text-sm font-bold text-slate-700">
+              <input checked={acceptingLeads} className="size-5 accent-indigo-600" onChange={(event) => setAcceptingLeads(event.target.checked)} type="checkbox" />
+              Accept new auto-assigned leads
+            </label>
+            <p className="text-xs font-semibold text-slate-500">Active controls login access. Auto-assignment also requires this checkbox to be enabled. Existing assigned leads stay with this salesperson.</p>
           </div>
 
           <div className="mt-5 grid gap-4 md:grid-cols-2">

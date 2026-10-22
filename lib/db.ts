@@ -550,3 +550,14 @@ export async function deleteSalesPersonAndLogin(id: string) {
     sales_team_users = COALESCE((SELECT jsonb_agg(account) FROM jsonb_array_elements(sales_team_users) account WHERE account->>'salesPersonId' IS DISTINCT FROM $1), '[]'::jsonb),
     updated_at = NOW() WHERE id = 1`, [id]);
 }
+
+export async function deleteLeadRecords(ids: string[]) {
+  const database = getDbPool();
+  if (!database) throw new Error("Database unavailable.");
+  // Filter the current server list atomically; preserve leads created since the
+  // administrator opened the page.
+  await database.query(`UPDATE app_state SET leads = COALESCE(
+    (SELECT jsonb_agg(lead) FROM jsonb_array_elements(leads) lead
+      WHERE NOT (lead->>'id' = ANY($1::text[]))), '[]'::jsonb),
+    updated_at = NOW() WHERE id = 1`, [ids]);
+}
