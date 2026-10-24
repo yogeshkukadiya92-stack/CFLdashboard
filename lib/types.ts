@@ -440,7 +440,7 @@ export interface BuilderField {
   max?: number;
   width?: "full" | "half";
   /** Maps a field to a core registration column so reports keep working. */
-  role?: "name" | "mobile" | "email" | "country" | "city";
+  role?: "name" | "mobile" | "email" | "country" | "state" | "city";
 }
 
 export interface BuilderTheme {

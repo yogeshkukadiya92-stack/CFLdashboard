@@ -5,7 +5,7 @@ import { normalizeCoreFieldRequirements } from "@/lib/builder-field-normalizatio
 import { workshops as seedWorkshops } from "@/lib/data";
 import { hydratePublicRegistrationState, readLocalArray, readLocalObject, savePublicRegistration, writeLiveStateToLocalStorage } from "@/lib/live-state";
 import { sanitizeRichTextHtml } from "@/lib/rich-text";
-import { COUNTRY_OPTIONS, citiesForCountry } from "@/lib/location-options";
+import { COUNTRY_OPTIONS, ensureLocationFields, statesForCountry } from "@/lib/location-options";
 import { resolveRegistrationOtpRequired } from "@/lib/registration-otp";
 import { resolveRegistrationGroupUrl } from "@/lib/registration-group";
 import type { BuilderField, BuilderForm, BuilderFormMode, BuilderTheme, FormAnalyticsRecord, PaymentTier, RegistrationEntry } from "@/lib/types";
@@ -101,13 +101,13 @@ const defaultTheme: BuilderTheme = {
 };
 
 function simpleFields(): BuilderField[] {
-  return [
+  return ensureLocationFields([
     { id: "name", type: "short_text", label: "Full Name", placeholder: "Your full name", required: true, role: "name" },
     { id: "mobile", type: "mobile", label: "Mobile Number", placeholder: "10-digit mobile", required: true, role: "mobile" },
     { id: "email", type: "email", label: "Email", placeholder: "you@example.com", required: false, role: "email" },
     { id: "country", type: "dropdown", label: "Country", required: true, options: [...COUNTRY_OPTIONS], role: "country" },
     { id: "city", type: "dropdown", label: "City", required: false, allowOther: true, role: "city" }
-  ];
+  ]);
 }
 
 function slugify(value: string) {
@@ -246,7 +246,7 @@ function modelFromBuilderForm(form: BuilderForm, overrides?: Partial<Pick<FormMo
     allowReferralConfirmation: Boolean(form.allowReferralConfirmation),
     eligibilityWaitingMessage: form.eligibilityWaitingMessage,
     theme: { ...defaultTheme, ...form.theme },
-    fields: form.fields?.length ? normalizeCoreFieldRequirements(form.fields) : simpleFields()
+    fields: form.fields?.length ? ensureLocationFields(normalizeCoreFieldRequirements(form.fields)) : simpleFields()
   };
 }
 
@@ -494,6 +494,19 @@ export default function RegistrationPage() {
 
   const roleField = (role: NonNullable<BuilderField["role"]>) => model?.fields.find((field) => field.role === role) ?? null;
   const mobileFieldId = roleField("mobile")?.id;
+  const selectedCountry = answers[roleField("country")?.id ?? ""] ?? "";
+  const selectedState = answers[roleField("state")?.id ?? ""] ?? "";
+  const [cityOptions, setCityOptions] = useState<{ country: string; state: string; options: string[] }>({ country: "", state: "", options: [] });
+  useEffect(() => {
+    if (!selectedCountry || !selectedState) return;
+    const controller = new AbortController();
+    fetch(`/api/locations?${new URLSearchParams({ country: selectedCountry, state: selectedState })}`, { signal: controller.signal })
+      .then(response => { if (!response.ok) throw new Error("Location lookup failed"); return response.json(); })
+      .then((options: string[]) => setCityOptions({ country: selectedCountry, state: selectedState, options }))
+      .catch(() => { if (!controller.signal.aborted) setCityOptions({ country: selectedCountry, state: selectedState, options: [] }); });
+    return () => controller.abort();
+  }, [selectedCountry, selectedState]);
+
   const mobileValue = mobileFieldId ? answers[mobileFieldId] ?? "" : "";
   const mobileDigits = cleanMobile(mobileValue);
   const otpVerified = Boolean(model?.otpRequired) && mobileDigits.length === 10 && otpVerifiedMobile === mobileDigits;
@@ -669,8 +682,14 @@ export default function RegistrationPage() {
     }
     setAnswers((prev) => {
       const next = { ...prev, [id]: value };
-      // A city is only valid for the country it was selected under.
+      // Clear dependent answers when their parent changes.
       if (id === roleField("country")?.id) {
+        const stateId = roleField("state")?.id;
+        if (stateId) next[stateId] = "";
+        const cityId = roleField("city")?.id;
+        if (cityId) next[cityId] = "";
+      }
+      if (id === roleField("state")?.id) {
         const cityId = roleField("city")?.id;
         if (cityId) next[cityId] = "";
       }
@@ -1152,8 +1171,8 @@ export default function RegistrationPage() {
                     onChange={(value) => setAnswer(field.id, value)}
                     onToggle={(option) => toggleCheckbox(field.id, option)}
                     radiusClass={fieldRadiusClass}
-                    dependentOptions={field.role === "city" ? citiesForCountry(answers[roleField("country")?.id ?? ""] ?? "") : undefined}
-                    disabled={field.role === "city" && Boolean(roleField("country")) && !answers[roleField("country")?.id ?? ""]}
+                    dependentOptions={field.role === "country" ? COUNTRY_OPTIONS : field.role === "state" ? statesForCountry(selectedCountry) : field.role === "city" ? (cityOptions.country === selectedCountry && cityOptions.state === selectedState ? cityOptions.options : []) : undefined}
+                    disabled={(field.role === "state" && !selectedCountry) || (field.role === "city" && !selectedState)}
                     value={answers[field.id] ?? ""}
                   />
                 ))}
@@ -1404,7 +1423,7 @@ function RenderField({
     control = (
       <div className="space-y-2">
         <select className={inputClass} disabled={disabled} onChange={(event) => onChange(event.target.value === "__other" ? "Other: " : event.target.value)} value={isOther ? "__other" : value}>
-          <option value="">{disabled ? "Select country first" : "Select…"}</option>
+          <option value="">{disabled ? (field.role === "city" ? "Select state first" : "Select country first") : "Select…"}</option>
           {(dependentOptions ?? field.options ?? []).map((option) => <option key={option} value={option}>{option}</option>)}
           {field.allowOther ? <option value="__other">Other</option> : null}
         </select>

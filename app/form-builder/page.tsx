@@ -8,7 +8,7 @@ import { hydrateLiveState, readLocalArray, saveLiveState } from "@/lib/live-stat
 import { buildRegistrationUrl, normalizeBaseUrl } from "@/lib/registration-url";
 import { publicFormSlug } from "@/lib/public-slug";
 import { sanitizeRichTextHtml } from "@/lib/rich-text";
-import { COUNTRY_OPTIONS } from "@/lib/location-options";
+import { COUNTRY_OPTIONS, ensureLocationFields } from "@/lib/location-options";
 import type { AttendanceSession, BuilderField, BuilderFieldType, BuilderForm, PaymentTier, ReferralCodeConfig } from "@/lib/types";
 import { generateId } from "@/lib/utils";
 import {
@@ -126,13 +126,13 @@ function slugify(value: string) {
 }
 
 function defaultFields(): BuilderField[] {
-  return [
+  return ensureLocationFields([
     { id: generateId(), type: "short_text", label: "Full Name", placeholder: "Your full name", required: true, role: "name" },
     { id: generateId(), type: "mobile", label: "Mobile Number", placeholder: "10-digit mobile", required: true, role: "mobile" },
     { id: generateId(), type: "email", label: "Email", placeholder: "you@example.com", required: false, role: "email" },
     { id: generateId(), type: "dropdown", label: "Country", required: true, options: [...COUNTRY_OPTIONS], role: "country" },
     { id: generateId(), type: "dropdown", label: "City", required: false, allowOther: true, role: "city" }
-  ];
+  ]);
 }
 
 export default function FormBuilderPage() {
@@ -300,7 +300,7 @@ export default function FormBuilderPage() {
       waitingMessage: waitingMessage.trim() || undefined,
       repeaterSourceWorkshopIds: existingForm?.repeaterSourceWorkshopIds,
       repeaterWaitingMode: existingForm?.repeaterWaitingMode,
-      fields,
+      fields: ensureLocationFields(fields),
       updatedAt: new Date().toISOString()
     };
   }, [accent, align, allowDuplicate, allowReferralConfirmation, bannerUrl, batch, closedMessage, description, eligibilityWaitingMessage, fee, fields, fontFamily, fontSize, highlights, logoUrl, otpFallbackCodeHash, otpFallbackEnabled, otpRequired, paid, partPayment, referralCodes, registrationCapacity, requireAttendanceForConfirmation, requiredAttendanceSessionId, responseLimit, submitButtonText, tagline, tiers, title, titleBold, titleItalic, waitingMessage, waitingMode, waitingTitle, whatsappSenderId, whatsappConfirmationEnabled, whatsappConfirmationButtonValues, whatsappConfirmationTemplate, whatsappGroupUrl, whatsappReferrerWaitingButtonValues, whatsappReferrerWaitingTemplate, whatsappWaitingButtonValues, whatsappWaitingTemplate, workshop, workshopId]);
@@ -335,14 +335,7 @@ export default function FormBuilderPage() {
   }
 
   function addCountryCityFields() {
-    setFields((current) => {
-      const withoutLocation = current.filter((field) => field.role !== "country" && field.role !== "city");
-      return [
-        ...withoutLocation,
-        { id: generateId(), type: "dropdown", label: "Country", required: true, options: [...COUNTRY_OPTIONS], role: "country" },
-        { id: generateId(), type: "dropdown", label: "City", required: false, allowOther: true, role: "city" }
-      ];
-    });
+    setFields((current) => ensureLocationFields(current));
   }
 
   function moveField(index: number, direction: -1 | 1) {
@@ -759,9 +752,9 @@ export default function FormBuilderPage() {
                 type="button"
               >
                 <Plus className="size-3.5" />
-                Add Country → City dropdowns
+                Add Country → State → City dropdowns
               </button>
-              <p className="mb-3 text-xs font-semibold text-slate-400">Selecting a country on the registration form will show its cities automatically.</p>
+              <p className="mb-3 text-xs font-semibold text-slate-400">Selecting a country shows its states; selecting a state shows its cities.</p>
               <p className="mb-2 text-sm font-bold text-slate-600">Add a field</p>
               <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
                 {addableTypes.map((type) => (

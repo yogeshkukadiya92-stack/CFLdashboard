@@ -1,5 +1,7 @@
 "use client";
 
+import { ensureLocationFields } from "@/lib/location-options";
+
 import { DEFAULT_MANUAL_WHATSAPP_TEMPLATE, renderManualWhatsApp } from "@/lib/manual-whatsapp";
 import { ManualWhatsAppSettings, ManualWhatsAppComposer, type ManualWhatsAppDraft } from "@/components/manual-whatsapp";
 import { WhatsAppTemplateButtons } from "@/components/whatsapp-template-buttons";
@@ -168,12 +170,12 @@ const addableTypes: BuilderFieldType[] = ["short_text", "paragraph", "email", "m
 const richTextColors = ["#0f172a", "#059669", "#4f46e5", "#dc2626", "#ea580c", "#7c3aed"];
 
 function defaultBuilderFields(): BuilderField[] {
-  return [
+  return ensureLocationFields([
     { id: generateId(), type: "short_text", label: "Full Name", placeholder: "Your full name", required: true, role: "name" },
     { id: generateId(), type: "mobile", label: "Mobile Number", placeholder: "10-digit mobile", required: true, role: "mobile" },
     { id: generateId(), type: "email", label: "Email", placeholder: "you@example.com", required: false, role: "email" },
     { id: generateId(), type: "short_text", label: "City", placeholder: "Your city", required: false, role: "city" }
-  ];
+  ]);
 }
 
 export default function WorkshopMasterPage() {
@@ -1259,7 +1261,7 @@ export default function WorkshopMasterPage() {
       whatsappReferrerWaitingButtonValues,
       whatsappReferrerWaitingTemplate: whatsappReferrerWaitingTemplate.trim() || undefined,
       submitButtonText: formSubmitButtonText.trim() || undefined,
-      fields: normalizeCoreFieldRequirements(formFields),
+      fields: ensureLocationFields(normalizeCoreFieldRequirements(formFields)),
       updatedAt: new Date().toISOString()
     };
   }
@@ -1321,7 +1323,7 @@ export default function WorkshopMasterPage() {
       setFormLogoUrl(savedForm.theme?.logoUrl ?? "");
       setFormMode(savedForm.mode ?? "classic");
       setFormTheme({ ...defaultTheme, ...savedForm.theme, logoUrl: undefined });
-      setFormFields(savedForm.fields?.length ? normalizeCoreFieldRequirements(savedForm.fields) : defaultBuilderFields());
+      setFormFields(savedForm.fields?.length ? ensureLocationFields(normalizeCoreFieldRequirements(savedForm.fields)) : defaultBuilderFields());
       setFormHighlights(savedForm.highlights ?? []);
       setFormOtpRequired(Boolean(savedForm.otpRequired));
       setFormRequireAttendanceForConfirmation(Boolean(savedForm.attendanceOnlyConfirmation));
