@@ -182,6 +182,10 @@ export default function WorkshopMasterPage() {
   const [statusOptions, setStatusOptions] = useState<IntroductionStatus[]>(defaultIntroductionStatuses);
   useEffect(() => { fetch("/api/admin/callflow-content", { cache: "no-store" }).then(response => response.ok ? response.json() : null).then(data => { if (Array.isArray(data?.introductionStatuses)) setStatusOptions(data.introductionStatuses); }).catch(() => {}); }, []);
   const [showData, setShowData] = useState(true);
+  const [showManualEntry, setShowManualEntry] = useState(false);
+  const [savingManualEntry, setSavingManualEntry] = useState(false);
+  const [manualEntryError, setManualEntryError] = useState("");
+
   const [name, setName] = useState("");
   const [tag, setTag] = useState("");
   const [type, setType] = useState("");
@@ -866,7 +870,67 @@ export default function WorkshopMasterPage() {
     }
   }
 
+  async function addManualEntry(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedWorkshop || savingManualEntry) return;
+    const form = new FormData(event.currentTarget);
+    const fullName = String(form.get("fullName") || "").trim();
+    const digits = String(form.get("mobile") || "").replace(/\D/g, "");
+    const mobile = digits.length === 12 && digits.startsWith("91") ? digits.slice(2) : digits;
+    setManualEntryError("");
+    if (!fullName || !/^[6-9]\d{9}$/.test(mobile)) {
+      setManualEntryError("Enter a name and a valid 10-digit Indian mobile number.");
+      return;
+    }
+    const batchId = String(form.get("batchId") || "");
+    const selectedBatch = selectedWorkshop.batches?.find((item) => item.id === batchId);
+    if (registrations.some((entry) => entry.workshopId === selectedWorkshop.id && (entry.batchId || "") === batchId && entry.mobile.replace(/\D/g, "").slice(-10) === mobile)) {
+      setManualEntryError("This mobile number is already registered in this workshop and batch.");
+      return;
+    }
+    const entry: RegistrationEntry = {
+      id: generateId(), workshopId: selectedWorkshop.id,
+      workshopSlug: workshopSlug(selectedWorkshop.name), workshopTitle: selectedWorkshop.name,
+      fullName, mobile, email: String(form.get("email") || "").trim(),
+      city: String(form.get("city") || "").trim(), facilitator: selectedWorkshop.facilitator,
+      batchId: selectedBatch?.id, batch: selectedBatch?.name || selectedWorkshop.batch,
+      createdAt: new Date().toISOString(), source: "manual", whatsappVerificationStatus: "not_required",
+      confirmationStatus: "pending", confirmationNote: String(form.get("note") || "").trim(),
+      registrationStatus: "waiting", waitingReason: "manual",
+      paymentMode: "Full", amountPaid: 0, amountDue: Math.max(0, Number(selectedWorkshop.feesWithTax) || 0),
+      status: selectedWorkshop.isPaid ? "Due" : "Paid"
+    };
+    setSavingManualEntry(true);
+    try {
+      const response = await fetch("/api/state", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ registrations: [entry] })
+      });
+      if (!response.ok) throw new Error("Could not save the entry. Please try again.");
+      setRegistrations((current) => {
+        const next = [entry, ...current.filter((item) => item.id !== entry.id)];
+        writeLocalCache(REGISTRATION_STORAGE_KEY, next);
+        return next;
+      });
+      setShowManualEntry(false);
+      setShowParticipants(true);
+      setParticipantSearch("");
+      setSelectedParticipantBatchId(batchId || "all");
+      setFollowUpScope("needs_follow_up");
+      setHideWaitingParticipants(false);
+      setHideDuplicateParticipants(false);
+      setResponseFilters({ ...emptyResponseFilters });
+      setMessage("Manual enquiry added. Follow up and confirm when ready.");
+    } catch (error) {
+      setManualEntryError(error instanceof Error ? error.message : "Could not save the entry.");
+    } finally {
+      setSavingManualEntry(false);
+    }
+  }
+
   function closeOpenedWorkshop() {
+    setShowManualEntry(false);
+    setManualEntryError("");
     setSelectedWorkshopId(null);
     setSelectedParticipantBatchId("all");
     setSelectedParticipantIds([]);
@@ -2710,6 +2774,10 @@ export default function WorkshopMasterPage() {
                   </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-1.5 lg:justify-end">
+                  <button type="button" className="inline-flex min-h-8 items-center gap-1.5 rounded-lg bg-emerald-600 px-2.5 text-[11px] font-black text-white hover:bg-emerald-700" aria-expanded={showManualEntry} onClick={() => { setShowManualEntry((value) => !value); setManualEntryError(""); }}>
+                    <Plus className="size-3.5" /> Add entry
+                  </button>
+
                   <label className={`inline-flex min-h-8 cursor-pointer items-center gap-1.5 rounded-lg border px-2.5 text-[11px] font-black ${formWaitingMode ? "border-amber-300 bg-amber-100 text-amber-900" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"}`}>
                     <input checked={formWaitingMode} className="size-4 accent-amber-600" onChange={(event) => void updateSelectedWaitingMode(event.target.checked)} type="checkbox" />
                     Waiting {formWaitingMode ? "ON" : "OFF"}
@@ -2789,6 +2857,23 @@ export default function WorkshopMasterPage() {
                   </button>
                 </div>
               </div>
+
+              {showManualEntry && (
+                <form onSubmit={addManualEntry} className="shrink-0 max-h-[55dvh] overflow-y-auto border-b border-emerald-200 bg-emerald-50/50 p-3" aria-label="Add manual workshop enquiry">
+                  <p className="text-sm font-black text-slate-900">Add enquiry — {selectedWorkshop.name}</p>
+                  <p className="mt-1 text-xs text-slate-600">Saved to the waiting list for follow-up. Confirm the enquiry when ready.</p>
+                  <fieldset disabled={savingManualEntry} className="mt-3 grid gap-3 sm:grid-cols-3">
+                    <label className="text-xs font-bold">Full name *<input autoFocus name="fullName" required maxLength={150} className="mt-1 block min-h-10 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100" /></label>
+                    <label className="text-xs font-bold">Mobile number *<input name="mobile" type="tel" inputMode="tel" required placeholder="10-digit mobile or +91" maxLength={20} className="mt-1 block min-h-10 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100" /></label>
+                    <label className="text-xs font-bold">Email<input name="email" type="email" maxLength={254} className="mt-1 block min-h-10 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100" /></label>
+                    <label className="text-xs font-bold">City<input name="city" maxLength={100} className="mt-1 block min-h-10 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100" /></label>
+                    {selectedWorkshop.batches?.length ? <label className="text-xs font-bold">Batch<select name="batchId" required defaultValue={selectedParticipantBatchId === "all" ? "" : selectedParticipantBatchId} className="mt-1 block min-h-10 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"><option value="">Select batch</option>{selectedWorkshop.batches.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label> : null}
+                    <label className="text-xs font-bold">Enquiry note<textarea name="note" maxLength={2000} rows={2} className="mt-1 block min-h-10 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100" /></label>
+                  </fieldset>
+                  {manualEntryError && <p role="alert" className="mt-2 text-sm font-semibold text-red-700">{manualEntryError}</p>}
+                  <div className="mt-3 flex gap-2"><button type="submit" disabled={savingManualEntry} className="rounded-lg bg-emerald-600 px-4 py-2 text-xs font-black text-white disabled:opacity-50">{savingManualEntry ? "Saving…" : "Save entry"}</button><button type="button" disabled={savingManualEntry} onClick={() => setShowManualEntry(false)} className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-bold">Cancel</button></div>
+                </form>
+              )}
 
               <div className="flex shrink-0 flex-wrap items-center gap-x-1 border-b border-slate-200 bg-slate-50/80 px-3 py-1.5">
                 <OperationalStat label="Users" value={displayedParticipants.length} />
