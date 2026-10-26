@@ -79,6 +79,7 @@ export default function LeadsPage() {
   const [clients, setClients] = useState<ClientRecord[]>([]);
   const [search, setSearch] = useState("");
   const [stageFilter, setStageFilter] = useState<"All" | LeadStage>("All");
+  const [sourceFilter, setSourceFilter] = useState("");
   const [ownerFilter, setOwnerFilter] = useState("All");
   const [scope, setScope] = useState<QueueScope>("all");
   const [viewMode, setViewMode] = useState<ViewMode>("list");
@@ -127,7 +128,7 @@ export default function LeadsPage() {
     return () => { disposed = true; clearTimeout(timeout); controller.abort(); };
   }, [reloadKey]);
 
-  useEffect(() => { setPage(1); }, [search, stageFilter, ownerFilter, scope, dateType, fromDate, toDate]);
+  useEffect(() => { setPage(1); }, [search, stageFilter, sourceFilter, ownerFilter, scope, dateType, fromDate, toDate]);
 
   const selectedLead = leads.find((lead) => lead.id === selectedId) ?? null;
   const todayCount = leads.filter((lead) => isToday(lead.createdAt)).length;
@@ -136,9 +137,12 @@ export default function LeadsPage() {
   const blockedCount = leads.filter((lead) => lead.blocked).length;
   const openPipelineValue = leads.filter((lead) => activeStages.includes(lead.stage)).reduce((sum, lead) => sum + lead.revenuePotential, 0);
 
+  const sources = useMemo(() => [...new Set(leads.map((lead) => lead.source).filter(Boolean))].sort((a, b) => a.localeCompare(b)), [leads]);
+
   const filteredLeads = useMemo(() => {
     const query = search.trim().toLowerCase();
     return leads.filter((lead) => {
+      if (sourceFilter && lead.source !== sourceFilter) return false;
       if (stageFilter !== "All" && lead.stage !== stageFilter) return false;
       if (ownerFilter !== "All" && (ownerFilter === "Unassigned" ? Boolean(lead.assignedTo) : lead.assignedTo !== ownerFilter)) return false;
       if (scope === "today" && !isToday(lead.createdAt)) return false;
@@ -152,7 +156,7 @@ export default function LeadsPage() {
       return [lead.name, lead.mobile, lead.email, lead.city, lead.source, lead.interest, lead.assignedTo, ...(lead.tags ?? [])]
         .some((value) => String(value ?? "").toLowerCase().includes(query));
     });
-  }, [dateType, fromDate, leads, ownerFilter, scope, search, stageFilter, toDate]);
+  }, [dateType, fromDate, leads, ownerFilter, scope, search, sourceFilter, stageFilter, toDate]);
 
   const pageCount = Math.max(1, Math.ceil(filteredLeads.length / 100));
   const currentPage = Math.min(page, pageCount);
@@ -476,10 +480,15 @@ export default function LeadsPage() {
             </fieldset>
           </div>
 
-          <div className="mt-4 grid gap-3 xl:grid-cols-[minmax(240px,1fr)_180px_200px_auto]">
-            <label className="relative"><Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-slate-400" /><input className={`${inputClass} pl-10`} onChange={(event) => setSearch(event.target.value)} placeholder="Search name, mobile, source, workshop..." value={search} /></label>
-            <select className={inputClass} onChange={(event) => setStageFilter(event.target.value as "All" | LeadStage)} value={stageFilter}><option>All</option>{stages.map((stage) => <option key={stage}>{stage}</option>)}</select>
-            <select className={inputClass} onChange={(event) => setOwnerFilter(event.target.value)} value={ownerFilter}><option>All</option><option>Unassigned</option>{salesPeople.map((person) => <option key={person.id} value={person.name}>{person.name}</option>)}</select>
+          <div className="mt-4 grid items-end gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(240px,1fr)_180px_180px_200px_auto]">
+            <label className="relative sm:col-span-2 xl:col-span-1"><Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-slate-400" /><input className={`${inputClass} pl-10`} onChange={(event) => setSearch(event.target.value)} placeholder="Search name, mobile, source, workshop..." value={search} /></label>
+            <label className="block text-xs font-black text-slate-500">Status
+              <select className={`${inputClass} mt-1`} onChange={(event) => setStageFilter(event.target.value as "All" | LeadStage)} value={stageFilter}><option value="All">All statuses</option>{stages.map((stage) => <option key={stage}>{stage}</option>)}</select>
+            </label>
+            <label className="block text-xs font-black text-slate-500">Source
+              <select className={`${inputClass} mt-1`} onChange={(event) => setSourceFilter(event.target.value)} value={sourceFilter}><option value="">All sources</option>{sources.map((source) => <option key={source} value={source}>{source}</option>)}</select>
+            </label>
+            <select className={inputClass} onChange={(event) => setOwnerFilter(event.target.value)} aria-label="Filter by owner" value={ownerFilter}><option value="All">All owners</option><option>Unassigned</option>{salesPeople.map((person) => <option key={person.id} value={person.name}>{person.name}</option>)}</select>
             <span className="inline-flex items-center gap-2 rounded-lg bg-slate-100 px-4 text-xs font-black uppercase text-slate-500"><SlidersHorizontal className="size-4" />Filters</span>
           </div>
 
