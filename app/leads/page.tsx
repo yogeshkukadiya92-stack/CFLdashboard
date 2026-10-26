@@ -1,5 +1,7 @@
 "use client";
 
+import { callFlowDispositions } from "@/lib/callflow-connector";
+import { latestLeadCallStatus, normalizeCallStatus } from "@/lib/lead-call-status";
 import { AdminPlatformShell } from "@/components/admin-platform-shell";
 import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
 import { createLeadActivity, createLeadId, nextPendingFollowUp, normalizeLead, normalizeLeadMobile } from "@/lib/lead-utils";
@@ -78,7 +80,7 @@ export default function LeadsPage() {
   const [workshops, setWorkshops] = useState<Workshop[]>([]);
   const [clients, setClients] = useState<ClientRecord[]>([]);
   const [search, setSearch] = useState("");
-  const [stageFilter, setStageFilter] = useState<"All" | LeadStage>("All");
+  const [stageFilter, setStageFilter] = useState<string>("All");
   const [sourceFilter, setSourceFilter] = useState("");
   const [ownerFilter, setOwnerFilter] = useState("All");
   const [scope, setScope] = useState<QueueScope>("all");
@@ -139,11 +141,20 @@ export default function LeadsPage() {
 
   const sources = useMemo(() => [...new Set(leads.map((lead) => lead.source).filter(Boolean))].sort((a, b) => a.localeCompare(b)), [leads]);
 
+  const callStatuses = useMemo(() => {
+    const options = new Map(callFlowDispositions.map(([, code, label]) => [normalizeCallStatus(code), label as string]));
+    for (const lead of leads) {
+      const status = latestLeadCallStatus(lead);
+      if (status && !options.has(status)) options.set(status, status.replace(/\b\w/g, letter => letter.toUpperCase()));
+    }
+    return [...options].map(([value, label]) => ({ value, label }));
+  }, [leads]);
+
   const filteredLeads = useMemo(() => {
     const query = search.trim().toLowerCase();
     return leads.filter((lead) => {
       if (sourceFilter && lead.source !== sourceFilter) return false;
-      if (stageFilter !== "All" && lead.stage !== stageFilter) return false;
+      if (stageFilter.startsWith("call:") ? latestLeadCallStatus(lead) !== stageFilter.slice(5) : stageFilter !== "All" && lead.stage !== stageFilter) return false;
       if (ownerFilter !== "All" && (ownerFilter === "Unassigned" ? Boolean(lead.assignedTo) : lead.assignedTo !== ownerFilter)) return false;
       if (scope === "today" && !isToday(lead.createdAt)) return false;
       if (scope === "overdue" && !hasOverdueFollowUp(lead)) return false;
@@ -483,7 +494,7 @@ export default function LeadsPage() {
           <div className="mt-4 grid items-end gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(240px,1fr)_180px_180px_200px_auto]">
             <label className="relative sm:col-span-2 xl:col-span-1"><Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-slate-400" /><input className={`${inputClass} pl-10`} onChange={(event) => setSearch(event.target.value)} placeholder="Search name, mobile, source, workshop..." value={search} /></label>
             <label className="block text-xs font-black text-slate-500">Status
-              <select className={`${inputClass} mt-1`} onChange={(event) => setStageFilter(event.target.value as "All" | LeadStage)} value={stageFilter}><option value="All">All statuses</option>{stages.map((stage) => <option key={stage}>{stage}</option>)}</select>
+              <select className={`${inputClass} mt-1`} onChange={(event) => setStageFilter(event.target.value)} value={stageFilter}><option value="All">All statuses</option><optgroup label="Lead stage">{stages.map((stage) => <option key={stage}>{stage}</option>)}</optgroup><optgroup label="Call Flow status">{callStatuses.map(status => <option key={status.value} value={`call:${status.value}`}>{status.label}</option>)}</optgroup></select>
             </label>
             <label className="block text-xs font-black text-slate-500">Source
               <select className={`${inputClass} mt-1`} onChange={(event) => setSourceFilter(event.target.value)} value={sourceFilter}><option value="">All sources</option>{sources.map((source) => <option key={source} value={source}>{source}</option>)}</select>
