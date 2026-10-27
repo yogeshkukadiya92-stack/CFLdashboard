@@ -1,15 +1,17 @@
-import { Country, State } from "country-state-city";
+import countries from "./generated/countries.json" with { type: "json" };
+import states from "./generated/states.json" with { type: "json" };
 import type { BuilderField } from "./types";
 
-export const COUNTRY_OPTIONS = Country.getAllCountries().map(country => country.name);
+export const PHONE_COUNTRIES = countries;
+
+export const COUNTRY_OPTIONS = countries.map(country => country.name);
 
 export function countryCode(country: string) {
-  return Country.getAllCountries().find(item => item.name === country)?.isoCode;
+  return countries.find(item => item.name === country)?.isoCode;
 }
 
 export function statesForCountry(country: string) {
-  const code = countryCode(country);
-  return code ? State.getStatesOfCountry(code).map(state => state.name) : [];
+  return (states as Record<string, string[]>)[country] ?? [];
 }
 
 /** Keep saved field IDs so existing responses and form rules remain associated. */

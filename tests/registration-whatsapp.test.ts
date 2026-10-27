@@ -79,6 +79,31 @@ test("routes confirmed and waiting WhatsApp messages only to allowed recipients"
       assert.equal(requests.at(-1)?.buttonValue, undefined);
     }
     requests.length = 0;
+    // JOY's approved template has only VARIABLE_1 (the participant name).
+    // It must also work without a workshop starting date.
+    for (const manualWhatsappStartDate of ["", "28th November"]) {
+      const joyPatch = await sendRegistrationStatusNotifications({
+        ...baseRegistration, registrationNumber: "REG-13968", registrationStatus: "confirmed"
+      }, { ...form, whatsappConfirmationTemplate: "cfl_the_joy_thank_you", manualWhatsappStartDate }, "Spiritual");
+      assert.equal(joyPatch.confirmationWhatsappStatus, "sent");
+      assert.equal(joyPatch.confirmationWhatsappError, undefined);
+      assert.ok(joyPatch.confirmationWhatsappSentAt);
+      for (const key of ["data", "BodyDynamicData", "parameters", "variables"]) {
+        assert.deepEqual(requests.at(-1)?.[key], ["Test Participant"]);
+      }
+      assert.equal(requests.at(-1)?.TemplateName, "cfl_the_joy_thank_you");
+      assert.equal(requests.at(-1)?.buttonValue, undefined);
+    }
+
+    requests.length = 0;
+    const internationalPatch = await sendRegistrationStatusNotifications({
+      ...baseRegistration, mobile: "+971501234567", registrationStatus: "confirmed"
+    }, { ...form, whatsappConfirmationTemplate: "cfl_the_joy_thank_you" });
+    assert.equal(internationalPatch.confirmationWhatsappStatus, "sent");
+    assert.equal(requests[0].PhoneNumber, "971501234567");
+    assert.equal(requests[0].sendto, "971501234567");
+
+    requests.length = 0;
     const hf39Patch = await sendRegistrationStatusNotifications({
       ...baseRegistration,
       registrationNumber: "REG-0039",

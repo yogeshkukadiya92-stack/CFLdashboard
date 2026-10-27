@@ -1,3 +1,4 @@
+import { internationalPhone } from "@/lib/phone-number";
 import { AUTH_COOKIE_NAME, verifyAuthToken } from "@/lib/auth";
 import { canUseManualOtpOverride } from "@/lib/otp-override";
 import { NextRequest, NextResponse } from "next/server";
@@ -8,7 +9,7 @@ import { getAppState } from "@/lib/db";
 import type { BuilderForm } from "@/lib/types";
 
 function cleanMobile(value: unknown) {
-  return String(value ?? "").replace(/\D/g, "").slice(-10);
+  return internationalPhone(value);
 }
 
 function cleanOtp(value: unknown) {
@@ -21,7 +22,7 @@ export async function POST(request: NextRequest) {
     const mobile = cleanMobile(body?.mobile);
     const otp = cleanOtp(body?.otp);
     const formId = String(body?.formId ?? "").trim().slice(0, 200);
-    if (mobile.length !== 10 || otp.length !== 6 || !formId) {
+    if (!mobile || otp.length !== 6 || !formId) {
       return NextResponse.json({ error: "Valid mobile and 6-digit OTP are required." }, { status: 400 });
     }
 

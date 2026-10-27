@@ -5,7 +5,9 @@ import { normalizeCoreFieldRequirements } from "@/lib/builder-field-normalizatio
 import { workshops as seedWorkshops } from "@/lib/data";
 import { hydratePublicRegistrationState, readLocalArray, readLocalObject, savePublicRegistration, writeLiveStateToLocalStorage } from "@/lib/live-state";
 import { sanitizeRichTextHtml } from "@/lib/rich-text";
-import { COUNTRY_OPTIONS, ensureLocationFields, statesForCountry } from "@/lib/location-options";
+import { COUNTRY_OPTIONS, PHONE_COUNTRIES, countryCode, ensureLocationFields, statesForCountry } from "@/lib/location-options";
+import { cachedCities, loadCities } from "@/lib/location-cities";
+import { internationalPhone, registrationPhoneKey, phoneCallingCode } from "@/lib/phone-number";
 import { resolveRegistrationOtpRequired } from "@/lib/registration-otp";
 import { resolveRegistrationGroupUrl } from "@/lib/registration-group";
 import type { BuilderField, BuilderForm, BuilderFormMode, BuilderTheme, FormAnalyticsRecord, PaymentTier, RegistrationEntry } from "@/lib/types";
@@ -103,7 +105,7 @@ const defaultTheme: BuilderTheme = {
 function simpleFields(): BuilderField[] {
   return ensureLocationFields([
     { id: "name", type: "short_text", label: "Full Name", placeholder: "Your full name", required: true, role: "name" },
-    { id: "mobile", type: "mobile", label: "Mobile Number", placeholder: "10-digit mobile", required: true, role: "mobile" },
+    { id: "mobile", type: "mobile", label: "Mobile Number", placeholder: "Mobile number", required: true, role: "mobile" },
     { id: "email", type: "email", label: "Email", placeholder: "you@example.com", required: false, role: "email" },
     { id: "country", type: "dropdown", label: "Country", required: true, options: [...COUNTRY_OPTIONS], role: "country" },
     { id: "city", type: "dropdown", label: "City", required: false, allowOther: true, role: "city" }
@@ -112,10 +114,6 @@ function simpleFields(): BuilderField[] {
 
 function slugify(value: string) {
   return value.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
-}
-
-function cleanMobile(value: string) {
-  return value.replace(/\D/g, "");
 }
 
 function isDarkColor(value: string | undefined) {
@@ -165,13 +163,12 @@ function buildPublicPages(fields: BuilderField[], mode: BuilderFormMode) {
   return pages.length ? pages : [{ fields: [], title: "Your details" }];
 }
 
-function hasValidAnswer(field: BuilderField, answers: Record<string, string>) {
+function hasValidAnswer(field: BuilderField, answers: Record<string, string>, phoneCountry = "IN") {
   if (field.type === "heading" || field.type === "divider" || !isFieldVisible(field, answers)) return true;
   const value = (answers[field.id] ?? "").trim();
   if (!value) return !field.required;
   if (field.role === "mobile") {
-    const digits = cleanMobile(value);
-    if (digits.length !== 10 || !/^[6-9]/.test(digits)) return false;
+    return Boolean(internationalPhone(value, phoneCountry));
   }
   if (field.type === "email" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return false;
   if (field.minLength && value.length < field.minLength) return false;
@@ -496,31 +493,38 @@ export default function RegistrationPage() {
   const mobileFieldId = roleField("mobile")?.id;
   const selectedCountry = answers[roleField("country")?.id ?? ""] ?? "";
   const selectedState = answers[roleField("state")?.id ?? ""] ?? "";
-  const [cityOptions, setCityOptions] = useState<{ country: string; state: string; options: string[] }>({ country: "", state: "", options: [] });
+  const [phoneCountryOverride, setPhoneCountryOverride] = useState("");
+  const locationCountryCode = countryCode(selectedCountry) || "IN";
+  const phoneCountry = phoneCountryOverride || (phoneCallingCode(locationCountryCode) ? locationCountryCode : "IN");
+  const [cityData, setCityData] = useState<{ country: string; lists: Record<string, string[]> }>({ country: "India", lists: cachedCities("India") ?? {} });
+  const [cityError, setCityError] = useState("");
+  const [cityRetry, setCityRetry] = useState(0);
   useEffect(() => {
-    if (!selectedCountry || !selectedState) return;
-    const controller = new AbortController();
-    fetch(`/api/locations?${new URLSearchParams({ country: selectedCountry, state: selectedState })}`, { signal: controller.signal })
-      .then(response => { if (!response.ok) throw new Error("Location lookup failed"); return response.json(); })
-      .then((options: string[]) => setCityOptions({ country: selectedCountry, state: selectedState, options }))
-      .catch(() => { if (!controller.signal.aborted) setCityOptions({ country: selectedCountry, state: selectedState, options: [] }); });
-    return () => controller.abort();
-  }, [selectedCountry, selectedState]);
+    let active = true;
+    setCityError("");
+    if (selectedCountry) loadCities(selectedCountry)
+      .then(lists => { if (active) setCityData({ country: selectedCountry, lists }); })
+      .catch(() => { if (active) setCityError("Cities could not load. Retry or choose Other to enter your city."); });
+    return () => { active = false; };
+  }, [selectedCountry, cityRetry]);
+  const cityLists = cachedCities(selectedCountry) ?? (cityData.country === selectedCountry ? cityData.lists : undefined);
+  const cityLoading = Boolean(selectedCountry && !cityLists && !cityError);
 
   const mobileValue = mobileFieldId ? answers[mobileFieldId] ?? "" : "";
-  const mobileDigits = cleanMobile(mobileValue);
-  const otpVerified = Boolean(model?.otpRequired) && mobileDigits.length === 10 && otpVerifiedMobile === mobileDigits;
+  const mobileInternational = internationalPhone(mobileValue, phoneCountry);
+  const mobileDigits = mobileInternational;
+  const otpVerified = Boolean(model?.otpRequired) && Boolean(mobileInternational) && otpVerifiedMobile === mobileDigits;
 
   // Auto-fill from a saved client when the mobile matches.
   useEffect(() => {
-    const digits = cleanMobile(mobileValue);
+    const digits = registrationPhoneKey(mobileInternational);
     if (!model || digits.length < 10 || clients.length === 0) {
       setMatchedClient(null);
       return;
     }
     const found = clients.find((client) => {
-      const stored = cleanMobile(client.mobile ?? "");
-      return stored.length >= 10 && (stored.endsWith(digits) || digits.endsWith(stored));
+      const stored = registrationPhoneKey(client.mobile);
+      return stored === digits;
     });
     if (!found) {
       setMatchedClient(null);
@@ -538,10 +542,10 @@ export default function RegistrationPage() {
       return next;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clients, mobileValue, model]);
+  }, [clients, mobileInternational, model]);
 
   useEffect(() => {
-    const mobile = cleanMobile(mobileValue).slice(-10);
+    const mobile = registrationPhoneKey(mobileInternational);
     if (!model || mobile.length !== 10 || !/^[6-9]/.test(mobile)) return;
 
     const controller = new AbortController();
@@ -574,7 +578,7 @@ export default function RegistrationPage() {
       controller.abort();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mobileValue, model, slug]);
+  }, [mobileInternational, model, slug]);
 
   useEffect(() => {
     setOtpCode("");
@@ -595,7 +599,7 @@ export default function RegistrationPage() {
   const activePageIndex = Math.min(currentPage, Math.max(0, pages.length - 1));
   const activePage = pages[activePageIndex] ?? { fields: visibleFields, title: "" };
   const isLastPage = activePageIndex >= pages.length - 1;
-  const currentPageInvalid = activePage.fields.some((field) => !hasValidAnswer(field, answers));
+  const currentPageInvalid = activePage.fields.some((field) => !hasValidAnswer(field, answers, phoneCountry));
 
   function trackAnalytics(event: "view" | "start" | "complete" | "drop_off", fieldId = "") {
     if (!model) return;
@@ -634,9 +638,10 @@ export default function RegistrationPage() {
     try {
       const raw = window.localStorage.getItem(`cfl_registration_draft_${model.formId}`);
       if (!raw) return;
-      const draft = JSON.parse(raw) as { answers?: Record<string, string>; currentPage?: number; partAmount?: string; paymentMode?: "Full" | "Part"; referralCode?: string; selectedTierId?: string };
+      const draft = JSON.parse(raw) as { answers?: Record<string, string>; currentPage?: number; partAmount?: string; paymentMode?: "Full" | "Part"; referralCode?: string; selectedTierId?: string; phoneCountry?: string };
       if (draft.answers && Object.keys(draft.answers).length) {
         setAnswers(draft.answers);
+        setPhoneCountryOverride(draft.phoneCountry ?? "");
         setCurrentPage(Math.max(0, Number(draft.currentPage || 0)));
         setPartAmount(draft.partAmount ?? "");
         setPaymentMode(draft.paymentMode === "Part" ? "Part" : "Full");
@@ -654,9 +659,9 @@ export default function RegistrationPage() {
     if (!model || success || !Object.keys(answers).length) return;
     window.localStorage.setItem(
       `cfl_registration_draft_${model.formId}`,
-      JSON.stringify({ answers, currentPage: activePageIndex, partAmount, paymentMode, referralCode, selectedTierId })
+      JSON.stringify({ answers, currentPage: activePageIndex, partAmount, paymentMode, referralCode, selectedTierId, phoneCountry: phoneCountryOverride })
     );
-  }, [activePageIndex, answers, model, partAmount, paymentMode, referralCode, selectedTierId, success]);
+  }, [activePageIndex, answers, model, partAmount, paymentMode, referralCode, selectedTierId, success, phoneCountryOverride]);
 
   useEffect(() => {
     if (!model) return;
@@ -671,8 +676,8 @@ export default function RegistrationPage() {
 
   const missingRequired = useMemo(() => {
     if (!model) return true;
-    return model.fields.some((field) => !hasValidAnswer(field, answers));
-  }, [answers, model]);
+    return model.fields.some((field) => !hasValidAnswer(field, answers, phoneCountry));
+  }, [answers, model, phoneCountry]);
 
   function setAnswer(id: string, value: string) {
     lastFieldIdRef.current = id;
@@ -680,6 +685,7 @@ export default function RegistrationPage() {
       analyticsStartedRef.current = true;
       trackAnalytics("start");
     }
+    if (id === roleField("country")?.id) setPhoneCountryOverride("");
     setAnswers((prev) => {
       const next = { ...prev, [id]: value };
       // Clear dependent answers when their parent changes.
@@ -712,8 +718,8 @@ export default function RegistrationPage() {
 
   async function sendOtp() {
     if (!model?.otpRequired) return;
-    if (mobileDigits.length !== 10 || !/^[6-9]/.test(mobileDigits)) {
-      setOtpMessage("Enter a valid 10-digit mobile number first.");
+    if (!mobileInternational) {
+      setOtpMessage("Select the calling code and enter a valid mobile number first.");
       return;
     }
     setOtpSending(true);
@@ -745,7 +751,7 @@ export default function RegistrationPage() {
 
   async function verifyOtp() {
     if (!model?.otpRequired) return false;
-    if (mobileDigits.length !== 10 || otpCode.trim().length !== 6) {
+    if (!mobileInternational || otpCode.trim().length !== 6) {
       setOtpMessage("Enter the 6-digit OTP.");
       return false;
     }
@@ -780,7 +786,7 @@ export default function RegistrationPage() {
   async function handlePrimarySubmit() {
     if (!model) return;
     if (missingRequired) {
-      setMessage("Please fill all required fields (and a valid 10-digit mobile).");
+      setMessage("Please fill all required fields and a valid mobile number with its country code.");
       return;
     }
     if (model.otpRequired && !otpVerified) {
@@ -830,14 +836,14 @@ export default function RegistrationPage() {
   async function submitRegistration(whatsappVerificationStatus: RegistrationEntry["whatsappVerificationStatus"] = "not_required") {
     if (!model) return;
     if (missingRequired) {
-      setMessage("Please fill all required fields (and a valid 10-digit mobile).");
+      setMessage("Please fill all required fields and a valid mobile number with its country code.");
       return;
     }
 
     const name = (roleField("name")?.id ? answers[roleField("name")!.id] : "")?.trim() || "Guest";
     const email = (roleField("email")?.id ? answers[roleField("email")!.id] : "")?.trim() || "";
     const city = (roleField("city")?.id ? answers[roleField("city")!.id] : "")?.trim() || "Unknown";
-    const mobile = cleanMobile(mobileValue);
+    const mobile = mobileInternational;
 
     const extra: Record<string, string> = {};
     if (activeTier) extra["Registration Type"] = activeTier.label;
@@ -915,7 +921,7 @@ export default function RegistrationPage() {
       workshopSlug: model.slug,
       workshopTitle: model.title,
       fullName: name,
-      mobile: mobile ? `+91 ${mobile}` : "",
+      mobile,
       email,
       city,
       facilitator: model.facilitator,
@@ -1171,12 +1177,16 @@ export default function RegistrationPage() {
                     onChange={(value) => setAnswer(field.id, value)}
                     onToggle={(option) => toggleCheckbox(field.id, option)}
                     radiusClass={fieldRadiusClass}
-                    dependentOptions={field.role === "country" ? COUNTRY_OPTIONS : field.role === "state" ? statesForCountry(selectedCountry) : field.role === "city" ? (cityOptions.country === selectedCountry && cityOptions.state === selectedState ? cityOptions.options : []) : undefined}
+                    dependentOptions={field.role === "country" ? COUNTRY_OPTIONS : field.role === "state" ? statesForCountry(selectedCountry) : field.role === "city" ? (cityLists?.[selectedState] ?? []) : undefined}
+                    loading={field.role === "city" && cityLoading}
+                    phoneCountry={phoneCountry}
+                    onPhoneCountryChange={setPhoneCountryOverride}
                     disabled={(field.role === "state" && !selectedCountry) || (field.role === "city" && !selectedState)}
                     value={answers[field.id] ?? ""}
                   />
                 ))}
               </div>
+              {cityError ? <p role="status" className="mt-2 text-sm text-amber-700">{cityError} <button type="button" className="underline" onClick={() => setCityRetry(value => value + 1)}>Retry</button></p> : null}
 
               {isLastPage && model.paid && hasTiers ? (
                 <div className="mt-5 rounded-2xl border border-slate-100 bg-slate-50/50 p-5">
@@ -1279,7 +1289,7 @@ export default function RegistrationPage() {
               <div>
                 <h2 className="text-xl font-black text-slate-950">WhatsApp OTP Verification</h2>
                 <p className="mt-1 text-sm font-semibold text-slate-500">
-                  OTP sent on WhatsApp to +91 {mobileDigits}. Enter OTP to complete registration.
+                  OTP sent on WhatsApp to {mobileDigits}. Enter OTP to complete registration.
                 </p>
               </div>
             </div>
@@ -1327,7 +1337,7 @@ export default function RegistrationPage() {
             </span>
             <h2 className="mt-5 text-2xl font-black text-slate-950">Already Registered</h2>
             <p className="mt-3 text-sm font-semibold leading-6 text-slate-600">
-              Mobile number +91 {mobileDigits} is already registered for this workshop. You cannot submit this form again with the same number.
+              Mobile number {mobileDigits} is already registered for this workshop. You cannot submit this form again with the same number.
             </p>
             <button className="mt-6 min-h-12 w-full rounded-xl bg-slate-950 px-5 text-sm font-black text-white hover:bg-slate-800" onClick={() => setDuplicateModalOpen(false)} type="button">Close</button>
           </div>
@@ -1388,6 +1398,9 @@ function RenderField({
   onToggle,
   radiusClass,
   dependentOptions,
+  loading,
+  phoneCountry,
+  onPhoneCountryChange,
   disabled,
   value
 }: {
@@ -1397,6 +1410,9 @@ function RenderField({
   onToggle: (option: string) => void;
   radiusClass: string;
   dependentOptions?: readonly string[];
+  loading?: boolean;
+  phoneCountry?: string;
+  onPhoneCountryChange?: (country: string) => void;
   disabled?: boolean;
   value: string;
 }) {
@@ -1418,12 +1434,19 @@ function RenderField({
     control = <textarea className={inputClass} onChange={(event) => onChange(event.target.value)} placeholder={field.placeholder} rows={3} value={value} />;
   } else if (isHeightField(field.type, field.label)) {
     control = <HeightInput className={inputClass} onChange={onChange} value={value} />;
+  } else if (field.role === "mobile") {
+    control = <div className="flex gap-2">
+      <select aria-label="Mobile country code" className={`${inputClass} !w-32 shrink-0 !px-2`} value={phoneCountry} onChange={event => onPhoneCountryChange?.(event.target.value)}>
+        {PHONE_COUNTRIES.filter(country => phoneCallingCode(country.isoCode)).map(country => <option key={country.isoCode} value={country.isoCode}>{country.isoCode} +{phoneCallingCode(country.isoCode)}</option>)}
+      </select>
+      <input aria-label={field.label} autoComplete="tel-national" className={`${inputClass} min-w-0`} type="tel" inputMode="tel" placeholder="Mobile number" value={value} onChange={event => onChange(event.target.value)} />
+    </div>;
   } else if (field.type === "dropdown") {
     const isOther = value.startsWith("Other: ");
     control = (
       <div className="space-y-2">
         <select className={inputClass} disabled={disabled} onChange={(event) => onChange(event.target.value === "__other" ? "Other: " : event.target.value)} value={isOther ? "__other" : value}>
-          <option value="">{disabled ? (field.role === "city" ? "Select state first" : "Select country first") : "Select…"}</option>
+          <option value="">{disabled ? (field.role === "city" ? "Select state first" : "Select country first") : loading ? "Loading cities…" : "Select…"}</option>
           {(dependentOptions ?? field.options ?? []).map((option) => <option key={option} value={option}>{option}</option>)}
           {field.allowOther ? <option value="__other">Other</option> : null}
         </select>

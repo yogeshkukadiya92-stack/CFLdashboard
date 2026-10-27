@@ -1,3 +1,4 @@
+import { internationalPhone, registrationPhoneKey } from "@/lib/phone-number";
 import { publicRegistrationJson } from "@/lib/public-registration-cache";
 import { ensureRegistrationHotPath } from "@/lib/registration-hot-path";
 import { drainRegistrationJobs, ensureRegistrationJobs } from "@/lib/registration-jobs";
@@ -33,10 +34,11 @@ export async function POST(request: Request) {
 
     const input = registration as Record<string, unknown>;
     const fullName = String(input.fullName ?? "").trim().slice(0, 200);
-    const mobileDigits = String(input.mobile ?? "").replace(/\D/g, "").slice(-10);
+    const mobile = internationalPhone(input.mobile);
+    const mobileDigits = registrationPhoneKey(mobile);
     const workshopTitle = String(input.workshopTitle ?? "").trim().slice(0, 300);
-    if (!fullName || !workshopTitle || mobileDigits.length !== 10 || !/^[6-9]/.test(mobileDigits)) {
-      return NextResponse.json({ error: "Name, workshop and valid 10-digit mobile are required." }, { status: 400 });
+    if (!fullName || !workshopTitle || !mobile) {
+      return NextResponse.json({ error: "Name, workshop and valid mobile with country code are required." }, { status: 400 });
     }
 
     const amountPaid = Math.min(10_000_000, Math.max(0, Number(input.amountPaid ?? 0) || 0));
@@ -63,7 +65,7 @@ export async function POST(request: Request) {
       id: String(input.id ?? "").trim().slice(0, 300),
       introductionSessionId: String(input.introductionSessionId ?? "").trim().slice(0, 300) || undefined,
       referralCode: String(input.referralCode ?? "").replace(/\D/g, "").slice(-10) || undefined,
-      mobile: `+91 ${mobileDigits}`,
+      mobile,
       landingPageSlug: String(input.landingPageSlug ?? "").trim().slice(0, 300) || undefined,
       paymentMode: input.paymentMode === "Part" ? "Part" : "Full",
       status: amountDue > 0 ? "Due" : "Paid",
@@ -177,8 +179,8 @@ export async function POST(request: Request) {
         ? attendanceEntries.some((entry) => attendanceMatchesFinalRegistration(entry, sanitizedRegistration, requiredSessionId))
         : false;
       const hasAttendanceForAnotherSession = attendanceRequired && !attendanceMatched && attendanceEntries.some((entry) => {
-        const incomingMobile = sanitizedRegistration.mobile.replace(/\D/g, "").slice(-10);
-        return entry.mobile.replace(/\D/g, "").slice(-10) === incomingMobile;
+        const incomingMobile = registrationPhoneKey(sanitizedRegistration.mobile);
+        return registrationPhoneKey(entry.mobile) === incomingMobile;
       });
       const referralCodes = (Array.isArray(form?.referralCodes) ? form.referralCodes : []) as ReferralCodeConfig[];
       const submittedReferral = sanitizedRegistration.referralCode;

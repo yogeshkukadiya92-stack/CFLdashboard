@@ -1,3 +1,4 @@
+import { internationalPhone } from "./phone-number.ts";
 import type { BuilderForm, RegistrationEntry } from './types.ts';
 
 export const DEFAULT_MANUAL_WHATSAPP_TEMPLATE = `Hello {{name}}
@@ -27,8 +28,8 @@ export function renderManualWhatsApp(entry: RegistrationEntry, form?: Partial<Bu
 }
 
 export function manualWhatsAppUrl(mobile: string, message: string) {
-  let digits = mobile.replace(/\D/g, '');
-  if (digits.length === 10) digits = `91${digits}`;
-  if (!/^[1-9]\d{10,14}$/.test(digits)) return null;
+  const number = internationalPhone(mobile);
+  if (!number) return null;
+  const digits = number.slice(1);
   return `https://wa.me/${digits}?text=${encodeURIComponent(message)}`;
 }

@@ -1,3 +1,4 @@
+import { registrationPhoneKey } from "./phone-number.ts";
 import { extractPreQualification } from "./crm-scorecard.ts";
 import type { Lead, LeadActivity, LeadFollowUp, LeadPriority, LeadStage } from "./types.ts";
 import { salesPersonCodeFromId } from "./sales-person-code.ts";
@@ -21,7 +22,7 @@ type RegistrationLeadInput = {
 };
 
 export function normalizeLeadMobile(value: unknown) {
-  return String(value ?? "").replace(/\D/g, "").slice(-10);
+  return registrationPhoneKey(value);
 }
 
 export function createLeadId() {

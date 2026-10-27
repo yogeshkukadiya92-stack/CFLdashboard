@@ -1,3 +1,4 @@
+import { internationalPhone } from "@/lib/phone-number";
 import { NextResponse } from "next/server";
 
 import { randomInt } from "node:crypto";
@@ -8,7 +9,7 @@ import { resolveWhatsAppAccount } from "@/lib/whatsapp-accounts";
 const OTP_TTL_MS = 5 * 60 * 1000;
 
 function cleanMobile(value: unknown) {
-  return String(value ?? "").replace(/\D/g, "").slice(-10);
+  return internationalPhone(value);
 }
 
 function createOtp() {
@@ -21,7 +22,7 @@ async function sendWhatsAppOtp(mobile: string, code: string, senderId?: string) 
   const directAuthToken = account ? account.authToken : process.env.WHATSAPP_OTP_AUTH_TOKEN;
   const directTemplate = account ? account.otpTemplate : process.env.WHATSAPP_OTP_TEMPLATE_NAME || process.env.WHATSAPP_OTP_TEMPLATE_ID;
   if (directApiUrl && directAuthToken && directTemplate) {
-    const recipient = `91${mobile}`;
+    const recipient = mobile.replace(/\D/g, "");
     const originWebsite = process.env.WHATSAPP_OTP_ORIGIN_WEBSITE || "https://coachforlife.in/";
     const senderNumber = account?.number || process.env.WHATSAPP_OTP_NUMBER || "916353531533";
     const language = account?.language || process.env.WHATSAPP_OTP_LANGUAGE || "en";
@@ -98,7 +99,7 @@ async function sendWhatsAppOtp(mobile: string, code: string, senderId?: string) 
       body: JSON.stringify({
         channel: "whatsapp",
         code,
-        mobile: `91${mobile}`,
+        mobile: mobile.replace(/\D/g, ""),
         ttlSeconds: OTP_TTL_MS / 1000
       }),
       headers: {
@@ -116,7 +117,7 @@ async function sendWhatsAppOtp(mobile: string, code: string, senderId?: string) 
 
   const response = await fetch("https://control.msg91.com/api/v5/otp", {
     body: JSON.stringify({
-      mobile: `91${mobile}`,
+      mobile: mobile.replace(/\D/g, ""),
       otp: code,
       template_id: templateId
     }),
@@ -134,8 +135,8 @@ export async function POST(request: Request) {
     const body = await request.json();
     const mobile = cleanMobile(body?.mobile);
     const formId = String(body?.formId ?? "").trim().slice(0, 200);
-    if (mobile.length !== 10 || !/^[6-9]/.test(mobile)) {
-      return NextResponse.json({ error: "Valid 10-digit mobile number is required." }, { status: 400 });
+    if (!mobile) {
+      return NextResponse.json({ error: "Valid mobile number with country code is required." }, { status: 400 });
     }
 
     const code = createOtp();

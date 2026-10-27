@@ -1,3 +1,4 @@
+import { registrationPhoneKey } from "./phone-number.ts";
 import type { AttendanceEntry, RegistrationEntry, WorkshopBatch } from "@/lib/types";
 import type { AttendanceSession, BuilderForm } from "@/lib/types";
 
@@ -6,7 +7,7 @@ function normalized(value: unknown) {
 }
 
 function mobileDigits(value: unknown) {
-  return String(value ?? "").replace(/\D/g, "").slice(-10);
+  return registrationPhoneKey(value);
 }
 
 function isQualifyingPastRegistration(registration: RegistrationEntry) {
@@ -23,7 +24,7 @@ export function findRepeaterSource(
 ) {
   const mobile = mobileDigits(incoming.mobile);
   const allowedWorkshops = new Set(sourceWorkshopIds.filter((id) => id && id !== incoming.workshopId));
-  if (mobile.length !== 10 || !allowedWorkshops.size) return undefined;
+  if (!mobile || !allowedWorkshops.size) return undefined;
 
   const registrationSource = registrations
     .filter((entry) => allowedWorkshops.has(entry.workshopId)

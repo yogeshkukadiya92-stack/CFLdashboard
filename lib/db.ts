@@ -1,3 +1,4 @@
+import { registrationPhoneKey } from "./phone-number.ts";
 import { reconcileSalesPeople } from "./sales-person-reconciliation.ts";
 import { Pool, type PoolClient, type QueryResult } from "pg";
 
@@ -220,7 +221,7 @@ export async function ensureRegistrationRecordsTable() {
         item->>'id',
         COALESCE(item->>'workshopId', item->>'workshopTitle', ''),
         COALESCE(NULLIF(item->>'batchId', ''), LOWER(COALESCE(item->>'batch', ''))),
-        RIGHT(REGEXP_REPLACE(COALESCE(item->>'mobile', ''), '[^0-9]', '', 'g'), 10),
+        CASE WHEN REGEXP_REPLACE(COALESCE(item->>'mobile', ''), '[^0-9]', '', 'g') ~ '^91[0-9]{10}$' THEN RIGHT(REGEXP_REPLACE(COALESCE(item->>'mobile', ''), '[^0-9]', '', 'g'), 10) WHEN COALESCE(item->>'mobile', '') LIKE '+%' OR LENGTH(REGEXP_REPLACE(COALESCE(item->>'mobile', ''), '[^0-9]', '', 'g')) > 10 THEN '+' || REGEXP_REPLACE(COALESCE(item->>'mobile', ''), '[^0-9]', '', 'g') ELSE REGEXP_REPLACE(COALESCE(item->>'mobile', ''), '[^0-9]', '', 'g') END,
         NOW(),
         item
       FROM app_state, LATERAL jsonb_array_elements(registrations) AS item
@@ -270,7 +271,7 @@ export async function upsertRegistrationRecord(client: Pick<PoolClient, "query">
   if (!externalId) throw new Error("Registration id is required.");
   const workshopId = String(registration.workshopId ?? registration.workshopTitle ?? "").trim();
   const batchKey = String(registration.batchId ?? "").trim() || String(registration.batch ?? "").trim().toLowerCase();
-  const mobile = String(registration.mobile ?? "").replace(/\D/g, "").slice(-10);
+  const mobile = registrationPhoneKey(registration.mobile);
   const createdAt = String(registration.createdAt ?? new Date().toISOString());
   const insertSql = `
     INSERT INTO cfl_registration_records (external_id, workshop_id, batch_key, mobile_normalized, created_at, payload, updated_at)

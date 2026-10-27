@@ -1,3 +1,4 @@
+import { internationalPhone } from "./phone-number.ts";
 import type { BuilderForm, RegistrationEntry } from "@/lib/types";
 import { recordOutboundWhatsAppMessage } from "./whatsapp-automation.ts";
 
@@ -41,19 +42,20 @@ export async function sendRegistrationConfirmation(registration: RegistrationEnt
   const templateName = form.whatsappConfirmationTemplate
     || process.env.WHATSAPP_CONFIRMATION_TEMPLATE_NAME
     || process.env.WHATSAPP_CONFIRMATION_TEMPLATE_ID;
-  // The approved pre-recorded course template has one body slot: name.
+  // The approved JOY and pre-recorded course templates have one body slot: name.
   // hf_39_confirmation has two body slots; the standard confirmation
   // template has four: name, workshop, starting date, registration number.
   // The group link is static text in the approved provider template.
   const isFixedHf39Template = templateName === "hf_39_confirmation";
+  const isNameOnlyTemplate = templateName === "cfl_the_joy_thank_you";
   const startDate = form.manualWhatsappStartDate?.trim();
   const isPreRecorded = (workshopType || "").replace(/[\s_-]+/g, "").toLowerCase() === "prerecorded";
-  if (!isFixedHf39Template && !isPreRecorded && !startDate) {
+  if (!isFixedHf39Template && !isNameOnlyTemplate && !isPreRecorded && !startDate) {
     return { configured: true, sent: false, error: "Set the workshop starting date in Workshop Create / Edit before sending confirmation WhatsApp." };
   }
   const values = isFixedHf39Template
     ? [registration.fullName, registration.registrationNumber || "-"]
-    : isPreRecorded
+    : isNameOnlyTemplate || isPreRecorded
       ? [registration.fullName]
       : [registration.fullName, form.workshopName || registration.workshopTitle, `Starting from ${startDate}`, registration.registrationNumber || "-"];
   return sendTemplateMessage({
@@ -83,12 +85,13 @@ async function sendTemplateMessage(input: {
   const apiUrl = account ? account.apiUrl : process.env.WHATSAPP_CONFIRMATION_API_URL || process.env.WHATSAPP_OTP_API_URL;
   const authToken = account ? account.authToken : process.env.WHATSAPP_CONFIRMATION_AUTH_TOKEN || process.env.WHATSAPP_OTP_AUTH_TOKEN;
   if (input.buttonValues?.some(value => typeof value !== "string" || !value.trim())) return { configured: true, sent: false, error: "Enter a value for each WhatsApp template button or remove the empty button." };
-  const mobileDigits = input.mobile.replace(/\D/g, "").slice(-10);
-  if (!apiUrl || !authToken || !input.templateName || mobileDigits.length !== 10) {
+  const recipient = internationalPhone(input.mobile);
+  const mobileDigits = recipient.replace(/\D/g, "");
+  if (!apiUrl || !authToken || !input.templateName || !recipient) {
     return { configured: false, sent: false };
   }
 
-  const mobile = `91${mobileDigits}`;
+  const mobile = mobileDigits;
   try {
     const response = await fetch(apiUrl, {
       body: JSON.stringify({

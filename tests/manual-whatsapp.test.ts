@@ -23,6 +23,8 @@ test('WhatsApp links preserve Hindi, emoji, newlines and special characters', ()
   assert.equal(url.searchParams.get('text'), message);
   assert.equal(manualWhatsAppUrl('9876543210', message), url.href);
   assert.equal(manualWhatsAppUrl('123', message), null);
+  assert.equal(new URL(manualWhatsAppUrl('+65 8123 4567', message)!).pathname, '/6581234567');
+  assert.equal(new URL(manualWhatsAppUrl('+971501234567', message)!).pathname, '/971501234567');
 });
 
 test('disabled API setting suppresses automatic notifications while manual rendering remains available', async () => {
