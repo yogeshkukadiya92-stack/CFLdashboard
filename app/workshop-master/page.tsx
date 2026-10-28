@@ -284,6 +284,7 @@ export default function WorkshopMasterPage() {
   const [responseSalesPersonId, setResponseSalesPersonId] = useState("");
   const [assigningResponseSales, setAssigningResponseSales] = useState(false);
   const [responseSalesMessage, setResponseSalesMessage] = useState("");
+  const [responseDetailTarget, setResponseDetailTarget] = useState<RegistrationEntry | null>(null);
   const [followUpTarget, setFollowUpTarget] = useState<RegistrationEntry | null>(null);
   const [shareSelectedOpen, setShareSelectedOpen] = useState(false);
   const [bulkWhatsAppOpen, setBulkWhatsAppOpen] = useState(false);
@@ -3138,7 +3139,7 @@ export default function WorkshopMasterPage() {
                             </div>
                           </td>
 	                          <td className="min-w-[190px] border-r border-slate-100 bg-white px-2.5 py-2.5 font-black text-slate-950 shadow-[8px_0_16px_-16px_rgba(15,23,42,0.65)] group-hover:bg-emerald-50 lg:sticky lg:left-[116px] lg:z-10">
-                              <p>{entry.fullName}</p>
+                              <button type="button" onClick={() => setResponseDetailTarget(entry)} className="text-left font-black text-emerald-800 underline decoration-emerald-300 underline-offset-2 hover:text-emerald-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-600" aria-label={`View registration response for ${entry.fullName}`}>{entry.fullName}</button>
                               <div className="mt-1 flex max-w-[220px] flex-wrap gap-1">
                                 {entry.registrationStatus === "waiting" ? <span className={`w-fit rounded-full px-2 py-0.5 text-[10px] font-black ${entry.waitingReason === "repeater_review" ? "bg-indigo-100 text-indigo-800" : "bg-amber-100 text-amber-800"}`}>WL-{entry.waitingPosition ?? "-"} · {entry.waitingReason === "repeater_review" ? "Repeater" : entry.waitingReason === "attendance_pending" ? "Attendance" : entry.waitingReason === "eligibility_pending" ? "Eligibility" : entry.waitingReason === "session_mismatch" ? "Session" : entry.waitingReason === "invalid_referral" ? "Referral" : entry.waitingReason === "capacity" ? "Capacity" : "Manual"}</span> : null}
                                 {entry.isRepeater ? <span className="w-fit rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-black text-violet-800">Repeater</span> : null}
@@ -3228,6 +3229,7 @@ export default function WorkshopMasterPage() {
       ) : null}
 
       {linkWorkshop ? <RegistrationLinkModal workshop={linkWorkshop} onClose={() => setLinkWorkshop(null)} /> : null}
+      {responseDetailTarget ? <RegistrationResponseModal entry={responseDetailTarget} onClose={() => setResponseDetailTarget(null)} /> : null}
       {followUpTarget ? <FollowUpModal statusOptions={statusOptions} entry={followUpTarget} onClose={() => setFollowUpTarget(null)} onSave={updateRegistrationFollowUp} /> : null}
       {shareSelectedOpen && selectedWorkshop ? (
         <ShareSelectedResponsesModal
@@ -3432,6 +3434,31 @@ export default function WorkshopMasterPage() {
         </div>
       ) : null}
     </AdminPlatformShell>
+  );
+}
+
+function RegistrationResponseModal({ entry, onClose }: { entry: RegistrationEntry; onClose: () => void }) {
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) { if (event.key === "Escape") onClose(); }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
+  const details: [string, string][] = [
+    ["Full name", entry.fullName], ["Mobile", entry.mobile], ["Email", entry.email], ["City", entry.city],
+    ...Object.entries(entry.answers ?? {})
+  ];
+
+  return (
+    <div aria-modal="true" aria-labelledby="registration-response-title" className="fixed inset-0 z-50 grid place-items-end bg-slate-950/55 sm:place-items-center sm:p-4" role="dialog" onClick={onClose}>
+      <section className="flex max-h-[90vh] w-full max-w-2xl flex-col rounded-t-2xl bg-white shadow-2xl sm:rounded-xl" onClick={(event) => event.stopPropagation()}>
+        <header className="flex items-start justify-between gap-4 border-b border-slate-200 p-5">
+          <div><p className="text-xs font-black uppercase tracking-wider text-emerald-700">Registration response</p><h2 className="mt-1 text-xl font-black text-slate-950" id="registration-response-title">{entry.fullName}</h2><p className="mt-1 text-sm text-slate-500">{entry.workshopTitle} · {formatSubmittedAt(entry.createdAt)}</p></div>
+          <button aria-label="Close registration response" className="grid size-9 shrink-0 place-items-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50" onClick={onClose} type="button"><X className="size-4" /></button>
+        </header>
+        <div className="overflow-y-auto p-5"><dl className="divide-y divide-slate-100">{details.map(([label, value], index) => <div className="py-3 first:pt-0" key={`${label}-${index}`}><dt className="text-xs font-bold text-slate-500">{label}</dt><dd className="mt-1 whitespace-pre-wrap break-words text-sm font-semibold text-slate-900">{value == null || String(value).trim() === "" ? "Not provided" : String(value)}</dd></div>)}</dl>{!Object.keys(entry.answers ?? {}).length ? <p className="mt-4 rounded-lg bg-slate-50 p-3 text-sm text-slate-500">No additional answers were saved for this registration.</p> : null}</div>
+      </section>
+    </div>
   );
 }
 
