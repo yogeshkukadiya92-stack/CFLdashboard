@@ -9,6 +9,7 @@ import { COUNTRY_OPTIONS, PHONE_COUNTRIES, countryCode, ensureLocationFields, st
 import { cachedCities, loadCities } from "@/lib/location-cities";
 import { internationalPhone, registrationPhoneKey, phoneCallingCode } from "@/lib/phone-number";
 import { resolveRegistrationOtpRequired } from "@/lib/registration-otp";
+import { configuredPartPayment } from "@/lib/registration-part-payment";
 import { resolveRegistrationGroupUrl } from "@/lib/registration-group";
 import type { BuilderField, BuilderForm, BuilderFormMode, BuilderTheme, FormAnalyticsRecord, PaymentTier, RegistrationEntry } from "@/lib/types";
 import { decodeJsonParam, formatCurrency } from "@/lib/utils";
@@ -25,7 +26,7 @@ const CLIENTS_STORAGE_KEY = "cfl_clients_v1";
 const FORM_ANALYTICS_STORAGE_KEY = "cfl_form_analytics_v1";
 const BRAND_LOGO_SRC = "/brand/coach-for-life-logo-horizontal.png";
 
-type WorkshopMasterRecord = { archived?: boolean; batch?: string; id: string; name: string; facilitator?: string; isPaid?: boolean };
+type WorkshopMasterRecord = { archived?: boolean; batch?: string; id: string; name: string; facilitator?: string; isPaid?: boolean; minimumPartPayment?: string | number };
 type ClientRecord = { city?: string; email?: string; id: number | string; mobile?: string; name?: string };
 type RazorpaySuccess = { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string };
 type RazorpayCheckout = { open: () => void; on: (event: string, handler: (response: { error?: { description?: string } }) => void) => void };
@@ -66,6 +67,7 @@ type FormModel = {
   paid: boolean;
   fee: number;
   partPayment: boolean;
+  minimumPartPayment?: number;
   otpRequired?: boolean;
   otpFallbackEnabled?: boolean;
   otpFallbackCodeHash?: string;
@@ -453,6 +455,7 @@ export default function RegistrationPage() {
       if (resolved) {
         resolved = {
           ...resolved,
+          minimumPartPayment: configuredPartPayment(readLocalArray<WorkshopMasterRecord>(WORKSHOP_MASTER_STORAGE_KEY), resolved.id, Number.MAX_SAFE_INTEGER),
           whatsappGroupUrl: resolveRegistrationGroupUrl(readLocalArray<BuilderForm>(FORMS_STORAGE_KEY), resolved)
         };
       }
@@ -591,7 +594,8 @@ export default function RegistrationPage() {
   const hasTiers = tierList.length > 0;
   const activeTier = hasTiers ? tierList.find((t) => t.id === selectedTierId) ?? tierList[0] : null;
   const fullAmount = model?.paid ? (activeTier ? activeTier.fee : model.fee) : 0;
-  const amountPaid = paymentMode === "Full" ? fullAmount : Math.max(0, Math.min(Number(partAmount || 0), fullAmount));
+  const fixedPartAmount = Math.min(model?.minimumPartPayment || 0, fullAmount);
+  const amountPaid = paymentMode === "Full" ? fullAmount : fixedPartAmount || Math.max(0, Math.min(Number(partAmount || 0), fullAmount));
   const amountDue = Math.max(0, fullAmount - amountPaid);
 
   const visibleFields = useMemo(() => model?.fields.filter((field) => isFieldVisible(field, answers)) ?? [], [answers, model]);
@@ -1238,7 +1242,9 @@ export default function RegistrationPage() {
                       inputMode="numeric"
                       onChange={(event) => setPartAmount(event.target.value)}
                       placeholder="Enter part amount"
-                      value={partAmount}
+                      aria-label="Part payment amount"
+                      readOnly={fixedPartAmount > 0}
+                      value={fixedPartAmount > 0 ? String(fixedPartAmount) : partAmount}
                     />
                   ) : null}
                   <div className="mt-3 grid grid-cols-2 gap-2 text-sm font-bold">
