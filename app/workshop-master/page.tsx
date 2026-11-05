@@ -35,6 +35,7 @@ import { type ClipboardEvent, type FormEvent, type ReactNode, useCallback, useEf
 
 type WorkshopRecord = {
   archived?: boolean;
+  pawSyncEnabled?: boolean;
   batch?: string;
   batches?: WorkshopBatch[];
   discountCodeEod?: string;
@@ -187,6 +188,8 @@ export default function WorkshopMasterPage() {
   const [manualEntryError, setManualEntryError] = useState("");
 
   const [name, setName] = useState("");
+  const [pawSyncEnabled, setPawSyncEnabled] = useState<boolean | undefined>(undefined);
+  const connectPaw = pawSyncEnabled ?? /\bPAW\b|personality awareness workshop/i.test(name);
   const [tag, setTag] = useState("");
   const [type, setType] = useState("");
   const [facilitator, setFacilitator] = useState("");
@@ -662,6 +665,7 @@ export default function WorkshopMasterPage() {
 
   function clearForm(clearMessage = true) {
     setName("");
+    setPawSyncEnabled(undefined);
     setTag("");
     setType("");
     setFacilitator("");
@@ -726,6 +730,7 @@ export default function WorkshopMasterPage() {
 
   function editRecord(record: WorkshopRecord) {
     setName(record.name);
+    setPawSyncEnabled(record.pawSyncEnabled);
     setTag(record.tag || (Array.isArray(record.tags) ? record.tags.join(", ") : ""));
     setType(record.type);
     setFacilitator(record.facilitator);
@@ -764,6 +769,7 @@ export default function WorkshopMasterPage() {
   function startDraftFromRecord(record: WorkshopRecord, mode: "full" | "form-only" = "full") {
     if (mode === "full") {
       setName(`${record.name} Copy`);
+      setPawSyncEnabled(record.pawSyncEnabled);
       setTag(record.tag || (Array.isArray(record.tags) ? record.tags.join(", ") : ""));
       setType(record.type);
       setFacilitator(record.facilitator);
@@ -1240,6 +1246,7 @@ export default function WorkshopMasterPage() {
       isPartPaymentAllow,
       leadAssignmentRules: transferLeadToCrm ? leadAssignmentRules.map((rule, priority) => ({ ...rule, priority })) : [],
       maxOrderQty,
+      pawSyncEnabled: connectPaw,
       mfwEnrollmentEnabled,
       mfwWorkshopEventId: mfwEnrollmentEnabled ? mfwWorkshopEventId : undefined,
       mfwWorkshopTitle: mfwEnrollmentEnabled ? mfwWorkshopTitle : undefined,
@@ -1731,6 +1738,14 @@ export default function WorkshopMasterPage() {
             <FormWorkflowCard title="MFW" detail={mfwEnrollmentEnabled ? "Enrollment ON" : "Enrollment OFF"} meta={mfwWorkshopTitle || mfwWorkshopEventId || "No mapping"} onOpen={() => setWorkshopWorkflowPanel("mfw")} />
             <FormWorkflowCard title="Pricing & CRM" detail={`${isPaid ? `Paid · INR ${feesWithTax || 0}` : "Free"} · CRM ${transferLeadToCrm ? "ON" : "OFF"}`} meta={`${leadAssignmentRules.length} lead rules`} onOpen={() => setWorkshopWorkflowPanel("pricing")} />
           </div>
+        </section>
+
+        <section className="mt-4 rounded-2xl border border-teal-200 bg-teal-50 p-4">
+          <label className="flex items-center gap-3 text-sm font-bold text-slate-900">
+            <input type="checkbox" className="size-5 accent-teal-700" checked={connectPaw} onChange={(event) => setPawSyncEnabled(event.target.checked)} />
+            Connect to PAW dashboard
+          </label>
+          <p className="mt-2 text-sm text-slate-600">When saved, this workshop will appear in PAW within about a minute, even before anyone registers. Registrations will sync automatically. Turning this off stops future sync; existing PAW records are kept.</p>
         </section>
 
         <div className="hidden">
