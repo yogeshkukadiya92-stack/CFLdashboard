@@ -16,7 +16,7 @@ import { WorkshopCohortCompare } from "@/components/workshop-cohort-compare";
 import { MultiWorkshopOverlap } from "@/components/multi-workshop-overlap";
 import { normalizeCoreFieldRequirements } from "@/lib/builder-field-normalization";
 import { AlertCircle, Archive, ArrowDown, ArrowUp, BarChart3, Bold, CalendarDays, Check, CheckSquare, ChevronDown, Circle, Copy, Download, Edit3, ExternalLink, Eye, EyeOff, Files, Heading, Image, Italic, LayoutList, Link2, List, ListOrdered, Mail, MessageCircle, Monitor, Palette, PhoneCall, Plus, QrCode, RefreshCw, Route, Save, Search, Share2, Smartphone, Sparkles, Tag, Trash2, Type, Underline, Upload, UsersRound, X } from "lucide-react";
-import { hydrateLiveState, readLocalArray, readLocalObject, saveLiveState, writeLocalCache } from "@/lib/live-state";
+import { hydrateLiveState, readLocalArray, readLocalObject, saveLiveState, saveLiveStateResult, writeLocalCache } from "@/lib/live-state";
 import { buildRegistrationUrl, normalizeBaseUrl } from "@/lib/registration-url";
 import { publicFormSlug } from "@/lib/public-slug";
 import { resolveRegistrationOtpRequired } from "@/lib/registration-otp";
@@ -263,6 +263,8 @@ export default function WorkshopMasterPage() {
   const [recordScope, setRecordScope] = useState<"all" | "active" | "historical" | "untagged">("active");
   const [quickTagWorkshop, setQuickTagWorkshop] = useState<WorkshopRecord | null>(null);
   const [quickTagValue, setQuickTagValue] = useState("");
+  const workshopSaveInFlight = useRef(false);
+  const [savingWorkshop, setSavingWorkshop] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedWorkshopId, setSelectedWorkshopId] = useState<string | null>(null);
   const [analyticsPanel, setAnalyticsPanel] = useState<AnalyticsPanel>(null);
@@ -700,6 +702,7 @@ export default function WorkshopMasterPage() {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (workshopSaveInFlight.current) return;
     if (!name || !tag.trim() || !type || !facilitator || !group) {
       setMessage("Please fill Workshop Name, Tag, Type, Facilitator and Product Group.");
       return;
@@ -712,20 +715,34 @@ export default function WorkshopMasterPage() {
       setMessage("Please select the required attendance form or turn off attendance confirmation.");
       return;
     }
-    if (editingId) {
-      const updatedRecord = buildWorkshopRecord(editingId);
-      const nextRecords = records.map((record) => record.id === editingId ? updatedRecord : record);
-      const [recordsSaved, formSaved] = await Promise.all([saveRecords(nextRecords), saveBuilderForm(updatedRecord)]);
-      setMessage(recordsSaved && formSaved ? "Workshop updated successfully. Changes are saved." : "Workshop updated locally, but server sync failed. Please try Update again.");
-      setShowData(false);
-      return;
-    } else {
-      const newRecord = buildWorkshopRecord(generateId());
-      const [recordsSaved, formSaved] = await Promise.all([saveRecords([newRecord, ...records]), saveBuilderForm(newRecord)]);
-      setMessage(recordsSaved && formSaved ? "Workshop saved successfully." : "Workshop saved locally, but server sync failed. Please try Save again.");
+    workshopSaveInFlight.current = true;
+    setSavingWorkshop(true);
+    try {
+      const record = buildWorkshopRecord(editingId || generateId());
+      const nextRecords = editingId
+        ? records.map((item) => item.id === editingId ? record : item)
+        : [record, ...records];
+      const forms = buildSavedForms(record);
+      // One database update saves the workshop and its registration form together.
+      const result = await saveLiveStateResult({ workshops: nextRecords, forms });
+      if (!result.ok) {
+        setMessage(`Changes are not saved on the server. ${result.error}`);
+        return;
+      }
+      setRecords(nextRecords);
+      setMessage(editingId ? "Workshop updated successfully. Changes are saved." : "Workshop saved successfully.");
+      if (editingId) {
+        setShowData(false);
+      } else {
+        clearForm(false);
+        setShowData(true);
+      }
+    } catch {
+      setMessage("Could not prepare the workshop for saving. Your edits are still open. Please retry.");
+    } finally {
+      workshopSaveInFlight.current = false;
+      setSavingWorkshop(false);
     }
-    clearForm(false);
-    setShowData(true);
   }
 
   function editRecord(record: WorkshopRecord) {
@@ -1338,17 +1355,11 @@ export default function WorkshopMasterPage() {
     };
   }
 
-  async function saveBuilderForm(record: WorkshopRecord) {
-    try {
-      const forms = readLocalArray<BuilderForm>(FORMS_STORAGE_KEY);
-      const existing = forms.find((item) => item.workshopId === record.id);
-      const form = { ...buildRegistrationForm(record), allowReferralConfirmation: existing?.allowReferralConfirmation, referralCodes: existing?.referralCodes, eligibilityWaitingMessage: existing?.eligibilityWaitingMessage };
-      const next = [form, ...forms.filter((item) => item.id !== form.id && item.workshopId !== record.id)];
-      return saveLiveState({ forms: next });
-    } catch {
-      // Workshop save should still work if local form storage is unavailable.
-      return false;
-    }
+  function buildSavedForms(record: WorkshopRecord) {
+    const forms = readLocalArray<BuilderForm>(FORMS_STORAGE_KEY);
+    const existing = forms.find((item) => item.workshopId === record.id);
+    const form = { ...buildRegistrationForm(record), allowReferralConfirmation: existing?.allowReferralConfirmation, referralCodes: existing?.referralCodes, eligibilityWaitingMessage: existing?.eligibilityWaitingMessage };
+    return [form, ...forms.filter((item) => item.id !== form.id && item.workshopId !== record.id)];
   }
 
   function loadBuilderForm(record: WorkshopRecord) {
@@ -2551,9 +2562,9 @@ export default function WorkshopMasterPage() {
             <RefreshCw className="size-4" />
             Clear
           </button>
-          <button className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-indigo-700" type="submit">
+          <button disabled={savingWorkshop} className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-indigo-700" type="submit">
             <Save className="size-4" />
-            {editingId ? "Update" : "Save"}
+            {savingWorkshop ? "Saving..." : editingId ? "Update" : "Save"}
           </button>
         </div>
       </form>

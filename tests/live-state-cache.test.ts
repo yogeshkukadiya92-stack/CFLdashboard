@@ -66,3 +66,45 @@ test("an empty server salesperson list clears stale cache without restoring dele
     else Reflect.deleteProperty(globalThis, "window");
   }
 });
+
+test("save reports authentication, storage and network failures without accepting a login page as success", async () => {
+  const { saveLiveStateResult } = await import("../lib/live-state.ts");
+  const oldFetch = globalThis.fetch;
+  try {
+    for (const [response, expected] of [
+      [Response.json({ message: "Unauthorized" }, { status: 401 }), /login session/],
+      [Response.json({ message: "Forbidden" }, { status: 403 }), /permission/],
+      [new Response("Too large", { status: 413 }), /too large/],
+      [Response.json({ dbEnabled: false }, { status: 400 }), /storage is unavailable/],
+      [new Response("<html>Sign in</html>"), /could not save/],
+      [Response.json({ ok: false }, { status: 500 }), /HTTP 500/],
+    ] as const) {
+      globalThis.fetch = async () => response;
+      const result = await saveLiveStateResult({});
+      assert.equal(result.ok, false);
+      if (!result.ok) assert.match(result.error, expected);
+    }
+    globalThis.fetch = async () => { throw new TypeError("Failed to fetch"); };
+    const result = await saveLiveStateResult({});
+    assert.equal(result.ok, false);
+    if (!result.ok) assert.match(result.error, /connection/);
+  } finally {
+    globalThis.fetch = oldFetch;
+  }
+});
+
+test("workshop and registration form are sent together and require server acknowledgment", async () => {
+  const oldFetch = globalThis.fetch;
+  const calls: unknown[] = [];
+  try {
+    globalThis.fetch = async (_url, options) => {
+      calls.push(JSON.parse(String(options?.body)));
+      return Response.json({ ok: true, dbEnabled: true });
+    };
+    const patch = { workshops: [{ id: "workshop-atomic" }], forms: [{ id: "form-atomic", workshopId: "workshop-atomic" }] };
+    assert.equal(await saveLiveState(patch), true);
+    assert.deepEqual(calls, [patch]);
+  } finally {
+    globalThis.fetch = oldFetch;
+  }
+});

@@ -128,7 +128,9 @@ export async function hydrateLiveState(): Promise<LiveState | null> {
   return state;
 }
 
-export async function saveLiveState(patch: LiveStatePatch) {
+export type LiveStateSaveResult = { ok: true } | { ok: false; error: string };
+
+export async function saveLiveStateResult(patch: LiveStatePatch): Promise<LiveStateSaveResult> {
   writeLiveStateToLocalStorage(patch);
   try {
     const response = await fetch("/api/state", {
@@ -137,10 +139,20 @@ export async function saveLiveState(patch: LiveStatePatch) {
       headers: { "Content-Type": "application/json" },
       method: "POST"
     });
-    return response.ok;
+    const result = await response.json().catch(() => null);
+    if (response.ok && result?.ok === true) return { ok: true };
+    if (response.status === 401 || response.redirected) return { ok: false, error: "Your login session has expired. Sign in again, then retry saving." };
+    if (response.status === 403) return { ok: false, error: "Your account does not have permission to save these changes." };
+    if (response.status === 413) return { ok: false, error: "The form data is too large. Reduce uploaded image sizes and retry." };
+    if (result?.dbEnabled === false) return { ok: false, error: "Server storage is unavailable. Please contact your administrator." };
+    return { ok: false, error: `The server could not save your changes${response.ok ? "" : ` (HTTP ${response.status})`}. Please retry.` };
   } catch {
-    return false;
+    return { ok: false, error: "Could not reach the server. Check your connection and retry." };
   }
+}
+
+export async function saveLiveState(patch: LiveStatePatch) {
+  return (await saveLiveStateResult(patch)).ok;
 }
 
 export async function hydratePublicRegistrationState(): Promise<LiveState | null> {
