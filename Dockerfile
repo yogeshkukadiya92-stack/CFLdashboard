@@ -38,6 +38,7 @@ COPY --from=build --chown=node:node /app/.next ./.next
 COPY --from=build --chown=node:node /app/public ./public
 COPY --from=build --chown=node:node /app/database ./database
 COPY --from=build --chown=node:node /app/scripts/start-server.mjs ./scripts/start-server.mjs
+COPY --from=build --chown=node:node /app/scripts/migrate-callflow-platform.mjs ./scripts/migrate-callflow-platform.mjs
 COPY --from=build --chown=node:node /app/package.json /app/next.config.mjs ./
 RUN mkdir -p .data .next/cache && chown -R node:node .data .next/cache
 USER node

@@ -1,3 +1,4 @@
+import { applyCentralSync } from "@/lib/central-app-sync";
 import { NextRequest, NextResponse } from "next/server";
 import { readCallFlowBearer } from "@/lib/callflow-auth";
 import { applyCallFlowEvent, normalizedCallPhone, parseEventPayload, type CallFlowCallRecord, type CallFlowEvent } from "@/lib/callflow-connector";
@@ -5,10 +6,14 @@ import { getAppState, saveAppState } from "@/lib/db";
 import type { Lead, SalesTeamUser } from "@/lib/types";
 
 export async function POST(request: NextRequest) {
-  const identity = readCallFlowBearer(request);
+  const identity = await readCallFlowBearer(request);
   if (!identity) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   try {
-    const body = await request.json() as { events?: CallFlowEvent[] };
+    const body = await request.json() as { deviceId?: string; events?: CallFlowEvent[] };
+    if (identity.sessionId) {
+      if (identity.deviceId !== body.deviceId) return NextResponse.json({ error: "Session device mismatch." }, { status: 403 });
+      return NextResponse.json(await applyCentralSync(identity, String(body.deviceId), Array.isArray(body.events) ? body.events : []));
+    }
     const events = Array.isArray(body.events) ? body.events.slice(0, 100) : [];
     const state = await getAppState();
     if (!state) return NextResponse.json({ error: "CRM database is unavailable." }, { status: 503 });

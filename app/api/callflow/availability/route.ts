@@ -1,3 +1,4 @@
+import { personalApp } from "@/lib/personal-app";
 import { NextRequest, NextResponse } from "next/server";
 import { readCallFlowBearer } from "@/lib/callflow-auth";
 import { getAppState, saveAppState } from "@/lib/db";
@@ -12,7 +13,7 @@ type SalesPersonAvailability = {
 };
 
 async function authenticatedState(request: NextRequest) {
-  const identity = readCallFlowBearer(request);
+  const identity = await readCallFlowBearer(request);
   if (!identity) return null;
   const state = await getAppState();
   if (!state) return null;
@@ -23,6 +24,8 @@ async function authenticatedState(request: NextRequest) {
 }
 
 export async function GET(request: NextRequest) {
+  const personal = await readCallFlowBearer(request);
+  if (personal?.sessionId) { try { return NextResponse.json(await personalApp(personal,"availability")); } catch { return NextResponse.json({error:"Invalid availability"},{status:400}); } }
   const result = await authenticatedState(request);
   if (!result) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const people = (Array.isArray(result.state.salesPeople) ? result.state.salesPeople : []) as SalesPersonAvailability[];
@@ -35,6 +38,8 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const personal = await readCallFlowBearer(request);
+  if (personal?.sessionId) { try { return NextResponse.json(await personalApp(personal,"availability",await request.json())); } catch { return NextResponse.json({error:"Invalid availability"},{status:400}); } }
   const result = await authenticatedState(request);
   if (!result) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const body = await request.json().catch(() => null) as { acceptingLeads?: unknown; latitude?: unknown; longitude?: unknown; accuracyMeters?: unknown; capturedAt?: unknown } | null;

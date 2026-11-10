@@ -2,11 +2,18 @@ import { NextRequest, NextResponse } from "next/server";
 import { createCallFlowToken, readCallFlowToken } from "@/lib/callflow-auth";
 import { getAppState } from "@/lib/db";
 import type { SalesTeamUser } from "@/lib/types";
+import { refreshCentralSession } from "@/lib/callflow-central-session";
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json() as { refreshToken?: string };
-    const identity = readCallFlowToken(body.refreshToken, "refresh");
+    const refreshToken = String(body.refreshToken || "");
+    if (refreshToken && !refreshToken.includes(".")) {
+      const central = await refreshCentralSession(refreshToken);
+      if (!central) return NextResponse.json({ error: "Session revoked or expired." }, { status: 403, headers: { "X-Session-Revoked": "true" } });
+      return NextResponse.json(central);
+    }
+    const identity = readCallFlowToken(refreshToken, "refresh");
     if (!identity) return NextResponse.json({ error: "Invalid or expired refresh token." }, { status: 401 });
     const state = await getAppState();
     const active = (state?.salesTeamUsers as SalesTeamUser[] | undefined)?.some((item) => item.id === identity.userId && item.active);

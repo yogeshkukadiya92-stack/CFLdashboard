@@ -5,6 +5,9 @@ export type CallFlowIdentity = {
   userId: string;
   salesPersonId: string;
   name: string;
+  tenantId?: string;
+  sessionId?: string;
+  deviceId?: string;
 };
 
 type TokenPayload = CallFlowIdentity & { type: "access" | "refresh"; exp: number };
@@ -33,11 +36,15 @@ export function readCallFlowToken(value: string | undefined, expectedType: Token
   try {
     const data = JSON.parse(decode(payload)) as TokenPayload;
     if (data.type !== expectedType || data.exp <= Date.now() || !data.userId || !data.salesPersonId) return null;
-    return { userId: data.userId, salesPersonId: data.salesPersonId, name: data.name };
+    return { userId: data.userId, salesPersonId: data.salesPersonId, name: data.name, tenantId: data.tenantId, sessionId: data.sessionId, deviceId: data.deviceId };
   } catch { return null; }
 }
 
-export function readCallFlowBearer(request: NextRequest) {
+export async function readCallFlowBearer(request: NextRequest) {
   const header = request.headers.get("authorization") || "";
-  return readCallFlowToken(header.match(/^Bearer\s+(.+)$/i)?.[1], "access");
+  const identity = readCallFlowToken(header.match(/^Bearer\s+(.+)$/i)?.[1], "access");
+  if (!identity) return null;
+  if (!identity.sessionId) return identity;
+  const { centralSessionIsActive } = await import("./callflow-central-session.ts");
+  return await centralSessionIsActive(identity) ? identity : null;
 }

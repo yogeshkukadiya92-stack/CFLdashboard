@@ -3,11 +3,15 @@ import { readCallFlowBearer } from "@/lib/callflow-auth";
 import { getAppState, saveAppState } from "@/lib/db";
 
 export async function POST(request: NextRequest) {
-  const identity = readCallFlowBearer(request);
+  const identity = await readCallFlowBearer(request);
   if (!identity) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const body = await request.json() as Record<string, unknown>;
   const installId = String(body.installId || "").trim();
   if (!installId) return NextResponse.json({ error: "installId is required." }, { status: 400 });
+  if (identity.sessionId) {
+    if (identity.deviceId !== installId) return NextResponse.json({ error: "Session device mismatch." }, { status: 403 });
+    return NextResponse.json({ deviceId: identity.deviceId, status: "ACTIVE" });
+  }
   const state = await getAppState();
   if (!state) return NextResponse.json({ error: "CRM database is unavailable." }, { status: 503 });
   const integrations = { ...(state.integrations || {}) } as Record<string, unknown>;

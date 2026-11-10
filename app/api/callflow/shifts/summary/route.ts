@@ -1,3 +1,4 @@
+import { personalApp } from "@/lib/personal-app";
 import { NextRequest, NextResponse } from "next/server";
 import { readCallFlowBearer } from "@/lib/callflow-auth";
 import type { CallFlowCallRecord } from "@/lib/callflow-connector";
@@ -7,8 +8,9 @@ type ShiftEvent = { salespersonId: string; type: "START" | "END"; at: string };
 const indiaDay = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit", day: "2-digit" });
 
 export async function GET(request: NextRequest) {
-  const identity = readCallFlowBearer(request);
+  const identity = await readCallFlowBearer(request);
   if (!identity) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (identity.sessionId) return NextResponse.json(await personalApp(identity,"shifts"));
   const state = await getAppState();
   if (!state) return NextResponse.json({ error: "Database unavailable" }, { status: 503 });
   const connector = (state.integrations?.callflow && typeof state.integrations.callflow === "object" ? state.integrations.callflow : {}) as { callRecords?: unknown; shiftEvents?: unknown };

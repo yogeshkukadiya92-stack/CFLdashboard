@@ -1,3 +1,4 @@
+import { centralChanges } from "@/lib/central-app-sync";
 import { NextRequest, NextResponse } from "next/server";
 import { readCallFlowBearer } from "@/lib/callflow-auth";
 import { callFlowDispositions, callFlowStages, leadToCallFlow } from "@/lib/callflow-connector";
@@ -5,8 +6,9 @@ import { getAppState } from "@/lib/db";
 import type { Lead, SalesTeamUser } from "@/lib/types";
 
 export async function GET(request: NextRequest) {
-  const identity = readCallFlowBearer(request);
+  const identity = await readCallFlowBearer(request);
   if (!identity) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (identity.sessionId) return NextResponse.json(await centralChanges(identity, request.nextUrl.searchParams.get("cursor")));
   const state = await getAppState();
   if (!state) return NextResponse.json({ error: "CRM database is unavailable." }, { status: 503 });
   const user = (state.salesTeamUsers as SalesTeamUser[]).find((item) => item.id === identity.userId && item.active);

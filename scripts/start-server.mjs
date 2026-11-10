@@ -1,3 +1,4 @@
+if (process.env.CALLFLOW_AUTH_PROVIDER === 'supabase') await import('./migrate-callflow-platform.mjs');
 // Use the stock Next server in supervised processes sharing one listening port.
 import cluster from 'node:cluster';
 import { availableParallelism } from 'node:os';
