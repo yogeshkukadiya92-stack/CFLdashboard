@@ -26,15 +26,13 @@ ENV NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL \
 RUN --mount=type=cache,id=cfl-next,target=/app/.next/cache,sharing=locked \
     npm run build
 
-FROM dependencies AS production-dependencies
-RUN npm prune --omit=dev --ignore-scripts --no-audit --no-fund
-
 FROM base AS runtime
 ENV NODE_ENV=production \
     PORT=3000 \
-    HOSTNAME=0.0.0.0
-COPY --from=production-dependencies --chown=node:node /app/node_modules ./node_modules
-COPY --from=build --chown=node:node /app/.next ./.next
+    HOSTNAME=0.0.0.0 \
+    CFL_STANDALONE=1
+COPY --from=build --chown=node:node /app/.next/standalone ./
+COPY --from=build --chown=node:node /app/.next/static ./.next/static
 COPY --from=build --chown=node:node /app/public ./public
 COPY --from=build --chown=node:node /app/database ./database
 COPY --from=build --chown=node:node /app/scripts/start-server.mjs ./scripts/start-server.mjs

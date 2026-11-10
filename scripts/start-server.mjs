@@ -11,7 +11,12 @@ const workers=Math.min(count,availableParallelism());
 cluster.schedulingPolicy=cluster.SCHED_RR;
 const args=['start',...process.argv.slice(2)];
 if(!args.some(a=>a==='--keepAliveTimeout'))args.push('--keepAliveTimeout','65000');
-cluster.setupPrimary({exec:require.resolve('next/dist/bin/next'),args});
+if (process.env.CFL_STANDALONE === '1') {
+ process.env.KEEP_ALIVE_TIMEOUT ||= '65000';
+ cluster.setupPrimary({exec:require.resolve('../server.js'),args:[]});
+} else {
+ cluster.setupPrimary({exec:require.resolve('next/dist/bin/next'),args});
+}
 let stopping=false;
 let failures=[];
 for(let i=0;i<workers;i++)cluster.fork();

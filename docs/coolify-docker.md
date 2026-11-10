@@ -17,13 +17,15 @@ runtime variables, domains, health checks, and persistent storage settings.
 
 The dependency layer depends only on `package.json`, `package-lock.json`, and the
 base image. npm downloads and `.next/cache` use persistent BuildKit cache mounts.
-The runtime image contains production dependencies, the compiled app, public
-assets, SQL files, and the cluster launcher. It excludes source, build-only
-dependencies, local data, and environment files.
+The runtime image uses Next.js standalone output and copies only traced server
+dependencies, static/public assets, SQL files, the migration script, and the cluster
+launcher. `CFL_STANDALONE=1` selects the generated server while preserving the
+existing worker count, migration startup, and graceful shutdown. Local `npm start`
+still uses the stock Next CLI. Build cache and untraced dependencies stay out of
+the runtime image.
 
 After deploying a new source commit with unchanged dependency files, the
-`dependencies` install and `production-dependencies` prune steps should be
-`CACHED`. The first build on a new server, or after cache cleanup, must populate
+`dependencies` install step should be `CACHED`. The first build on a new server, or after cache cleanup, must populate
 the caches. Do not routinely force builds without cache.
 
 Validation: check the build result, application runtime logs and public login
