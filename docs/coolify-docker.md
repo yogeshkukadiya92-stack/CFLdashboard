@@ -9,6 +9,8 @@ In Advanced > Build:
 - Build cache: **Use Docker build cache**.
 - Build arguments: **Managed manually in Dockerfile**.
 - Source commit availability: **Runtime only (preserves cache)**.
+- Network hosts during build: **Do not add (preserves cache)**. The build needs
+  no running database; container IP changes must not invalidate cached RUN steps.
 
 Make `NEXT_PUBLIC_APP_URL` and `NEXT_PUBLIC_RESET_DEMO_DATA` available during build
 when required. All private configuration remains in Coolify's runtime environment;
