@@ -1,5 +1,6 @@
 "use client";
 
+import { LocationSearchSelect } from "@/components/location-search-select";
 import { HeightInput, isHeightField } from "@/components/height-input";
 import { normalizeCoreFieldRequirements } from "@/lib/builder-field-normalization";
 import { workshops as seedWorkshops } from "@/lib/data";
@@ -1447,6 +1448,18 @@ function RenderField({
       </select>
       <input aria-label={field.label} autoComplete="tel-national" className={`${inputClass} min-w-0`} type="tel" inputMode="tel" placeholder="Mobile number" value={value} onChange={event => onChange(event.target.value)} />
     </div>;
+  } else if (field.type === "dropdown" && ["country", "state", "city"].includes(field.role ?? "")) {
+    control = <LocationSearchSelect
+      key={`${field.id}-${disabled}-${dependentOptions?.[0] ?? ""}`}
+      label={field.label}
+      className={inputClass}
+      disabled={disabled}
+      loading={loading}
+      options={dependentOptions ?? field.options ?? []}
+      onChange={onChange}
+      value={value}
+      placeholder={disabled ? (field.role === "city" ? "Select state first" : "Select country first") : `Type to search ${field.label.toLowerCase()}…`}
+    />;
   } else if (field.type === "dropdown") {
     const isOther = value.startsWith("Other: ");
     control = (
@@ -1531,7 +1544,7 @@ function RenderField({
     );
   }
 
-  if (isHeightField(field.type, field.label)) {
+  if (isHeightField(field.type, field.label) || (field.type === "dropdown" && ["country", "state", "city"].includes(field.role ?? ""))) {
     return <div className={`block ${wide ? "md:col-span-2" : ""}`}>{labelNode}{control}</div>;
   }
   return <label className={`block ${wide ? "md:col-span-2" : ""}`}>{labelNode}{control}</label>;
