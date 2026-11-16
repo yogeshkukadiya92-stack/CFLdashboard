@@ -51,6 +51,7 @@ test("routes confirmed and waiting WhatsApp messages only to allowed recipients"
     assert.equal(requests.length, 1);
     assert.equal(requests[0].PhoneNumber, "919876543210");
     assert.equal(requests[0].TemplateName, "participant_confirmed");
+    assert.equal("myfile" in requests[0], false);
     for (const key of ["data", "BodyDynamicData", "parameters", "variables"]) {
       assert.deepEqual(requests[0][key], ["Test Participant", "Healthy Forever", "Starting from 28th November", "REG-0001"]);
     }
@@ -69,6 +70,20 @@ test("routes confirmed and waiting WhatsApp messages only to allowed recipients"
     assert.equal(requests[0].TemplateName, "participant_confirmed");
     assert.equal(promotedPatch.confirmationWhatsappStatus, "sent");
     assert.equal(promotedPatch.waitingWhatsappStatus, undefined);
+
+    requests.length = 0;
+    const mediaPatch = await sendRegistrationStatusNotifications({
+      ...baseRegistration, registrationStatus: "confirmed"
+    }, { ...form, whatsappConfirmationMediaUrl: " https://cdn.example.com/workshop.jpg " });
+    assert.equal(mediaPatch.confirmationWhatsappStatus, "sent");
+    assert.equal(requests[0].myfile, "https://cdn.example.com/workshop.jpg");
+    requests.length = 0;
+    const invalidMediaPatch = await sendRegistrationStatusNotifications({
+      ...baseRegistration, registrationStatus: "confirmed"
+    }, { ...form, whatsappConfirmationMediaUrl: "file:///private/image.jpg" });
+    assert.equal(invalidMediaPatch.confirmationWhatsappStatus, "failed");
+    assert.match(invalidMediaPatch.confirmationWhatsappError || "", /HTTPS/);
+    assert.equal(requests.length, 0);
 
     requests.length = 0;
     const missingDatePatch = await sendRegistrationStatusNotifications({

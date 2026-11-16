@@ -65,6 +65,7 @@ export async function sendRegistrationConfirmation(registration: RegistrationEnt
     name: registration.fullName,
     registrationId: registration.id,
     templateName,
+    mediaUrl: form.whatsappConfirmationMediaUrl,
     buttonValues: form.whatsappConfirmationButtonValues ?? (templateName === "hf_39_confirmation" ? ["https://shorturl.at/Wgcr4"] : undefined),
     values
   });
@@ -79,6 +80,7 @@ async function sendTemplateMessage(input: {
   registrationId?: string;
   templateName?: string;
   buttonValues?: string[];
+  mediaUrl?: string;
   values: string[];
 }): Promise<WhatsAppDeliveryResult> {
   let account;
@@ -86,6 +88,11 @@ async function sendTemplateMessage(input: {
   const apiUrl = account ? account.apiUrl : process.env.WHATSAPP_CONFIRMATION_API_URL || process.env.WHATSAPP_OTP_API_URL;
   const authToken = account ? account.authToken : process.env.WHATSAPP_CONFIRMATION_AUTH_TOKEN || process.env.WHATSAPP_OTP_AUTH_TOKEN;
   if (input.buttonValues?.some(value => typeof value !== "string" || !value.trim())) return { configured: true, sent: false, error: "Enter a value for each WhatsApp template button or remove the empty button." };
+  const mediaUrl = input.mediaUrl?.trim();
+  if (mediaUrl) {
+    try { if (new URL(mediaUrl).protocol !== "https:") throw new Error("invalid"); }
+    catch { return { configured: true, sent: false, error: "Enter a public HTTPS URL for the WhatsApp template header file." }; }
+  }
   const recipient = internationalPhone(input.mobile);
   const mobileDigits = recipient.replace(/\D/g, "");
   if (!apiUrl || !authToken || !input.templateName || !recipient) {
@@ -98,6 +105,7 @@ async function sendTemplateMessage(input: {
       body: JSON.stringify({
         authToken,
         ...(account ? { from: account.number, sender: account.number, whatsappNumber: account.number } : {}),
+        ...(mediaUrl ? { myfile: mediaUrl } : {}),
         data: input.values,
         language: account?.language || process.env.WHATSAPP_CONFIRMATION_LANGUAGE || "en",
         name: input.name,
@@ -174,6 +182,7 @@ export async function sendRegistrationStatusNotifications(registration: Registra
       name: registration.fullName,
       registrationId: registration.id,
       templateName: participantTemplate,
+      mediaUrl: form.whatsappWaitingMediaUrl,
       buttonValues: form.whatsappWaitingButtonValues,
       values: [
         registration.fullName,
@@ -199,6 +208,7 @@ export async function sendRegistrationStatusNotifications(registration: Registra
       name: registration.referrerName || "Referrer",
       registrationId: registration.id,
       templateName: referrerTemplate,
+      mediaUrl: form.whatsappReferrerWaitingMediaUrl,
       buttonValues: form.whatsappReferrerWaitingButtonValues,
       values: [
         registration.referrerName || "Referrer",

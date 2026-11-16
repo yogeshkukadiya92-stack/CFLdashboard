@@ -256,10 +256,13 @@ export default function WorkshopMasterPage() {
   const [whatsappConfirmationEnabled, setWhatsappConfirmationEnabled] = useState(false);
   const [whatsappConfirmationButtonValues, setWhatsappConfirmationButtonValues] = useState<string[] | undefined>(undefined);
   const [whatsappConfirmationTemplate, setWhatsappConfirmationTemplate] = useState("");
+  const [whatsappConfirmationMediaUrl, setWhatsappConfirmationMediaUrl] = useState("");
   const [whatsappWaitingButtonValues, setWhatsappWaitingButtonValues] = useState<string[] | undefined>(undefined);
   const [whatsappWaitingTemplate, setWhatsappWaitingTemplate] = useState("");
+  const [whatsappWaitingMediaUrl, setWhatsappWaitingMediaUrl] = useState("");
   const [whatsappReferrerWaitingButtonValues, setWhatsappReferrerWaitingButtonValues] = useState<string[] | undefined>(undefined);
   const [whatsappReferrerWaitingTemplate, setWhatsappReferrerWaitingTemplate] = useState("");
+  const [whatsappReferrerWaitingMediaUrl, setWhatsappReferrerWaitingMediaUrl] = useState("");
   const [message, setMessage] = useState("");
   const [search, setSearch] = useState("");
   const [recordScope, setRecordScope] = useState<"all" | "active" | "historical" | "untagged">("active");
@@ -1177,7 +1180,8 @@ export default function WorkshopMasterPage() {
       const result = await response.json() as { error?: string; registration?: RegistrationEntry };
       if (!response.ok || !result.registration) throw new Error(result.error || "WhatsApp retry failed.");
       setRegistrations((current) => current.map((entry) => entry.id === registrationId ? result.registration as RegistrationEntry : entry));
-      setMessage("WhatsApp delivery checked and updated.");
+      const deliveryError = result.registration.registrationStatus === "waiting" ? result.registration.waitingWhatsappError || result.registration.referrerWaitingWhatsappError : result.registration.confirmationWhatsappError;
+      setMessage(deliveryError || "WhatsApp delivery checked and updated.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "WhatsApp delivery could not be retried.");
     }
@@ -1309,10 +1313,13 @@ export default function WorkshopMasterPage() {
     setWhatsappConfirmationEnabled(false);
     setWhatsappConfirmationButtonValues(undefined);
     setWhatsappConfirmationTemplate("");
+    setWhatsappConfirmationMediaUrl("");
     setWhatsappWaitingButtonValues(undefined);
     setWhatsappWaitingTemplate("");
+    setWhatsappWaitingMediaUrl("");
     setWhatsappReferrerWaitingButtonValues(undefined);
     setWhatsappReferrerWaitingTemplate("");
+    setWhatsappReferrerWaitingMediaUrl("");
   }
 
   function buildRegistrationForm(record: WorkshopRecord): BuilderForm {
@@ -1348,10 +1355,13 @@ export default function WorkshopMasterPage() {
       manualWhatsappStartDate: manualWhatsappStartDate.trim(),
       whatsappConfirmationButtonValues,
       whatsappConfirmationTemplate: whatsappConfirmationTemplate.trim() || undefined,
+      whatsappConfirmationMediaUrl: whatsappConfirmationMediaUrl.trim() || undefined,
       whatsappWaitingButtonValues,
       whatsappWaitingTemplate: whatsappWaitingTemplate.trim() || undefined,
+      whatsappWaitingMediaUrl: whatsappWaitingMediaUrl.trim() || undefined,
       whatsappReferrerWaitingButtonValues,
       whatsappReferrerWaitingTemplate: whatsappReferrerWaitingTemplate.trim() || undefined,
+      whatsappReferrerWaitingMediaUrl: whatsappReferrerWaitingMediaUrl.trim() || undefined,
       submitButtonText: formSubmitButtonText.trim() || undefined,
       fields: ensureLocationFields(normalizeCoreFieldRequirements(formFields)),
       updatedAt: new Date().toISOString()
@@ -1396,10 +1406,13 @@ export default function WorkshopMasterPage() {
     setWhatsappConfirmationEnabled(false);
         setWhatsappConfirmationButtonValues(undefined);
     setWhatsappConfirmationTemplate("");
+    setWhatsappConfirmationMediaUrl("");
         setWhatsappWaitingButtonValues(undefined);
     setWhatsappWaitingTemplate("");
+    setWhatsappWaitingMediaUrl("");
         setWhatsappReferrerWaitingButtonValues(undefined);
     setWhatsappReferrerWaitingTemplate("");
+    setWhatsappReferrerWaitingMediaUrl("");
         return;
       }
       setFormTitle(savedForm.title || `${record.name} Registration`);
@@ -1428,10 +1441,13 @@ export default function WorkshopMasterPage() {
       setWhatsappConfirmationEnabled(Boolean(savedForm.whatsappConfirmationEnabled));
       setWhatsappConfirmationButtonValues(savedForm?.whatsappConfirmationButtonValues);
       setWhatsappConfirmationTemplate(savedForm.whatsappConfirmationTemplate ?? "");
+      setWhatsappConfirmationMediaUrl(savedForm.whatsappConfirmationMediaUrl ?? "");
       setWhatsappWaitingButtonValues(savedForm?.whatsappWaitingButtonValues);
       setWhatsappWaitingTemplate(savedForm.whatsappWaitingTemplate ?? "");
+      setWhatsappWaitingMediaUrl(savedForm.whatsappWaitingMediaUrl ?? "");
       setWhatsappReferrerWaitingButtonValues(savedForm?.whatsappReferrerWaitingButtonValues);
       setWhatsappReferrerWaitingTemplate(savedForm.whatsappReferrerWaitingTemplate ?? "");
+      setWhatsappReferrerWaitingMediaUrl(savedForm.whatsappReferrerWaitingMediaUrl ?? "");
     } catch {
       resetBuilderForm();
     }
@@ -2204,9 +2220,9 @@ export default function WorkshopMasterPage() {
               <WhatsAppSenderSelector value={whatsappSenderId} onChange={setWhatsappSenderId} />
               {whatsappConfirmationEnabled ? (
                 <div className="mt-3 grid gap-3 md:grid-cols-3">
-                  <label className="block"><span className="mb-2 block text-xs font-bold text-slate-600">Participant Confirmation Template</span><input className={inputClass} onChange={(event) => setWhatsappConfirmationTemplate(event.target.value)} placeholder="registration_confirmed" value={whatsappConfirmationTemplate} /><WhatsAppTemplateButtons values={whatsappConfirmationButtonValues ?? (whatsappConfirmationTemplate === "hf_39_confirmation" ? ["https://shorturl.at/Wgcr4"] : undefined)} onChange={setWhatsappConfirmationButtonValues} /></label>
-                  <label className="block"><span className="mb-2 block text-xs font-bold text-slate-600">Participant Waiting Template</span><input className={inputClass} onChange={(event) => setWhatsappWaitingTemplate(event.target.value)} placeholder="registration_waiting" value={whatsappWaitingTemplate} /><WhatsAppTemplateButtons values={whatsappWaitingButtonValues} onChange={setWhatsappWaitingButtonValues} /></label>
-                  <label className="block"><span className="mb-2 block text-xs font-bold text-slate-600">Referrer Waiting Template</span><input className={inputClass} onChange={(event) => setWhatsappReferrerWaitingTemplate(event.target.value)} placeholder="referrer_registration_waiting" value={whatsappReferrerWaitingTemplate} /><WhatsAppTemplateButtons values={whatsappReferrerWaitingButtonValues} onChange={setWhatsappReferrerWaitingButtonValues} /></label>
+                  <label className="block"><span className="mb-2 block text-xs font-bold text-slate-600">Participant Confirmation Template</span><input className={inputClass} onChange={(event) => setWhatsappConfirmationTemplate(event.target.value)} placeholder="registration_confirmed" value={whatsappConfirmationTemplate} /><span className="mt-3 block text-xs font-bold text-slate-600">Header image / document / video URL (optional)</span><input aria-label="WhatsappConfirmation header media URL" className={`${inputClass} mt-1`} onChange={(event) => setWhatsappConfirmationMediaUrl(event.target.value)} placeholder="https://... (public file URL)" type="url" value={whatsappConfirmationMediaUrl} /><span className="mt-1 block text-xs font-normal text-slate-500">Required when your approved template has a media header. Use the file for this template.</span><WhatsAppTemplateButtons values={whatsappConfirmationButtonValues ?? (whatsappConfirmationTemplate === "hf_39_confirmation" ? ["https://shorturl.at/Wgcr4"] : undefined)} onChange={setWhatsappConfirmationButtonValues} /></label>
+                  <label className="block"><span className="mb-2 block text-xs font-bold text-slate-600">Participant Waiting Template</span><input className={inputClass} onChange={(event) => setWhatsappWaitingTemplate(event.target.value)} placeholder="registration_waiting" value={whatsappWaitingTemplate} /><span className="mt-3 block text-xs font-bold text-slate-600">Header image / document / video URL (optional)</span><input aria-label="WhatsappWaiting header media URL" className={`${inputClass} mt-1`} onChange={(event) => setWhatsappWaitingMediaUrl(event.target.value)} placeholder="https://... (public file URL)" type="url" value={whatsappWaitingMediaUrl} /><span className="mt-1 block text-xs font-normal text-slate-500">Required when your approved template has a media header. Use the file for this template.</span><WhatsAppTemplateButtons values={whatsappWaitingButtonValues} onChange={setWhatsappWaitingButtonValues} /></label>
+                  <label className="block"><span className="mb-2 block text-xs font-bold text-slate-600">Referrer Waiting Template</span><input className={inputClass} onChange={(event) => setWhatsappReferrerWaitingTemplate(event.target.value)} placeholder="referrer_registration_waiting" value={whatsappReferrerWaitingTemplate} /><span className="mt-3 block text-xs font-bold text-slate-600">Header image / document / video URL (optional)</span><input aria-label="WhatsappReferrerWaiting header media URL" className={`${inputClass} mt-1`} onChange={(event) => setWhatsappReferrerWaitingMediaUrl(event.target.value)} placeholder="https://... (public file URL)" type="url" value={whatsappReferrerWaitingMediaUrl} /><span className="mt-1 block text-xs font-normal text-slate-500">Required when your approved template has a media header. Use the file for this template.</span><WhatsAppTemplateButtons values={whatsappReferrerWaitingButtonValues} onChange={setWhatsappReferrerWaitingButtonValues} /></label>
                 </div>
               ) : null}
             </div>
@@ -2452,9 +2468,9 @@ export default function WorkshopMasterPage() {
                       <WhatsAppSenderSelector value={whatsappSenderId} onChange={setWhatsappSenderId} />
               {whatsappConfirmationEnabled ? (
                         <div className="mt-3 grid gap-3 md:grid-cols-3">
-                          <label className="block"><span className="mb-2 block text-xs font-bold text-slate-600">Participant Confirmation Template</span><input className={inputClass} onChange={(event) => setWhatsappConfirmationTemplate(event.target.value)} placeholder="registration_confirmed" value={whatsappConfirmationTemplate} /><WhatsAppTemplateButtons values={whatsappConfirmationButtonValues ?? (whatsappConfirmationTemplate === "hf_39_confirmation" ? ["https://shorturl.at/Wgcr4"] : undefined)} onChange={setWhatsappConfirmationButtonValues} /></label>
-                          <label className="block"><span className="mb-2 block text-xs font-bold text-slate-600">Participant Waiting Template</span><input className={inputClass} onChange={(event) => setWhatsappWaitingTemplate(event.target.value)} placeholder="registration_waiting" value={whatsappWaitingTemplate} /><WhatsAppTemplateButtons values={whatsappWaitingButtonValues} onChange={setWhatsappWaitingButtonValues} /></label>
-                          <label className="block"><span className="mb-2 block text-xs font-bold text-slate-600">Referrer Waiting Template</span><input className={inputClass} onChange={(event) => setWhatsappReferrerWaitingTemplate(event.target.value)} placeholder="referrer_registration_waiting" value={whatsappReferrerWaitingTemplate} /><WhatsAppTemplateButtons values={whatsappReferrerWaitingButtonValues} onChange={setWhatsappReferrerWaitingButtonValues} /></label>
+                          <label className="block"><span className="mb-2 block text-xs font-bold text-slate-600">Participant Confirmation Template</span><input className={inputClass} onChange={(event) => setWhatsappConfirmationTemplate(event.target.value)} placeholder="registration_confirmed" value={whatsappConfirmationTemplate} /><span className="mt-3 block text-xs font-bold text-slate-600">Header image / document / video URL (optional)</span><input aria-label="WhatsappConfirmation header media URL" className={`${inputClass} mt-1`} onChange={(event) => setWhatsappConfirmationMediaUrl(event.target.value)} placeholder="https://... (public file URL)" type="url" value={whatsappConfirmationMediaUrl} /><span className="mt-1 block text-xs font-normal text-slate-500">Required when your approved template has a media header. Use the file for this template.</span><WhatsAppTemplateButtons values={whatsappConfirmationButtonValues ?? (whatsappConfirmationTemplate === "hf_39_confirmation" ? ["https://shorturl.at/Wgcr4"] : undefined)} onChange={setWhatsappConfirmationButtonValues} /></label>
+                          <label className="block"><span className="mb-2 block text-xs font-bold text-slate-600">Participant Waiting Template</span><input className={inputClass} onChange={(event) => setWhatsappWaitingTemplate(event.target.value)} placeholder="registration_waiting" value={whatsappWaitingTemplate} /><span className="mt-3 block text-xs font-bold text-slate-600">Header image / document / video URL (optional)</span><input aria-label="WhatsappWaiting header media URL" className={`${inputClass} mt-1`} onChange={(event) => setWhatsappWaitingMediaUrl(event.target.value)} placeholder="https://... (public file URL)" type="url" value={whatsappWaitingMediaUrl} /><span className="mt-1 block text-xs font-normal text-slate-500">Required when your approved template has a media header. Use the file for this template.</span><WhatsAppTemplateButtons values={whatsappWaitingButtonValues} onChange={setWhatsappWaitingButtonValues} /></label>
+                          <label className="block"><span className="mb-2 block text-xs font-bold text-slate-600">Referrer Waiting Template</span><input className={inputClass} onChange={(event) => setWhatsappReferrerWaitingTemplate(event.target.value)} placeholder="referrer_registration_waiting" value={whatsappReferrerWaitingTemplate} /><span className="mt-3 block text-xs font-bold text-slate-600">Header image / document / video URL (optional)</span><input aria-label="WhatsappReferrerWaiting header media URL" className={`${inputClass} mt-1`} onChange={(event) => setWhatsappReferrerWaitingMediaUrl(event.target.value)} placeholder="https://... (public file URL)" type="url" value={whatsappReferrerWaitingMediaUrl} /><span className="mt-1 block text-xs font-normal text-slate-500">Required when your approved template has a media header. Use the file for this template.</span><WhatsAppTemplateButtons values={whatsappReferrerWaitingButtonValues} onChange={setWhatsappReferrerWaitingButtonValues} /></label>
                         </div>
                       ) : null}
                     </div>
@@ -3189,6 +3205,7 @@ export default function WorkshopMasterPage() {
                               <span className={`text-[10px] font-black ${registrationWhatsAppStatus(entry) === "sent" ? "text-emerald-700" : registrationWhatsAppStatus(entry) === "failed" ? "text-rose-700" : "text-slate-500"}`}>
                                 {registrationWhatsAppStatus(entry)}
                               </span>
+                              {registrationWhatsAppStatus(entry) === "failed" ? <span className="max-w-64 text-[10px] text-rose-700" role="note">{entry.registrationStatus === "waiting" ? entry.waitingWhatsappError || entry.referrerWaitingWhatsappError : entry.confirmationWhatsappError}</span> : null}
                               {registrationWhatsAppStatus(entry) !== "sent" ? <button aria-label={`Retry WhatsApp for ${entry.fullName}`} className="grid size-7 place-items-center rounded-md bg-emerald-50 text-emerald-700 hover:bg-emerald-100" onClick={() => void retryRegistrationWhatsApp(entry.id)} title="Retry registration WhatsApp" type="button"><MessageCircle className="size-3.5" /></button> : null}
                               {entry.confirmationStatus === "confirmed" && entry.registrationStatus !== "waiting" ? <button type="button" className="mt-1 rounded-lg border border-emerald-200 px-2 py-1 text-xs font-bold text-emerald-700" aria-label={`Send WhatsApp manually to ${entry.fullName}`} onClick={() => openManualWhatsApp([entry])}>Send WhatsApp</button> : null}
                             </div>

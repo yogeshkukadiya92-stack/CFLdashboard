@@ -515,10 +515,13 @@ export interface BuilderForm {
   manualWhatsappTemplate?: string;
   manualWhatsappStartDate?: string;
   whatsappConfirmationTemplate?: string;
+  whatsappConfirmationMediaUrl?: string;
   whatsappConfirmationButtonValues?: string[];
   whatsappWaitingTemplate?: string;
+  whatsappWaitingMediaUrl?: string;
   whatsappWaitingButtonValues?: string[];
   whatsappReferrerWaitingTemplate?: string;
+  whatsappReferrerWaitingMediaUrl?: string;
   whatsappReferrerWaitingButtonValues?: string[];
   submitButtonText?: string;
   allowDuplicate?: boolean;
