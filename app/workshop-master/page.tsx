@@ -1,6 +1,7 @@
 "use client";
 
 import { filterRepeaterWorkshops } from "@/lib/repeater-workshops";
+import { registrationPaymentLabel } from "@/lib/registration-payment-display";
 import { ensureLocationFields } from "@/lib/location-options";
 
 import { DEFAULT_MANUAL_WHATSAPP_TEMPLATE, renderManualWhatsApp } from "@/lib/manual-whatsapp";
@@ -524,7 +525,7 @@ export default function WorkshopMasterPage() {
       Mobile: entry.mobile,
       Email: entry.email,
       City: entry.city,
-      "Payment Status": entry.status,
+      "Payment Status": registrationPaymentLabel(entry, selectedWorkshop),
       Repeater: entry.isRepeater ? "Yes" : "No",
       Source: entry.source ?? "Registration Link"
     },
@@ -532,7 +533,7 @@ export default function WorkshopMasterPage() {
     confirmationStatus: entry.confirmationStatus ?? "pending",
     mfwSyncStatus: entry.mfwSyncStatus ?? "not_required",
     whatsappStatus: registrationWhatsAppStatus(entry).replace(" ", "_")
-  })), [selectedParticipants]);
+  })), [selectedParticipants, selectedWorkshop]);
   const filteredParticipants = useMemo(() => applyResponseFilters(participantFilterRecords, responseFilters), [participantFilterRecords, responseFilters]);
   const searchedParticipants = useMemo(() => {
     const query = participantSearch.trim().toLowerCase();
@@ -1570,7 +1571,7 @@ export default function WorkshopMasterPage() {
       entry.confirmationUpdatedBy ?? "",
       entry.confirmationUpdatedAt ? formatSubmittedAt(entry.confirmationUpdatedAt) : "",
       ...(showMedicalReport ? [entry.medicalReportStatus === "yes" ? "Yes" : entry.medicalReportStatus === "no" ? "No" : ""] : []),
-      entry.status,
+      registrationPaymentLabel(entry, selectedWorkshop),
       entry.amountPaid,
       entry.amountDue,
       formatSubmittedAt(entry.createdAt),
@@ -1641,7 +1642,7 @@ export default function WorkshopMasterPage() {
       entry.confirmationUpdatedBy ?? "",
       entry.confirmationUpdatedAt ? formatSubmittedAt(entry.confirmationUpdatedAt) : "",
       entry.confirmationNote ?? "",
-      entry.status,
+      registrationPaymentLabel(entry, selectedWorkshop),
       entry.amountPaid,
       entry.amountDue,
       formatSubmittedAt(entry.createdAt)
@@ -1679,7 +1680,7 @@ export default function WorkshopMasterPage() {
       entry.confirmationUpdatedBy ?? "",
       entry.confirmationUpdatedAt ? formatSubmittedAt(entry.confirmationUpdatedAt) : "",
       entry.confirmationNote ?? "",
-      entry.status,
+      registrationPaymentLabel(entry, selectedWorkshop),
       entry.amountPaid,
       entry.amountDue,
       formatSubmittedAt(entry.createdAt)
@@ -2905,8 +2906,9 @@ export default function WorkshopMasterPage() {
 
               <div className="flex shrink-0 flex-wrap items-center gap-x-1 border-b border-slate-200 bg-slate-50/80 px-3 py-1.5">
                 <OperationalStat label="Users" value={displayedParticipants.length} />
-                <OperationalStat label="Paid" tone="success" value={displayedParticipants.filter((entry) => entry.status === "Paid").length} />
-                <OperationalStat label="Due" value={displayedParticipants.filter((entry) => entry.status === "Due").length} />
+                <OperationalStat label="Free" tone="success" value={displayedParticipants.filter((entry) => registrationPaymentLabel(entry, selectedWorkshop) === "Free").length} />
+                <OperationalStat label="Paid" tone="success" value={displayedParticipants.filter((entry) => registrationPaymentLabel(entry, selectedWorkshop) === "Paid").length} />
+                <OperationalStat label="Due" value={displayedParticipants.filter((entry) => registrationPaymentLabel(entry, selectedWorkshop) === "Due").length} />
                 <OperationalStat
                   active={followUpScope === "confirmed"}
                   label="Confirmed"
@@ -3216,13 +3218,13 @@ export default function WorkshopMasterPage() {
                           ) : null}
                           <td className="min-w-[150px] max-w-[220px] whitespace-normal px-2.5 py-2.5 text-[11px] leading-4 text-slate-600">{entry.confirmationNote || "-"}</td>
                           <td className="min-w-[150px] px-2.5 py-2.5">
-                            <span className={`rounded-full px-3 py-1 text-xs font-black ${entry.status === "Paid" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
-                              {entry.status}
+                            <span className={`rounded-full px-3 py-1 text-xs font-black ${registrationPaymentLabel(entry, selectedWorkshop) !== "Due" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
+                              {registrationPaymentLabel(entry, selectedWorkshop)}
                             </span>
-                            <div className="mt-1.5 grid grid-cols-2 gap-2 text-[10px] leading-4 text-slate-500">
+                            {registrationPaymentLabel(entry, selectedWorkshop) !== "Free" ? <div className="mt-1.5 grid grid-cols-2 gap-2 text-[10px] leading-4 text-slate-500">
                               <p><span className="block font-bold uppercase text-slate-400">Paid</span>INR {entry.amountPaid.toLocaleString("en-IN")}</p>
                               <p><span className="block font-bold uppercase text-slate-400">Due</span>INR {entry.amountDue.toLocaleString("en-IN")}</p>
-                            </div>
+                            </div> : null}
                           </td>
                           <td className="min-w-[130px] whitespace-normal px-2.5 py-2.5 text-[11px] leading-4">{formatSubmittedAt(entry.createdAt)}</td>
                         </tr>
