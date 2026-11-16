@@ -114,11 +114,11 @@ export function workshopMatchesSearch(record: WorkshopTagRecord, query: string):
   const paymentStr = record.isPaid ? "paid" : "free";
 
   return [
-    record.name,
+    record.name ?? "",
     record.type ?? "",
     record.facilitator ?? "",
     record.productGroup ?? "",
     tagStr,
     paymentStr
-  ].some((item) => item.toLowerCase().includes(value));
+  ].some((item) => typeof item === "string" && item.toLowerCase().includes(value));
 }

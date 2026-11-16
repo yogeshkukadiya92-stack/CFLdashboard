@@ -1,5 +1,6 @@
 "use client";
 
+import { filterRepeaterWorkshops } from "@/lib/repeater-workshops";
 import { ensureLocationFields } from "@/lib/location-options";
 
 import { DEFAULT_MANUAL_WHATSAPP_TEMPLATE, renderManualWhatsApp } from "@/lib/manual-whatsapp";
@@ -459,6 +460,7 @@ export default function WorkshopMasterPage() {
       return workshopMatchesSearch(record, search);
     });
   }, [recordScope, records, search]);
+  const repeaterWorkshops = useMemo(() => filterRepeaterWorkshops(records, editingId, repeaterWorkshopQuery), [records, editingId, repeaterWorkshopQuery]);
   const paidCount = records.filter((record) => record.isPaid).length;
   const freeCount = records.filter((record) => !record.isPaid && !record.paymentUnknown).length;
   const historicalCount = records.filter((record) => record.archived).length;
@@ -2284,8 +2286,7 @@ export default function WorkshopMasterPage() {
                 <input className={`${inputClass} pl-10`} onChange={(event) => setRepeaterWorkshopQuery(event.target.value)} placeholder="Search past workshops" value={repeaterWorkshopQuery} />
               </label>
               <div className="mt-2 max-h-56 overflow-y-auto rounded-xl border border-violet-100 bg-white">
-                {records
-                  .filter((workshop) => workshop.id !== editingId && workshop.name.toLowerCase().includes(repeaterWorkshopQuery.trim().toLowerCase()))
+                {repeaterWorkshops
                   .map((workshop) => {
                     const checked = formRepeaterSourceWorkshopIds.includes(workshop.id);
                     return (
@@ -2303,7 +2304,7 @@ export default function WorkshopMasterPage() {
                       </label>
                     );
                   })}
-                {!records.some((workshop) => workshop.id !== editingId && workshop.name.toLowerCase().includes(repeaterWorkshopQuery.trim().toLowerCase())) ? <p className="px-4 py-6 text-center text-sm font-bold text-slate-500">No other workshop found.</p> : null}
+                {!repeaterWorkshops.length ? <p className="px-4 py-6 text-center text-sm font-bold text-slate-500">No other workshop found.</p> : null}
               </div>
               {formRepeaterSourceWorkshopIds.length ? <button className="mt-3 text-xs font-black text-rose-600 hover:underline" onClick={() => setFormRepeaterSourceWorkshopIds([])} type="button">Clear selection</button> : null}
             </div>
@@ -2500,7 +2501,7 @@ export default function WorkshopMasterPage() {
                         <input className={`${inputClass} pl-10`} onChange={(event) => setRepeaterWorkshopQuery(event.target.value)} placeholder="Search past workshops" value={repeaterWorkshopQuery} />
                       </label>
                       <div className="mt-2 max-h-56 overflow-y-auto rounded-xl border border-violet-100 bg-white">
-                        {records.filter((workshop) => workshop.id !== editingId && workshop.name.toLowerCase().includes(repeaterWorkshopQuery.trim().toLowerCase())).map((workshop) => {
+                        {repeaterWorkshops.map((workshop) => {
                           const checked = formRepeaterSourceWorkshopIds.includes(workshop.id);
                           return (
                             <label className="flex cursor-pointer items-center gap-3 border-b border-slate-100 px-3 py-3 last:border-0 hover:bg-violet-50" key={workshop.id}>
