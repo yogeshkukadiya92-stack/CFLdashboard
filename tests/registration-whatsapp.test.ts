@@ -58,6 +58,19 @@ test("routes confirmed and waiting WhatsApp messages only to allowed recipients"
     assert.equal(confirmedPatch.referrerWaitingWhatsappSentAt, undefined);
 
     requests.length = 0;
+    const promotedPatch = await sendRegistrationStatusNotifications({
+      ...baseRegistration,
+      registrationStatus: "waiting",
+      confirmationStatus: "confirmed",
+      registrationNumber: "REG-0002",
+      waitingWhatsappSentAt: "2026-08-29T00:01:00.000Z"
+    }, form);
+    assert.equal(requests.length, 1);
+    assert.equal(requests[0].TemplateName, "participant_confirmed");
+    assert.equal(promotedPatch.confirmationWhatsappStatus, "sent");
+    assert.equal(promotedPatch.waitingWhatsappStatus, undefined);
+
+    requests.length = 0;
     const missingDatePatch = await sendRegistrationStatusNotifications({
       ...baseRegistration, registrationNumber: "REG-9296", registrationStatus: "confirmed"
     }, { ...form, manualWhatsappStartDate: "", whatsappGroupUrl: "https://chat.whatsapp.com/example" });

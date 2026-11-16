@@ -1,3 +1,4 @@
+import { promoteConfirmedRegistration } from "@/lib/registration-status";
 import { introductionStatuses } from "@/lib/introduction-statuses";
 import { NextResponse } from "next/server";
 import { getAppState, isDbEnabled, saveAppState } from "@/lib/db";
@@ -33,7 +34,9 @@ export async function PATCH(request: Request) {
     if (!current) return NextResponse.json({ error: "Registration not found." }, { status: 404 });
 
     if (!statusOptions.some(option => option.id === status && option.active) && current.confirmationStatus !== status) return NextResponse.json({ error: "Status is inactive" }, { status: 400 });
-    const numberedRegistrations = assignRegistrationNumbers(registrations, current.workshopId);
+    const isConfirmed = statusOptions.some(option => option.id === status && option.isConfirmed);
+    const statusRegistrations = registrations.map(entry => entry.id === registrationId && isConfirmed ? promoteConfirmedRegistration(entry) : entry);
+    const numberedRegistrations = assignRegistrationNumbers(statusRegistrations, current.workshopId);
     const numberedCurrent = numberedRegistrations.find((entry) => entry.id === registrationId) as RegistrationEntry;
     const now = new Date().toISOString();
     const activity: RegistrationConfirmationActivity = {
@@ -47,10 +50,11 @@ export async function PATCH(request: Request) {
     };
     const form = (Array.isArray(state?.forms) ? state.forms : [])
       .find((item: BuilderForm) => item.workshopId === current.workshopId) as BuilderForm | undefined;
-    const [mfwSync, whatsapp] = status === "confirmed"
+    const workshop = (state?.workshops ?? []).find((item: { id?: string }) => item.id === current.workshopId) as { type?: string } | undefined;
+    const [mfwSync, whatsapp] = isConfirmed
       ? await Promise.all([
           syncConfirmedRegistrationToMfw(numberedCurrent),
-          sendRegistrationConfirmation(numberedCurrent, form).catch(() => ({ configured: true, sent: false }))
+          sendRegistrationConfirmation(numberedCurrent, form, workshop?.type).catch(() => ({ configured: true, sent: false }))
         ])
       : [{}, { configured: false, sent: false }];
     const updated: RegistrationEntry = {
@@ -60,6 +64,10 @@ export async function PATCH(request: Request) {
       confirmationNote: note,
       confirmationUpdatedAt: now,
       confirmationUpdatedBy: "Admin User",
+      ...(isConfirmed && form?.whatsappConfirmationEnabled && !numberedCurrent.confirmationWhatsappSentAt ? {
+        confirmationWhatsappStatus: whatsapp.sent ? "sent" as const : whatsapp.configured ? "failed" as const : "not_configured" as const,
+        confirmationWhatsappError: whatsapp.sent ? undefined : ("error" in whatsapp ? String(whatsapp.error) : "WhatsApp confirmation delivery failed.")
+      } : {}),
       confirmationWhatsappSentAt: whatsapp.sent ? now : numberedCurrent.confirmationWhatsappSentAt,
       confirmationHistory: [activity, ...(current.confirmationHistory ?? [])].slice(0, 200)
     };

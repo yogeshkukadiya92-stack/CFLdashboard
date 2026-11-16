@@ -1,3 +1,4 @@
+import { isWaitingRegistration } from "./registration-status.ts";
 import { internationalPhone } from "./phone-number.ts";
 import type { BuilderForm, RegistrationEntry } from "@/lib/types";
 import { recordOutboundWhatsAppMessage } from "./whatsapp-automation.ts";
@@ -35,7 +36,7 @@ export function assignRegistrationNumbers(registrations: RegistrationEntry[], wo
 }
 
 export async function sendRegistrationConfirmation(registration: RegistrationEntry, form?: Partial<BuilderForm>, workshopType?: string): Promise<WhatsAppDeliveryResult> {
-  if (!form?.whatsappConfirmationEnabled || registration.registrationStatus === "waiting" || registration.confirmationWhatsappSentAt) {
+  if (!form?.whatsappConfirmationEnabled || isWaitingRegistration(registration) || registration.confirmationWhatsappSentAt) {
     return { configured: false, sent: false };
   }
 
@@ -154,7 +155,7 @@ export async function sendRegistrationStatusNotifications(registration: Registra
   if (!form?.whatsappConfirmationEnabled) return patch;
   const now = new Date().toISOString();
 
-  if (registration.registrationStatus !== "waiting") {
+  if (!isWaitingRegistration(registration)) {
     if (registration.confirmationWhatsappSentAt) return patch;
     const result = await sendRegistrationConfirmation(registration, form, workshopType);
     patch.confirmationWhatsappStatus = result.sent ? "sent" : result.configured ? "failed" : "not_configured";

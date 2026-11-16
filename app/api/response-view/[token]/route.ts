@@ -1,3 +1,4 @@
+import { promoteConfirmedRegistration } from "@/lib/registration-status";
 import { NextRequest, NextResponse } from "next/server";
 import { getAppState, isDbEnabled, saveAppState } from "@/lib/db";
 import {
@@ -10,9 +11,9 @@ import {
   verifyResponseAccessCode,
   verifyResponseViewerSession
 } from "@/lib/response-access";
-import type { RegistrationConfirmationActivity, RegistrationConfirmationStatus, RegistrationEntry, ResponseAccessGrant } from "@/lib/types";
+import type { BuilderForm, RegistrationConfirmationActivity, RegistrationConfirmationStatus, RegistrationEntry, ResponseAccessGrant } from "@/lib/types";
 import { syncConfirmedRegistrationToMfw } from "@/lib/mfw-registration";
-import { assignRegistrationNumbers } from "@/lib/registration-confirmation";
+import { assignRegistrationNumbers, sendRegistrationStatusNotifications } from "@/lib/registration-confirmation";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -238,7 +239,8 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ t
       }
     }
 
-    const numberedRegistrations = assignRegistrationNumbers(registrations, current.workshopId);
+    const statusRegistrations = registrations.map(entry => entry.id === current.id && action === "status" && status === "confirmed" ? promoteConfirmedRegistration(entry) : entry);
+    const numberedRegistrations = assignRegistrationNumbers(statusRegistrations, current.workshopId);
     const numberedCurrent = numberedRegistrations.find((entry) => entry.id === current.id) as RegistrationEntry;
     const now = new Date().toISOString();
     const activity: RegistrationConfirmationActivity = {
@@ -253,8 +255,13 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ t
       createdAt: now
     };
     const mfwSync = action === "status" && status === "confirmed" ? await syncConfirmedRegistrationToMfw(numberedCurrent) : {};
+    const form = (state?.forms ?? []).find((item: BuilderForm) => item.workshopId === current.workshopId) as BuilderForm | undefined;
+    const workshop = (state?.workshops ?? []).find((item: { id?: string }) => item.id === current.workshopId) as { type?: string } | undefined;
+    const notification = action === "status" && status === "confirmed"
+      ? await sendRegistrationStatusNotifications(numberedCurrent, form, workshop?.type) : {};
     const updated: RegistrationEntry = {
       ...numberedCurrent,
+      ...notification,
       ...mfwSync,
       confirmationStatus: action === "note" ? current.confirmationStatus ?? "pending" : status,
       confirmationNote: note || current.confirmationNote,
