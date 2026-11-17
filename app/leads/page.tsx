@@ -35,7 +35,7 @@ import {
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
 type SalesPerson = { id: string; acceptingLeads?: boolean; isActive: boolean; name: string; salesPersonCode?: string };
-type Workshop = { id: string; name: string; transferLeadToCrm?: boolean; assignedSalesPersonId?: string; leadAssignmentRules?: WorkshopLeadAssignmentRule[] };
+type Workshop = { id: string; name: string; transferLeadToCrm?: boolean; assignedSalesPersonIds?: string[]; assignedSalesPersonId?: string; leadAssignmentRules?: WorkshopLeadAssignmentRule[] };
 type ClientRecord = {
   city: string;
   country: string;
@@ -406,7 +406,7 @@ export default function LeadsPage() {
         pincode: pickImportValue(row, ["pincode", "pin code", "postal code"]),
         workshopId: workshop.id, workshopTitle: workshop.name, source: importSource,
         createdAt: new Date().toISOString()
-      }, workshop.leadAssignmentRules, salesPeople, Array.from(byMobile.values()), workshop.assignedSalesPersonId, "unassigned") : undefined;
+      }, workshop.leadAssignmentRules, salesPeople, Array.from(byMobile.values()), workshop.assignedSalesPersonIds?.length ? workshop.assignedSalesPersonIds : workshop.assignedSalesPersonId, "unassigned") : undefined;
       const codeOwner = decision ? salesPeople.find((person) => person.id === decision.salesPersonId) : findSalesPersonByCode(salesPeople, salespersonCode);
       const importedOwner = decision ? codeOwner?.name || "" : codeOwner?.name || pickImportValue(row, ["assigned to", "owner", "sales person"]);
       if (mobile.length !== 10 || !name) { invalid += 1; return; }

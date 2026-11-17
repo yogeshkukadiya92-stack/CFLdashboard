@@ -59,3 +59,20 @@ test("registration form answers supply state and pincode criteria", () => {
     [{ id: "local", state: "Gujarat", pincode: "395007", salesPersonId: "surat" }], people, [], "default", "unassigned");
   assert.equal(decision.salesPersonId, "surat");
 });
+
+test("multiple default salespeople distribute to the least loaded selected owner", () => {
+  const team = [...people, { id: "other", name: "Other sales" }];
+  const decision = resolveSmartLeadAssignment({}, [], team, [{ assignedSalesPersonId: "surat", stage: "New Leads" }], ["surat", "default"], "unassigned");
+  assert.equal(decision.salesPersonId, "default");
+  assert.equal(decision.strategy, "least-active");
+});
+
+test("multiple rule owners respect eligibility and never select outside the pool", () => {
+  const rule = { id: "pool", city: "Surat", salesPersonIds: ["surat", "default"] };
+  const team = [{ ...people[0], acceptingLeads: false }, people[1], { id: "other", name: "Other" }];
+  assert.equal(resolveSmartLeadAssignment({ city: "Surat" }, [rule], team, [], "", "unassigned").salesPersonId, "default");
+});
+
+test("unavailable selected default pool leaves leads unassigned", () => {
+  assert.equal(resolveSmartLeadAssignment({}, [], people.map(person => ({ ...person, acceptingLeads: false })), [], ["surat", "default"], "unassigned").salesPersonId, "");
+});

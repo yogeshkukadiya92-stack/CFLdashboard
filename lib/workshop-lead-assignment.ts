@@ -12,6 +12,7 @@ export type WorkshopLeadAssignmentRule = {
   startDate?: string;
   endDate?: string;
   salesPersonId?: string;
+  salesPersonIds?: string[];
   strategy?: LeadAssignmentStrategy;
   maxActiveLeads?: number;
 };
@@ -145,7 +146,10 @@ export function resolveSmartLeadAssignment(
     if (!ruleMatches(registration, rule)) continue;
     const eligible = eligiblePeople(salesPeople, counts, rule.maxActiveLeads);
     const strategy = rule.strategy ?? (rule.salesPersonId ? "fixed" : "least-active");
-    const selected = rule.salesPersonId
+    const pool = rule.salesPersonIds;
+    const selected = pool?.length
+      ? chooseByStrategy("least-active", registration, eligible.filter((person) => pool.includes(String(person.id))), counts)
+      : rule.salesPersonId
       ? eligible.find((person) => String(person.id ?? "") === rule.salesPersonId)
       : chooseByStrategy(strategy, registration, eligible, counts);
     if (selected) {
@@ -154,23 +158,23 @@ export function resolveSmartLeadAssignment(
         salesPersonId: id,
         salesPersonName: String(selected.name ?? ""),
         ruleId: rule.id,
-        strategy,
+        strategy: pool?.length ? "least-active" : strategy,
         reason: `Matched priority rule ${rule.id}`,
         activeLeadCount: counts.get(id) ?? 0
       };
     }
   }
 
-  const defaultId = String(defaultSalesPersonId ?? "");
+  const defaultIds = Array.isArray(defaultSalesPersonId) ? defaultSalesPersonId.map(String) : [String(defaultSalesPersonId ?? "")];
   const available = eligiblePeople(salesPeople, counts);
-  const defaultPerson = available.find((person) => String(person.id ?? "") === defaultId);
+  const defaultPerson = chooseByStrategy("least-active", registration, available.filter((person) => defaultIds.includes(String(person.id ?? ""))), counts);
   const selected = defaultPerson ?? chooseByStrategy(fallbackStrategy, registration, available, counts);
   if (!selected) return { salesPersonId: "", salesPersonName: "", strategy: "unassigned", reason: "No available sales person matched", activeLeadCount: 0 };
   const id = String(selected.id ?? "");
   return {
     salesPersonId: id,
     salesPersonName: String(selected.name ?? ""),
-    strategy: defaultPerson ? "fixed" : fallbackStrategy,
+    strategy: defaultPerson ? (defaultIds.length > 1 ? "least-active" : "fixed") : fallbackStrategy,
     reason: defaultPerson ? "Used default sales person" : `Used ${fallbackStrategy} fallback`,
     activeLeadCount: counts.get(id) ?? 0
   };
@@ -185,8 +189,9 @@ export function resolveWorkshopSalesPersonId(
   fallbackStrategy: LeadAssignmentStrategy = "unassigned"
 ) {
   if (!salesPeople.length) {
-    const matched = (Array.isArray(rules) ? rules : []).find((rule) => rule.salesPersonId && ruleMatches(registration, rule));
-    return matched?.salesPersonId || String(defaultSalesPersonId ?? "");
+    const matched = (Array.isArray(rules) ? rules : []).find((rule) => (rule.salesPersonIds?.length || rule.salesPersonId) && ruleMatches(registration, rule));
+    const ids = matched?.salesPersonIds?.length ? matched.salesPersonIds : matched?.salesPersonId ? [matched.salesPersonId] : Array.isArray(defaultSalesPersonId) ? defaultSalesPersonId.map(String) : [String(defaultSalesPersonId ?? "")];
+    return ids[stableNumber(registration.id) % ids.length] || "";
   }
   return resolveSmartLeadAssignment(registration, rules, salesPeople, leads, defaultSalesPersonId, fallbackStrategy).salesPersonId;
 }

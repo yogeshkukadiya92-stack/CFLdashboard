@@ -64,6 +64,7 @@ type WorkshopRecord = {
   paymentUnknown?: boolean;
   transferLeadToCrm?: boolean;
   assignedSalesPersonId?: string;
+  assignedSalesPersonIds?: string[];
   assignedSalesPersonName?: string;
   assignedSalesPersonCode?: string;
   leadAssignmentRules?: WorkshopLeadAssignmentRule[];
@@ -209,7 +210,7 @@ export default function WorkshopMasterPage() {
   const [minOrderQty, setMinOrderQty] = useState("");
   const [maxOrderQty, setMaxOrderQty] = useState("");
   const [transferLeadToCrm, setTransferLeadToCrm] = useState(false);
-  const [assignedSalesPersonId, setAssignedSalesPersonId] = useState("");
+  const [assignedSalesPersonIds, setAssignedSalesPersonIds] = useState<string[]>([]);
   const [salesPeople, setSalesPeople] = useState<SalesPersonRecord[]>([]);
   const [leadAssignmentRules, setLeadAssignmentRules] = useState<WorkshopLeadAssignmentRule[]>([]);
   const [ruleCity, setRuleCity] = useState("");
@@ -217,7 +218,7 @@ export default function WorkshopMasterPage() {
   const [rulePincode, setRulePincode] = useState("");
   const [ruleStartDate, setRuleStartDate] = useState("");
   const [ruleEndDate, setRuleEndDate] = useState("");
-  const [ruleSalesPersonId, setRuleSalesPersonId] = useState("");
+  const [ruleSalesPersonIds, setRuleSalesPersonIds] = useState<string[]>([]);
   const [mfwEnrollmentEnabled, setMfwEnrollmentEnabled] = useState(false);
   const [mfwWorkshopEventId, setMfwWorkshopEventId] = useState("");
   const [mfwWorkshopTitle, setMfwWorkshopTitle] = useState("");
@@ -691,12 +692,12 @@ export default function WorkshopMasterPage() {
     setMinOrderQty("");
     setMaxOrderQty("");
     setTransferLeadToCrm(false);
-    setAssignedSalesPersonId("");
+    setAssignedSalesPersonIds([]);
     setLeadAssignmentRules([]);
     setRuleCity(""); setRuleState(""); setRulePincode("");
     setRuleStartDate("");
     setRuleEndDate("");
-    setRuleSalesPersonId("");
+    setRuleSalesPersonIds([]);
     setMfwEnrollmentEnabled(false);
     setMfwWorkshopEventId("");
     setMfwWorkshopTitle("");
@@ -771,7 +772,7 @@ export default function WorkshopMasterPage() {
     setMinOrderQty(record.minOrderQty ?? "");
     setMaxOrderQty(record.maxOrderQty ?? "");
     setTransferLeadToCrm(Boolean(record.transferLeadToCrm));
-    setAssignedSalesPersonId(record.assignedSalesPersonId ?? "");
+    setAssignedSalesPersonIds(record.assignedSalesPersonIds ?? (record.assignedSalesPersonId ? [record.assignedSalesPersonId] : []));
     setLeadAssignmentRules(record.leadAssignmentRules ?? []);
     setMfwEnrollmentEnabled(Boolean(record.mfwEnrollmentEnabled));
     setMfwWorkshopEventId(record.mfwWorkshopEventId ?? "");
@@ -810,7 +811,7 @@ export default function WorkshopMasterPage() {
       setMinOrderQty(record.minOrderQty ?? "");
       setMaxOrderQty(record.maxOrderQty ?? "");
       setTransferLeadToCrm(Boolean(record.transferLeadToCrm));
-      setAssignedSalesPersonId(record.assignedSalesPersonId ?? "");
+      setAssignedSalesPersonIds(record.assignedSalesPersonIds ?? (record.assignedSalesPersonId ? [record.assignedSalesPersonId] : []));
       setLeadAssignmentRules(record.leadAssignmentRules ?? []);
       setMfwEnrollmentEnabled(false);
       setMfwWorkshopEventId("");
@@ -1252,8 +1253,9 @@ export default function WorkshopMasterPage() {
       createdAt: now,
       updatedAt: now
     }];
-    const assignedSalesPerson = salesPeople.find((person) => person.id === assignedSalesPersonId);
+    const assignedSalesPerson = salesPeople.find((person) => person.id === assignedSalesPersonIds[0]);
     return {
+      assignedSalesPersonIds: transferLeadToCrm ? assignedSalesPersonIds : [],
       assignedSalesPersonCode: transferLeadToCrm && assignedSalesPerson ? assignedSalesPerson.salesPersonCode || salesPersonCodeFromId(assignedSalesPerson.id) : undefined,
       assignedSalesPersonId: transferLeadToCrm && assignedSalesPerson ? assignedSalesPerson.id : undefined,
       assignedSalesPersonName: transferLeadToCrm && assignedSalesPerson ? assignedSalesPerson.name : undefined,
@@ -1869,16 +1871,9 @@ export default function WorkshopMasterPage() {
           {transferLeadToCrm ? <div className="mt-4 grid gap-3 rounded-xl border border-indigo-100 bg-indigo-50/60 p-4 md:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] md:items-center">
             <div>
               <p className="text-sm font-black text-slate-900">Default salesperson for this workshop</p>
-              <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">Every new registration will appear as a lead in the selected sales person&apos;s CRM queue. Leave it unassigned to route leads manually.</p>
+              <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">New leads are distributed among selected salespeople by active workload. Leave all unchecked to assign manually.</p>
             </div>
-            <label className="block">
-              <span className="sr-only">Assigned sales person</span>
-              <select className={inputClass} onChange={(event) => setAssignedSalesPersonId(event.target.value)} value={assignedSalesPersonId}>
-                <option value="">Keep new leads unassigned</option>
-                {assignedSalesPersonId && !salesPeople.some((person) => person.id === assignedSalesPersonId) ? <option value={assignedSalesPersonId}>Saved sales person unavailable</option> : null}
-                {salesPeople.filter((person) => person.isActive !== false).map((person) => <option key={person.id} value={person.id}>{person.name}{person.acceptingLeads === false ? " · Not accepting leads" : ""}</option>)}
-              </select>
-            </label>
+            <div className="block"><SalesPeoplePicker people={salesPeople} value={assignedSalesPersonIds} onChange={setAssignedSalesPersonIds} /></div>
           </div> : null}
 
           {transferLeadToCrm ? <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
@@ -1891,7 +1886,7 @@ export default function WorkshopMasterPage() {
             </div>
             {leadAssignmentRules.length ? <div className="mt-3 space-y-2">
               {leadAssignmentRules.map((rule, index) => {
-                const person = salesPeople.find((item) => item.id === rule.salesPersonId);
+                const person = { name: (rule.salesPersonIds ?? (rule.salesPersonId ? [rule.salesPersonId] : [])).map((id) => salesPeople.find((item) => item.id === id)?.name || "Unavailable sales person").join(", ") };
                 return <div className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-700" key={rule.id}>
                   <span className="text-indigo-600">#{index + 1}</span>
                   <label className="inline-flex items-center gap-1"><input type="checkbox" aria-label={`Enable rule ${index + 1}`} checked={rule.enabled !== false} onChange={(event) => setLeadAssignmentRules((rules) => rules.map((item) => item.id === rule.id ? { ...item, enabled: event.target.checked } : item))} />Enabled</label><span>{rule.city ? `City: ${rule.city}` : "Any city"}</span>{rule.state ? <span>State: {rule.state}</span> : null}{rule.pincode ? <span>Pincode: {rule.pincode}</span> : null}
@@ -1913,11 +1908,11 @@ export default function WorkshopMasterPage() {
               <label className="block"><span className="mb-1 block text-xs font-bold text-slate-600">Pincode (optional)</span><input className={inputClass} inputMode="numeric" maxLength={6} onChange={(event) => setRulePincode(event.target.value.replace(/\D/g, ""))} placeholder="e.g. 395007" value={rulePincode} /></label>
               <label className="block"><span className="mb-1 block text-xs font-bold text-slate-600">From date (optional)</span><input className={inputClass} onChange={(event) => setRuleStartDate(event.target.value)} type="date" value={ruleStartDate} /></label>
               <label className="block"><span className="mb-1 block text-xs font-bold text-slate-600">To date (optional)</span><input className={inputClass} min={ruleStartDate || undefined} onChange={(event) => setRuleEndDate(event.target.value)} type="date" value={ruleEndDate} /></label>
-              <label className="block"><span className="mb-1 block text-xs font-bold text-slate-600">Assign to</span><select className={inputClass} onChange={(event) => setRuleSalesPersonId(event.target.value)} value={ruleSalesPersonId}><option value="">Select sales person</option>{salesPeople.filter((person) => person.isActive !== false).map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}</select></label>
+              <div className="block"><span className="mb-1 block text-xs font-bold text-slate-600">Assign to</span><SalesPeoplePicker people={salesPeople} value={ruleSalesPersonIds} onChange={setRuleSalesPersonIds} /></div>
             </div>
-            <button className="mt-3 inline-flex min-h-[40px] items-center gap-2 rounded-lg bg-slate-900 px-4 text-sm font-black text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50" disabled={(Boolean(rulePincode) && !/^\d{6}$/.test(rulePincode)) || !ruleSalesPersonId || (!ruleCity.trim() && !ruleState.trim() && !rulePincode.trim() && !ruleStartDate && !ruleEndDate) || (Boolean(ruleStartDate && ruleEndDate) && ruleEndDate < ruleStartDate)} onClick={() => {
-              setLeadAssignmentRules((rules) => [...rules, { id: generateId(), city: ruleCity.trim() || undefined, state: ruleState.trim() || undefined, pincode: rulePincode.trim() || undefined, enabled: true, startDate: ruleStartDate || undefined, endDate: ruleEndDate || undefined, salesPersonId: ruleSalesPersonId }]);
-              setRuleCity(""); setRuleState(""); setRulePincode(""); setRuleStartDate(""); setRuleEndDate(""); setRuleSalesPersonId("");
+            <button className="mt-3 inline-flex min-h-[40px] items-center gap-2 rounded-lg bg-slate-900 px-4 text-sm font-black text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50" disabled={(Boolean(rulePincode) && !/^\d{6}$/.test(rulePincode)) || !ruleSalesPersonIds.length || (!ruleCity.trim() && !ruleState.trim() && !rulePincode.trim() && !ruleStartDate && !ruleEndDate) || (Boolean(ruleStartDate && ruleEndDate) && ruleEndDate < ruleStartDate)} onClick={() => {
+              setLeadAssignmentRules((rules) => [...rules, { id: generateId(), city: ruleCity.trim() || undefined, state: ruleState.trim() || undefined, pincode: rulePincode.trim() || undefined, enabled: true, startDate: ruleStartDate || undefined, endDate: ruleEndDate || undefined, salesPersonId: ruleSalesPersonIds[0], salesPersonIds: ruleSalesPersonIds }]);
+              setRuleCity(""); setRuleState(""); setRulePincode(""); setRuleStartDate(""); setRuleEndDate(""); setRuleSalesPersonIds([]);
             }} type="button"><Plus className="size-4" />Add assignment rule</button>
           </div> : null}
 
@@ -2091,16 +2086,9 @@ export default function WorkshopMasterPage() {
                     {transferLeadToCrm ? <div className="grid gap-3 rounded-xl border border-indigo-100 bg-indigo-50/60 p-4 md:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] md:items-center">
                       <div>
                         <p className="text-sm font-black text-slate-900">Default salesperson for this workshop</p>
-                        <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">Leave it unassigned to route leads manually.</p>
+                        <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">Select multiple names to distribute new leads by active workload.</p>
                       </div>
-                      <label className="block">
-                        <span className="sr-only">Assigned sales person</span>
-                        <select className={inputClass} onChange={(event) => setAssignedSalesPersonId(event.target.value)} value={assignedSalesPersonId}>
-                          <option value="">Keep new leads unassigned</option>
-                          {assignedSalesPersonId && !salesPeople.some((person) => person.id === assignedSalesPersonId) ? <option value={assignedSalesPersonId}>Saved sales person unavailable</option> : null}
-                          {salesPeople.filter((person) => person.isActive !== false).map((person) => <option key={person.id} value={person.id}>{person.name}{person.acceptingLeads === false ? " · Not accepting leads" : ""}</option>)}
-                        </select>
-                      </label>
+                      <div className="block"><SalesPeoplePicker people={salesPeople} value={assignedSalesPersonIds} onChange={setAssignedSalesPersonIds} /></div>
                     </div> : null}
                     {transferLeadToCrm ? <div className="rounded-xl border border-slate-200 bg-white p-4">
                       <div className="flex flex-wrap items-start justify-between gap-2">
@@ -2109,7 +2097,7 @@ export default function WorkshopMasterPage() {
                       </div>
                       {leadAssignmentRules.length ? <div className="mt-3 space-y-2">
                         {leadAssignmentRules.map((rule, index) => {
-                          const person = salesPeople.find((item) => item.id === rule.salesPersonId);
+                          const person = { name: (rule.salesPersonIds ?? (rule.salesPersonId ? [rule.salesPersonId] : [])).map((id) => salesPeople.find((item) => item.id === id)?.name || "Unavailable sales person").join(", ") };
                           return <div className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-700" key={rule.id}><span className="text-indigo-600">#{index + 1}</span><label className="inline-flex items-center gap-1"><input type="checkbox" aria-label={`Enable rule ${index + 1}`} checked={rule.enabled !== false} onChange={(event) => setLeadAssignmentRules((rules) => rules.map((item) => item.id === rule.id ? { ...item, enabled: event.target.checked } : item))} />Enabled</label><span>{rule.city ? `City: ${rule.city}` : "Any city"}</span>{rule.state ? <span>State: {rule.state}</span> : null}{rule.pincode ? <span>Pincode: {rule.pincode}</span> : null}<span className="text-slate-300">•</span><span>{rule.startDate || rule.endDate ? `${rule.startDate || "Any date"} to ${rule.endDate || "Any date"}` : "Any date"}</span><span className="text-slate-300">→</span><span className="text-slate-950">{person?.name || "Unavailable sales person"}</span><div className="ml-auto flex items-center gap-1"><button aria-label={`Move rule ${index + 1} up`} className="rounded-md p-1.5 text-slate-500 hover:bg-white disabled:opacity-30" disabled={index === 0} onClick={() => setLeadAssignmentRules((rules) => { const next = [...rules]; [next[index - 1], next[index]] = [next[index], next[index - 1]]; return next; })} type="button"><ArrowUp className="size-4" /></button><button aria-label={`Move rule ${index + 1} down`} className="rounded-md p-1.5 text-slate-500 hover:bg-white disabled:opacity-30" disabled={index === leadAssignmentRules.length - 1} onClick={() => setLeadAssignmentRules((rules) => { const next = [...rules]; [next[index], next[index + 1]] = [next[index + 1], next[index]]; return next; })} type="button"><ArrowDown className="size-4" /></button><button aria-label={`Remove rule ${index + 1}`} className="rounded-md p-1.5 text-rose-600 hover:bg-rose-50" onClick={() => setLeadAssignmentRules((rules) => rules.filter((item) => item.id !== rule.id))} type="button"><Trash2 className="size-4" /></button></div></div>;
                         })}
                       </div> : null}
@@ -2119,9 +2107,9 @@ export default function WorkshopMasterPage() {
               <label className="block"><span className="mb-1 block text-xs font-bold text-slate-600">Pincode (optional)</span><input className={inputClass} inputMode="numeric" maxLength={6} onChange={(event) => setRulePincode(event.target.value.replace(/\D/g, ""))} placeholder="e.g. 395007" value={rulePincode} /></label>
               <label className="block"><span className="mb-1 block text-xs font-bold text-slate-600">From date (optional)</span><input className={inputClass} onChange={(event) => setRuleStartDate(event.target.value)} type="date" value={ruleStartDate} /></label>
                         <label className="block"><span className="mb-1 block text-xs font-bold text-slate-600">To date (optional)</span><input className={inputClass} min={ruleStartDate || undefined} onChange={(event) => setRuleEndDate(event.target.value)} type="date" value={ruleEndDate} /></label>
-                        <label className="block"><span className="mb-1 block text-xs font-bold text-slate-600">Assign to</span><select className={inputClass} onChange={(event) => setRuleSalesPersonId(event.target.value)} value={ruleSalesPersonId}><option value="">Select sales person</option>{salesPeople.filter((person) => person.isActive !== false).map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}</select></label>
+                        <div className="block"><span className="mb-1 block text-xs font-bold text-slate-600">Assign to</span><SalesPeoplePicker people={salesPeople} value={ruleSalesPersonIds} onChange={setRuleSalesPersonIds} /></div>
                       </div>
-                      <button className="mt-3 inline-flex min-h-[40px] items-center gap-2 rounded-lg bg-slate-900 px-4 text-sm font-black text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50" disabled={(Boolean(rulePincode) && !/^\d{6}$/.test(rulePincode)) || !ruleSalesPersonId || (!ruleCity.trim() && !ruleState.trim() && !rulePincode.trim() && !ruleStartDate && !ruleEndDate) || (Boolean(ruleStartDate && ruleEndDate) && ruleEndDate < ruleStartDate)} onClick={() => { setLeadAssignmentRules((rules) => [...rules, { id: generateId(), city: ruleCity.trim() || undefined, state: ruleState.trim() || undefined, pincode: rulePincode.trim() || undefined, enabled: true, startDate: ruleStartDate || undefined, endDate: ruleEndDate || undefined, salesPersonId: ruleSalesPersonId }]); setRuleCity(""); setRuleState(""); setRulePincode(""); setRuleStartDate(""); setRuleEndDate(""); setRuleSalesPersonId(""); }} type="button"><Plus className="size-4" />Add assignment rule</button>
+                      <button className="mt-3 inline-flex min-h-[40px] items-center gap-2 rounded-lg bg-slate-900 px-4 text-sm font-black text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50" disabled={(Boolean(rulePincode) && !/^\d{6}$/.test(rulePincode)) || !ruleSalesPersonIds.length || (!ruleCity.trim() && !ruleState.trim() && !rulePincode.trim() && !ruleStartDate && !ruleEndDate) || (Boolean(ruleStartDate && ruleEndDate) && ruleEndDate < ruleStartDate)} onClick={() => { setLeadAssignmentRules((rules) => [...rules, { id: generateId(), city: ruleCity.trim() || undefined, state: ruleState.trim() || undefined, pincode: rulePincode.trim() || undefined, enabled: true, startDate: ruleStartDate || undefined, endDate: ruleEndDate || undefined, salesPersonId: ruleSalesPersonIds[0], salesPersonIds: ruleSalesPersonIds }]); setRuleCity(""); setRuleState(""); setRulePincode(""); setRuleStartDate(""); setRuleEndDate(""); setRuleSalesPersonIds([]); }} type="button"><Plus className="size-4" />Add assignment rule</button>
                     </div> : null}
                     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                       <label className="block"><span className="mb-2 block text-sm font-bold text-slate-600">Batch</span><input className={inputClass} onChange={(event) => setBatch(event.target.value)} placeholder="Main Batch" value={batch} /></label>
@@ -4980,4 +4968,15 @@ function SelectBox({ label, onChange, options, value }: { label: string; onChang
       </span>
     </label>
   );
+}
+
+function SalesPeoplePicker({ people, value, onChange }: { people: { id: string; name: string; isActive?: boolean; acceptingLeads?: boolean }[]; value: string[]; onChange: (ids: string[]) => void }) {
+  return <span className="block rounded-lg border border-slate-200 bg-white p-3">
+    <span className="mb-2 block text-xs font-semibold text-slate-500">Select salespeople · {value.length} selected</span>
+    <span className="flex max-h-40 flex-col gap-2 overflow-y-auto">
+      {people.filter((person) => person.isActive !== false || value.includes(person.id)).map((person) => <span className="flex items-center gap-2 text-sm font-semibold" key={person.id}><input type="checkbox" aria-label={person.name} checked={value.includes(person.id)} onChange={(event) => onChange(event.target.checked ? [...value, person.id] : value.filter((id) => id !== person.id))} /><span>{person.name}{person.acceptingLeads === false ? " · Not accepting leads" : ""}</span></span>)}
+      {value.filter((id) => !people.some((person) => person.id === id)).map((id) => <span className="flex items-center gap-2 text-sm" key={id}><input type="checkbox" aria-label="Saved salesperson unavailable" checked onChange={() => onChange(value.filter((item) => item !== id))} />Saved salesperson unavailable</span>)}
+      {!people.length && !value.length ? <span className="text-sm text-slate-500">No salespeople available</span> : null}
+    </span>
+  </span>;
 }
