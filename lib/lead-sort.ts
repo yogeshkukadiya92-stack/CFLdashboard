@@ -1,5 +1,5 @@
-/** Sort before pagination so the newest leads appear on the first page. */
-export function newestLeadsFirst<T extends { createdAt?: string }>(leads: readonly T[]): T[] {
+/** Return records newest first without mutating the stored order. */
+export function newestFirstByCreatedAt<T extends { createdAt?: string }>(leads: readonly T[]): T[] {
   const timestamp = (value?: string) => {
     const parsed = value ? Date.parse(value) : NaN;
     return Number.isFinite(parsed) ? parsed : -Infinity;
