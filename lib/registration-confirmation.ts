@@ -1,3 +1,4 @@
+import { renderTemplateValues } from "./whatsapp-template-values.ts";
 import { isWaitingRegistration } from "./registration-status.ts";
 import { internationalPhone } from "./phone-number.ts";
 import type { BuilderForm, RegistrationEntry } from "@/lib/types";
@@ -51,7 +52,7 @@ export async function sendRegistrationConfirmation(registration: RegistrationEnt
   const isNameOnlyTemplate = templateName === "cfl_the_joy_thank_you";
   const startDate = form.manualWhatsappStartDate?.trim();
   const isPreRecorded = (workshopType || "").replace(/[\s_-]+/g, "").toLowerCase() === "prerecorded";
-  if (!isFixedHf39Template && !isNameOnlyTemplate && !isPreRecorded && !startDate) {
+  if (form.whatsappConfirmationBodyValues === undefined && !isFixedHf39Template && !isNameOnlyTemplate && !isPreRecorded && !startDate) {
     return { configured: true, sent: false, error: "Set the workshop starting date in Workshop Create / Edit before sending confirmation WhatsApp." };
   }
   const values = isFixedHf39Template
@@ -60,6 +61,7 @@ export async function sendRegistrationConfirmation(registration: RegistrationEnt
       ? [registration.fullName]
       : [registration.fullName, form.workshopName || registration.workshopTitle, `Starting from ${startDate}`, registration.registrationNumber || "-"];
   return sendTemplateMessage({
+    form, registration, kind: "Confirmation",
     senderId: form.whatsappSenderId,
     mobile: registration.mobile,
     name: registration.fullName,
@@ -74,6 +76,9 @@ export async function sendRegistrationConfirmation(registration: RegistrationEnt
 type WhatsAppDeliveryResult = { configured: boolean; error?: string; messageId?: string; sent: boolean };
 
 async function sendTemplateMessage(input: {
+  form: Partial<BuilderForm>;
+  registration: RegistrationEntry;
+  kind: "Confirmation" | "Waiting" | "ReferrerWaiting";
   senderId?: string;
   mobile: string;
   name: string;
@@ -83,6 +88,34 @@ async function sendTemplateMessage(input: {
   mediaUrl?: string;
   values: string[];
 }): Promise<WhatsAppDeliveryResult> {
+  const prefix = `whatsapp${input.kind}` as const;
+  const customValues = input.form[`${prefix}BodyValues`];
+  const headerType = input.form[`${prefix}HeaderType`];
+  const language = input.form[`${prefix}Language`]?.trim();
+  if (language && !/^[a-z]{2,3}(?:[_-][A-Za-z]{2,4})?$/.test(language)) {
+    return { configured: true, sent: false, error: "Enter the language code of the approved WhatsApp template (for example en, hi or gu)." };
+  }
+  if (headerType && headerType !== "none" && !input.mediaUrl?.trim()) {
+    return { configured: true, sent: false, error: `Add the approved template's ${headerType} header file URL in Workshop Create / Edit → Automation before sending WhatsApp.` };
+  }
+  if (customValues !== undefined) {
+    try {
+      input.values = renderTemplateValues(customValues, {
+        name: input.registration.fullName,
+        workshop_name: input.form.workshopName || input.registration.workshopTitle,
+        start_date: input.form.manualWhatsappStartDate?.trim() || "",
+        registration_no: input.registration.registrationNumber || "",
+        batch: input.registration.batch || "Main Batch",
+        whatsapp_group_link: input.form.whatsappGroupUrl || "",
+        waiting_no: input.registration.waitingPosition ? `WL-${input.registration.waitingPosition}` : "",
+        waiting_reason: input.registration.waitingReason || "",
+        referrer_name: input.registration.referrerName || "",
+        mobile: input.registration.mobile
+      });
+    } catch (error) {
+      return { configured: true, sent: false, error: error instanceof Error ? error.message : "Check WhatsApp template body variables." };
+    }
+  }
   let account;
   try { account = await resolveWhatsAppAccount(input.senderId); } catch { return { configured: true, sent: false, error: "Selected WhatsApp sender is unavailable." }; }
   const apiUrl = account ? account.apiUrl : process.env.WHATSAPP_CONFIRMATION_API_URL || process.env.WHATSAPP_OTP_API_URL;
@@ -107,7 +140,7 @@ async function sendTemplateMessage(input: {
         ...(account ? { from: account.number, sender: account.number, whatsappNumber: account.number } : {}),
         ...(mediaUrl ? { myfile: mediaUrl } : {}),
         data: input.values,
-        language: account?.language || process.env.WHATSAPP_CONFIRMATION_LANGUAGE || "en",
+        language: language || account?.language || process.env.WHATSAPP_CONFIRMATION_LANGUAGE || "en",
         name: input.name,
         originWebsite: process.env.WHATSAPP_OTP_ORIGIN_WEBSITE || "https://coachforlife.in/",
         sendto: mobile,
@@ -182,6 +215,7 @@ export async function sendRegistrationStatusNotifications(registration: Registra
       || process.env.WHATSAPP_WAITING_TEMPLATE_NAME
       || process.env.WHATSAPP_WAITING_TEMPLATE_ID;
     const participantResult = await sendTemplateMessage({
+      form, registration, kind: "Waiting",
       senderId: form.whatsappSenderId,
     mobile: registration.mobile,
       name: registration.fullName,
@@ -208,6 +242,7 @@ export async function sendRegistrationStatusNotifications(registration: Registra
       || process.env.WHATSAPP_REFERRER_WAITING_TEMPLATE_NAME
       || process.env.WHATSAPP_REFERRER_WAITING_TEMPLATE_ID;
     const referrerResult = await sendTemplateMessage({
+      form, registration, kind: "ReferrerWaiting",
       senderId: form.whatsappSenderId,
       mobile: referenceDigits,
       name: registration.referrerName || "Referrer",

@@ -86,6 +86,32 @@ test("routes confirmed and waiting WhatsApp messages only to allowed recipients"
     assert.equal(requests.length, 0);
 
     requests.length = 0;
+    const customForm = { ...form, manualWhatsappStartDate: "", whatsappConfirmationTemplate: "custom_approved", whatsappConfirmationLanguage: "hi", whatsappConfirmationBodyValues: ["{{name}}", "Join {{workshop_name}}", "Fixed value"] };
+    const customPatch = await sendRegistrationStatusNotifications({ ...baseRegistration, registrationStatus: "confirmed" }, customForm);
+    assert.equal(customPatch.confirmationWhatsappStatus, "sent");
+    assert.deepEqual(requests[0].data, ["Test Participant", "Join Healthy Forever", "Fixed value"]);
+    assert.equal(requests[0].language, "hi");
+    requests.length = 0;
+    const staticPatch = await sendRegistrationStatusNotifications({ ...baseRegistration, registrationStatus: "confirmed" }, { ...customForm, whatsappConfirmationBodyValues: [] });
+    assert.equal(staticPatch.confirmationWhatsappStatus, "sent");
+    assert.deepEqual(requests[0].data, []);
+    requests.length = 0;
+    for (const value of ["{{start_date}}", "{{unknown}}", "", "{{name"]) {
+      const invalid = await sendRegistrationStatusNotifications({ ...baseRegistration, registrationStatus: "confirmed" }, { ...customForm, whatsappConfirmationBodyValues: [value] });
+      assert.equal(invalid.confirmationWhatsappStatus, "failed");
+      assert.equal(requests.length, 0);
+    }
+    const missingHeader = await sendRegistrationStatusNotifications({ ...baseRegistration, registrationStatus: "confirmed" }, { ...customForm, whatsappConfirmationHeaderType: "image" });
+    assert.equal(missingHeader.confirmationWhatsappStatus, "failed");
+    assert.match(missingHeader.confirmationWhatsappError || "", /header file URL/);
+    assert.equal(requests.length, 0);
+    const waitingCustom = await sendRegistrationStatusNotifications({ ...baseRegistration, registrationStatus: "waiting", waitingPosition: 3, referralCodeId: "ref", referralCode: "9123456789", referrerName: "Referrer" }, { ...form, whatsappWaitingBodyValues: ["{{name}}", "{{waiting_no}}"], whatsappReferrerWaitingBodyValues: ["{{referrer_name}}", "{{name}}"] });
+    assert.equal(waitingCustom.waitingWhatsappStatus, "sent");
+    assert.equal(waitingCustom.referrerWaitingWhatsappStatus, "sent");
+    assert.deepEqual(requests[0].data, ["Test Participant", "WL-3"]);
+    assert.deepEqual(requests[1].data, ["Referrer", "Test Participant"]);
+
+    requests.length = 0;
     const missingDatePatch = await sendRegistrationStatusNotifications({
       ...baseRegistration, registrationNumber: "REG-9296", registrationStatus: "confirmed"
     }, { ...form, manualWhatsappStartDate: "", whatsappGroupUrl: "https://chat.whatsapp.com/example" });
