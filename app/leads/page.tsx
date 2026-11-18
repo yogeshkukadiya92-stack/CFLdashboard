@@ -1,6 +1,7 @@
 "use client";
 
 import { callFlowDispositions } from "@/lib/callflow-connector";
+import { newestLeadsFirst } from "@/lib/lead-sort";
 import { latestLeadCallStatus, normalizeCallStatus } from "@/lib/lead-call-status";
 import { AdminPlatformShell } from "@/components/admin-platform-shell";
 import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
@@ -152,7 +153,7 @@ export default function LeadsPage() {
 
   const filteredLeads = useMemo(() => {
     const query = search.trim().toLowerCase();
-    return leads.filter((lead) => {
+    return newestLeadsFirst(leads.filter((lead) => {
       if (sourceFilter && lead.source !== sourceFilter) return false;
       if (stageFilter.startsWith("call:") ? latestLeadCallStatus(lead) !== stageFilter.slice(5) : stageFilter !== "All" && lead.stage !== stageFilter) return false;
       if (ownerFilter !== "All" && (ownerFilter === "Unassigned" ? Boolean(lead.assignedTo) : lead.assignedTo !== ownerFilter)) return false;
@@ -166,7 +167,7 @@ export default function LeadsPage() {
       if (!query) return true;
       return [lead.name, lead.mobile, lead.email, lead.city, lead.source, lead.interest, lead.assignedTo, ...(lead.tags ?? [])]
         .some((value) => String(value ?? "").toLowerCase().includes(query));
-    });
+    }));
   }, [dateType, fromDate, leads, ownerFilter, scope, search, sourceFilter, stageFilter, toDate]);
 
   const pageCount = Math.max(1, Math.ceil(filteredLeads.length / 100));
