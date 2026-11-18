@@ -21,7 +21,7 @@ export function ensureLocationFields(fields: BuilderField[]): BuilderField[] {
     const existing = fields.find(field => field.role === role);
     return { ...existing, id: existing?.id ?? `location-${role}`, type: "dropdown" as const,
       label: existing?.label ?? role[0].toUpperCase() + role.slice(1), role,
-      required: role === "country", allowOther: role !== "country",
+      required: existing?.required ?? (role === "country"), allowOther: role !== "country",
       options: role === "country" ? [...COUNTRY_OPTIONS] : undefined };
   });
   const first = fields.findIndex(field => roles.some(role => role === field.role));

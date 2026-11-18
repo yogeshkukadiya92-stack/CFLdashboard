@@ -150,7 +150,12 @@ async function sendTemplateMessage(input: {
     } catch {
       // Successful provider responses are not guaranteed to be JSON.
     }
-    const error = sent ? undefined : `WhatsApp provider returned ${response.status}.${providerReason ? ` ${providerReason}` : ""}`;
+    const fileRejected = !sent && /invalid file|file not found/i.test(providerReason || "");
+    const error = sent ? undefined : fileRejected
+      ? mediaUrl
+        ? "WhatsApp template header file was rejected. In Workshop Create / Edit → Automation, replace the header media URL with a public HTTPS link to the image, document or video required by the approved template, then retry WhatsApp."
+        : "WhatsApp provider requires a template header file. In Workshop Create / Edit → Automation, enter the header image / document / video URL for this template, then retry WhatsApp."
+      : `WhatsApp provider returned ${response.status}.${providerReason ? ` ${providerReason}` : ""}`;
     await recordOutboundWhatsAppMessage({ providerMessageId: messageId, registrationId: input.registrationId, mobile, templateName: input.templateName, status: sent ? "sent" : "failed", error }).catch(() => undefined);
     return { configured: true, error, messageId, sent };
   } catch (error) {

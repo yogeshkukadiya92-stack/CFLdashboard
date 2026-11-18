@@ -11,7 +11,6 @@ export function normalizeCoreFieldRequirements(fields: BuilderField[]) {
       return { ...field, type: "number" as const, role: undefined };
     }
     if (field.role === "name" || field.role === "mobile") return { ...field, required: true };
-    if (field.role === "email" || field.role === "city") return { ...field, required: false };
     return field;
   });
 }

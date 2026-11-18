@@ -1,7 +1,20 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { normalizeCoreFieldRequirements } from "../lib/builder-field-normalization.ts";
+import { ensureLocationFields } from "../lib/location-options.ts";
 import type { BuilderField } from "../lib/types.ts";
+
+test("required choices survive saving and reopening the registration form", () => {
+  for (const required of [true, false]) {
+    const fields: BuilderField[] = ["country", "state", "city", "email"].map(role => ({
+      id: role, label: role, role: role as BuilderField["role"], type: "dropdown", required
+    }));
+    const saved = ensureLocationFields(normalizeCoreFieldRequirements(fields));
+    const reopened = ensureLocationFields(normalizeCoreFieldRequirements(JSON.parse(JSON.stringify(saved))));
+    for (const field of reopened) assert.equal(field.required, required, field.role);
+    assert.deepEqual(reopened, saved);
+  }
+});
 
 test("repairs Age fields that retained a renamed email core-field configuration", () => {
   const fields: BuilderField[] = [

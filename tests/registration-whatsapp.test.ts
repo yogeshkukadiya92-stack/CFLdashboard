@@ -211,6 +211,17 @@ test("routes confirmed and waiting WhatsApp messages only to allowed recipients"
     assert.match(providerRejection.confirmationWhatsappError || "", /400.*Template parameter count mismatch/);
     assert.doesNotMatch(providerRejection.confirmationWhatsappError || "", /test-token/);
 
+    globalThis.fetch = (async () => new Response(JSON.stringify({ Message: "Invalid File or File Not found! Please try again with a valid file" }), { status: 400 })) as typeof fetch;
+    for (const mediaUrl of [undefined, "https://cdn.example.com/missing.jpg"]) {
+      const fileFailure = await sendRegistrationStatusNotifications({
+        ...baseRegistration, registrationStatus: "confirmed"
+      }, { ...form, whatsappConfirmationMediaUrl: mediaUrl });
+      assert.equal(fileFailure.confirmationWhatsappStatus, "failed");
+      assert.equal(fileFailure.confirmationWhatsappSentAt, undefined);
+      assert.match(fileFailure.confirmationWhatsappError || "", /Automation/);
+      assert.match(fileFailure.confirmationWhatsappError || "", mediaUrl ? /replace the header media URL/ : /enter the header image/);
+    }
+
     globalThis.fetch = (async () => new Response("provider error", { status: 500 })) as typeof fetch;
     const failedPatch = await sendRegistrationStatusNotifications({
       ...baseRegistration,

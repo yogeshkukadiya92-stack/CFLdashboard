@@ -3,6 +3,7 @@
 import { filterRepeaterWorkshops } from "@/lib/repeater-workshops";
 import { registrationPaymentLabel } from "@/lib/registration-payment-display";
 import { ensureLocationFields } from "@/lib/location-options";
+import { consumeWorkshopPanelUrl } from "@/lib/workshop-panel-url";
 
 import { DEFAULT_MANUAL_WHATSAPP_TEMPLATE, renderManualWhatsApp } from "@/lib/manual-whatsapp";
 import { ManualWhatsAppSettings, ManualWhatsAppComposer, type ManualWhatsAppDraft } from "@/components/manual-whatsapp";
@@ -975,13 +976,19 @@ export default function WorkshopMasterPage() {
     const targetEditId = urlParams.get("edit");
     const targetWorkshopId = urlParams.get("workshopId") || urlParams.get("id");
     if (targetEditId) {
-      handledUrlWorkshopRef.current = true;
       const found = records.find((r) => r.id === targetEditId);
-      if (found) editRecord(found);
+      if (found) {
+        handledUrlWorkshopRef.current = true;
+        window.history.replaceState(window.history.state, "", consumeWorkshopPanelUrl(window.location.href));
+        editRecord(found);
+      }
     } else if (targetWorkshopId) {
-      handledUrlWorkshopRef.current = true;
       const found = records.find((r) => r.id === targetWorkshopId);
-      if (found) void openWorkshop(found);
+      if (found) {
+        handledUrlWorkshopRef.current = true;
+        window.history.replaceState(window.history.state, "", consumeWorkshopPanelUrl(window.location.href));
+        void openWorkshop(found);
+      }
     }
   }, [records]);
 
