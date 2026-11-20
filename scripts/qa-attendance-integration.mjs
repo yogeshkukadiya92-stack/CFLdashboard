@@ -1,0 +1,61 @@
+import assert from 'node:assert/strict';
+import { Pool } from 'pg';
+import { createAuthToken } from '../lib/auth.ts';
+import { createCallFlowToken } from '../lib/callflow-auth.ts';
+const base = process.env.CFL_QA_BASE_URL || 'http://127.0.0.1:3197';
+if (!['127.0.0.1', 'localhost'].includes(new URL(base).hostname)) throw new Error('This fixture must only run against a local QA server.');
+const cookie = `cfl_admin_session=${await createAuthToken('coachforlife107@gmail.com')}`;
+const headers = { Cookie: cookie, 'Content-Type': 'application/json' };
+async function call(path, options = {}) {
+ const response = await fetch(base + path, options); const body = await response.json();
+ return { status: response.status, body };
+}
+const endpoint = '/api/callflow/workshop-attendance';
+let checks = 0;
+function check(value, label) { assert.ok(value, label); console.log('PASS', label); checks++; }
+check((await call(endpoint)).status === 401, 'unauthenticated requests cannot read attendance');
+check((await call('/api/state', { headers })).status === 200, 'isolated dashboard database initialized');
+const now = new Date().toISOString();
+const session = { id: 'qa-intro', workshopId: 'qa-workshop', workshopName: 'QA Introduction', workshopSlug: 'qa-workshop', slug: 'qa-intro', title: 'Introduction session', sessionDate: '2026-11-20', introductionSessionId: 'intro', batchId: 'batch', published: true, fields: [], createdAt: now, updatedAt: now, description: '' };
+const lead = { id: 'qa-lead', name: 'QA Participant', mobile: '9876543210', email: '', city: 'Ahmedabad', state: '', country: 'India', source: 'Manual', stage: 'New Leads', assignedTo: 'QA One', assignedSalesPersonId: 'qa-one', score: 0, revenuePotential: 0, notes: [], callHistory: [], whatsappHistory: [], workshopsAttended: [], paymentHistory: [], certificates: [], familyAccounts: [], tags: [], createdAt: now, updatedAt: now, nextFollowUp: '', bestTime: '' };
+const people = [{ id: 'qa-one', name: 'QA One', isActive: true }, { id: 'qa-two', name: 'QA Two', isActive: true }, { id: 'qa-off', name: 'Inactive', isActive: false }];
+const seed = await call('/api/state', { method: 'POST', headers, body: JSON.stringify({ leads: [lead], attendanceSessions: [session], attendanceEntries: [], salesPeople: people, workshops: [{ id: session.workshopId, name: session.workshopName }] }) });
+check(seed.status === 200, 'seeded synthetic workshop and lead');
+check((await call('/api/state?scope=lead-management', { headers })).body.attendanceSessions.some(row => row.id === session.id), 'lead creation loads workshop sessions for auto-registration');
+const pool = new Pool({ connectionString: 'postgres://yogeshaihub@127.0.0.1:55447/postgres' });
+await pool.query('TRUNCATE cfl_registration_records');
+await pool.query('UPDATE app_state SET sales_team_users=$1::jsonb WHERE id=1', [JSON.stringify(people.map(person => ({ id: `user-${person.id}`, salesPersonId: person.id, name: person.name, active: person.isActive }))) ]);
+const registered = await call('/api/state', { method: 'POST', headers, body: JSON.stringify({ leads: [{ ...lead, attendanceSessionId: session.id }] }) });
+check(registered.status === 200, 'adding workshop selection auto-registers lead in same save');
+let response = await call(endpoint, { headers });
+check(response.body.records.length === 1 && response.body.records[0].status === 'not_marked', 'automatic registration does not mark attendance');
+await call('/api/state', { method: 'POST', headers, body: JSON.stringify({ leads: [{ ...lead, attendanceSessionId: session.id }] }) });
+check((await pool.query('SELECT count(*) FROM cfl_registration_records')).rows[0].count === '1', 'repeated lead save does not duplicate registration');
+function salesHeaders(personId, extra = {}) { return { Authorization: `Bearer ${createCallFlowToken({ userId: `user-${personId}`, salesPersonId: personId, name: people.find(p => p.id === personId)?.name || '', ...extra }, 'access', 3600)}`, 'Content-Type': 'application/json' }; }
+const first = salesHeaders('qa-one'); const second = salesHeaders('qa-two');
+check((await call(endpoint, { headers: first })).body.records.length === 1, 'assigned salesperson sees registered participant');
+check((await call(endpoint, { headers: second })).body.records.length === 0, 'other salesperson cannot read participant');
+async function save(body, requestHeaders = first) { return call(endpoint, { method: 'POST', headers: requestHeaders, body: JSON.stringify({ leadId: lead.id, sessionId: session.id, ...body }) }); }
+check((await save({ action: 'attendance', status: 'checked_in' }, second)).status === 404, 'other salesperson cannot edit attendance');
+check((await save({ action: 'attendance', status: 'invalid' })).status === 400, 'invalid attendance status is rejected');
+response = await save({ action: 'attendance', status: 'checked_in' });
+check(response.status === 200 && response.body.records[0].status === 'checked_in', 'salesperson can mark Present');
+check((await call(endpoint, { headers })).body.records[0].status === 'checked_in', 'dashboard immediately reads salesperson attendance update');
+check((await call('/api/state', { headers })).body.attendanceEntries.length === 1, 'attendance uses shared dashboard response records');
+await save({ action: 'attendance', status: 'absent' });
+response = await call('/api/state', { headers });
+check(response.body.attendanceEntries.length === 0 && response.body.registrations[0].attendanceHistory[0].previousEntries.length === 1, 'Absent correction preserves original response in audit');
+check((await call(endpoint, { headers })).body.records[0].status === 'absent', 'Absent correction appears on dashboard');
+check((await save({ action: 'assign', salesPersonId: 'qa-off' })).status === 400, 'inactive salesperson cannot receive assignment');
+await save({ action: 'attendance', status: 'late' }, headers);
+check((await call(endpoint, { headers: first })).body.records[0].status === 'late', 'dashboard attendance edit appears for mobile salesperson');
+response = await save({ action: 'assign', salesPersonId: 'qa-two' });
+check(response.status === 200 && response.body.records.length === 0, 'reassignment removes participant from previous owner');
+response = await call(endpoint, { headers: second });
+check(response.body.records[0].assignedTo === 'QA Two' && response.body.records[0].status === 'late', 'new salesperson receives attendance and ownership');
+check((await save({ action: 'attendance', status: 'completed' })).status === 404, 'previous salesperson loses edit permission after reassignment');
+check((await call(endpoint, { headers: salesHeaders('qa-two', { tenantId: 'other-company' }) })).status === 401, 'company tenant cannot access original CFL workshops');
+check((await call('/api/callflow/sync/changes', { headers: first })).body.deletedLeadIds.includes(lead.id), 'mobile sync removes the lead from the previous owner');
+check((await call('/api/callflow/sync/changes', { headers: second })).body.leads.some(row => row.id === lead.id), 'mobile sync delivers the lead to its new owner');
+console.log(`INTEGRATION PASSED: ${checks} checks`);
+await pool.end();

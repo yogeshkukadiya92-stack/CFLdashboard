@@ -405,7 +405,7 @@ export async function getAttendanceFormState() {
 export async function getLeadManagementState() {
   const client = getDbPool();
   if (!client) return null;
-  const read = () => client.query(`SELECT leads, clients, workshops,
+  const read = () => client.query(`SELECT leads, clients, workshops, attendance_sessions AS "attendanceSessions",
     sales_people AS "salesPeople", sales_team_users AS "salesTeamUsers"
     FROM app_state WHERE id = 1 LIMIT 1`);
   let result;
@@ -415,7 +415,7 @@ export async function getLeadManagementState() {
     await ensurePersistenceTable();
     result = await read();
   }
-  const state = result.rows[0] ?? { leads: [], clients: [], workshops: [], salesPeople: [], salesTeamUsers: [] };
+  const state = result.rows[0] ?? { leads: [], clients: [], workshops: [], attendanceSessions: [], salesPeople: [], salesTeamUsers: [] };
   state.salesPeople = reconcileSalesPeople(state.salesPeople, state.salesTeamUsers);
   return state;
 }
@@ -489,8 +489,35 @@ export async function saveAppState(input: Partial<AppState>) {
   };
   const fields = (Object.keys(columns) as Array<keyof AppState>).filter(key => input[key] !== undefined);
   if (!fields.length) return true;
-  await client.query(`UPDATE app_state SET ${fields.map((key,index) => `${columns[key]}=$${index+1}::jsonb`).join(",")}, updated_at=NOW() WHERE id=1`,
-    fields.map(key => JSON.stringify(input[key])));
+  const updateSql = `UPDATE app_state SET ${fields.map((key,index) => `${columns[key]}=$${index+1}::jsonb`).join(",")}, updated_at=NOW() WHERE id=1`;
+  const updateValues = fields.map(key => JSON.stringify(input[key]));
+  const selectedLeads = Array.isArray(input.leads) ? input.leads as import("./types").Lead[] : [];
+  if (selectedLeads.some(lead => lead.attendanceSessionId)) {
+    await ensureRegistrationRecordsTable();
+    const transaction = await client.connect();
+    try {
+      await transaction.query("BEGIN");
+      const row = await transaction.query("SELECT attendance_sessions, attendance_entries, sales_people, leads FROM app_state WHERE id=1 FOR UPDATE");
+      const current = row.rows[0];
+      if (!current) throw new Error("Database state unavailable.");
+      const registrations = await transaction.query<{ payload: import("./types").RegistrationEntry }>("SELECT payload FROM cfl_registration_records ORDER BY external_id FOR UPDATE");
+      const { registerAttendanceLead } = await import("./callflow-attendance");
+      const state = { leads: selectedLeads, attendanceSessions: current.attendance_sessions, attendanceEntries: current.attendance_entries, salesPeople: current.sales_people, registrations: registrations.rows.map(row => row.payload) };
+      const existingIds = new Set(state.registrations.map(reg => reg.id));
+      for (const lead of selectedLeads) {
+        if (!lead.attendanceSessionId) continue;
+        const previous = (current.leads as import("./types").Lead[]).find(item => item.id === lead.id);
+        if (previous?.attendanceSessionId === lead.attendanceSessionId) continue;
+        const session = state.attendanceSessions.find((session: import("./types").AttendanceSession) => session.id === lead.attendanceSessionId && session.published);
+        if (!session) throw new Error("Selected workshop session is unavailable.");
+        registerAttendanceLead(state, lead, session, new Date().toISOString(), `registration-${crypto.randomUUID()}`);
+      }
+      await transaction.query(updateSql, updateValues);
+      for (const registration of state.registrations) if (!existingIds.has(registration.id)) await upsertRegistrationRecord(transaction, registration as unknown as Record<string, unknown>);
+      await transaction.query("COMMIT");
+    } catch (error) { await transaction.query("ROLLBACK").catch(() => undefined); throw error; }
+    finally { transaction.release(); }
+  } else await client.query(updateSql, updateValues);
   if (Array.isArray(input.registrations)) await mergeRegistrationRecords(input.registrations);
   return true;
 }

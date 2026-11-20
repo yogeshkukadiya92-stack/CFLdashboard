@@ -99,6 +99,8 @@ export function normalizeLead(value: unknown): Lead {
     tags: stringArray(input.tags),
     updatedAt: validIso(input.updatedAt) ?? createdAt,
     whatsappHistory: stringArray(input.whatsappHistory),
+    attendanceSessionId: input.attendanceSessionId ? String(input.attendanceSessionId) : undefined,
+    previousSalesPersonIds: stringArray(input.previousSalesPersonIds),
     workshopsAttended: stringArray(input.workshopsAttended),
     convertedClientId: input.convertedClientId ? String(input.convertedClientId) : undefined
   };

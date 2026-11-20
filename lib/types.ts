@@ -67,6 +67,8 @@ export type PaymentStatus = "Paid" | "Due" | "Overdue" | "Failed" | "Refunded";
 export type Channel = "WhatsApp" | "Email" | "SMS" | "Call" | "Landing Page";
 
 export interface Lead {
+  attendanceSessionId?: string;
+  previousSalesPersonIds?: string[];
   id: string;
   name: string;
   mobile: string;
@@ -244,6 +246,11 @@ export interface Kpi {
 }
 
 export interface RegistrationEntry {
+  attendanceSessionId?: string;
+  assignedSalesPersonId?: string;
+  assignedTo?: string;
+  attendanceBySession?: Record<string, { status: "checked_in" | "late" | "joined_zoom" | "completed" | "absent"; updatedAt: string; updatedBy: string }>;
+  attendanceHistory?: Array<{ id: string; sessionId: string; status: string; previousStatus: string; updatedAt: string; updatedBy: string; previousEntries: AttendanceEntry[] }>;
   id: string;
   workshopId: string;
   workshopSlug: string;

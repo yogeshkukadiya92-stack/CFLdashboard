@@ -1,5 +1,6 @@
 "use client";
 
+import { CallFlowAttendancePanel } from "@/components/callflow-attendance-panel";
 import { AdminPlatformShell } from "@/components/admin-platform-shell";
 import { OperationalStat } from "@/components/operational-stat";
 import { parseBulkAttendanceMobiles } from "@/lib/bulk-attendance";
@@ -585,6 +586,7 @@ export default function WorkshopAttendancePage() {
 
   return (
     <AdminPlatformShell activeLabel="Workshop Attendance" description="Create session-wise attendance forms and track who attended every workshop session." title="Workshop Attendance">
+      <CallFlowAttendancePanel />
       <section className="min-w-0 space-y-3">
         <aside className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
           <div className="flex flex-wrap items-center gap-2">
