@@ -1,3 +1,4 @@
+import { importedCallHistory } from "@/lib/imported-call-history";
 import { centralChanges } from "@/lib/central-app-sync";
 import { ownsAttendanceLead } from "@/lib/callflow-attendance";
 import { NextRequest, NextResponse } from "next/server";
@@ -34,5 +35,18 @@ export async function GET(request: NextRequest) {
     createdAt: Date.parse(item.createdAt || item.dueAt) || now, updatedAt: Date.parse(item.completedAt || item.createdAt || item.dueAt) || now,
     version: Date.parse(item.completedAt || item.createdAt || item.dueAt) || now,
   })));
-  return NextResponse.json({ leads, calls: [], callEvents: [], notes: [], followUps, leadStages: callFlowStages.map(([id, name], sortOrder) => ({ id, code: id.toUpperCase(), name, sortOrder, active: true })), dispositions: callFlowDispositions.map(([id, code, name, requiresNote, requiresFollowUp, targetStageId], sortOrder) => ({ id, code, name, icon: null, sortOrder, active: true, requiresNote, requiresFollowUp, targetStageId })), appConfiguration, deletedLeadIds: removedLeads.map(lead => lead.id), deletedFollowUpIds: removedLeads.flatMap(lead => (lead.followUps || []).map(item => item.id)), nextCursor: Buffer.from(String(now)).toString("base64url"), serverTimestamp: new Date(now).toISOString() });
+  const imported = await importedCallHistory(identity.salesPersonId, cursor);
+  const allowedLeadIds = new Set(assignedLeads.map(lead => lead.id));
+  const calls = imported.map(record => ({
+    id: record.id, serverId: record.id, leadId: allowedLeadIds.has(record.leadId) ? record.leadId : null,
+    employeeId: identity.userId, campaignId: null, normalizedPhone: "+91" + record.phone,
+    direction: record.direction, startedAt: Date.parse(record.startedAt), answeredAt: null,
+    endedAt: null, failureReason: record.outcome || "Imported · Outcome unavailable",
+  }));
+  const notes = imported.flatMap(record => record.note && allowedLeadIds.has(record.leadId) ? [{
+    id: record.id + "-note", leadId: record.leadId,
+    callId: record.id, body: record.note, createdAt: Date.parse(record.startedAt),
+    createdBy: identity.userId, deviceId: "external-import",
+  }] : []);
+  return NextResponse.json({ leads, calls, callEvents: [], notes, followUps, leadStages: callFlowStages.map(([id, name], sortOrder) => ({ id, code: id.toUpperCase(), name, sortOrder, active: true })), dispositions: callFlowDispositions.map(([id, code, name, requiresNote, requiresFollowUp, targetStageId], sortOrder) => ({ id, code, name, icon: null, sortOrder, active: true, requiresNote, requiresFollowUp, targetStageId })), appConfiguration, deletedLeadIds: removedLeads.map(lead => lead.id), deletedFollowUpIds: removedLeads.flatMap(lead => (lead.followUps || []).map(item => item.id)), nextCursor: Buffer.from(String(now)).toString("base64url"), serverTimestamp: new Date(now).toISOString() });
 }

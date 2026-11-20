@@ -55,7 +55,11 @@ export default function CrmAnalyticsPage() {
       if (Array.isArray(state.leads)) setLeads(state.leads.map(normalizeLead));
       const integrations = state?.integrations as Record<string, unknown> | undefined;
       const callflow = integrations?.callflow as { callRecords?: unknown } | undefined;
-      setRecords(Array.isArray(callflow?.callRecords) ? callflow.callRecords as CallFlowCallRecord[] : []);
+      const response = await fetch("/api/admin/call-history-import", { cache: "no-store" });
+      const imported = response.ok ? (await response.json()).records as CallFlowCallRecord[] : [];
+      if (!active) return;
+      const native = Array.isArray(callflow?.callRecords) ? callflow.callRecords as CallFlowCallRecord[] : [];
+      setRecords([...native, ...imported]);
       setIntegrations(integrations || {});
       setReviews(Array.isArray((callflow as { callReviews?: unknown } | undefined)?.callReviews) ? (callflow as { callReviews: CallReview[] }).callReviews : []);
       setTeam(Array.isArray(state?.salesPeople) ? state.salesPeople as SalesPersonLive[] : []);

@@ -14,16 +14,17 @@ export function filterCallRecords(records: CallFlowCallRecord[], filters: CallAn
 }
 
 export function callSummary(records: CallFlowCallRecord[]) {
-  const connected = records.filter((record) => record.connected);
+  const measured = records.filter(record => record.source !== "External call history");
+  const connected = measured.filter(record => record.connected);
   const totalTalkSeconds = connected.reduce((sum, record) => sum + record.durationSeconds, 0);
   return {
     total: records.length,
     connected: connected.length,
-    missed: records.length - connected.length,
+    missed: measured.length - connected.length,
     uniqueLeads: new Set(records.map((record) => record.leadId)).size,
     totalTalkSeconds,
     averageTalkSeconds: connected.length ? Math.round(totalTalkSeconds / connected.length) : 0,
-    connectionRate: records.length ? Math.round(connected.length / records.length * 100) : 0,
+    connectionRate: measured.length ? Math.round(connected.length / measured.length * 100) : 0,
   };
 }
 
@@ -67,6 +68,6 @@ export function callRecordsCsv(records: CallFlowCallRecord[]) {
     return `"${safe.replaceAll('"', '""')}"`;
   };
   const headers = ["Call ID", "Lead", "Phone", "Salesperson", "Campaign", "Direction", "Started At", "Ended At", "Duration Seconds", "Connected", "Outcome", "Conversation Notes"];
-  const rows = records.map((record) => [record.id, record.leadName, record.phone, record.salespersonName, record.campaign, record.direction, record.startedAt, record.endedAt, record.durationSeconds, record.connected ? "Yes" : "No", record.outcome, record.note || ""]);
+  const rows = records.map((record) => [record.id, record.leadName, record.phone, record.salespersonName, record.campaign, record.direction, record.startedAt, record.endedAt, record.durationSeconds, record.source === "External call history" ? "Unknown" : record.connected ? "Yes" : "No", record.outcome, record.note || ""]);
   return [headers, ...rows].map((row) => row.map(escape).join(",")).join("\n");
 }
