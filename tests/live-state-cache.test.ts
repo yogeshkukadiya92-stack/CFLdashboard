@@ -108,3 +108,29 @@ test("workshop and registration form are sent together and require server acknow
     globalThis.fetch = oldFetch;
   }
 });
+
+
+test("an empty server attendance list clears cached check-ins without undoing an Absent correction", async () => {
+  const oldWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
+  const oldFetch = globalThis.fetch;
+  const cache = new Map<string, string>();
+  Object.defineProperty(globalThis, "window", { configurable: true, value: { localStorage: {
+    getItem(key: string) { return cache.get(key) ?? null; },
+    setItem(key: string, value: string) { cache.set(key, value); }
+  } } });
+  let writes = 0;
+  globalThis.fetch = async (_url, options) => {
+    if (options?.method === "POST") writes++;
+    return Response.json({ dbEnabled: true, attendanceEntries: [] });
+  };
+  try {
+    writeLiveStateToLocalStorage({ attendanceEntries: [{ id: "corrected-check-in" }] });
+    await hydrateLiveState();
+    assert.deepEqual(readLocalArray("cfl_attendance_entries_v1"), []);
+    assert.equal(writes, 0);
+  } finally {
+    globalThis.fetch = oldFetch;
+    if (oldWindow) Object.defineProperty(globalThis, "window", oldWindow);
+    else Reflect.deleteProperty(globalThis, "window");
+  }
+});

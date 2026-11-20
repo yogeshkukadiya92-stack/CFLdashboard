@@ -7,7 +7,7 @@ import { parseBulkAttendanceMobiles } from "@/lib/bulk-attendance";
 import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
 import { DuplicateResponseFilter } from "@/components/duplicate-response-filter";
 import { AdvancedResponseFilters } from "@/components/advanced-response-filters";
-import { hydrateLiveState, readLocalArray, saveLiveState } from "@/lib/live-state";
+import { fetchLiveState, hydrateLiveState, readLocalArray, saveLiveState, writeLiveStateToLocalStorage } from "@/lib/live-state";
 import type { AttendanceEntry, AttendanceSession, BuilderField, BuilderFieldType, BuilderVisibilityOperator, RegistrationEntry } from "@/lib/types";
 import { generateId } from "@/lib/utils";
 import { publicFormSlug } from "@/lib/public-slug";
@@ -156,6 +156,13 @@ export default function WorkshopAttendancePage() {
     setRegistrations(loadedRegistrations);
     setSelectedWorkshopId((current) => current || loadedWorkshops[0]?.id || "");
     setSelectedSessionId((current) => current || loadedSessions[0]?.id || "");
+  }
+
+  async function refreshAfterCallFlowSave() {
+    const state = await fetchLiveState();
+    if (!state?.dbEnabled) return;
+    writeLiveStateToLocalStorage({ attendanceEntries: state.attendanceEntries || [], registrations: state.registrations || [] });
+    loadLocal();
   }
 
   useEffect(() => {
@@ -586,7 +593,7 @@ export default function WorkshopAttendancePage() {
 
   return (
     <AdminPlatformShell activeLabel="Workshop Attendance" description="Create session-wise attendance forms and track who attended every workshop session." title="Workshop Attendance">
-      <CallFlowAttendancePanel />
+      <CallFlowAttendancePanel onSaved={refreshAfterCallFlowSave} />
       <section className="min-w-0 space-y-3">
         <aside className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
           <div className="flex flex-wrap items-center gap-2">

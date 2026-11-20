@@ -7,7 +7,7 @@ type Data = { records: RecordRow[]; sessions: { id: string; title: string; works
 const endpoint = "/api/callflow/workshop-attendance";
 const labels: Record<string, string> = { not_marked: "Not marked", checked_in: "Present", late: "Late", joined_zoom: "Joined Zoom", completed: "Completed", absent: "Absent" };
 const selectClass = "min-h-10 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm";
-export function CallFlowAttendancePanel() {
+export function CallFlowAttendancePanel({ onSaved }: { onSaved?: () => Promise<void> }) {
   const [data, setData] = useState<Data | null>(null);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -37,6 +37,7 @@ export function CallFlowAttendancePanel() {
       const response = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       const next = await response.json(); if (!response.ok) throw new Error(next.error || "Changes were not saved.");
       setData(next);
+      await onSaved?.();
     } catch (error) { setError(error instanceof Error ? error.message : "Changes were not saved."); }
     finally { setSaving(false); }
   }

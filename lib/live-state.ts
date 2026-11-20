@@ -103,7 +103,7 @@ export async function hydrateLiveState(): Promise<LiveState | null> {
     const storageKey = LIVE_STATE_STORAGE_KEYS[key];
     const value = state[key];
     if (Array.isArray(value)) {
-      if (key === "salesPeople" || value.length > 0 || !hasLocalArrayData(storageKey)) {
+      if (key === "salesPeople" || key === "attendanceEntries" || value.length > 0 || !hasLocalArrayData(storageKey)) {
         Object.assign(localPatch, { [key]: value });
       } else {
         Object.assign(repairPatch, { [key]: readLocalArray(storageKey) });
