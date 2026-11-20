@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { sendRegistrationStatusNotifications } from "../lib/registration-confirmation.ts";
+import { sendAttendanceThankYou, sendRegistrationStatusNotifications } from "../lib/registration-confirmation.ts";
 import type { BuilderForm, RegistrationEntry } from "../lib/types.ts";
 
 const form = {
@@ -41,6 +41,19 @@ test("routes confirmed and waiting WhatsApp messages only to allowed recipients"
   }) as typeof fetch;
 
   try {
+    const thankYou = await sendAttendanceThankYou({
+      mobile: baseRegistration.mobile,
+      name: baseRegistration.fullName,
+      sessionTitle: "Intro session",
+      supportNumber: "+919123456789",
+      templateName: "session_thank_you"
+    });
+    assert.equal(thankYou.sent, true);
+    assert.equal(requests[0].PhoneNumber, "919876543210");
+    assert.equal(requests[0].TemplateName, "session_thank_you");
+    assert.deepEqual(requests[0].BodyDynamicData, ["Test Participant", "Intro session", "+919123456789"]);
+    requests.length = 0;
+
     const confirmedPatch = await sendRegistrationStatusNotifications({
       ...baseRegistration,
       referralCode: "9123456789",

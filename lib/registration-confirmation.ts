@@ -73,11 +73,27 @@ export async function sendRegistrationConfirmation(registration: RegistrationEnt
   });
 }
 
-type WhatsAppDeliveryResult = { configured: boolean; error?: string; messageId?: string; sent: boolean };
+type WhatsAppDeliveryResult = { configured: boolean; error?: string; messageId?: string; retryable?: boolean; sent: boolean };
+
+export function sendAttendanceThankYou(input: {
+  mobile: string;
+  name: string;
+  sessionTitle: string;
+  supportNumber: string;
+  templateName: string;
+  senderId?: string;
+}) {
+  return sendTemplateMessage({
+    ...input,
+    form: {},
+    kind: "Confirmation",
+    values: [input.name, input.sessionTitle, input.supportNumber]
+  });
+}
 
 async function sendTemplateMessage(input: {
   form: Partial<BuilderForm>;
-  registration: RegistrationEntry;
+  registration?: RegistrationEntry;
   kind: "Confirmation" | "Waiting" | "ReferrerWaiting";
   senderId?: string;
   mobile: string;
@@ -98,7 +114,7 @@ async function sendTemplateMessage(input: {
   if (headerType && headerType !== "none" && !input.mediaUrl?.trim()) {
     return { configured: true, sent: false, error: `Add the approved template's ${headerType} header file URL in Workshop Create / Edit → Automation before sending WhatsApp.` };
   }
-  if (customValues !== undefined) {
+  if (customValues !== undefined && input.registration) {
     try {
       input.values = renderTemplateValues(customValues, {
         name: input.registration.fullName,
@@ -190,7 +206,7 @@ async function sendTemplateMessage(input: {
         : "WhatsApp provider requires a template header file. In Workshop Create / Edit → Automation, enter the header image / document / video URL for this template, then retry WhatsApp."
       : `WhatsApp provider returned ${response.status}.${providerReason ? ` ${providerReason}` : ""}`;
     await recordOutboundWhatsAppMessage({ providerMessageId: messageId, registrationId: input.registrationId, mobile, templateName: input.templateName, status: sent ? "sent" : "failed", error }).catch(() => undefined);
-    return { configured: true, error, messageId, sent };
+    return { configured: true, error, messageId, retryable: response.status === 429, sent };
   } catch (error) {
     return { configured: true, error: error instanceof Error ? error.message : "WhatsApp delivery failed.", sent: false };
   }

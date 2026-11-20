@@ -35,7 +35,7 @@ function validZoomUrl(value?: string) {
 }
 
 function publicSession(session: AttendanceSession) {
-  const { zoomJoinUrl: _privateZoomJoinUrl, ...safe } = session;
+  const { zoomJoinUrl: _privateZoomJoinUrl, whatsappThankYouTemplate: _privateWhatsAppTemplate, ...safe } = session;
   return {
     ...safe,
     attendanceWindow: attendanceWindow(session)

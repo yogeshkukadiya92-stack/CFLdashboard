@@ -563,6 +563,7 @@ export interface AttendanceSession {
   sessionDate: string;
   startTime?: string;
   endTime?: string;
+  whatsappThankYouTemplate?: string;
   batch?: string;
   batchId?: string;
   introductionSessionId?: string;

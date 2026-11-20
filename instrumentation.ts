@@ -11,5 +11,7 @@ export async function register() {
     }
     const { startRegistrationWorker } = await import("./lib/registration-jobs");
     startRegistrationWorker();
+    const { startAttendanceThankYouWorker } = await import("./lib/attendance-thank-you");
+    startAttendanceThankYouWorker();
   }
 }

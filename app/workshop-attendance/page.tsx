@@ -840,6 +840,25 @@ export default function WorkshopAttendancePage() {
                       <span className="mb-2 block text-sm font-bold text-slate-600">End Time</span>
                       <input className={inputClass} onChange={(event) => updateSession({ endTime: event.target.value })} type="time" value={selectedSession.endTime || ""} />
                     </label>
+                    <label className="md:col-span-2">
+                      <span className="mb-2 block text-sm font-bold text-slate-600">Post-session WhatsApp thank-you template</span>
+                      <input
+                        className={inputClass}
+                        defaultValue={selectedSession.whatsappThankYouTemplate || ""}
+                        key={selectedSession.id}
+                        maxLength={200}
+                        onBlur={(event) => {
+                          const template = event.target.value.trim();
+                          if (template !== (selectedSession.whatsappThankYouTemplate || "")) {
+                            updateSession({ whatsappThankYouTemplate: template });
+                          }
+                        }}
+                        placeholder="Approved WhatsApp template name"
+                      />
+                      <span className="mt-1.5 block text-xs font-semibold text-slate-500">
+                        After the end time (IST), recorded attendees with an assigned salesperson receive the message. Template variables in order are attendee name, session title, and salesperson mobile. A blank template disables sending.
+                      </span>
+                    </label>
                     <label>
                       <span className="mb-2 block text-sm font-bold text-slate-600">Facilitator</span>
                       <input className={inputClass} onChange={(event) => updateSession({ facilitator: event.target.value })} value={selectedSession.facilitator || ""} />
