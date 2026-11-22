@@ -47,7 +47,7 @@ export function leadToCallFlow(lead: Lead, userId: string, duplicateCount = 1) {
     normalizedPhone, displayPhone: lead.mobile || normalizedPhone, stageId: stageId(lead.stage),
     assignedUserId: lead.assignedSalesPersonId || lead.assignedSalesPersonCode || userId,
     campaignId: lead.source || null, nextFollowUpAt: time(lead.nextFollowUp) || null,
-    updatedAt, updatedBy: "cfl-dashboard", version: updatedAt, doNotCall: lead.doNotCall === true || lead.tags?.some((tag) => tag.toLowerCase() === "do not call"), duplicateCount: Math.max(1, duplicateCount),
+    createdAt: time(lead.createdAt) || null, updatedAt, updatedBy: "cfl-dashboard", version: updatedAt, doNotCall: lead.doNotCall === true || lead.tags?.some((tag) => tag.toLowerCase() === "do not call"), duplicateCount: Math.max(1, duplicateCount),
     score: Math.max(0, Math.round(Number(lead.score) || 0)), quality: lead.priority || null
   };
 }

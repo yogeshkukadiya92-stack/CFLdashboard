@@ -72,3 +72,14 @@ test("Android lead sync includes source score and quality filters", () => {
   assert.equal(result.score, 50);
   assert.equal(result.quality, "Warm");
 });
+
+test("CallFlow sync preserves the original date of an imported lead", () => {
+  const historical = {
+    ...lead(),
+    createdAt: "2026-09-04T08:00:00.000Z",
+    updatedAt: "2026-11-22T06:00:00.000Z",
+  };
+  const delta = leadToCallFlow(historical, "sales-one");
+  assert.equal(delta.createdAt, Date.parse(historical.createdAt));
+  assert.equal(delta.updatedAt, Date.parse(historical.updatedAt));
+});
