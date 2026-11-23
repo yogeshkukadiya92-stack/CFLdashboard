@@ -42,6 +42,7 @@ export default function TagFeatures() {
   return <AdminPlatformShell title="Tag features" activeLabel="Settings" description="Choose the workshop setup options available for each primary tag.">
     <fieldset disabled={!ready} className="max-w-3xl space-y-4 rounded-xl bg-white p-5">
       <label className="block font-bold">Workshop tag<input list="tags" className="mt-2 block w-full rounded-lg border p-3" placeholder="Select or enter a tag" value={name} onChange={e => select(e.target.value)} /></label>
+      <div className="flex flex-wrap gap-2" aria-label="Existing workshop tags">{Array.from(new Set([...existing,...policies.map(p => p.name)])).sort().map(tag => <button type="button" key={tag} onClick={() => select(tag)} aria-pressed={primaryTag(name) === primaryTag(tag)} className={`rounded-lg border px-3 py-2 ${primaryTag(name) === primaryTag(tag) ? "bg-emerald-700 text-white" : "bg-white text-slate-700"}`}>{tag}</button>)}</div>
       <datalist id="tags">{Array.from(new Set([...existing,...policies.map(p => p.name)])).sort().map(tag => <option key={tag}>{tag}</option>)}</datalist>
       {Object.entries(featureGroups).map(([group, items]) => <fieldset key={group} className="rounded-lg border p-4">
         <legend className="px-2 font-bold"><label><input type="checkbox" checked={items.every(item => !disabled.includes(item))} onChange={e => toggle(items,e.target.checked)} /> {group}</label></legend>

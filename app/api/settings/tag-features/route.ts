@@ -1,4 +1,5 @@
-import { getDbPool } from "@/lib/db";
+import { extractWorkshopTags, type WorkshopTagRecord } from "@/lib/workshop-tags";
+import { ensurePersistenceTable, getDbPool } from "@/lib/db";
 import { features } from "@/lib/tag-features";
 import { NextResponse } from "next/server";
 
@@ -12,7 +13,16 @@ export async function GET() {
   try {
     const db = await database();
     const result = await db.query("SELECT name, disabled FROM workshop_tag_features ORDER BY name");
-    return NextResponse.json(result.rows);
+    await ensurePersistenceTable();
+    const state = await db.query<{ workshops: WorkshopTagRecord[] }>("SELECT workshops FROM app_state WHERE id = 1");
+    const policies = new Map(result.rows.map(row => [row.name.trim().toLowerCase(), row]));
+    for (const workshop of state.rows[0]?.workshops ?? []) {
+      for (const name of extractWorkshopTags(workshop)) {
+        const key = name.toLowerCase();
+        if (!policies.has(key)) policies.set(key, { name, disabled: [] });
+      }
+    }
+    return NextResponse.json(Array.from(policies.values()).sort((a, b) => a.name.localeCompare(b.name)), { headers: { "Cache-Control": "no-store" } });
   } catch {
     return NextResponse.json({error: "Could not load tag features."}, {status: 503});
   }
