@@ -1,3 +1,6 @@
+import { ensureRegistrationRecordsTable, getDbPool } from "@/lib/db";
+import { internationalPhone } from "@/lib/phone-number";
+import { completeCheckoutRegistration, saveCheckoutRegistration } from "@/lib/checkout-registration";
 import { assignVerifiedCourseCheckout } from "@/lib/razorpay-course-checkout";
 import { courseOrderNotes } from "@/lib/course-order-enrollment";
 import { NextResponse } from "next/server";
@@ -21,6 +24,11 @@ export async function POST(request: Request) {
     const signature = String(body.razorpay_signature || "").trim();
     if (!verifyRazorpayCheckoutSignature(orderId, paymentId, signature, keySecret)) {
       return NextResponse.json({ error: "Payment verification failed." }, { status: 400 });
+    }
+    try {
+      await completeCheckoutRegistration(orderId, paymentId);
+    } catch {
+      return NextResponse.json({ error: "Payment received. Registration is pending recovery. Please contact support before paying again." }, { status: 503 });
     }
     try {
       const enrollment = await assignVerifiedCourseCheckout(orderId, paymentId);
@@ -49,7 +57,27 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Valid currency and receipt are required." }, { status: 400 });
   }
 
+  const registration = body?.registration;
+  if (registration && (typeof registration !== "object" || Array.isArray(registration)
+    || !registration.id || registration.id !== notes.registrationId
+    || registration.workshopId !== notes.workshopId || !registration.fullName || !internationalPhone(registration.mobile)
+    || JSON.stringify(registration).length > 64000)) {
+    return NextResponse.json({ error: "Valid registration details are required." }, { status: 400 });
+  }
+  if (notes.registrationId && !registration) {
+    return NextResponse.json({ error: "Refresh the registration page before paying." }, { status: 400 });
+  }
+
   try {
+    if (registration) {
+      const db = getDbPool();
+      if (!db) throw new Error("Checkout database is unavailable.");
+      await ensureRegistrationRecordsTable();
+      const existing = await db.query("SELECT external_id FROM cfl_registration_records WHERE external_id=$1", [registration.id]);
+      if (existing.rowCount) {
+        return NextResponse.json({ error: "This registration is already saved. Contact support before paying again." }, { status: 409 });
+      }
+    }
     const response = await fetch("https://api.razorpay.com/v1/orders", {
       body: JSON.stringify({
         amount: Math.round(amount * 100),
@@ -65,6 +93,10 @@ export async function POST(request: Request) {
     });
 
     const data = await response.json().catch(() => ({ error: "Invalid response from Razorpay." }));
+    if (response.ok && registration) {
+      // Never expose an order to checkout until its full form is durable.
+      await saveCheckoutRegistration(data.id, registration, amount, currency);
+    }
     return NextResponse.json(response.ok ? { ...data, key: keyId } : data, { status: response.status });
   } catch {
     return NextResponse.json({ error: "Unable to create Razorpay order." }, { status: 502 });

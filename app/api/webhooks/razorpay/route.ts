@@ -1,3 +1,4 @@
+import { completeCheckoutRegistration } from "@/lib/checkout-registration";
 import { syncCoursePaymentToMfw } from "@/lib/mfw-course-payment";
 import { after, NextResponse } from "next/server";
 import { getAppState } from "@/lib/db";
@@ -40,6 +41,15 @@ export async function POST(request: Request) {
   try { payload = JSON.parse(rawBody); } catch { return NextResponse.json({ error: "Invalid webhook payload." }, { status: 400 }); }
   const event = parseRazorpayPaymentEvent(payload);
   if (!event) return NextResponse.json({ error: "Unsupported payment event." }, { status: 400 });
+  const payment = (payload as { payload?: { payment?: { entity?: { order_id?: string } } } }).payload?.payment?.entity;
+  let checkoutCompleted = false;
+  if ((event.eventName === "payment.captured" || event.eventName === "order.paid") && payment?.order_id) {
+    try {
+      checkoutCompleted = !(await completeCheckoutRegistration(payment.order_id, event.paymentId)).skipped;
+    } catch {
+      return NextResponse.json({ error: "Paid registration pending. Retry this event." }, { status: 503 });
+    }
+  }
   // Run on duplicate deliveries too: an earlier MFW attempt may have failed.
   if ((event.eventName === "payment_link.paid" || event.eventName === "order.paid")) {
     try {
@@ -49,7 +59,7 @@ export async function POST(request: Request) {
     }
   }
   const isNew = await recordPaymentEvent(event);
-  const registration = await applyCapturedPayment(event);
+  const registration = checkoutCompleted ? null : await applyCapturedPayment(event);
   if (isNew) after(() => runPaymentWorkflows(event).catch(() => undefined));
-  return NextResponse.json({ event: event.eventName, duplicate: !isNew, registrationUpdated: Boolean(registration), ok: true });
+  return NextResponse.json({ event: event.eventName, duplicate: !isNew, registrationUpdated: checkoutCompleted || Boolean(registration), ok: true });
 }

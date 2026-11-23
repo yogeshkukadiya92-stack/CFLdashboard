@@ -4,6 +4,8 @@ import { LocationSearchSelect } from "@/components/location-search-select";
 import { HeightInput, isHeightField } from "@/components/height-input";
 import { normalizeCoreFieldRequirements } from "@/lib/builder-field-normalization";
 import { workshops as seedWorkshops } from "@/lib/data";
+import { getVisibleBuilderFields } from "@/lib/builder-field-visibility";
+import { registrationUtmFields, registrationUtmValue } from "@/lib/registration-utm";
 import { hydratePublicRegistrationState, readLocalArray, readLocalObject, savePublicRegistration, writeLiveStateToLocalStorage } from "@/lib/live-state";
 import { sanitizeRichTextHtml } from "@/lib/rich-text";
 import { COUNTRY_OPTIONS, PHONE_COUNTRIES, countryCode, ensureLocationFields, statesForCountry } from "@/lib/location-options";
@@ -51,6 +53,9 @@ type RegistrationLinkConfig = {
   published?: boolean;
   slug?: string;
   title?: string;
+  utmSource?: string;
+  utmMedium?: string;
+  utmCampaign?: string;
   venue?: string;
 };
 
@@ -128,18 +133,6 @@ function isDarkColor(value: string | undefined) {
   return (red * 299 + green * 587 + blue * 114) / 1000 < 150;
 }
 
-function isFieldVisible(field: BuilderField, answers: Record<string, string>) {
-  const rule = field.visibility;
-  if (!rule?.fieldId) return true;
-  const sourceValue = (answers[rule.fieldId] ?? "").trim();
-  const expected = (rule.value ?? "").trim();
-  if (rule.operator === "answered") return Boolean(sourceValue);
-  if (rule.operator === "not_answered") return !sourceValue;
-  if (rule.operator === "not_equals") return sourceValue !== expected;
-  if (rule.operator === "contains") return sourceValue.toLowerCase().includes(expected.toLowerCase());
-  return sourceValue === expected;
-}
-
 function buildPublicPages(fields: BuilderField[], mode: BuilderFormMode) {
   if (mode === "classic") return [{ fields, title: "" }];
   if (mode === "guided") {
@@ -167,7 +160,7 @@ function buildPublicPages(fields: BuilderField[], mode: BuilderFormMode) {
 }
 
 function hasValidAnswer(field: BuilderField, answers: Record<string, string>, phoneCountry = "IN") {
-  if (field.type === "heading" || field.type === "divider" || !isFieldVisible(field, answers)) return true;
+  if (field.type === "heading" || field.type === "divider") return true;
   const value = (answers[field.id] ?? "").trim();
   if (!value) return !field.required;
   if (field.role === "mobile") {
@@ -599,7 +592,7 @@ export default function RegistrationPage() {
   const amountPaid = paymentMode === "Full" ? fullAmount : fixedPartAmount || Math.max(0, Math.min(Number(partAmount || 0), fullAmount));
   const amountDue = Math.max(0, fullAmount - amountPaid);
 
-  const visibleFields = useMemo(() => model?.fields.filter((field) => isFieldVisible(field, answers)) ?? [], [answers, model]);
+  const visibleFields = useMemo(() => getVisibleBuilderFields(model?.fields ?? [], answers), [answers, model]);
   const pages = useMemo(() => buildPublicPages(visibleFields, model?.mode ?? "classic"), [model?.mode, visibleFields]);
   const activePageIndex = Math.min(currentPage, Math.max(0, pages.length - 1));
   const activePage = pages[activePageIndex] ?? { fields: visibleFields, title: "" };
@@ -681,8 +674,8 @@ export default function RegistrationPage() {
 
   const missingRequired = useMemo(() => {
     if (!model) return true;
-    return model.fields.some((field) => !hasValidAnswer(field, answers, phoneCountry));
-  }, [answers, model, phoneCountry]);
+    return visibleFields.some((field) => !hasValidAnswer(field, answers, phoneCountry));
+  }, [answers, model, phoneCountry, visibleFields]);
 
   function setAnswer(id: string, value: string) {
     lastFieldIdRef.current = id;
@@ -852,8 +845,8 @@ export default function RegistrationPage() {
 
     const extra: Record<string, string> = {};
     if (activeTier) extra["Registration Type"] = activeTier.label;
-    model.fields.forEach((field) => {
-      if (field.type === "heading" || field.role || !isFieldVisible(field, answers)) return;
+    visibleFields.forEach((field) => {
+      if (field.type === "heading" || field.role) return;
       const value = (answers[field.id] ?? "").trim();
       if (!value) return;
       extra[field.label] = value;
@@ -864,6 +857,46 @@ export default function RegistrationPage() {
     const responseSuffix = model.allowDuplicate ? `-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}` : "";
     const registrationId = `reg-${model.id}-${registrationScope}-${mobile || Date.now().toString(36)}${responseSuffix}`;
     const source = searchParams.get("source") === "landing-page" ? "landing_page" : "registration_link";
+    const linkConfig = readLocalObject<Record<string, RegistrationLinkConfig>>(REGISTRATION_LINK_CONFIG_STORAGE_KEY)[slug];
+    const configuredTracking: Record<string, string | undefined> = {
+      utm_source: linkConfig?.utmSource,
+      utm_medium: linkConfig?.utmMedium,
+      utm_campaign: linkConfig?.utmCampaign
+    };
+    const trackingAnswers: Record<string, string> = {};
+    for (const [parameter, label] of registrationUtmFields) {
+      const value = registrationUtmValue(searchParams.get(parameter)) || registrationUtmValue(configuredTracking[parameter]);
+      if (value) trackingAnswers[label] = value;
+    }
+
+    const payload: RegistrationEntry = {
+      id: registrationId,
+      workshopId: model.id,
+      workshopSlug: model.slug,
+      workshopTitle: model.title,
+      fullName: name,
+      mobile,
+      email,
+      city,
+      facilitator: model.facilitator,
+      paymentMode,
+      amountPaid,
+      amountDue,
+      status: amountDue > 0 ? "Due" : "Paid",
+      whatsappVerificationStatus,
+      source,
+      landingPageSlug: source === "landing_page" ? searchParams.get("landing") ?? undefined : undefined,
+      createdAt: new Date().toISOString(),
+      batch: model.batch,
+      batchId: batchIdParam || undefined,
+      introductionSessionId: introductionSessionIdParam || undefined,
+      referralCode: referralCode.replace(/\D/g, "").slice(0, 10) || undefined,
+      answers: Object.keys(extra).length || Object.keys(trackingAnswers).length ? {
+        ...trackingAnswers,
+        ...Object.fromEntries(Object.entries(extra).filter(([label]) => !(label in trackingAnswers)))
+      } : undefined
+    };
+
     let payment: RazorpaySuccess | null = null;
     if (model.paid) {
       if (amountPaid < 1) {
@@ -874,7 +907,7 @@ export default function RegistrationPage() {
       setMessage("");
       try {
         const orderResponse = await fetch("/api/razorpay/order", {
-          body: JSON.stringify({ amount: amountPaid, buyer: { name, email, mobile }, notes: { registrationId, workshopId: model.id }, receipt: registrationId }),
+          body: JSON.stringify({ amount: amountPaid, buyer: { name, email, mobile }, registration: payload, notes: { registrationId, workshopId: model.id }, receipt: registrationId }),
           headers: { "Content-Type": "application/json" },
           method: "POST"
         });
@@ -906,7 +939,11 @@ export default function RegistrationPage() {
           headers: { "Content-Type": "application/json" },
           method: "POST"
         });
-        if (!verifyResponse.ok) throw new Error("Payment could not be verified. Please contact support before paying again.");
+        if (!verifyResponse.ok) {
+          const failure = await verifyResponse.json().catch(() => ({}));
+          throw new Error(failure.error || "Payment could not be verified. Please contact support before paying again.");
+        }
+        payload.answers = { ...payload.answers, "Razorpay Order ID": payment.razorpay_order_id, "Razorpay Payment ID": payment.razorpay_payment_id };
       } catch (reason) {
         setMessage(reason instanceof Error ? reason.message : "Could not complete payment. Please try again.");
         setSubmitting(false);
@@ -914,40 +951,6 @@ export default function RegistrationPage() {
       }
     }
 
-    const trackingAnswers: Record<string, string> = {};
-    for (const [parameter, label] of [["utm_source", "UTM Source"], ["utm_medium", "UTM Medium"], ["utm_campaign", "UTM Campaign"]]) {
-      const value = searchParams.get(parameter)?.trim().slice(0, 200);
-      if (value) trackingAnswers[label] = value;
-    }
-
-    const payload: RegistrationEntry = {
-      id: registrationId,
-      workshopId: model.id,
-      workshopSlug: model.slug,
-      workshopTitle: model.title,
-      fullName: name,
-      mobile,
-      email,
-      city,
-      facilitator: model.facilitator,
-      paymentMode,
-      amountPaid,
-      amountDue,
-      status: amountDue > 0 ? "Due" : "Paid",
-      whatsappVerificationStatus,
-      source,
-      landingPageSlug: source === "landing_page" ? searchParams.get("landing") ?? undefined : undefined,
-      createdAt: new Date().toISOString(),
-      batch: model.batch,
-      batchId: batchIdParam || undefined,
-      introductionSessionId: introductionSessionIdParam || undefined,
-      referralCode: referralCode.replace(/\D/g, "").slice(0, 10) || undefined,
-      answers: Object.keys(extra).length || Object.keys(trackingAnswers).length || payment ? {
-        ...extra,
-        ...trackingAnswers,
-        ...(payment ? { "Razorpay Order ID": payment.razorpay_order_id, "Razorpay Payment ID": payment.razorpay_payment_id } : {})
-      } : undefined
-    };
 
     try {
       const current = readLocalArray<RegistrationEntry>(REGISTRATION_STORAGE_KEY);
