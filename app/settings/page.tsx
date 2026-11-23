@@ -111,6 +111,7 @@ export default function SettingsPage() {
       title="Plugin Manager"
     >
       <SettingsMenu />
+      <a className="mb-4 inline-block rounded-xl border bg-white px-4 py-3 font-bold text-emerald-700" href="/settings/tag-features">Workshop tag features</a>
       <section className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
         <IntegrationHubPanel appUrl={settings.appUrl} />
         <div className="space-y-4">

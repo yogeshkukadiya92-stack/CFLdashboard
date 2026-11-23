@@ -1,4 +1,5 @@
 "use client";
+import { featureGroups, primaryTag, type TagPolicy } from "@/lib/tag-features";
 
 import { filterRepeaterWorkshops } from "@/lib/repeater-workshops";
 import { registrationPaymentLabel } from "@/lib/registration-payment-display";
@@ -196,6 +197,16 @@ export default function WorkshopMasterPage() {
   const [pawSyncEnabled, setPawSyncEnabled] = useState<boolean | undefined>(undefined);
   const connectPaw = pawSyncEnabled ?? /\bPAW\b|personality awareness workshop/i.test(name);
   const [tag, setTag] = useState("");
+  const [tagPolicies, setTagPolicies] = useState<TagPolicy[]>([]);
+  useEffect(() => {
+    void fetch("/api/settings/tag-features", {cache:"no-store"}).then(async response => {
+      if (response.ok) setTagPolicies(await response.json());
+    }).catch(() => {});
+  }, []);
+  function featureEnabled(feature: string) {
+    return !tagPolicies.find(policy => primaryTag(policy.name) === primaryTag(tag))?.disabled.includes(feature);
+  }
+
   const [type, setType] = useState("");
   const [facilitator, setFacilitator] = useState("");
   const [group, setGroup] = useState("");
@@ -457,7 +468,7 @@ export default function WorkshopMasterPage() {
 
   const progress = useMemo(() => Math.round(([name, tag, type, facilitator, group].filter(Boolean).length / 5) * 100), [facilitator, group, name, tag, type]);
   const availableTags = useMemo(() => {
-    const set = new Set<string>();
+    const set = new Set(tagPolicies.map(policy => policy.name));
     records.forEach((record) => {
       if (record.tag) {
         record.tag.split(",").map((s) => s.trim()).filter(Boolean).forEach((t) => set.add(t));
@@ -467,7 +478,7 @@ export default function WorkshopMasterPage() {
       }
     });
     return Array.from(set);
-  }, [records]);
+  }, [records, tagPolicies]);
   const filteredRecords = useMemo(() => {
     return records.filter((record) => {
       if (recordScope === "active" && record.archived) return false;
@@ -1820,12 +1831,12 @@ export default function WorkshopMasterPage() {
           </div>
           <div className="mt-3 grid gap-2 md:grid-cols-3">
             <FormWorkflowCard title="Workshop info" detail={name || "Workshop name"} meta={`${tag ? `Tag: ${tag} · ` : ""}${type || "Type"} · ${facilitator || "Facilitator"}`} onOpen={() => setWorkshopWorkflowPanel("info")} />
-            <FormWorkflowCard title="MFW" detail={mfwEnrollmentEnabled ? "Enrollment ON" : "Enrollment OFF"} meta={mfwWorkshopTitle || mfwWorkshopEventId || "No mapping"} onOpen={() => setWorkshopWorkflowPanel("mfw")} />
-            <FormWorkflowCard title="Pricing & CRM" detail={`${isPaid ? `Paid · INR ${feesWithTax || 0}` : "Free"} · CRM ${transferLeadToCrm ? "ON" : "OFF"}`} meta={`${leadAssignmentRules.length} lead rules`} onOpen={() => setWorkshopWorkflowPanel("pricing")} />
+            {featureEnabled("MFW") && <FormWorkflowCard title="MFW" detail={mfwEnrollmentEnabled ? "Enrollment ON" : "Enrollment OFF"} meta={mfwWorkshopTitle || mfwWorkshopEventId || "No mapping"} onOpen={() => setWorkshopWorkflowPanel("mfw")} />}
+            {featureEnabled("Pricing & CRM") && <FormWorkflowCard title="Pricing & CRM" detail={`${isPaid ? `Paid · INR ${feesWithTax || 0}` : "Free"} · CRM ${transferLeadToCrm ? "ON" : "OFF"}`} meta={`${leadAssignmentRules.length} lead rules`} onOpen={() => setWorkshopWorkflowPanel("pricing")} />}
           </div>
         </section>
 
-        <section className="mt-4 rounded-2xl border border-teal-200 bg-teal-50 p-4">
+        <section hidden={!featureEnabled("PAW sync")} className="mt-4 rounded-2xl border border-teal-200 bg-teal-50 p-4">
           <label className="flex items-center gap-3 text-sm font-bold text-slate-900">
             <input type="checkbox" className="size-5 accent-teal-700" checked={connectPaw} onChange={(event) => setPawSyncEnabled(event.target.checked)} />
             Connect to PAW dashboard
@@ -2198,14 +2209,14 @@ export default function WorkshopMasterPage() {
           </div>
 
           <div className="mt-4 grid gap-2 md:grid-cols-5">
-            <FormWorkflowCard title="Basics" detail={formTitle || "Untitled form"} meta={formMode === "classic" ? "Classic" : formMode === "steps" ? "Multi-step" : "Guided"} onOpen={() => setFormWorkflowPanel("basics")} />
-            <FormWorkflowCard title="Automation" detail={`${formWaitingMode ? "Waiting ON" : "Waiting OFF"} · ${formOtpRequired ? "OTP ON" : "OTP OFF"}`} meta={`${formRepeaterSourceWorkshopIds.length} repeater source${formRepeaterSourceWorkshopIds.length === 1 ? "" : "s"}`} onOpen={() => setFormWorkflowPanel("automation")} />
-            <FormWorkflowCard title="Fields" detail={`${formFields.length} fields`} meta={`${formFields.filter((field) => field.required).length} required`} onOpen={() => setFormWorkflowPanel("fields")} />
-            <FormWorkflowCard title="Included" detail={`${formHighlights.filter(Boolean).length} items`} meta="Workshop highlights" onOpen={() => setFormWorkflowPanel("includes")} />
-            <FormWorkflowCard title="Preview" detail="Public form" meta={isPaid ? "Paid" : "Free"} onOpen={() => setFormWorkflowPanel("preview")} />
+            {featureEnabled("Basics") && <FormWorkflowCard title="Basics" detail={formTitle || "Untitled form"} meta={formMode === "classic" ? "Classic" : formMode === "steps" ? "Multi-step" : "Guided"} onOpen={() => setFormWorkflowPanel("basics")} />}
+            {featureGroups.Automation.some(item => featureEnabled(item)) && <FormWorkflowCard title="Automation" detail={`${formWaitingMode ? "Waiting ON" : "Waiting OFF"} · ${formOtpRequired ? "OTP ON" : "OTP OFF"}`} meta={`${formRepeaterSourceWorkshopIds.length} repeater source${formRepeaterSourceWorkshopIds.length === 1 ? "" : "s"}`} onOpen={() => setFormWorkflowPanel("automation")} />}
+            {featureEnabled("Fields") && <FormWorkflowCard title="Fields" detail={`${formFields.length} fields`} meta={`${formFields.filter((field) => field.required).length} required`} onOpen={() => setFormWorkflowPanel("fields")} />}
+            {featureEnabled("Included") && <FormWorkflowCard title="Included" detail={`${formHighlights.filter(Boolean).length} items`} meta="Workshop highlights" onOpen={() => setFormWorkflowPanel("includes")} />}
+            {featureEnabled("Preview") && <FormWorkflowCard title="Preview" detail="Public form" meta={isPaid ? "Paid" : "Free"} onOpen={() => setFormWorkflowPanel("preview")} />}
           </div>
 
-          {editingAnalytics ? (
+          {editingAnalytics && featureEnabled("Form analytics") ? (
             <FormAnalyticsSummary analytics={editingAnalytics} fields={formFields} />
           ) : null}
 
@@ -2368,7 +2379,7 @@ export default function WorkshopMasterPage() {
             </div>
           </div>
 
-          {editingAnalytics ? (
+          {editingAnalytics && featureEnabled("Form analytics") ? (
             <FormAnalyticsSummary analytics={editingAnalytics} fields={formFields} />
           ) : null}
 
@@ -2493,12 +2504,12 @@ export default function WorkshopMasterPage() {
 
                 {formWorkflowPanel === "automation" ? (
                   <div className="grid gap-3">
-                    <label className="block">
+                    <label style={featureEnabled("WhatsApp invite") ? undefined : {display:"none"}} className="block">
                       <span className="mb-2 block text-sm font-bold text-slate-600">WhatsApp Group Invite Link</span>
                       <input className={inputClass} onChange={(event) => setWhatsappGroupUrl(event.target.value)} placeholder="https://chat.whatsapp.com/xxxxxxxx" value={whatsappGroupUrl} />
                     </label>
                     <ManualWhatsAppSettings template={manualWhatsappTemplate} startDate={manualWhatsappStartDate} onTemplate={setManualWhatsappTemplate} onStartDate={setManualWhatsappStartDate} />
-                    <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4">
+                    <div style={featureEnabled("Status messages") ? undefined : {display:"none"}} className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4">
                       <label className="flex min-h-[48px] items-center justify-between gap-4">
                         <span>
                           <span className="block text-sm font-black text-slate-700">Send registration status on WhatsApp</span>
@@ -2515,11 +2526,11 @@ export default function WorkshopMasterPage() {
                         </div>
                       ) : null}
                     </div>
-                    <label className="flex min-h-[52px] items-center justify-between gap-4 rounded-xl border border-emerald-100 bg-white px-4 py-3">
+                    <label style={featureEnabled("OTP verification") ? undefined : {display:"none"}} className="flex min-h-[52px] items-center justify-between gap-4 rounded-xl border border-emerald-100 bg-white px-4 py-3">
                       <span><span className="block text-sm font-black text-slate-700">WhatsApp OTP Verification</span><span className="mt-0.5 block text-xs font-semibold text-slate-400">Require OTP before final registration submit.</span></span>
                       <input checked={formOtpRequired} className="size-5 shrink-0 accent-emerald-600" onChange={(event) => setFormOtpRequired(event.target.checked)} type="checkbox" />
                     </label>
-                    <div className="rounded-xl border border-sky-200 bg-sky-50/70 p-4">
+                    <div style={featureEnabled("Attendance confirmation") ? undefined : {display:"none"}} className="rounded-xl border border-sky-200 bg-sky-50/70 p-4">
                       <label className="flex min-h-[48px] items-center justify-between gap-4">
                         <span><span className="block text-sm font-black text-slate-800">Confirm only attended participants</span><span className="mt-0.5 block text-xs font-semibold text-slate-500">Others join waiting until attendance is matched.</span></span>
                         <input checked={formRequireAttendanceForConfirmation} className="size-5 shrink-0 accent-sky-600" onChange={(event) => { setFormRequireAttendanceForConfirmation(event.target.checked); if (!event.target.checked) setFormRequiredAttendanceSessionId(""); }} type="checkbox" />
@@ -2534,7 +2545,7 @@ export default function WorkshopMasterPage() {
                         </label>
                       ) : null}
                     </div>
-                    <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-4">
+                    <div style={featureEnabled("Waiting list") ? undefined : {display:"none"}} className="rounded-xl border border-amber-200 bg-amber-50/70 p-4">
                       <label className="flex min-h-[48px] items-center justify-between gap-4">
                         <span><span className="block text-sm font-black text-slate-800">Waiting Mode</span><span className="mt-0.5 block text-xs font-semibold text-slate-500">Send every new form submission to waiting.</span></span>
                         <input checked={formWaitingMode} className="size-5 shrink-0 accent-amber-600" onChange={(event) => setFormWaitingMode(event.target.checked)} type="checkbox" />
@@ -2545,7 +2556,7 @@ export default function WorkshopMasterPage() {
                         <label className="block md:col-span-2"><span className="mb-2 block text-xs font-black text-slate-600">Waiting Message</span><input className={inputClass} maxLength={240} onChange={(event) => setFormWaitingMessage(event.target.value)} value={formWaitingMessage} /></label>
                       </div>
                     </div>
-                    <div className="rounded-xl border border-violet-200 bg-violet-50/70 p-4">
+                    <div style={featureEnabled("Repeater rules") ? undefined : {display:"none"}} className="rounded-xl border border-violet-200 bg-violet-50/70 p-4">
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <span><span className="block text-sm font-black text-slate-800">Repeater Source Workshops</span><span className="mt-0.5 block text-xs font-semibold text-slate-500">Matching participants are marked as repeaters.</span></span>
                         <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-violet-700">{formRepeaterSourceWorkshopIds.length} selected</span>
