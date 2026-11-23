@@ -1924,7 +1924,7 @@ export default function WorkshopMasterPage() {
           {transferLeadToCrm ? <div className="mt-4 grid gap-3 rounded-xl border border-indigo-100 bg-indigo-50/60 p-4 md:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] md:items-center">
             <div>
               <p className="text-sm font-black text-slate-900">Default salesperson for this workshop</p>
-              <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">New leads are distributed among selected salespeople by active workload. Leave all unchecked to assign manually.</p>
+              <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">New leads are balanced among selected salespeople using open leads for this workshop. Leave all unchecked to assign manually.</p>
             </div>
             <div className="block"><SalesPeoplePicker people={salesPeople} value={assignedSalesPersonIds} onChange={setAssignedSalesPersonIds} /></div>
           </div> : null}
@@ -2139,7 +2139,7 @@ export default function WorkshopMasterPage() {
                     {transferLeadToCrm ? <div className="grid gap-3 rounded-xl border border-indigo-100 bg-indigo-50/60 p-4 md:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] md:items-center">
                       <div>
                         <p className="text-sm font-black text-slate-900">Default salesperson for this workshop</p>
-                        <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">Select multiple names to distribute new leads by active workload.</p>
+                        <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">Select multiple names to balance open leads for this workshop.</p>
                       </div>
                       <div className="block"><SalesPeoplePicker people={salesPeople} value={assignedSalesPersonIds} onChange={setAssignedSalesPersonIds} /></div>
                     </div> : null}

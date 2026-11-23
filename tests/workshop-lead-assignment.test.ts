@@ -76,3 +76,30 @@ test("multiple rule owners respect eligibility and never select outside the pool
 test("unavailable selected default pool leaves leads unassigned", () => {
   assert.equal(resolveSmartLeadAssignment({}, [], people.map(person => ({ ...person, acceptingLeads: false })), [], ["surat", "default"], "unassigned").salesPersonId, "");
 });
+
+test("historical CRM imports do not monopolize a workshop's selected team", () => {
+  const team = [{ id: "diksha", name: "Diksha" }, { id: "prakash", name: "Prakash" }];
+  const leads = [
+    ...Array.from({ length: 20 }, () => ({ assignedSalesPersonId: "prakash", stage: "Contacted", interest: "" })),
+    { assignedSalesPersonId: "diksha", stage: "Contacted", interest: "Business Growth Blueprint" }
+  ];
+  const result = resolveSmartLeadAssignment({ workshopTitle: "Business Growth Blueprint" }, [], team, leads, ["diksha", "prakash"], "unassigned");
+  assert.equal(result.salesPersonId, "prakash");
+  assert.equal(result.reason, "Balanced selected team within this workshop");
+});
+
+test("workshop source history counts when a lead has a different current interest", () => {
+  const team = [{ id: "diksha", name: "Diksha" }, { id: "prakash", name: "Prakash" }];
+  const result = resolveSmartLeadAssignment({ workshopTitle: "Business Growth Blueprint" }, [], team,
+    [{ assignedTo: "Diksha", stage: "Contacted", interest: "Another workshop", sourceDetails: ["Registration Link: Business Growth Blueprint"] }],
+    ["diksha", "prakash"], "unassigned");
+  assert.equal(result.salesPersonId, "prakash");
+});
+
+test("workshop distribution still enforces global workload limits and pauses", () => {
+  const team = [{ id: "diksha", name: "Diksha" }, { id: "prakash", name: "Prakash", maxActiveLeads: 1 }];
+  const result = resolveSmartLeadAssignment({ workshopTitle: "Business Growth Blueprint" }, [], team,
+    [{ assignedTo: "Prakash", stage: "Contacted", interest: "Another workshop" }],
+    ["diksha", "prakash"], "unassigned");
+  assert.equal(result.salesPersonId, "diksha");
+});

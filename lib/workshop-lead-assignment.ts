@@ -40,6 +40,8 @@ export type SalesPersonForAssignment = {
 };
 
 export type LeadForAssignment = {
+  interest?: unknown;
+  sourceDetails?: unknown;
   assignedSalesPersonId?: unknown;
   assignedTo?: unknown;
   stage?: unknown;
@@ -167,7 +169,18 @@ export function resolveSmartLeadAssignment(
 
   const defaultIds = Array.isArray(defaultSalesPersonId) ? defaultSalesPersonId.map(String) : [String(defaultSalesPersonId ?? "")];
   const available = eligiblePeople(salesPeople, counts);
-  const defaultPerson = chooseByStrategy("least-active", registration, available.filter((person) => defaultIds.includes(String(person.id ?? ""))), counts);
+  const workshopTitle = normalize(registration.workshopTitle);
+  // Balance a selected workshop team within that workshop. Historical CRM
+  // imports from other workshops must not monopolize incoming registrations.
+  // Global counts still enforce each salesperson's workload limit above.
+  const distributionCounts = defaultIds.length > 1 && workshopTitle
+    ? activeLeadCounts(leads.filter((lead) => normalize(lead.interest) === workshopTitle
+      || (Array.isArray(lead.sourceDetails) && lead.sourceDetails.some((detail) => {
+        const source = normalize(detail);
+        return source === workshopTitle || source.endsWith(`: ${workshopTitle}`);
+      }))), salesPeople.map((person) => ({ ...person, activeLeadCount: 0 })))
+    : counts;
+  const defaultPerson = chooseByStrategy("least-active", registration, available.filter((person) => defaultIds.includes(String(person.id ?? ""))), distributionCounts);
   const selected = defaultPerson ?? chooseByStrategy(fallbackStrategy, registration, available, counts);
   if (!selected) return { salesPersonId: "", salesPersonName: "", strategy: "unassigned", reason: "No available sales person matched", activeLeadCount: 0 };
   const id = String(selected.id ?? "");
@@ -175,7 +188,7 @@ export function resolveSmartLeadAssignment(
     salesPersonId: id,
     salesPersonName: String(selected.name ?? ""),
     strategy: defaultPerson ? (defaultIds.length > 1 ? "least-active" : "fixed") : fallbackStrategy,
-    reason: defaultPerson ? "Used default sales person" : `Used ${fallbackStrategy} fallback`,
+    reason: defaultPerson ? (defaultIds.length > 1 && workshopTitle ? "Balanced selected team within this workshop" : "Used default sales person") : `Used ${fallbackStrategy} fallback`,
     activeLeadCount: counts.get(id) ?? 0
   };
 }
