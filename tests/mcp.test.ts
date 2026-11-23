@@ -125,3 +125,36 @@ test("HTTP route fails closed, publishes OAuth discovery, and rejects foreign or
     for (const [key, value] of Object.entries(previous)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
   }
 });
+
+test("business datasets bind filters, validate dates and preserve text cursors", () => {
+  for (const dataset of ["registrations", "crm_registrations", "attendance", "payments"]) {
+    const cursor = dataset === "crm_registrations" ? "12" : "reg-z:123";
+    const query = buildMcpQuery({ dataset, after_id: cursor, query: "A%_\\", workshop_id: "w'1", status: "Paid", date_from: "2026-09-01", date_to: "2026-09-30", limit: 50 });
+    assert.equal(query.values[0], cursor);
+    assert.ok(!query.sql.includes("w'1"));
+    assert.match(query.sql, /LEFT\(recorded_at, 10\) >= \$5/);
+    assert.match(query.sql, /LEFT\(recorded_at, 10\) <= \$6/);
+    assert.equal(query.values.at(-1), 51);
+    assert.match(query.sql, new RegExp(`FROM cfl_mcp\\.${dataset}`));
+  }
+  assert.throws(() => buildMcpQuery({ dataset: "attendance", date_from: "2026-02-30" }));
+  assert.throws(() => buildMcpQuery({ dataset: "payments", date_from: "2026-09-30", date_to: "2026-09-01" }));
+  assert.throws(() => buildMcpQuery({ dataset: "summary", status: "Paid" }));
+  assert.equal(buildMcpQuery({ dataset: "attendance" }).values[0], "");
+});
+
+test("SDK exposes the requested business datasets and forwards their filters", async () => {
+  let received: unknown;
+  const server = createCflMcpServer(async args => { received = args; return { rows: [{ id: "a-1" }], has_more: true, next_cursor: "a-1" }; }, { local: true });
+  const client = new Client({ name: "business-test", version: "1" });
+  const [a, b] = InMemoryTransport.createLinkedPair();
+  try {
+    await server.connect(b); await client.connect(a);
+    const datasets = await client.callTool({ name: "list_datasets", arguments: {} });
+    for (const name of ["registrations", "crm_registrations", "attendance", "payments"]) assert.ok(JSON.stringify(datasets).includes(name));
+    const result = await client.callTool({ name: "browse_records", arguments: { dataset: "attendance", workshop_id: "w1", date_from: "2026-09-01" } });
+    assert.equal(result.isError, undefined);
+    assert.equal((received as { workshop_id: string }).workshop_id, "w1");
+    assert.equal((result.structuredContent as { next_cursor: string }).next_cursor, "a-1");
+  } finally { await client.close(); await server.close(); }
+});
