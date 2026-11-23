@@ -98,6 +98,8 @@ type FormWorkflowPanel = "basics" | "automation" | "fields" | "includes" | "prev
 type WorkshopWorkflowPanel = "info" | "mfw" | "pricing" | null;
 type FollowUpScope = "needs_follow_up" | "completed" | "confirmed" | "confirmed_new" | "waiting" | "repeaters" | "all";
 type RegistrationLinkConfig = {
+  redirectUrl?: string;
+  redirectButtonText?: string;
   utmSource?: string;
   utmMedium?: string;
   utmCampaign?: string;
@@ -4205,6 +4207,8 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
   const [venue, setVenue] = useState("");
   const [published, setPublished] = useState(true);
   const [publishUntil, setPublishUntil] = useState("");
+  const [redirectButtonText, setRedirectButtonText] = useState("");
+  const [redirectUrl, setRedirectUrl] = useState("");
   const [customBaseUrl, setCustomBaseUrl] = useState("");
   const [utmSource, setUtmSource] = useState("");
   const [utmMedium, setUtmMedium] = useState("");
@@ -4254,6 +4258,8 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
         setPublished(existing.published !== false);
         setPublishUntil(existing.publishUntil || "");
         setCustomBaseUrl(existing.customBaseUrl || "");
+        setRedirectUrl(existing.redirectUrl || "");
+        setRedirectButtonText(existing.redirectButtonText || "");
         setUtmSource(existing.utmSource || "");
         setUtmMedium(existing.utmMedium || "");
         setUtmCampaign(existing.utmCampaign || "");
@@ -4291,6 +4297,10 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
     if (!linkSettingsLoaded) return false;
     try {
       setSaveStatus("saving");
+      if (redirectUrl.trim()) {
+        const url = new URL(redirectUrl.trim());
+        if (!["https:", "http:"].includes(url.protocol)) throw new Error("Invalid redirect URL");
+      }
       const forms = readLocalArray<BuilderForm>(FORMS_STORAGE_KEY);
       const existingForm = forms.find((item) => item.workshopId === workshop.id || item.workshopSlug === workshopSlug(workshop.name));
       if (otpRequired && otpFallbackEnabled && !existingForm) {
@@ -4318,6 +4328,8 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
       }
       const configs = readLocalObject<Record<string, RegistrationLinkConfig>>(REGISTRATION_LINK_CONFIG_STORAGE_KEY);
       configs[shortSlug] = {
+        redirectUrl: redirectUrl.trim() || undefined,
+        redirectButtonText: redirectButtonText.trim() || undefined,
         utmSource: utmSource.trim() || undefined,
         utmMedium: utmMedium.trim() || undefined,
         utmCampaign: utmCampaign.trim() || undefined,
@@ -4348,7 +4360,7 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
       setSaveStatus("failed");
       return false;
     }
-  }, [utmSource, utmMedium, utmCampaign, batch, customBaseUrl, fee, linkSettingsLoaded, onClose, otpFallbackCode, otpFallbackCodeHash, otpFallbackEnabled, otpRequired, paid, partPayment, publishUntil, published, shortSlug, venue, waitingMessage, waitingMode, waitingTitle, workshop]);
+  }, [redirectButtonText, redirectUrl, utmSource, utmMedium, utmCampaign, batch, customBaseUrl, fee, linkSettingsLoaded, onClose, otpFallbackCode, otpFallbackCodeHash, otpFallbackEnabled, otpRequired, paid, partPayment, publishUntil, published, shortSlug, venue, waitingMessage, waitingMode, waitingTitle, workshop]);
 
   async function copyLink() {
     let copied = false;
@@ -4567,6 +4579,13 @@ function RegistrationLinkModal({ workshop, onClose }: { workshop: WorkshopRecord
                 <input className={inputClass} onChange={(event) => setCustomBaseUrl(event.target.value)} placeholder="https://register.cflb.in" value={customBaseUrl} />
               </label>
             </div>
+            <label className="mb-4 block text-sm font-bold text-slate-600">After registration redirect URL
+              <input type="url" value={redirectUrl} onChange={event => setRedirectUrl(event.target.value)} placeholder="https://chat.whatsapp.com/... or https://your-site.com/thank-you" className="mt-2 block w-full rounded-xl border p-3" />
+              <span className="mt-1 block text-xs font-normal">Opens automatically after successful registration. Leave empty to use the form's WhatsApp group.</span>
+            </label>
+            <label className="mb-4 block text-sm font-bold text-slate-600">Redirect button text
+              <input value={redirectButtonText} onChange={event => setRedirectButtonText(event.target.value)} placeholder="e.g. Join our group / આગળ વધો" className="mt-2 block w-full rounded-xl border p-3" />
+            </label>
             <span className="mb-2 block text-sm font-bold text-slate-600">Shareable Link</span>
             <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-2">
               <span className="w-full break-all px-2 text-sm font-semibold text-slate-700">{link}</span>

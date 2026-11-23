@@ -42,6 +42,8 @@ declare global {
   }
 }
 type RegistrationLinkConfig = {
+  redirectUrl?: string;
+  redirectButtonText?: string;
   batch?: string;
   facilitator?: string;
   fee?: number;
@@ -81,6 +83,8 @@ type FormModel = {
   otpFallbackCodeHash?: string;
   tiers?: PaymentTier[];
   highlights?: string[];
+  redirectUrl?: string;
+  redirectButtonText?: string;
   whatsappGroupUrl?: string;
   submitButtonText?: string;
   registrationCapacity?: number;
@@ -452,6 +456,11 @@ export default function RegistrationPage() {
       if (resolved) {
         resolved = {
           ...resolved,
+          redirectButtonText: readLocalObject<Record<string, RegistrationLinkConfig>>(REGISTRATION_LINK_CONFIG_STORAGE_KEY)[slug]?.redirectButtonText?.trim(),
+          redirectUrl: (() => {
+            const value = readLocalObject<Record<string, RegistrationLinkConfig>>(REGISTRATION_LINK_CONFIG_STORAGE_KEY)[slug]?.redirectUrl;
+            try { const url = new URL(value || ""); return ["https:", "http:"].includes(url.protocol) ? url.href : undefined; } catch { return undefined; }
+          })(),
           minimumPartPayment: configuredPartPayment(readLocalArray<WorkshopMasterRecord>(WORKSHOP_MASTER_STORAGE_KEY), resolved.id, Number.MAX_SAFE_INTEGER),
           whatsappGroupUrl: resolveRegistrationGroupUrl(readLocalArray<BuilderForm>(FORMS_STORAGE_KEY), resolved)
         };
@@ -471,7 +480,7 @@ export default function RegistrationPage() {
   }, []);
 
   useEffect(() => {
-    if (!success || waitingPosition || !model?.whatsappGroupUrl) {
+    if (!success || waitingPosition || !(model?.redirectUrl || model?.whatsappGroupUrl)) {
       return;
     }
 
@@ -480,14 +489,14 @@ export default function RegistrationPage() {
       setRedirectCountdown((value) => Math.max(0, value - 1));
     }, 1000);
     const redirectTimer = window.setTimeout(() => {
-      window.location.href = model.whatsappGroupUrl as string;
+      window.location.href = (model.redirectUrl || model.whatsappGroupUrl) as string;
     }, 5000);
 
     return () => {
       window.clearInterval(countdownTimer);
       window.clearTimeout(redirectTimer);
     };
-  }, [model?.whatsappGroupUrl, success, waitingPosition]);
+  }, [model?.redirectUrl, model?.whatsappGroupUrl, success, waitingPosition]);
 
   const roleField = (role: NonNullable<BuilderField["role"]>) => model?.fields.find((field) => field.role === role) ?? null;
   const mobileFieldId = roleField("mobile")?.id;
@@ -1376,11 +1385,12 @@ export default function RegistrationPage() {
                 : (message || "Your registration has been saved successfully.")}
             </p>
             {!waitingPosition && registrationNumber ? <p className="mt-3 text-lg font-black text-emerald-700">Registration No. {registrationNumber}</p> : null}
-            {model.whatsappGroupUrl && !waitingPosition ? (
+            {(model.redirectUrl || model.whatsappGroupUrl) && !waitingPosition ? (
               <p className="mt-3 rounded-2xl bg-emerald-50 px-4 py-3 text-sm font-black text-emerald-700">
-                WhatsApp group opens in {redirectCountdown} seconds.
+                {model.redirectUrl ? "Your next page" : "WhatsApp group"} opens in {redirectCountdown} seconds.
               </p>
             ) : null}
+            {model.redirectUrl && !waitingPosition ? <a className="mt-4 inline-block font-bold text-emerald-700" href={model.redirectUrl}>{model.redirectButtonText || "Continue now"}</a> : null}
             {model.whatsappGroupUrl && !waitingPosition ? (
               <a
                 className="mt-5 inline-flex min-h-[48px] w-full items-center justify-center rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-black text-white shadow-sm hover:bg-emerald-700"
@@ -1388,7 +1398,7 @@ export default function RegistrationPage() {
                 rel="noreferrer"
                 target="_blank"
               >
-                Join WhatsApp Group Now
+                {(!model.redirectUrl && model.redirectButtonText) || "Join WhatsApp Group Now"}
               </a>
             ) : null}
             {model.allowDuplicate ? (
