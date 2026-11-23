@@ -1,4 +1,6 @@
 "use client";
+import { BirthdateInput } from "@/components/birthdate-input";
+import { isBirthdateField } from "@/lib/birthdate";
 
 import { WhatsAppTemplateButtons } from "@/components/whatsapp-template-buttons";
 import { WhatsAppSenderSelector } from "@/components/whatsapp-sender-selector";
@@ -1276,6 +1278,7 @@ function PreviewField({ field, accent }: { field: BuilderField; accent: string }
   );
   const inputClass = "w-full rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-3 text-base sm:text-sm outline-none transition-all focus:border-slate-300 focus:bg-white focus:ring-4 focus:ring-slate-100";
 
+  if (isBirthdateField(field)) return <div>{label}<BirthdateInput className={inputClass} label={field.label} /></div>;
   if (field.type === "paragraph") {
     return <label className="block">{label}<textarea className={inputClass} placeholder={field.placeholder} rows={3} /></label>;
   }

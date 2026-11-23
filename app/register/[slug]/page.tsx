@@ -1,4 +1,6 @@
 "use client";
+import { BirthdateInput } from "@/components/birthdate-input";
+import { isBirthdateField, validBirthdate } from "@/lib/birthdate";
 
 import { LocationSearchSelect } from "@/components/location-search-select";
 import { HeightInput, isHeightField } from "@/components/height-input";
@@ -163,6 +165,7 @@ function hasValidAnswer(field: BuilderField, answers: Record<string, string>, ph
   if (field.type === "heading" || field.type === "divider") return true;
   const value = (answers[field.id] ?? "").trim();
   if (!value) return !field.required;
+  if (isBirthdateField(field)) return validBirthdate(value);
   if (field.role === "mobile") {
     return Boolean(internationalPhone(value, phoneCountry));
   }
@@ -638,7 +641,7 @@ export default function RegistrationPage() {
       if (!raw) return;
       const draft = JSON.parse(raw) as { answers?: Record<string, string>; currentPage?: number; partAmount?: string; paymentMode?: "Full" | "Part"; referralCode?: string; selectedTierId?: string; phoneCountry?: string };
       if (draft.answers && Object.keys(draft.answers).length) {
-        setAnswers(draft.answers);
+        setAnswers(Object.fromEntries(Object.entries(draft.answers).filter(([id]) => !model.fields.some((field) => field.id === id && isBirthdateField(field)))));
         setPhoneCountryOverride(draft.phoneCountry ?? "");
         setCurrentPage(Math.max(0, Number(draft.currentPage || 0)));
         setPartAmount(draft.partAmount ?? "");
@@ -1533,6 +1536,8 @@ function RenderField({
         ) : null}
       </div>
     );
+  } else if (isBirthdateField(field)) {
+    control = <BirthdateInput className={inputClass} label={field.label} value={value} onChange={onChange} />;
   } else {
     const inputType = field.type === "email" ? "email" : field.type === "number" ? "number" : field.type === "date" ? "date" : "text";
     control = (
@@ -1547,7 +1552,7 @@ function RenderField({
     );
   }
 
-  if (isHeightField(field.type, field.label) || (field.type === "dropdown" && ["country", "state", "city"].includes(field.role ?? ""))) {
+  if (isBirthdateField(field) || isHeightField(field.type, field.label) || (field.type === "dropdown" && ["country", "state", "city"].includes(field.role ?? ""))) {
     return <div className={`block ${wide ? "md:col-span-2" : ""}`}>{labelNode}{control}</div>;
   }
   return <label className={`block ${wide ? "md:col-span-2" : ""}`}>{labelNode}{control}</label>;

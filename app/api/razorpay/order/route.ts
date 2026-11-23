@@ -1,3 +1,4 @@
+import { hasInvalidBirthdateAnswer } from "@/lib/birthdate";
 import { ensureRegistrationRecordsTable, getDbPool } from "@/lib/db";
 import { internationalPhone } from "@/lib/phone-number";
 import { completeCheckoutRegistration, saveCheckoutRegistration } from "@/lib/checkout-registration";
@@ -64,6 +65,7 @@ export async function POST(request: Request) {
     || JSON.stringify(registration).length > 64000)) {
     return NextResponse.json({ error: "Valid registration details are required." }, { status: 400 });
   }
+  if (hasInvalidBirthdateAnswer(registration?.answers)) return NextResponse.json({ error: "Please select a valid birthdate. Minimum age is 12 years." }, { status: 400 });
   if (notes.registrationId && !registration) {
     return NextResponse.json({ error: "Refresh the registration page before paying." }, { status: 400 });
   }

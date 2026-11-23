@@ -1,3 +1,4 @@
+import { hasInvalidBirthdateAnswer } from "@/lib/birthdate";
 import { internationalPhone, registrationPhoneKey } from "@/lib/phone-number";
 import { publicRegistrationJson } from "@/lib/public-registration-cache";
 import { ensureRegistrationHotPath } from "@/lib/registration-hot-path";
@@ -51,6 +52,7 @@ export async function POST(request: Request) {
     const answers = answersInput
       ? Object.fromEntries(Object.entries(answersInput).slice(0, 100).map(([key, value]) => [key.slice(0, 200), String(value ?? "").slice(0, 2000)]))
       : undefined;
+  if (hasInvalidBirthdateAnswer(answers)) return NextResponse.json({ error: "Please select a valid birthdate. Minimum age is 12 years." }, { status: 400 });
     const sanitizedRegistration = {
       amountDue,
       amountPaid,

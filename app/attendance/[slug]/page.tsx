@@ -1,4 +1,6 @@
 "use client";
+import { BirthdateInput } from "@/components/birthdate-input";
+import { isBirthdateField, validBirthdate } from "@/lib/birthdate";
 
 import { HeightInput, isHeightField } from "@/components/height-input";
 import { readLocalArray, writeLiveStateToLocalStorage } from "@/lib/live-state";
@@ -179,6 +181,10 @@ export default function AttendanceFormPage() {
   async function submitAttendance() {
     if (submitting) return;
     if (!session) return;
+    if (session.fields.some((field) => isBirthdateField(field) && answers[field.id] && !validBirthdate(answers[field.id]))) {
+      setMessage("Please select a valid birthdate. Minimum age is 12 years.");
+      return;
+    }
     if (missingRequired) {
       setMessage("Please fill all required fields with a valid 10-digit mobile number.");
       return;
@@ -423,6 +429,8 @@ function RenderField({
     control = <div className="flex flex-wrap gap-2">{Array.from({ length: maximum }, (_, index) => index + 1).map((rating) => <button aria-label={`Rate ${rating}`} className="grid size-11 place-items-center border border-slate-200 bg-white" key={rating} onClick={() => onChange(String(rating))} type="button"><Star className="size-6" fill={Number(value) >= rating ? accent : "transparent"} style={{ color: Number(value) >= rating ? accent : "#cbd5e1" }} /></button>)}</div>;
   } else if (field.type === "consent") {
     control = <label className="flex min-h-12 items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm font-semibold text-slate-700"><input checked={value === "Accepted"} className="mt-0.5 size-5" onChange={(event) => onChange(event.target.checked ? "Accepted" : "")} style={{ accentColor: accent }} type="checkbox" /><span>{field.placeholder || "I agree and give my consent."}</span></label>;
+  } else if (isBirthdateField(field)) {
+    control = <BirthdateInput className={inputClass} label={field.label} value={value} onChange={onChange} />;
   } else {
     const inputType = field.type === "email" ? "email" : field.type === "number" ? "number" : field.type === "date" ? "date" : field.type === "time" ? "time" : "text";
     control = (
@@ -451,6 +459,6 @@ function RenderField({
       {field.helpText ? <span className="mt-1.5 block text-xs font-semibold text-slate-400">{field.helpText}</span> : null}
     </>
   );
-  if (isHeightField(field.type, field.label)) return <div className={`block ${wide ? "md:col-span-2" : ""}`}>{content}</div>;
+  if (isBirthdateField(field) || isHeightField(field.type, field.label)) return <div className={`block ${wide ? "md:col-span-2" : ""}`}>{content}</div>;
   return <label className={`block ${wide ? "md:col-span-2" : ""}`}>{content}</label>;
 }

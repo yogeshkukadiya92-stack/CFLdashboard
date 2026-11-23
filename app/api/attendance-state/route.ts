@@ -1,3 +1,4 @@
+import { hasInvalidBirthdateAnswer } from "@/lib/birthdate";
 import { ensurePersistenceTable, ensureRegistrationRecordsTable, getAppState, getAttendanceFormState, getDbPool, isDbEnabled, mutateAttendanceEntries, readRegistrationRecords, upsertRegistrationRecord } from "@/lib/db";
 import { attendanceWindow } from "@/lib/attendance-window";
 import { assignRegistrationNumbers } from "@/lib/registration-confirmation";
@@ -237,6 +238,7 @@ export async function POST(request: Request) {
     if (!attendeeName || mobileDigits.length !== 10 || !/^[6-9]/.test(mobileDigits)) {
       return NextResponse.json({ error: "Name and a valid 10-digit mobile number are required." }, { status: 400 });
     }
+  if (hasInvalidBirthdateAnswer(answers)) return NextResponse.json({ error: "Please select a valid birthdate. Minimum age is 12 years." }, { status: 400 });
     const missingField = requiredCustomFields(session.fields, answers).find((field) => !answers[field.label]?.trim());
     if (missingField) return NextResponse.json({ error: `${missingField.label} is required.` }, { status: 400 });
     if (email && !/^\S+@\S+\.\S+$/.test(email)) return NextResponse.json({ error: "Enter a valid email address." }, { status: 400 });
