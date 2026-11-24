@@ -13,6 +13,6 @@ test("confirmation runs MFW and WhatsApp provider calls in parallel", () => {
 
 test("MFW-only retries skip CRM and confirmation notifications", () => {
   assert.match(workerSource, /if \(!mfwSyncOnly\) await upsertLiveRegistration/);
-  assert.match(workerSource, /if \(!mfwSyncOnly && linkedWorkshop\?\.transferLeadToCrm === true\)/);
+  assert.match(workerSource, /!mfwSyncOnly \? await assignRegistrationToCrm\(registrationId\)/);
   assert.match(workerSource, /mfwSyncOnly \? \{\} : await sendRegistrationStatusNotifications/);
 });

@@ -105,3 +105,21 @@ test("existing salesperson records remain assignable and all-paused teams stay u
   assert.equal(chooseAssignee([{ id: "legacy", name: "Legacy User", isActive: true }], "Workshop", []), "Legacy User");
   assert.equal(chooseAssignee([{ id: "paused", name: "On Leave", isActive: true, acceptingLeads: false }], "Workshop", []), "");
 });
+
+test("campaign attribution survives lead creation and later registration", () => {
+  const initialLeads = upsertLeadFromRegistration([], {
+    mobile: "9876543218",
+    source: "landing_page",
+    answers: { "UTM Source": " instagram ", "UTM Campaign": "november-workshop" }
+  });
+  const [lead] = upsertLeadFromRegistration(initialLeads, {
+    mobile: "9876543218",
+    answers: { "UTM Source": "whatsapp" }
+  }).map(normalizeLead);
+  assert.equal(lead.source, "Landing Page");
+  assert.deepEqual(lead.sourceDetails?.filter((detail) => detail.startsWith("UTM ")), [
+    "UTM Source: whatsapp",
+    "UTM Source: instagram",
+    "UTM Campaign: november-workshop"
+  ]);
+});

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { ensurePersistenceTable, ensureRegistrationRecordsTable, getDbPool } from "@/lib/db";
+import { normalizeLeadMobile } from "@/lib/lead-utils";
 import { assignRegistrationLeads } from "@/lib/registration-sales-assignment";
 import type { Lead, RegistrationEntry } from "@/lib/types";
 
@@ -42,6 +43,13 @@ export async function PATCH(request: Request) {
         return NextResponse.json({ error: error instanceof Error ? error.message : "Could not assign responses." }, { status: 409 });
       }
       await client.query("UPDATE app_state SET leads=$1::jsonb, updated_at=NOW() WHERE id=1", [JSON.stringify(result.leads)]);
+      for (const { payload: registration } of selected.rows) {
+        const lead = result.leads.find(item => normalizeLeadMobile(item.mobile) === normalizeLeadMobile(registration.mobile));
+        await client.query(`UPDATE cfl_registration_records SET payload=payload || $2::jsonb,updated_at=NOW() WHERE external_id=$1`,
+          [registration.id, JSON.stringify({ crmAssignmentStatus: "assigned", crmAssignmentReason: "Assigned manually by admin.",
+            crmAssignmentCheckedAt: new Date().toISOString(), crmLeadId: lead?.id,
+            crmSalesPersonId: person.id, crmSalesPersonName: person.name })]);
+      }
       await client.query("COMMIT");
       return NextResponse.json({ assigned: result.assigned, created: result.created, salesPersonName: person.name });
     } catch (error) {

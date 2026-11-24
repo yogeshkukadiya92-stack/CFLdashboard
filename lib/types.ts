@@ -246,6 +246,12 @@ export interface Kpi {
 }
 
 export interface RegistrationEntry {
+  crmAssignmentStatus?: "assigned" | "pending" | "failed";
+  crmAssignmentReason?: string;
+  crmAssignmentCheckedAt?: string;
+  crmLeadId?: string;
+  crmSalesPersonId?: string;
+  crmSalesPersonName?: string;
   attendanceSessionId?: string;
   assignedSalesPersonId?: string;
   assignedTo?: string;

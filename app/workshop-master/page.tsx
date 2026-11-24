@@ -857,6 +857,32 @@ export default function WorkshopMasterPage() {
     window.requestAnimationFrame(() => window.scrollTo({ behavior: "smooth", top: 0 }));
   }
 
+  const [recoveringCrm, setRecoveringCrm] = useState(false);
+  async function recoverWorkshopCrm() {
+    if (!selectedWorkshop || recoveringCrm) return;
+    setRecoveringCrm(true);
+    try {
+      const response = await fetch("/api/admin/registration-crm", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ workshopId: selectedWorkshop.id })
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Recovery failed");
+      setResponseSalesMessage(result.busy ? "Recovery is already running. Refresh shortly." :
+        `CRM recovery: ${result.assigned} assigned, ${result.pending} pending, ${result.failed} failed (${result.checked} checked). Batches process up to 100 registrations.`);
+      const refreshed = await fetch("/api/registrations/live", { cache: "no-store" });
+      if (refreshed.ok) {
+        const state = await refreshed.json();
+        if (state.dbEnabled && Array.isArray(state.registrations)) {
+          setRegistrations(state.registrations);
+          writeLocalCache(REGISTRATION_STORAGE_KEY, state.registrations);
+        }
+      }
+    } catch (error) {
+      setResponseSalesMessage(error instanceof Error ? error.message : "Recovery failed; automatic retry remains scheduled.");
+    } finally { setRecoveringCrm(false); }
+  }
+
   async function assignSelectedResponsesToSales() {
     if (!selectedWorkshop || !responseSalesPersonId || assigningResponseSales) return;
     const ids = selectedParticipants.filter((entry) => selectedParticipantIds.includes(entry.id)).map((entry) => entry.id);
@@ -3038,6 +3064,13 @@ export default function WorkshopMasterPage() {
 
               {showParticipants ? (
                 <div className="flex min-h-0 flex-1 flex-col bg-white">
+                  {selectedWorkshop?.transferLeadToCrm && selectedParticipants.some(entry => entry.crmAssignmentStatus !== "assigned") ? (
+                    <div role="alert" className="border-b border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-900">
+                      CRM assignment: {selectedParticipants.filter(entry => entry.crmAssignmentStatus === "failed").length} need attention · {selectedParticipants.filter(entry => !entry.crmAssignmentStatus || entry.crmAssignmentStatus === "pending").length} pending verification/assignment. Automatic recovery checks every 5 minutes. See each response for details.
+                      <button type="button" disabled={recoveringCrm} onClick={() => void recoverWorkshopCrm()} className="ml-2 underline disabled:opacity-50">{recoveringCrm ? "Recovering…" : "Check and recover now"}</button>
+                    </div>
+                  ) : null}
+
                   <div className="flex shrink-0 flex-col gap-2 border-b border-slate-200 px-3 py-2 xl:flex-row xl:items-center">
                     <div aria-label="Response status" className="flex shrink-0 gap-1 overflow-x-auto" role="group">
                       {([
@@ -3214,7 +3247,7 @@ export default function WorkshopMasterPage() {
                         </th>
                         <th className="sticky top-0 z-30 w-[76px] min-w-[76px] bg-slate-50 px-2 py-2.5 lg:left-10">Action</th>
                         <th className="sticky top-0 z-30 min-w-[190px] border-r border-slate-200 bg-slate-50 px-2.5 py-2.5 shadow-[8px_0_16px_-16px_rgba(15,23,42,0.65)] lg:left-[116px]">User</th>
-                        {["Contact", "City", "Source", "Reference", "WhatsApp", "Confirmation", "MFW", ...(showMedicalReport ? ["Medical Report"] : []), "Call note", "Payment", "Submitted"].map((head) => <th className="sticky top-0 z-20 bg-slate-50 px-2.5 py-2.5" key={head}>{head}</th>)}
+                        {["Contact", "CRM assignment", "City", "Source", "Reference", "WhatsApp", "Confirmation", "MFW", ...(showMedicalReport ? ["Medical Report"] : []), "Call note", "Payment", "Submitted"].map((head) => <th className="sticky top-0 z-20 bg-slate-50 px-2.5 py-2.5" key={head}>{head}</th>)}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -3249,6 +3282,14 @@ export default function WorkshopMasterPage() {
 	                          <td className="min-w-[150px] px-2.5 py-2.5">
                             <p className="font-bold text-slate-700">{entry.mobile}</p>
                             <p className="mt-0.5 max-w-[180px] truncate text-[10px] text-slate-500" title={entry.email || "No email provided"}>{entry.email || "No email"}</p>
+                          </td>
+                          <td className="min-w-[165px] px-2.5 py-2.5">
+                            {selectedWorkshop?.transferLeadToCrm ? <>
+                              <span className={`rounded-full px-2 py-1 text-[10px] font-black ${entry.crmAssignmentStatus === "assigned" ? "bg-emerald-50 text-emerald-700" : entry.crmAssignmentStatus === "failed" ? "bg-rose-50 text-rose-700" : "bg-amber-50 text-amber-700"}`}>
+                                {entry.crmAssignmentStatus === "assigned" ? `Assigned · ${entry.crmSalesPersonName || "Existing owner"}` : entry.crmAssignmentStatus === "failed" ? "Assignment needs attention" : "Pending assignment"}
+                              </span>
+                              <p className="mt-1 max-w-[200px] whitespace-normal text-[10px] text-slate-500">{entry.crmAssignmentReason || "Automatic assignment check scheduled."}</p>
+                            </> : <span className="text-xs text-slate-400">CRM transfer off</span>}
                           </td>
                           <td className="min-w-[86px] px-2.5 py-2.5">{entry.city || "-"}</td>
                           <td className="px-2.5 py-2.5"><RegistrationSourceBadge source={entry.source} /></td>
@@ -3301,7 +3342,7 @@ export default function WorkshopMasterPage() {
                         </tr>
 	                      )) : (
 	                        <tr>
-	                          <td className="px-4 py-10 text-center text-slate-500" colSpan={showMedicalReport ? 14 : 13}>
+	                          <td className="px-4 py-10 text-center text-slate-500" colSpan={showMedicalReport ? 15 : 14}>
 	                            {participantSearch ? "No response found for this name or mobile number." : "No users registered in this workshop yet."}
 	                          </td>
 	                        </tr>

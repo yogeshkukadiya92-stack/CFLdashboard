@@ -2,6 +2,7 @@
 
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import { registrationUtmFields, registrationUtmValue } from "@/lib/registration-utm";
 import { LandingPageRenderer } from "@/components/landing-page-renderer";
 import { hydratePublicRegistrationState, LIVE_STATE_STORAGE_KEYS, readLocalArray } from "@/lib/live-state";
 import type { LandingPageRecord } from "@/lib/types";
@@ -10,8 +11,17 @@ export default function PublicLandingPage() {
   const params = useParams<{ slug: string }>();
   const [page, setPage] = useState<LandingPageRecord | null>(null);
   const [loading, setLoading] = useState(true);
+  const [trackingQuery, setTrackingQuery] = useState("");
 
   useEffect(() => {
+    const incoming = new URLSearchParams(window.location.search);
+    const tracking = new URLSearchParams();
+    for (const [parameter] of registrationUtmFields) {
+      const value = registrationUtmValue(incoming.get(parameter));
+      if (value) tracking.set(parameter, value);
+    }
+    setTrackingQuery(tracking.toString());
+
     function load() {
       const slug = String(params.slug ?? "").toLowerCase();
       const match = readLocalArray<LandingPageRecord>(LIVE_STATE_STORAGE_KEYS.landingPages)
@@ -32,5 +42,5 @@ export default function PublicLandingPage() {
     );
   }
 
-  return <LandingPageRenderer page={page} />;
+  return <LandingPageRenderer page={page} trackingQuery={trackingQuery} />;
 }

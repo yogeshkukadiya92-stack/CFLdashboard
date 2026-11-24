@@ -1,4 +1,5 @@
-import { registrationPhoneKey } from "./phone-number.ts";
+import { registrationUtmDetails } from "./registration-utm.ts";
+import { internationalPhone, registrationPhoneKey } from "./phone-number.ts";
 import { extractPreQualification } from "./crm-scorecard.ts";
 import type { Lead, LeadActivity, LeadFollowUp, LeadPriority, LeadStage } from "./types.ts";
 import { salesPersonCodeFromId } from "./sales-person-code.ts";
@@ -114,12 +115,12 @@ export function upsertLeadFromRegistration(
 ) {
   const leads = currentLeads.map(normalizeLead);
   const mobile = normalizeLeadMobile(registration.mobile);
-  if (mobile.length !== 10) return leads;
+  if (!internationalPhone(registration.mobile)) return leads;
 
   const now = validIso(registration.createdAt) ?? new Date().toISOString();
   const workshop = String(registration.workshopTitle ?? "Workshop").trim();
   const source = registration.source === "landing_page" ? "Landing Page" : registration.source === "manual" ? "Manual" : "Registration Link";
-  const sourceDetail = `${source}: ${workshop}`;
+  const sourceDetails = [`${source}: ${workshop}`, ...registrationUtmDetails(registration.answers)];
   const existingIndex = leads.findIndex((lead) => normalizeLeadMobile(lead.mobile) === mobile);
   const preQualification = extractPreQualification(registration.answers);
   const assignedPerson = salesPeople
@@ -147,7 +148,7 @@ export function upsertLeadFromRegistration(
       lastActivityAt: now,
       name: existing.name === "Unnamed Lead" ? String(registration.fullName ?? existing.name) : existing.name,
       preQualification: preQualification ?? existing.preQualification,
-      sourceDetails: unique([sourceDetail, ...(existing.sourceDetails ?? [])]),
+      sourceDetails: unique([...sourceDetails, ...(existing.sourceDetails ?? [])]),
       updatedAt: now
     };
     return leads;
@@ -173,11 +174,11 @@ export function upsertLeadFromRegistration(
     priority: "Warm",
     score: 60,
     source,
-    sourceDetails: [sourceDetail],
+    sourceDetails,
     stage: "New Leads",
     updatedAt: now
   });
-  return [lead, ...leads].slice(0, 10000);
+  return [lead, ...leads];
 }
 
 export function nextPendingFollowUp(followUps: LeadFollowUp[]) {

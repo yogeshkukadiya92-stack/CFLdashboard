@@ -1,9 +1,8 @@
 import { upsertLiveRegistration } from "@/lib/crm-db";
-import { upsertLeadFromRegistration } from "@/lib/lead-utils";
+import { assignRegistrationToCrm } from "./registration-crm-recovery";
 import { sendRegistrationStatusNotifications } from "@/lib/registration-confirmation";
 import { syncConfirmedRegistrationToMfw } from "@/lib/mfw-registration";
-import { resolveWorkshopSalesPersonId, type WorkshopLeadAssignmentRule } from "@/lib/workshop-lead-assignment";
-import { getActiveWorkflowAssignmentSettings } from "@/lib/workflow-db";
+import { type WorkshopLeadAssignmentRule } from "@/lib/workshop-lead-assignment";
 import { getDbPool } from "./db";
 import type { BuilderForm, RegistrationEntry } from "./types";
 
@@ -27,42 +26,9 @@ export async function runRegistrationFollowup(registrationId: string) {
   }
 
   if (!mfwSyncOnly) await upsertLiveRegistration(finalRegistration as unknown as Record<string, unknown>);
-  if (!mfwSyncOnly && linkedWorkshop?.transferLeadToCrm === true) {
-    const workflowAssignment = await getActiveWorkflowAssignmentSettings(finalRegistration.workshopId).catch(() => null);
-    const crmClient = await database.connect();
-    try {
-      await crmClient.query("BEGIN");
-      const crmResult = await crmClient.query(`SELECT leads, sales_people FROM app_state WHERE id = 1 FOR UPDATE`);
-      const crmState = crmResult.rows[0] ?? {};
-      const assignmentRules = linkedWorkshop?.leadAssignmentRules?.length ? linkedWorkshop.leadAssignmentRules : workflowAssignment?.rules;
-      const salesPeople = Array.isArray(crmState.sales_people) ? crmState.sales_people : [];
-      const currentLeads = Array.isArray(crmState.leads) ? crmState.leads : [];
-      const assignedSalesPersonId = resolveWorkshopSalesPersonId(
-        finalRegistration,
-        assignmentRules,
-        (linkedWorkshop?.assignedSalesPersonIds?.length ? linkedWorkshop.assignedSalesPersonIds : linkedWorkshop?.assignedSalesPersonId) || workflowAssignment?.defaultSalesPersonId,
-        salesPeople as Array<Record<string, unknown>>,
-        currentLeads as Array<Record<string, unknown>>,
-        workflowAssignment?.fallbackStrategy ?? "unassigned"
-      );
-      const leads = linkedWorkshop?.transferLeadToCrm === true
-        ? upsertLeadFromRegistration(
-            currentLeads,
-            finalRegistration,
-            salesPeople,
-            assignedSalesPersonId
-          )
-        : currentLeads;
-
-      await crmClient.query(`UPDATE app_state SET leads = $1::jsonb, updated_at = NOW() WHERE id = 1`, [JSON.stringify(leads)]);
-      await crmClient.query("COMMIT");
-    } catch (error) {
-      await crmClient.query("ROLLBACK");
-      throw error;
-    } finally {
-      crmClient.release();
-    }
-  }
+  // CRM assignment has its own receipt and recovery loop. Keep provider
+  // notifications progressing even when no salesperson is currently available.
+  const crmAssignment = !mfwSyncOnly ? await assignRegistrationToCrm(registrationId) : undefined;
   let savedRegistration = finalRegistration;
   if (savedRegistration.registrationStatus === "confirmed" && savedRegistration.mfwSyncStatus !== "synced") {
     savedRegistration = { ...savedRegistration, ...(await syncConfirmedRegistrationToMfw(savedRegistration)) };
@@ -76,6 +42,9 @@ export async function runRegistrationFollowup(registrationId: string) {
     await upsertLiveRegistration(savedRegistration as unknown as Record<string, unknown>);
   }
 
+  if (crmAssignment?.required && !crmAssignment.assigned) {
+    throw new Error(crmAssignment.reason || "CRM assignment pending; retry scheduled");
+  }
   if ((savedRegistration.registrationStatus === "confirmed" && savedRegistration.mfwSyncStatus === "failed")
     || Object.values(notificationPatch).includes("failed")) {
     throw new Error("Registration follow-up provider failed; retry scheduled");

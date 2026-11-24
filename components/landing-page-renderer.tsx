@@ -11,8 +11,8 @@ function withAlpha(hex: string, alpha: string) {
   return normalized.length === 6 ? `#${normalized}${alpha}` : hex;
 }
 
-export function LandingPageRenderer({ page, preview = false }: { page: LandingPageRecord; preview?: boolean }) {
-  const registrationUrl = `/register/${page.workshopSlug}?source=landing-page&landing=${encodeURIComponent(page.slug)}`;
+export function LandingPageRenderer({ page, preview = false, trackingQuery = "" }: { page: LandingPageRecord; preview?: boolean; trackingQuery?: string }) {
+  const registrationUrl = `/register/${page.workshopSlug}?source=landing-page&landing=${encodeURIComponent(page.slug)}${trackingQuery ? `&${trackingQuery}` : ""}`;
   const actionUrl = preview ? "#landing-preview-form" : registrationUrl;
   const style = {
     "--lp-accent": page.accentColor,

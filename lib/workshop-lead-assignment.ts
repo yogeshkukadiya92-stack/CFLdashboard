@@ -108,7 +108,7 @@ function ruleMatches(registration: RegistrationForAssignment, rule: WorkshopLead
 function eligiblePeople(salesPeople: SalesPersonForAssignment[], counts: Map<string, number>, maxActiveLeads?: number) {
   return salesPeople.filter((person) => {
     const id = String(person.id ?? "");
-    if (!id || person.isActive === false || person.acceptingLeads === false) return false;
+    if (!id || !String(person.name ?? "").trim() || person.isActive === false || person.acceptingLeads === false) return false;
     const limit = Number(maxActiveLeads ?? person.maxActiveLeads ?? 0);
     return !Number.isFinite(limit) || limit <= 0 || (counts.get(id) ?? 0) < limit;
   });

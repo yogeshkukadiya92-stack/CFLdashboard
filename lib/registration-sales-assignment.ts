@@ -1,3 +1,4 @@
+import { internationalPhone } from "./phone-number.ts";
 import { createLeadActivity, normalizeLeadMobile, upsertLeadFromRegistration } from "./lead-utils.ts";
 import { salesPersonCodeFromId } from "./sales-person-code.ts";
 import type { Lead, RegistrationEntry } from "./types.ts";
@@ -13,7 +14,7 @@ export function assignRegistrationLeads(
   let created = 0;
   for (const registration of registrations) {
     const mobile = normalizeLeadMobile(registration.mobile);
-    if (mobile.length !== 10) throw new Error(`Please correct the mobile number for ${registration.fullName} before assigning.`);
+    if (!internationalPhone(registration.mobile)) throw new Error(`Please correct the mobile number for ${registration.fullName} before assigning.`);
     if (assigned.has(mobile)) continue;
     const matches = leads.filter((lead) => normalizeLeadMobile(lead.mobile) === mobile);
     if (matches.length > 1) throw new Error(`Please resolve duplicate CRM leads for ${registration.fullName} before assigning.`);

@@ -36,6 +36,8 @@ export async function drainRegistrationJobs() {
     client = await db.connect();
     locked = (await client.query(`SELECT pg_try_advisory_lock(73184, 1) AS acquired`)).rows[0].acquired;
     if (!locked) return;
+    const { recoverMissingCrmAssignments } = await import("./registration-crm-recovery");
+    await recoverMissingCrmAssignments();
     const { runRegistrationFollowup } = await import("./registration-followup-worker");
     const configured=Number(process.env.REGISTRATION_JOB_CONCURRENCY ?? 2);
     const concurrency=Number.isInteger(configured)&&configured>=1&&configured<=4?configured:2;
@@ -53,6 +55,11 @@ export async function drainRegistrationJobs() {
           // notification is in flight. Only acknowledge the revision we ran.
           await client!.query(`UPDATE cfl_registration_jobs SET completed_at=NOW(),last_error=NULL WHERE registration_id=$1 AND revision=$2`,[id,revision]);
         } catch(error) {
+          // Persist failures that occur before CRM processing, too. Never replace
+          // a successful assignment receipt because a notification provider failed.
+          await client!.query(`UPDATE cfl_registration_records SET payload=payload || $2::jsonb,updated_at=NOW()
+            WHERE external_id=$1 AND COALESCE(payload->>'crmAssignmentStatus','') NOT IN ('assigned','pending','failed')`,
+            [id, JSON.stringify({ crmAssignmentStatus: "failed", crmAssignmentReason: error instanceof Error ? error.message.slice(0,500) : "Registration transfer failed; retry scheduled.", crmAssignmentCheckedAt: new Date().toISOString() })]);
           await client!.query(`UPDATE cfl_registration_jobs SET attempts=attempts+1,
             available_at=NOW() + LEAST(3600,5*power(2,LEAST(attempts,10))) * interval '1 second',
             last_error=$2 WHERE registration_id=$1 AND revision=$3`,[id,error instanceof Error?error.message.slice(0,500):"Follow-up failed",revision]);

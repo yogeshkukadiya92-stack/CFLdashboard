@@ -345,6 +345,8 @@ export default function FormBuilderPage() {
       const next = [...current];
       const target = index + direction;
       if (target < 0 || target >= next.length) return current;
+      if (current[index].visibility?.fieldId === current[target].id ||
+          current[target].visibility?.fieldId === current[index].id) return current;
       [next[index], next[target]] = [next[target], next[index]];
       return next;
     });
@@ -362,7 +364,9 @@ export default function FormBuilderPage() {
   }
 
   function removeField(id: string) {
-    setFields((current) => current.filter((field) => field.id !== id));
+    setFields((current) => current.filter((field) => field.id !== id).map((field) =>
+      field.visibility?.fieldId === id ? { ...field, visibility: undefined } : field
+    ));
   }
 
   function addReferralCode() {
@@ -735,6 +739,9 @@ export default function FormBuilderPage() {
               {fields.map((field, index) => (
                 <FieldEditor
                   field={field}
+                  conditionFields={fields.slice(0, index).filter((candidate) =>
+                    candidate.type === "dropdown" || candidate.type === "radio"
+                  )}
                   index={index}
                   key={field.id}
                   onChange={(patch) => updateField(field.id, patch)}
@@ -1033,6 +1040,7 @@ function ToggleButton({ active, children, onClick, title }: { active: boolean; c
 }
 
 function FieldEditor({
+  conditionFields,
   field,
   index,
   onChange,
@@ -1042,6 +1050,7 @@ function FieldEditor({
   onRemove,
   total
 }: {
+  conditionFields: BuilderField[];
   field: BuilderField;
   index: number;
   onChange: (patch: Partial<BuilderField>) => void;
@@ -1052,6 +1061,8 @@ function FieldEditor({
   total: number;
 }) {
   const meta = fieldTypeMeta[field.type];
+  const condition = field.visibility;
+  const conditionField = conditionFields.find((candidate) => candidate.id === condition?.fieldId);
   const Icon = field.type === "email" ? Mail : field.type === "mobile" ? Smartphone : field.type === "heading" ? Heading : field.type === "checkbox" ? CheckSquare : field.type === "radio" ? Circle : Type;
   const options = field.options?.length ? field.options : ["Option 1", "Option 2"];
   const updateOption = (optionIndex: number, value: string) => {
@@ -1108,6 +1119,45 @@ function FieldEditor({
               Add Other text option
             </label>
           </div>
+        </div>
+      ) : null}
+
+      {conditionFields.length || condition ? (
+        <div className="mt-3 grid gap-2 sm:grid-cols-2 sm:pl-10">
+          <label className="text-xs font-bold text-slate-600">
+            Show field when
+            <select
+              className="mt-1 w-full rounded-lg border border-slate-200 bg-white p-2 text-sm"
+              onChange={(event) => {
+                const controllingField = conditionFields.find((candidate) => candidate.id === event.target.value);
+                onChange({ visibility: controllingField ? { fieldId: controllingField.id, operator: "answered" } : undefined });
+              }}
+              value={condition?.fieldId ?? ""}
+            >
+              <option value="">Always</option>
+              {condition && !conditionField ? <option value={condition.fieldId}>Existing condition</option> : null}
+              {conditionFields.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.label}</option>)}
+            </select>
+          </label>
+          {conditionField && condition ? (
+            <label className="text-xs font-bold text-slate-600">
+              Selected answer
+              <select
+                className="mt-1 w-full rounded-lg border border-slate-200 bg-white p-2 text-sm"
+                onChange={(event) => {
+                  const value = event.target.value;
+                  onChange({ visibility: { fieldId: conditionField.id, operator: value ? "equals" : "answered", value: value || undefined } });
+                }}
+                value={condition.operator === "equals" ? condition.value ?? "" : ""}
+              >
+                <option value="">Any answer</option>
+                {condition.operator === "equals" && condition.value && !conditionField.options?.includes(condition.value)
+                  ? <option value={condition.value}>{condition.value}</option>
+                  : null}
+                {conditionField.options?.map((option, index) => <option key={index} value={option}>{option}</option>)}
+              </select>
+            </label>
+          ) : null}
         </div>
       ) : null}
 
