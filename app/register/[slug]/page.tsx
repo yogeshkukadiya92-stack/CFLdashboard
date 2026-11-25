@@ -1404,8 +1404,9 @@ export default function RegistrationPage() {
                 {model.redirectUrl ? "Your next page" : "WhatsApp group"} opens in {redirectCountdown} seconds.
               </p>
             ) : null}
-            {model.redirectUrl && !waitingPosition ? <a className="mt-4 inline-block font-bold text-emerald-700" href={model.redirectUrl}>{model.redirectButtonText || "Continue now"}</a> : null}
-            {model.whatsappGroupUrl && !waitingPosition ? (
+            {(!medical.active || medical.confirmed) && model.redirectUrl && !waitingPosition ? <a className="mt-4 inline-block font-bold text-emerald-700" href={model.redirectUrl}>{model.redirectButtonText || "Continue now"}</a> : null}
+            {!waitingPosition && medical.submitButton}
+            {(!medical.active || medical.confirmed) && model.whatsappGroupUrl && !waitingPosition ? (
               <a
                 className="mt-5 inline-flex min-h-[48px] w-full items-center justify-center rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-black text-white shadow-sm hover:bg-emerald-700"
                 href={model.whatsappGroupUrl}

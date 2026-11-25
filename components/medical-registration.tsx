@@ -103,17 +103,10 @@ export function useMedicalRegistration() {
               ))}
             </select>
           </label>
-          {status.enrolled === false && <p>Finishing MFW enrollment…</p>}
+          {status.enrolled === false && <p>Submit to complete enrollment and book your selected time.</p>}
           {status.slots?.length === 0 && (
             <p>No appointments currently available.</p>
           )}
-          <button
-            type="button"
-            disabled={!slot || busy || !status.enrolled}
-            onClick={book}
-          >
-            {busy ? "Booking…" : "Book selected time"}
-          </button>
           {error && (
             <p role="alert">
               {error}{" "}
@@ -134,6 +127,17 @@ export function useMedicalRegistration() {
   );
   return {
     active: Boolean(access),
+    confirmed: Boolean(status.receipt),
+    submitButton: access && !status.receipt ? (
+      <button
+        className="mt-5 inline-flex min-h-[48px] w-full items-center justify-center rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-black text-white shadow-sm hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+        type="button"
+        disabled={!slot || busy}
+        onClick={book}
+      >
+        {busy ? "Submitting…" : "Submit"}
+      </button>
+    ) : null,
     result,
     open: (registrationId: string, secret: string) =>
       setAccess({ registrationId, secret }),

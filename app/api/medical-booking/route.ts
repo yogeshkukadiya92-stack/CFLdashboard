@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { syncConfirmedRegistrationToMfw } from "@/lib/mfw-registration";
 import { getDbPool } from "@/lib/db";
 import {
   medicalKey,
@@ -36,13 +37,24 @@ export async function POST(request: Request) {
       return NextResponse.json({ receipt: registration.medicalBookingReceipt });
     const mapping = await medicalMapping(registration.workshopId, client);
     if (!mapping) return new Response(null, { status: 404 });
-    const enrolled =
+    let enrolled =
       registration.mfwSyncStatus === "synced" &&
       registration.mfwWorkshopEventId === mapping.event &&
       Boolean(registration.mfwParticipantId);
     if (body.action === "status") {
       const slots = await availableMedicalSlots(mapping);
       return NextResponse.json({ slots, enrolled });
+    }
+    if (!enrolled) {
+      const enrollment = await syncConfirmedRegistrationToMfw(registration);
+      Object.assign(registration, enrollment);
+      await client.query(
+        "UPDATE cfl_registration_records SET payload=payload || $2::jsonb,updated_at=now() WHERE external_id=$1",
+        [registration.id, JSON.stringify(enrollment)]
+      );
+      enrolled = registration.mfwSyncStatus === "synced" &&
+        registration.mfwWorkshopEventId === mapping.event &&
+        Boolean(registration.mfwParticipantId);
     }
     if (!enrolled)
       return NextResponse.json(
