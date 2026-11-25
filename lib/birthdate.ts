@@ -21,3 +21,9 @@ export function hasInvalidBirthdateAnswer(answers: unknown) {
   if (!answers || typeof answers !== "object" || Array.isArray(answers)) return false;
   return Object.entries(answers).some(([label, value]) => isBirthdateField({ label }) && String(value ?? "").trim() !== "" && !validBirthdate(String(value).trim()));
 }
+
+export function ageFromBirthdate(value: string, now = new Date()) {
+  if (!validBirthdate(value, now)) return "";
+  const today = new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
+  return String(Number(today.slice(0, 4)) - Number(value.slice(0, 4)) - Number(today.slice(5) < value.slice(5)));
+}

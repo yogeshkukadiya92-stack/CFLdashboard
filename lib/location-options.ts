@@ -1,3 +1,4 @@
+import { normalizeAgeField } from "./builder-field-normalization.ts";
 import countries from "./generated/countries.json" with { type: "json" };
 import states from "./generated/states.json" with { type: "json" };
 import type { BuilderField } from "./types";
@@ -16,10 +17,13 @@ export function statesForCountry(country: string) {
 
 /** Keep saved field IDs so existing responses and form rules remain associated. */
 export function ensureLocationFields(fields: BuilderField[]): BuilderField[] {
+  fields = fields.map(normalizeAgeField);
   const roles = ["country", "state", "city"] as const;
   const location = roles.map(role => {
     const existing = fields.find(field => field.role === role);
-    return { ...existing, id: existing?.id ?? `location-${role}`, type: "dropdown" as const,
+    let id = `location-${role}`;
+    while (!existing && fields.some(field => field.id === id)) id += "-field";
+    return { ...existing, id: existing?.id ?? id, type: "dropdown" as const,
       label: existing?.label ?? role[0].toUpperCase() + role.slice(1), role,
       required: existing?.required ?? (role === "country"), allowOther: role !== "country",
       options: role === "country" ? [...COUNTRY_OPTIONS] : undefined };

@@ -1,113 +1,105 @@
-import { medicalAnswerError } from "@/lib/medical-form-fields";
-import { drainRegistrationJobs } from "@/lib/registration-jobs";
-import { after, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
+import { getDbPool } from "@/lib/db";
 import {
-  medicalDb,
-  medicalForm,
   medicalKey,
   medicalMapping,
+  availableMedicalSlots,
 } from "@/lib/mfw-medical";
+import type { RegistrationEntry } from "@/lib/types";
 
-export async function GET(req: Request) {
+export async function POST(request: Request) {
+  const body = await request.json().catch(() => null);
+  if (
+    typeof body?.secret !== "string" ||
+    body.secret.length !== 36 ||
+    typeof body.registrationId !== "string" ||
+    !["status", "book"].includes(body.action) ||
+    (body.action === "book" && typeof body.slot !== "string")
+  )
+    return new Response(null, { status: 400 });
+  const db = getDbPool();
+  if (!db) return new Response(null, { status: 503 });
+  const client = await db.connect();
+  let committed = false;
   try {
-    const mapping = await medicalMapping(
-      new URL(req.url).searchParams.get("workshop") || ""
+    await client.query("BEGIN");
+    const result = await client.query(
+      `SELECT payload FROM cfl_registration_records WHERE external_id=$1
+      AND payload->>'registrationStatus'='confirmed' AND payload->>'medicalSlotAccess'=$2 FOR UPDATE`,
+      [body.registrationId, medicalKey(body.secret)]
     );
-    return NextResponse.json(mapping ? await medicalForm(mapping) : null);
+    const registration = result.rows[0]?.payload as
+      | RegistrationEntry
+      | undefined;
+    if (!registration) return new Response(null, { status: 403 });
+    if (registration.medicalBookingReceipt)
+      return NextResponse.json({ receipt: registration.medicalBookingReceipt });
+    const mapping = await medicalMapping(registration.workshopId, client);
+    if (!mapping) return new Response(null, { status: 404 });
+    const enrolled =
+      registration.mfwSyncStatus === "synced" &&
+      registration.mfwWorkshopEventId === mapping.event &&
+      Boolean(registration.mfwParticipantId);
+    if (body.action === "status") {
+      const slots = await availableMedicalSlots(mapping);
+      return NextResponse.json({ slots, enrolled });
+    }
+    if (!enrolled)
+      return NextResponse.json(
+        { error: "Enrollment is processing. Please try again shortly." },
+        { status: 409 }
+      );
+    const url = String(process.env.MFW_API_BASE_URL || "").replace(/\/+$/, "");
+    const response = await fetch(
+      url +
+        "/integrations/v1/workshops/" +
+        encodeURIComponent(mapping.event) +
+        "/appointments",
+      {
+        method: "POST",
+        cache: "no-store",
+        signal: AbortSignal.timeout(12000),
+        headers: {
+          "Content-Type": "application/json",
+          "x-mfw-api-key": process.env.MFW_INTEGRATION_API_KEY || "",
+        },
+        body: JSON.stringify({
+          formToken: mapping.token,
+          participantId: registration.mfwParticipantId,
+          slotId: body.slot,
+        }),
+      }
+    );
+    if (!response.ok)
+      return NextResponse.json(
+        {
+          error:
+            response.status === 409
+              ? "This time is unavailable. Please select another slot."
+              : "MFW could not confirm the booking. Please try again.",
+        },
+        { status: response.status === 409 ? 409 : 503 }
+      );
+    const { receipt } = await response.json();
+    if (!receipt?.id || !receipt.startsAt || !receipt.endsAt)
+      throw new Error("Missing appointment receipt");
+    await client.query(
+      "UPDATE cfl_registration_records SET payload=payload || jsonb_build_object('medicalBookingReceipt',$2::jsonb),updated_at=now() WHERE external_id=$1",
+      [registration.id, receipt]
+    );
+    await client.query("COMMIT");
+    committed = true;
+    return NextResponse.json({ receipt });
   } catch {
     return NextResponse.json(
-      { error: "Could not load the MFW medical form." },
+      { error: "MFW is unavailable. Please try again." },
       { status: 503 }
     );
-  }
-}
-
-export async function POST(req: Request) {
-  try {
-    const body = await req.json();
-    if (typeof body.secret !== "string" || !/^[a-f0-9-]{36}$/.test(body.secret))
-      return new Response(null, { status: 400 });
-    const db = await medicalDb();
-    const key = medicalKey(body.secret);
-    if (body.action === "prepare") {
-      if (
-        typeof body.registrationId !== "string" ||
-        !body.registrationId ||
-        body.registrationId.length > 300
-      )
-        return new Response(null, { status: 400 });
-      const mapping = await medicalMapping(body.workshop);
-      if (!mapping) return new Response(null, { status: 404 });
-      const form = await medicalForm(mapping);
-      if (!form.slots.some((slot) => slot.id === body.slot))
-        return NextResponse.json(
-          { error: "Please select an available slot." },
-          { status: 409 }
-        );
-      if (
-        !body.answers ||
-        typeof body.answers !== "object" ||
-        Array.isArray(body.answers) ||
-        JSON.stringify(body.answers).length > 64000
-      )
-        return new Response(null, { status: 400 });
-      const invalid = medicalAnswerError(form.fields, body.answers);
-      if (invalid)
-        return NextResponse.json({ error: invalid }, { status: 400 });
-      await db.query(
-        "INSERT INTO cfl_medical_bookings(key,workshop,event,token,answers,slot,registration_id) VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(key) DO NOTHING",
-        [
-          key,
-          body.workshop,
-          mapping.event,
-          mapping.token,
-          body.answers,
-          body.slot,
-          body.registrationId,
-        ]
-      );
-      return NextResponse.json({ key });
+  } finally {
+    try {
+      if (!committed) await client.query("ROLLBACK");
+    } finally {
+      client.release();
     }
-    if (body.action === "reselect") {
-      const {
-        rows: [row],
-      } = await db.query(
-        "SELECT token,event FROM cfl_medical_bookings WHERE key=$1 AND state='choose_slot'",
-        [key]
-      );
-      if (!row) return new Response(null, { status: 409 });
-      const form = await medicalForm(row);
-      if (!form.slots.some((slot) => slot.id === body.slot))
-        return NextResponse.json(
-          { error: "Slot unavailable." },
-          { status: 409 }
-        );
-      await db.query(
-        `WITH changed AS (
-        UPDATE cfl_medical_bookings SET slot=$2,state='pending' WHERE key=$1 AND state='choose_slot' RETURNING registration_id
-      ) INSERT INTO cfl_registration_jobs(registration_id) SELECT registration_id FROM changed
-        ON CONFLICT(registration_id) DO UPDATE SET completed_at=NULL, available_at=now(), attempts=0,
-        revision=cfl_registration_jobs.revision+1`,
-        [key, body.slot]
-      );
-      after(() => drainRegistrationJobs());
-    }
-    const {
-      rows: [row],
-    } = await db.query(
-      "SELECT state,receipt,token,event FROM cfl_medical_bookings WHERE key=$1",
-      [key]
-    );
-    if (!row) return new Response(null, { status: 404 });
-    return NextResponse.json({
-      state: row.state,
-      receipt: row.receipt,
-      slots: row.state === "choose_slot" ? (await medicalForm(row)).slots : [],
-    });
-  } catch {
-    return NextResponse.json(
-      { error: "MFW booking is unavailable. Please try again." },
-      { status: 503 }
-    );
   }
 }

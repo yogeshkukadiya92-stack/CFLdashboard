@@ -128,3 +128,96 @@ for (const scenario of [
       assert.ok(sql.some((s) => s.includes("medicalBookingState")));
   });
 }
+
+for (const scenario of [
+  "waiting",
+  "confirmed",
+  "not enrolled",
+  "book",
+  "existing receipt",
+]) {
+  test("post-registration slot access: " + scenario, async () => {
+    const calls: string[] = [];
+    const receipt = {
+      id: "appointment",
+      startsAt: "2026-11-26T00:30:00Z",
+      endsAt: "2026-11-26T01:00:00Z",
+    };
+    const record = {
+      id: "reg",
+      workshopId: "cfl",
+      mfwSyncStatus: scenario === "not enrolled" ? "pending" : "synced",
+      mfwWorkshopEventId: "mfw",
+      mfwParticipantId: "participant",
+      medicalBookingReceipt:
+        scenario === "existing receipt" ? receipt : undefined,
+    };
+    const client = {
+      release() {},
+      async query(sql: string) {
+        if (sql.startsWith("SELECT payload")) {
+          assert.match(sql, /registrationStatus'='confirmed'/);
+          assert.match(sql, /medicalSlotAccess'=/);
+          return { rows: scenario === "waiting" ? [] : [{ payload: record }] };
+        }
+        return { rows: [] };
+      },
+    };
+    const modules: Record<string, unknown> = {
+      "next/server": { NextResponse: Response },
+      "@/lib/db": { getDbPool: () => ({ connect: async () => client }) },
+      "@/lib/mfw-medical": {
+        medicalKey: () => "hash",
+        medicalMapping: async () => ({ event: "mfw", token: "form" }),
+        availableMedicalSlots: async () => {
+          calls.push("slots");
+          return [{ id: "open" }];
+        },
+      },
+    };
+    const source = readFileSync(
+      new URL("../app/api/medical-booking/route.ts", import.meta.url),
+      "utf8"
+    );
+    const code = ts.transpileModule(source, {
+      compilerOptions: {
+        module: ts.ModuleKind.CommonJS,
+        target: ts.ScriptTarget.ES2022,
+      },
+    }).outputText;
+    const route = {} as { POST: (req: Request) => Promise<Response> };
+    new Function("require", "exports", "fetch", code)(
+      (n: string) => modules[n],
+      route,
+      async (url: string, options: RequestInit) => {
+        assert.match(url, /workshops\/mfw\/appointments$/);
+        assert.deepEqual(JSON.parse(String(options.body)), {
+          participantId: "participant",
+          formToken: "form",
+          slotId: "open",
+        });
+        calls.push("book");
+        return Response.json({ receipt });
+      }
+    );
+    const response = await route.POST(
+      new Request("http://test", {
+        method: "POST",
+        body: JSON.stringify({
+          registrationId: "reg",
+          secret: "a".repeat(36),
+          action: scenario === "confirmed" ? "status" : "book",
+          slot: "open",
+        }),
+      })
+    );
+    assert.equal(
+      response.status,
+      scenario === "waiting" ? 403 : scenario === "not enrolled" ? 409 : 200
+    );
+    assert.deepEqual(
+      calls,
+      scenario === "confirmed" ? ["slots"] : scenario === "book" ? ["book"] : []
+    );
+  });
+}

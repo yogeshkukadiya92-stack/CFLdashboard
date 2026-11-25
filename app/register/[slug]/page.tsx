@@ -1,11 +1,11 @@
 "use client";
 import { useMedicalRegistration } from "@/components/medical-registration";
 import { BirthdateInput } from "@/components/birthdate-input";
-import { isBirthdateField, validBirthdate } from "@/lib/birthdate";
+import { ageFromBirthdate, isBirthdateField, validBirthdate } from "@/lib/birthdate";
 
 import { LocationSearchSelect } from "@/components/location-search-select";
 import { HeightInput, isHeightField } from "@/components/height-input";
-import { normalizeCoreFieldRequirements } from "@/lib/builder-field-normalization";
+import { isAgeField, normalizeCoreFieldRequirements } from "@/lib/builder-field-normalization";
 import { workshops as seedWorkshops } from "@/lib/data";
 import { getVisibleBuilderFields } from "@/lib/builder-field-visibility";
 import { registrationUtmFields, registrationUtmValue } from "@/lib/registration-utm";
@@ -284,7 +284,7 @@ export default function RegistrationPage() {
   const [otpVerifiedMobile, setOtpVerifiedMobile] = useState("");
   const [otpModalOpen, setOtpModalOpen] = useState(false);
   const [duplicateModalOpen, setDuplicateModalOpen] = useState(false);
-  const medical = useMedicalRegistration(model?.id);
+  const medical = useMedicalRegistration();
   const [success, setSuccess] = useState(false);
   const [waitingPosition, setWaitingPosition] = useState<number | null>(null);
   const [registrationNumber, setRegistrationNumber] = useState("");
@@ -652,7 +652,7 @@ export default function RegistrationPage() {
       if (!raw) return;
       const draft = JSON.parse(raw) as { answers?: Record<string, string>; currentPage?: number; partAmount?: string; paymentMode?: "Full" | "Part"; referralCode?: string; selectedTierId?: string; phoneCountry?: string };
       if (draft.answers && Object.keys(draft.answers).length) {
-        setAnswers(Object.fromEntries(Object.entries(draft.answers).filter(([id]) => !model.fields.some((field) => field.id === id && isBirthdateField(field)))));
+        setAnswers(Object.fromEntries(Object.entries(draft.answers).filter(([id]) => !model.fields.some((field) => field.id === id && (isBirthdateField(field) || isAgeField(field))))));
         setPhoneCountryOverride(draft.phoneCountry ?? "");
         setCurrentPage(Math.max(0, Number(draft.currentPage || 0)));
         setPartAmount(draft.partAmount ?? "");
@@ -700,6 +700,9 @@ export default function RegistrationPage() {
     if (id === roleField("country")?.id) setPhoneCountryOverride("");
     setAnswers((prev) => {
       const next = { ...prev, [id]: value };
+      if (model?.fields.some(field => field.id === id && isBirthdateField(field))) {
+        for (const field of model.fields.filter(isAgeField)) next[field.id] = ageFromBirthdate(value);
+      }
       // Clear dependent answers when their parent changes.
       if (id === roleField("country")?.id) {
         const stateId = roleField("state")?.id;
@@ -912,8 +915,9 @@ export default function RegistrationPage() {
     };
 
     setSubmitting(true);
-    try { payload.medicalBookingKey = await medical.prepare(name,mobile,email,registrationId); }
-    catch (error) { setSubmitting(false); setMessage(error instanceof Error ? error.message : "Medical booking unavailable."); return; }
+    const slotSecret = crypto.randomUUID();
+    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(slotSecret));
+    payload.medicalSlotAccess = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("");
     let payment: RazorpaySuccess | null = null;
     if (model.paid) {
       if (amountPaid < 1) {
@@ -990,6 +994,8 @@ export default function RegistrationPage() {
       const savedIndex = current.findIndex((item) => item.id === registrationId);
       if (savedIndex >= 0) current[savedIndex] = saved;
       try { writeLiveStateToLocalStorage({ registrations: current }); } catch { /* Registration is durable even if browser storage is full. */ }
+      if (saved.registrationStatus === "confirmed" && saved.medicalSlotAccess === payload.medicalSlotAccess)
+        medical.open(saved.id, slotSecret);
       setWaitingPosition(saved.registrationStatus === "waiting" ? saved.waitingPosition ?? 1 : null);
       setWaitingReason(saved.waitingReason);
       setRegistrationNumber(saved.registrationNumber ?? "");
@@ -1277,7 +1283,6 @@ export default function RegistrationPage() {
                 </div>
               ) : null}
 
-              {isLastPage && medical.fields(answers[roleField("name")?.id || ""] || "",mobileInternational,answers[roleField("email")?.id || ""] || "")}
               {isLastPage && model.allowReferralConfirmation ? (
                 <label className="mt-5 block rounded-2xl border border-indigo-100 bg-indigo-50/50 p-4">
                   <span className="block text-sm font-black text-slate-700">Reference Number <span className="font-semibold text-slate-400">(optional)</span></span>

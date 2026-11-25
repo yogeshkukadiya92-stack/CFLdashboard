@@ -54,7 +54,7 @@ export async function POST(request: Request) {
       : undefined;
   if (hasInvalidBirthdateAnswer(answers)) return NextResponse.json({ error: "Please select a valid birthdate. Minimum age is 12 years." }, { status: 400 });
     const sanitizedRegistration = {
-      medicalBookingKey: /^[a-f0-9]{64}$/.test(String(input.medicalBookingKey)) ? String(input.medicalBookingKey) : undefined,
+
       amountDue,
       amountPaid,
       answers,
@@ -136,18 +136,6 @@ export async function POST(request: Request) {
       if (previousRegistration && isDuplicateWorkshopRegistration(previousRegistration, sanitizedRegistration)) {
         await client.query("COMMIT");
         return NextResponse.json({ ok: true, dbEnabled: true, registration: previousRegistration });
-      }
-      if (workshop?.mfwEnrollmentEnabled && workshop.mfwMedicalFormToken && sanitizedRegistration.source !== "manual") {
-        const draft = sanitizedRegistration.medicalBookingKey && await client.query(
-          "SELECT 1 FROM cfl_medical_bookings WHERE key=$1 AND workshop=$2 AND registration_id=$3 AND event=$4 AND token=$5",
-          [sanitizedRegistration.medicalBookingKey, sanitizedRegistration.workshopId, sanitizedRegistration.id, workshop.mfwWorkshopEventId, workshop.mfwMedicalFormToken]
-        );
-        if (!draft || !draft.rowCount) {
-          await client.query("ROLLBACK");
-          return NextResponse.json({error:"Please complete the linked medical form and select a slot."},{status:400});
-        }
-      } else {
-        sanitizedRegistration.medicalBookingKey = undefined;
       }
       const duplicate = current.find((value: unknown) => {
         if (!value || typeof value !== "object") return false;
@@ -281,6 +269,9 @@ export async function POST(request: Request) {
       };
       let finalRegistration = {
         ...pendingRegistration,
+        medicalSlotAccess: !isWaiting && workshop?.mfwEnrollmentEnabled && workshop.mfwMedicalFormToken &&
+          typeof input.medicalSlotAccess === "string" && /^[a-f0-9]{64}$/.test(input.medicalSlotAccess)
+          ? input.medicalSlotAccess : undefined,
         waitingPosition: isWaiting ? Number(counts.waiting) + 1 : undefined
       } as RegistrationEntry;
       if (!isWaiting && !finalRegistration.registrationNumber) {

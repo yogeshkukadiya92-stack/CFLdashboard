@@ -176,7 +176,8 @@ export default function WorkshopAttendancePage() {
       if (!value) return true;
       const tagList = Array.isArray(workshop.tags) ? workshop.tags : [];
       const tagStr = [workshop.tag ?? "", ...tagList].join(" ");
-      return workshop.name.toLowerCase().includes(value) || tagStr.toLowerCase().includes(value);
+      const name = typeof workshop.name === "string" ? workshop.name : "";
+      return name.toLowerCase().includes(value) || tagStr.toLowerCase().includes(value);
     });
   }, [query, workshops]);
 

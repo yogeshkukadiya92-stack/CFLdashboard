@@ -3318,7 +3318,7 @@ export default function WorkshopMasterPage() {
                             <RegistrationConfirmationBadge status={entry.confirmationStatus} statusOptions={statusOptions} />
                             {entry.confirmationUpdatedBy ? <p className="mt-1 max-w-[150px] text-[10px] leading-4 text-slate-500">{entry.confirmationUpdatedBy}{entry.confirmationUpdatedAt ? ` · ${formatSubmittedAt(entry.confirmationUpdatedAt)}` : ""}</p> : null}
                           </td>
-                          <td className="px-2.5 py-2.5"><MfwSyncBadge entry={entry} />{entry.medicalBookingKey && <div>{entry.medicalBookingReceipt ? `Medical: ${new Date(entry.medicalBookingReceipt.startsAt).toLocaleString("en-IN",{ timeZone:"Asia/Kolkata" })} · ${entry.medicalBookingReceipt.id}` : entry.medicalBookingState === "choose_slot" ? "Another slot required" : entry.medicalBookingState === "review" ? "Verify booking in MFW" : "Medical booking pending"}</div>}</td>
+                          <td className="px-2.5 py-2.5"><MfwSyncBadge entry={entry} />{(entry.medicalBookingKey || entry.medicalSlotAccess) && <div>{entry.medicalBookingReceipt ? `Medical: ${new Date(entry.medicalBookingReceipt.startsAt).toLocaleString("en-IN",{ timeZone:"Asia/Kolkata" })} · ${entry.medicalBookingReceipt.id}` : entry.medicalBookingState === "choose_slot" ? "Another slot required" : entry.medicalBookingState === "review" ? "Verify booking in MFW" : "Medical booking pending"}</div>}</td>
                           {showMedicalReport ? (
                             <td className="min-w-[145px] px-2.5 py-2.5">
                               <div aria-label={`Medical report status for ${entry.fullName}`} className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5">

@@ -26,8 +26,8 @@ async function graphql<T>(
   return body.data;
 }
 
-export async function medicalMapping(workshopId: string) {
-  const result = await getDbPool()!.query(
+export async function medicalMapping(workshopId: string, database: Pick<import("pg").PoolClient, "query"> = getDbPool()!) {
+  const result = await database.query(
     "SELECT w FROM app_state, jsonb_array_elements(workshops) w WHERE id=1 AND w->>'id'=$1",
     [workshopId]
   );
@@ -46,6 +46,15 @@ export type MedicalSlot = {
   endsAt: string;
   available: boolean;
 };
+export async function availableMedicalSlots(mapping: { token: string; event: string }) {
+  const data = await graphql<{form: {eventId: string}; slots: MedicalSlot[]}>(
+    "query($token:String!){form:getMyHealthyForeverWorkshopForm(token:$token){eventId} slots:getMyHealthyForeverWorkshopAppointmentSlots(token:$token){id startsAt endsAt available}}",
+    {token: mapping.token}
+  );
+  if (data.form?.eventId !== mapping.event) throw new Error("Medical workshop mismatch.");
+  return data.slots.filter(slot => slot.available);
+}
+
 export async function medicalForm(mapping: { token: string; event: string }) {
   const data = await graphql<{
     form: {
