@@ -5113,7 +5113,13 @@ function MfwSyncBadge({ entry }: { entry: RegistrationEntry }) {
     return <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700" title={entry.mfwWorkshopEventId}>Enrolled</span>;
   }
   if (entry.mfwSyncStatus === "failed") {
-    return <span className="rounded-full bg-rose-50 px-3 py-1 text-xs font-black text-rose-700" title={entry.mfwSyncError}>Failed · select to retry</span>;
+    return (
+      <div className="min-w-40 max-w-64 space-y-1">
+        <span className="inline-block rounded-full bg-rose-50 px-3 py-1 text-xs font-black text-rose-700">Failed</span>
+        <p className="break-words text-xs text-rose-700">{entry.mfwSyncError || "MFW did not complete enrollment."}</p>
+        <p className="text-xs text-slate-500">Select this participant, then use Assign to MFW to retry.</p>
+      </div>
+    );
   }
   if (entry.mfwSyncStatus === "pending") {
     return <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-black text-indigo-700">Assigning...</span>;
