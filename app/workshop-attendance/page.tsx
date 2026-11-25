@@ -591,9 +591,14 @@ export default function WorkshopAttendancePage() {
     URL.revokeObjectURL(url);
   }
 
+  function selectWorkshop(id: string) {
+    setSelectedWorkshopId(id);
+    setSelectedSessionId(sessions.find((session) => session.workshopId === id)?.id || "");
+    setSessionView("responses");
+  }
+
   return (
     <AdminPlatformShell activeLabel="Workshop Attendance" description="Create session-wise attendance forms and track who attended every workshop session." title="Workshop Attendance">
-      <CallFlowAttendancePanel onSaved={refreshAfterCallFlowSave} />
       <section className="min-w-0 space-y-3">
         <aside className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
           <div className="flex flex-wrap items-center gap-2">
@@ -601,6 +606,16 @@ export default function WorkshopAttendancePage() {
               <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-700">Attendance workspace</p>
               <h2 className="text-lg font-black text-slate-950">Choose workshop</h2>
             </div>
+            <select
+              aria-label="Choose workshop"
+              className="min-h-9 w-full rounded-lg border border-slate-200 px-3 text-sm font-semibold sm:w-72"
+              disabled={!workshops.length}
+              value={selectedWorkshop?.id ?? ""}
+              onChange={(event) => { setQuery(""); selectWorkshop(event.target.value); }}
+            >
+              {!workshops.length && <option value="">No workshops available</option>}
+              {workshops.map((workshop) => <option key={workshop.id} value={workshop.id}>{workshop.name || "Unnamed workshop"}</option>)}
+            </select>
             <div className="relative w-full sm:w-72">
               <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
               <input
@@ -637,11 +652,7 @@ export default function WorkshopAttendancePage() {
                     aria-pressed={active}
                     className={`w-[210px] shrink-0 rounded-lg border px-3 py-2 text-left transition ${active ? "border-emerald-300 bg-emerald-50 text-emerald-900" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"}`}
                     key={workshop.id}
-                    onClick={() => {
-                      setSelectedWorkshopId(workshop.id);
-                      setSelectedSessionId(sessions.find((session) => session.workshopId === workshop.id)?.id || "");
-                      setSessionView("responses");
-                    }}
+                    onClick={() => selectWorkshop(workshop.id)}
                     type="button"
                   >
                     <p className="truncate text-xs font-black">{workshop.name}</p>
@@ -1117,6 +1128,10 @@ export default function WorkshopAttendancePage() {
           ) : null}
         </div>
       </section>
+      <details className="rounded-xl border border-slate-200 bg-white p-3">
+        <summary className="cursor-pointer font-bold">Attendance–CallFlow connection</summary>
+        <CallFlowAttendancePanel onSaved={refreshAfterCallFlowSave} />
+      </details>
       <ConfirmDialog confirmLabel="Delete Session" description="The attendance form and all responses for this session will be removed permanently." onCancel={() => setDeleteSessionTarget(null)} onConfirm={() => deleteSessionTarget && deleteSession(deleteSessionTarget.id)} open={Boolean(deleteSessionTarget)} title="Delete attendance session?">{deleteSessionTarget?.title}</ConfirmDialog>
       <ConfirmDialog confirmLabel="Delete Response" description="This attendance response will be removed permanently." onCancel={() => setDeleteEntryTarget(null)} onConfirm={deleteEntry} open={Boolean(deleteEntryTarget)} title="Delete attendance response?">{deleteEntryTarget?.attendeeName}</ConfirmDialog>
       {entryDetail ? <EntryDetailDialog entry={entryDetail} onClose={() => setEntryDetail(null)} /> : null}
