@@ -3409,7 +3409,7 @@ export default function WorkshopMasterPage() {
       </ConfirmDialog>
       <ConfirmDialog
         confirmLabel={bulkMfwAssigning ? "Assigning..." : `Assign ${selectedMfwAssignableParticipants.length} to MFW`}
-        description="Selected confirmed participants will be queued for My Fitness World enrollment. Failed enrollments will be retried, and existing waiting-list inconsistencies will be repaired."
+        description="Selected confirmed participants will be queued for My Fitness World enrollment. Failed enrollments will be retried. If MFW reports that another person owns the REG ID, a new REG ID will be generated and the previous ID retained in history. Existing waiting-list inconsistencies will be repaired."
         onCancel={() => {
           if (!bulkMfwAssigning) setBulkMfwOpen(false);
         }}

@@ -312,6 +312,7 @@ export interface RegistrationEntry {
   referrerWaitingWhatsappError?: string;
   mfwSyncStatus?: "not_required" | "pending" | "synced" | "failed";
   mfwSyncOnly?: boolean;
+  mfwPreviousRegistrationNumbers?: string[];
   mfwSyncError?: string;
   mfwSyncedAt?: string;
   mfwUserId?: string;

@@ -9,6 +9,7 @@ import {
 import { ensureRegistrationHotPath } from "@/lib/registration-hot-path";
 import { drainRegistrationJobs, ensureRegistrationJobs } from "@/lib/registration-jobs";
 import type { RegistrationEntry } from "@/lib/types";
+import { hasMfwRegistrationIdConflict } from "@/lib/mfw-id-conflict";
 
 export const runtime = "nodejs";
 
@@ -42,12 +43,18 @@ export async function POST(request: Request) {
       for (const { payload: entry } of selected.rows) {
         if (entry.confirmationStatus !== "confirmed" || entry.mfwSyncStatus === "synced") continue;
         const wasWaiting = entry.registrationStatus === "waiting";
+        const replaceConflictingId = hasMfwRegistrationIdConflict(entry);
         const next: RegistrationEntry = {
           ...entry,
           registrationStatus: "confirmed",
           waitingPosition: undefined,
           waitingReason: undefined,
-          registrationNumber: entry.registrationNumber || await reserveRegistrationNumber(client),
+          registrationNumber: replaceConflictingId || !entry.registrationNumber
+            ? await reserveRegistrationNumber(client)
+            : entry.registrationNumber,
+          mfwPreviousRegistrationNumbers: replaceConflictingId
+            ? [...(entry.mfwPreviousRegistrationNumbers || []), entry.registrationNumber!]
+            : entry.mfwPreviousRegistrationNumbers,
           mfwSyncOnly: true,
           mfwSyncStatus: "pending",
           mfwSyncError: undefined
