@@ -1,5 +1,6 @@
 "use client";
 
+import { WorkshopTagFilter, useWorkshopTagFilter } from "@/components/workshop-tag-filter";
 import {
   AlertCircle,
   ArrowDown,
@@ -49,6 +50,7 @@ export function ParametersPanel({ node, onChange, onRename, onTest, salesPeople 
     .filter((session) => session.workshopId && session.workshopName)
     .map((session) => [session.workshopId, { id: session.workshopId, name: session.workshopName }])).values()), [attendanceSessions]);
   const availableWorkshops: WorkflowWorkshop[] = workshops.length ? workshops : attendanceWorkshops;
+  const workshopTagFilter = useWorkshopTagFilter(availableWorkshops);
   const selectedWorkshop = availableWorkshops.find((item) => item.id === node.config.workshopId);
   const scopedSessions = attendanceSessions.filter((session) => !node.config.workshopId || session.workshopId === node.config.workshopId);
   const isAssignNode = node.kind === "crm" && !node.title.toLowerCase().includes("reassign") && node.title.toLowerCase().includes("assign");
@@ -59,7 +61,7 @@ export function ParametersPanel({ node, onChange, onRename, onTest, salesPeople 
     <Field label="Node name"><input className="workflow-input" onChange={(event) => onRename(event.target.value)} value={node.title} /></Field>
 
     {["attendance", "trigger", "payment", "workshop"].includes(node.kind) && node.config.repeaterOnly !== true ? <>
-      <Field label="Workshop"><select className="workflow-input" value={String(node.config.workshopId ?? "")} onChange={(event) => { onChange("workshopId", event.target.value); onChange("sessionIds", []); onChange("formId", ""); onChange("batchId", ""); }}><option value="">All workshops / event source</option>{availableWorkshops.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></Field>
+      <WorkshopTagFilter {...workshopTagFilter} /><Field label="Workshop"><select className="workflow-input" value={String(node.config.workshopId ?? "")} onChange={(event) => { onChange("workshopId", event.target.value); onChange("sessionIds", []); onChange("formId", ""); onChange("batchId", ""); }}><option value="">All workshops / event source</option>{workshopTagFilter.filtered.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></Field>
       {node.kind === "trigger" ? <Field label="Registration form"><select className="workflow-input" value={String(node.config.formId ?? "")} onChange={(event) => onChange("formId", event.target.value)}><option value="">All registration forms</option>{(selectedWorkshop ? [selectedWorkshop] : availableWorkshops).flatMap((item) => (item.forms ?? []).map((form) => <option key={form.id} value={form.id}>{item.name} · {form.title}</option>))}</select></Field> : null}
       {node.kind === "attendance" ? <Field label="Attendance forms"><div className="max-h-48 space-y-2 overflow-auto">{scopedSessions.map((session) => <label className="flex gap-2 text-xs" key={session.id}><input type="checkbox" checked={Array.isArray(node.config.sessionIds) && node.config.sessionIds.includes(session.id)} onChange={(event) => { const ids = Array.isArray(node.config.sessionIds) ? node.config.sessionIds.map(String) : []; onChange("sessionIds", event.target.checked ? [...ids, session.id] : ids.filter((id) => id !== session.id)); }} />{session.label}</label>)}{!scopedSessions.length ? <p className="text-xs text-slate-500">No attendance forms for this workshop.</p> : <p className="text-xs text-slate-500">Leave unchecked to accept all forms in the selected workshop.</p>}</div></Field> : null}
     </> : null}
@@ -104,7 +106,7 @@ export function ParametersPanel({ node, onChange, onRename, onTest, salesPeople 
     </> : null}
 
     {node.kind === "workshop" && node.config.repeaterOnly === true ? <>
-      <Field hint="Only repeater registrations from this workshop will match" label="Search in workshop"><select className="workflow-input" onChange={(event) => { const selected = availableWorkshops.find((workshop) => workshop.id === event.target.value); onChange("workshopId", event.target.value); onChange("workshop", selected?.name ?? ""); }} value={String(node.config.workshopId ?? "")}><option value="">Select workshop</option>{availableWorkshops.map((workshop) => <option key={workshop.id} value={workshop.id}>{workshop.name}</option>)}</select></Field>
+      <WorkshopTagFilter {...workshopTagFilter} /><Field hint="Only repeater registrations from this workshop will match" label="Search in workshop"><select className="workflow-input" onChange={(event) => { const selected = availableWorkshops.find((workshop) => workshop.id === event.target.value); onChange("workshopId", event.target.value); onChange("workshop", selected?.name ?? ""); }} value={String(node.config.workshopId ?? "")}><option value="">Select workshop</option>{workshopTagFilter.filtered.map((workshop) => <option key={workshop.id} value={workshop.id}>{workshop.name}</option>)}</select></Field>
       {!availableWorkshops.length ? <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-[10px] font-bold text-amber-800">No active workshops found.</p> : null}
       <Field label="Match registration by"><select className="workflow-input" onChange={(event) => onChange("match", event.target.value)} value={String(node.config.match ?? "Mobile number")}><option>Mobile number</option><option>Registration ID</option><option>Email</option></select></Field>
       <ToggleField checked label="Repeater registrations only" onChange={() => onChange("repeaterOnly", true)} />
@@ -161,7 +163,7 @@ export function ParametersPanel({ node, onChange, onRename, onTest, salesPeople 
 
     {node.kind === "data" ? <>
       <Field label="Allowed data"><select className="workflow-input" onChange={(event) => onChange("scope", event.target.value)} value={String(node.config.scope ?? "Dashboard summary")}><option>Dashboard summary</option><option>Workshop registrations</option><option>Attendance analytics</option><option>CRM pipeline</option><option>Payment summary</option></select></Field>
-      {String(node.config.scope ?? "Dashboard summary") === "Workshop registrations" ? <Field hint="Limit matching and export to one workshop" label="Workshop"><select className="workflow-input" onChange={(event) => onChange("workshopId", event.target.value)} value={String(node.config.workshopId ?? "")}><option value="">All selected workshops</option>{availableWorkshops.map((workshop) => <option key={workshop.id} value={workshop.id}>{workshop.name}</option>)}</select></Field> : null}
+      {String(node.config.scope ?? "Dashboard summary") === "Workshop registrations" ? <Field hint="Limit matching and export to one workshop" label="Workshop"><select className="workflow-input" onChange={(event) => onChange("workshopId", event.target.value)} value={String(node.config.workshopId ?? "")}><option value="">All selected workshops</option>{workshopTagFilter.filtered.map((workshop) => <option key={workshop.id} value={workshop.id}>{workshop.name}</option>)}</select></Field> : null}
       <div className="grid grid-cols-2 gap-2"><Field label="Access"><select className="workflow-input" onChange={(event) => onChange("access", event.target.value)} value={String(node.config.access ?? "Read only")}><option>Read only</option></select></Field><Field label="Maximum rows"><input className="workflow-input" min="1" max="100" onChange={(event) => onChange("maxRows", Math.min(100, Math.max(1, Number(event.target.value))))} type="number" value={Number(node.config.maxRows ?? 25)} /></Field></div>
       <ToggleField checked={node.config.redactSensitive !== false} label="Hide phone, email and payment identifiers" onChange={(value) => onChange("redactSensitive", value)} />
     </> : null}

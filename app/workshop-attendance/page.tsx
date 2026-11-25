@@ -1,5 +1,7 @@
 "use client";
 
+import { workshopHasTag } from "@/lib/workshop-tags";
+import { WorkshopTagFilter, useWorkshopTagFilter } from "@/components/workshop-tag-filter";
 import { CallFlowAttendancePanel } from "@/components/callflow-attendance-panel";
 import { AdminPlatformShell } from "@/components/admin-platform-shell";
 import { OperationalStat } from "@/components/operational-stat";
@@ -170,16 +172,17 @@ export default function WorkshopAttendancePage() {
     hydrateLiveState().then(loadLocal);
   }, []);
 
+  const workshopTagFilter = useWorkshopTagFilter(workshops);
   const filteredWorkshops = useMemo(() => {
     const value = query.trim().toLowerCase();
-    return workshops.filter((workshop) => {
+    return workshopTagFilter.filtered.filter((workshop) => {
       if (!value) return true;
       const tagList = Array.isArray(workshop.tags) ? workshop.tags : [];
       const tagStr = [workshop.tag ?? "", ...tagList].join(" ");
       const name = typeof workshop.name === "string" ? workshop.name : "";
       return name.toLowerCase().includes(value) || tagStr.toLowerCase().includes(value);
     });
-  }, [query, workshops]);
+  }, [workshopTagFilter.tag, query, workshops]);
 
   const selectedWorkshop = workshops.find((item) => item.id === selectedWorkshopId) ?? filteredWorkshops[0] ?? null;
   const workshopSessions = sessions.filter((session) => session.workshopId === selectedWorkshop?.id);
@@ -607,15 +610,21 @@ export default function WorkshopAttendancePage() {
               <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-700">Attendance workspace</p>
               <h2 className="text-lg font-black text-slate-950">Choose workshop</h2>
             </div>
+            <WorkshopTagFilter {...workshopTagFilter} setTag={(tag) => {
+              workshopTagFilter.setTag(tag);
+              setQuery("");
+              const matches = workshops.filter((item) => !tag || workshopHasTag(item, tag));
+              selectWorkshop(matches.some((item) => item.id === selectedWorkshopId) ? selectedWorkshopId : matches[0]?.id ?? "");
+            }} />
             <select
               aria-label="Choose workshop"
               className="min-h-9 w-full rounded-lg border border-slate-200 px-3 text-sm font-semibold sm:w-72"
               disabled={!workshops.length}
-              value={selectedWorkshop?.id ?? ""}
+              value={workshopTagFilter.filtered.some((item) => item.id === selectedWorkshopId) ? selectedWorkshopId : ""}
               onChange={(event) => { setQuery(""); selectWorkshop(event.target.value); }}
             >
-              {!workshops.length && <option value="">No workshops available</option>}
-              {workshops.map((workshop) => <option key={workshop.id} value={workshop.id}>{workshop.name || "Unnamed workshop"}</option>)}
+              <option value="">Select workshop</option>
+              {workshopTagFilter.filtered.map((workshop) => <option key={workshop.id} value={workshop.id}>{workshop.name || "Unnamed workshop"}</option>)}
             </select>
             <div className="relative w-full sm:w-72">
               <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />

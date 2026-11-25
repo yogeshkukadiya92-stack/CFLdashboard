@@ -1,5 +1,6 @@
 "use client";
 
+import { WorkshopTagFilter, useWorkshopTagFilter } from "@/components/workshop-tag-filter";
 import { AdminPlatformShell } from "@/components/admin-platform-shell";
 import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
 import { hydrateLiveState, readLocalArray, saveLiveState } from "@/lib/live-state";
@@ -313,6 +314,7 @@ type CouponRecord = {
 function ApplyCouponWorkflow() {
   const [clients, setClients] = useState<ClientStorageRecord[]>([]);
   const [workshops, setWorkshops] = useState<WorkshopMasterRecord[]>([]);
+  const workshopTagFilter = useWorkshopTagFilter(workshops);
   const [coupons, setCoupons] = useState<CouponRecord[]>([]);
 
   const [clientQuery, setClientQuery] = useState("");
@@ -467,11 +469,12 @@ function ApplyCouponWorkflow() {
           </label>
 
           {/* Workshop select */}
+          <WorkshopTagFilter {...workshopTagFilter} />
           <label className="block">
             <span className="mb-2 block text-sm font-bold text-slate-600">Select Workshop</span>
             <select className={inputClass} onChange={(e) => setWorkshopId(e.target.value)} value={workshopId}>
               <option value="">SELECT WORKSHOP</option>
-              {workshops.map((w) => (
+              {workshopTagFilter.filtered.map((w) => (
                 <option key={w.id} value={w.id}>{w.name}</option>
               ))}
             </select>
@@ -1795,6 +1798,7 @@ function MergeClientWorkflow() {
 
 function ManualClientRegistrationWorkflow() {
   const [workshops, setWorkshops] = useState<WorkshopMasterRecord[]>([]);
+  const workshopTagFilter = useWorkshopTagFilter(workshops);
   const [clients, setClients] = useState<ClientStorageRecord[]>([]);
   const [workshop, setWorkshop] = useState("");
   const [batch, setBatch] = useState("");
@@ -1999,10 +2003,11 @@ function ManualClientRegistrationWorkflow() {
 
         <form onSubmit={submit}>
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+            <WorkshopTagFilter {...workshopTagFilter} />
             <ManualSelect
               label="Select Workshop"
               onChange={setWorkshop}
-              options={workshops.map((item) => ({ label: item.name, value: item.id }))}
+              options={workshopTagFilter.filtered.map((item) => ({ label: item.name, value: item.id }))}
               placeholder={workshops.length ? "SELECT WORKSHOP" : "No workshop added yet"}
               value={workshop}
             />

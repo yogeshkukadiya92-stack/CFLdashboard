@@ -1,16 +1,21 @@
 "use client";
 
+import { WorkshopTagFilter, useWorkshopTagFilter } from "@/components/workshop-tag-filter";
 import { BarChart3, Check, ChevronDown, ChevronUp, Download, MessageCircle, Search, UsersRound, X } from "lucide-react";
 import type { AttendanceEntry, AttendanceSession, RegistrationEntry } from "@/lib/types";
 import { useMemo, useState } from "react";
 
 type WorkshopOption = {
+  tag?: string;
+  tags?: string[];
   archived?: boolean;
   id: string;
   name: string;
 };
 
 type FormOption = {
+  tag?: string;
+  tags?: string[];
   id: string;
   name: string;
   sourceId: string;
@@ -54,12 +59,16 @@ export function MultiWorkshopOverlap({
 
   const availableWorkshops = useMemo<FormOption[]>(() => [
     ...workshops.map((workshop) => ({
+      tag: workshop.tag,
+      tags: workshop.tags,
       id: `registration:${workshop.id}`,
       name: workshop.name,
       sourceId: workshop.id,
       type: "registration" as const
     })),
     ...attendanceSessions.map((session) => ({
+      tag: workshops.find((item) => item.id === session.workshopId)?.tag,
+      tags: workshops.find((item) => item.id === session.workshopId)?.tags,
       id: `attendance:${session.id}`,
       name: session.title || `${session.workshopName} attendance`,
       sourceId: session.id,
@@ -155,7 +164,8 @@ export function MultiWorkshopOverlap({
     });
   }, [mode, query, rows, selectedIds.length]);
 
-  const filteredWorkshopOptions = availableWorkshops.filter((workshop) =>
+  const workshopTagFilter = useWorkshopTagFilter(availableWorkshops);
+  const filteredWorkshopOptions = workshopTagFilter.filtered.filter((workshop) =>
     workshop.name.toLowerCase().includes(workshopQuery.trim().toLowerCase())
   );
 
@@ -214,6 +224,7 @@ export function MultiWorkshopOverlap({
                 <h4 className="text-base font-black text-slate-950">Select forms</h4>
                 {selectedIds.length ? <button className="text-xs font-black text-rose-600 hover:underline" onClick={() => setSelectedIds([])} type="button">Clear all</button> : null}
               </div>
+              <WorkshopTagFilter {...workshopTagFilter} />
               <label className="relative mt-3 block">
                 <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
                 <input className="min-h-11 w-full rounded-lg border border-slate-200 pl-10 pr-3 text-sm font-semibold outline-none focus:border-indigo-500" onChange={(event) => setWorkshopQuery(event.target.value)} placeholder="Search all forms" value={workshopQuery} />
@@ -258,7 +269,8 @@ export function MultiWorkshopOverlap({
                       <button className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-slate-200 px-3 text-xs font-black text-slate-700 hover:bg-slate-50 disabled:opacity-40" disabled={!visibleRows.length} onClick={exportRows} type="button"><Download className="size-4" />Export</button>
                     </div>
                   </div>
-                  <label className="relative mt-3 block">
+                  <WorkshopTagFilter {...workshopTagFilter} />
+              <label className="relative mt-3 block">
                     <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
                     <input className="min-h-11 w-full rounded-lg border border-slate-200 pl-10 pr-10 text-sm font-semibold outline-none focus:border-indigo-500" onChange={(event) => setQuery(event.target.value)} placeholder="Search common people by name, mobile or email" value={query} />
                     {query ? <button aria-label="Clear search" className="absolute right-2 top-1/2 grid size-8 -translate-y-1/2 place-items-center text-slate-400" onClick={() => setQuery("")} type="button"><X className="size-4" /></button> : null}

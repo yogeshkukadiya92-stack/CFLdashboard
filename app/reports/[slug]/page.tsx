@@ -1,5 +1,7 @@
 "use client";
 
+import { workshopHasTag } from "@/lib/workshop-tags";
+import { WorkshopTagFilter, useWorkshopTagFilter } from "@/components/workshop-tag-filter";
 import { AdminPlatformShell } from "@/components/admin-platform-shell";
 import { hydrateLiveState, LIVE_STATE_STORAGE_KEYS, readLocalArray } from "@/lib/live-state";
 import { formatCurrency } from "@/lib/utils";
@@ -973,6 +975,7 @@ export default function ReportPage() {
 
   const [registrations, setRegistrations] = useState<Registration[]>([]);
   const [workshops, setWorkshops] = useState<Workshop[]>([]);
+  const workshopTagFilter = useWorkshopTagFilter(workshops);
   const [clients, setClients] = useState<Client[]>([]);
   const [salesPeople, setSalesPeople] = useState<SalesPerson[]>([]);
   const [leads, setLeads] = useState<LeadRecord[]>([]);
@@ -1119,6 +1122,7 @@ export default function ReportPage() {
         {/* Filter bar */}
         {!report.placeholder && (
           <div className="grid gap-3 border-b border-slate-200 p-4 md:grid-cols-5 md:p-6">
+            {showWorkshopFilter && <WorkshopTagFilter {...workshopTagFilter} setTag={(tag) => { workshopTagFilter.setTag(tag); setWorkshop(tag ? workshops.find((item) => workshopHasTag(item, tag))?.name ?? "" : "All Workshops"); }} />}
             {showWorkshopFilter && (
               <label className="block">
                 <span className="mb-2 block text-sm font-bold text-slate-600">Workshop</span>
@@ -1127,8 +1131,8 @@ export default function ReportPage() {
                   onChange={(e) => setWorkshop(e.target.value)}
                   value={workshop}
                 >
-                  <option>All Workshops</option>
-                  {workshopOptions.map((item) => (
+                  {!workshopTagFilter.tag && <option>All Workshops</option>}
+                  {workshopOptions.filter((name) => !workshopTagFilter.tag || workshopTagFilter.filtered.some((item) => item.name === name)).map((item) => (
                     <option key={item}>{item}</option>
                   ))}
                 </select>

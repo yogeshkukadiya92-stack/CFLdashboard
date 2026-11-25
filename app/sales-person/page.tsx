@@ -1,5 +1,6 @@
 "use client";
 
+import { WorkshopTagFilter, useWorkshopTagFilter } from "@/components/workshop-tag-filter";
 import { AdminPlatformShell } from "@/components/admin-platform-shell";
 import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
 import { Check, Edit3, Eye, RefreshCw, Save, Trash2, UserPlus } from "lucide-react";
@@ -34,6 +35,8 @@ type SalesPersonRecord = {
   salesPersonCode?: string;
 };
 type WorkshopRecord = {
+  tag?: string;
+  tags?: string[];
   name: string;
 };
 
@@ -43,7 +46,9 @@ const SALES_STORAGE_KEY = "cfl_sales_people_v1";
 const inputClass = "w-full rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-sm outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100";
 
 export default function SalesPersonPage() {
-  const [workshops, setWorkshops] = useState<string[]>([]);
+  const [workshopRecords, setWorkshopRecords] = useState<WorkshopRecord[]>([]);
+  const workshopTagFilter = useWorkshopTagFilter(workshopRecords);
+  const workshops = workshopTagFilter.filtered.map((item) => item.name);
   const [records, setRecords] = useState<SalesPersonRecord[]>([]);
   const [showData, setShowData] = useState(false);
   const [firstName, setFirstName] = useState("");
@@ -76,7 +81,7 @@ export default function SalesPersonPage() {
   useEffect(() => {
     function loadLocal() {
       const workshopRecords = readLocalArray<WorkshopRecord>(WORKSHOP_STORAGE_KEY);
-      setWorkshops(workshopRecords.map((item) => item.name).filter(Boolean));
+      setWorkshopRecords(workshopRecords);
       const stored = readLocalArray<SalesPersonRecord>(SALES_STORAGE_KEY);
       const normalized = stored.map((record) => ({ ...record, salesPersonCode: record.salesPersonCode || salesPersonCodeFromId(record.id) }));
       setRecords(normalized);
@@ -299,13 +304,13 @@ export default function SalesPersonPage() {
             <Field label="Daily Call Target"><input className={inputClass} min="1" onChange={(event) => setDailyCallTarget(event.target.value)} type="number" value={dailyCallTarget} /></Field>
             <Field label="Daily Connected Target"><input className={inputClass} min="1" onChange={(event) => setDailyConnectedTarget(event.target.value)} type="number" value={dailyConnectedTarget} /></Field>
             <label className="block md:col-span-2"><span className="mb-2 block text-sm font-bold text-slate-600">WhatsApp Template</span><textarea className={inputClass} maxLength={500} onChange={(event) => setWhatsappTemplate(event.target.value)} rows={3} value={whatsappTemplate} /><span className="mt-1 block text-xs font-semibold text-slate-500">Use {"{{leadName}}"}, {"{{company}}"} and {"{{salespersonName}}"} placeholders.</span></label>
-            <Field label="Select Workshop Conversation For General Lead Assign">
+            <WorkshopTagFilter {...workshopTagFilter} /><Field label="Select Workshop Conversation For General Lead Assign">
               <select className={inputClass} onChange={(event) => setGeneralAssign(event.target.value)} value={generalAssign}>
                 <option value="">Select workshop conversations</option>
                 {workshops.map((item) => <option key={item} value={item}>{item}</option>)}
               </select>
             </Field>
-            <Field label="Select Workshop Conversation For Direct Client">
+            <WorkshopTagFilter {...workshopTagFilter} /><Field label="Select Workshop Conversation For Direct Client">
               <select className={inputClass} onChange={(event) => setDirectClient(event.target.value)} value={directClient}>
                 <option value="">Select direct client conversations</option>
                 {workshops.map((item) => <option key={item} value={item}>{item}</option>)}
@@ -317,7 +322,7 @@ export default function SalesPersonPage() {
         <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm md:p-6">
           <h3 className="text-xl font-black text-slate-950">Manage Workshop-wise Commission and Direct Client Commission</h3>
           <div className="mt-5 grid gap-4 lg:grid-cols-[1fr_220px_220px_auto]">
-            <Field label="Select Workshop">
+            <WorkshopTagFilter {...workshopTagFilter} /><Field label="Select Workshop">
               <select className={inputClass} onChange={(event) => setCommissionWorkshop(event.target.value)} value={commissionWorkshop}>
                 <option value="">Select Workshop</option>
                 {workshops.map((item) => <option key={item} value={item}>{item}</option>)}

@@ -1,5 +1,6 @@
 "use client";
 
+import { WorkshopTagFilter, useWorkshopTagFilter } from "@/components/workshop-tag-filter";
 import { AdminPlatformShell } from "@/components/admin-platform-shell";
 import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
 import { LandingPageRenderer } from "@/components/landing-page-renderer";
@@ -63,6 +64,7 @@ function createDraft(): LandingPageRecord {
 export default function LandingPagesPage() {
   const [pages, setPages] = useState<LandingPageRecord[]>([]);
   const [workshops, setWorkshops] = useState<WorkshopRecord[]>([]);
+  const workshopTagFilter = useWorkshopTagFilter(workshops);
   const [forms, setForms] = useState<BuilderForm[]>([]);
   const [draft, setDraft] = useState<LandingPageRecord | null>(null);
   const [tab, setTab] = useState<BuilderTab>("content");
@@ -214,7 +216,7 @@ export default function LandingPagesPage() {
 
             {tab === "content" ? (
               <div className="mt-6 space-y-5">
-                <Field label="Workshop"><select className={inputClass} onChange={(event) => selectWorkshop(event.target.value)} value={draft.workshopId}><option value="">Select workshop</option>{workshops.map((workshop) => <option key={workshop.id} value={workshop.id}>{workshop.name}</option>)}</select>{draft.workshopId && !linkedForm ? <p className="mt-2 text-xs font-bold text-amber-700">Registration form is not ready for this workshop.</p> : null}</Field>
+                <WorkshopTagFilter {...workshopTagFilter} /><Field label="Workshop"><select className={inputClass} onChange={(event) => selectWorkshop(event.target.value)} value={draft.workshopId}><option value="">Select workshop</option>{workshopTagFilter.filtered.map((workshop) => <option key={workshop.id} value={workshop.id}>{workshop.name}</option>)}</select>{draft.workshopId && !linkedForm ? <p className="mt-2 text-xs font-bold text-amber-700">Registration form is not ready for this workshop.</p> : null}</Field>
                 <Field label="Main headline"><input className={inputClass} maxLength={100} onChange={(event) => updateDraft({ headline: event.target.value })} placeholder="Workshop name or clear offer" value={draft.headline} /></Field>
                 <Field label="Supporting headline"><textarea className={`${inputClass} min-h-24 resize-y`} maxLength={260} onChange={(event) => updateDraft({ subheadline: event.target.value })} placeholder="Why should someone join?" value={draft.subheadline} /></Field>
                 <Field label="About this workshop"><textarea className={`${inputClass} min-h-32 resize-y`} onChange={(event) => updateDraft({ description: event.target.value })} placeholder="Workshop details and value" value={draft.description} /></Field>

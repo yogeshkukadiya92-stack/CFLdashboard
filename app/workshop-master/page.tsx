@@ -1,4 +1,5 @@
 "use client";
+import { WorkshopTagFilter, useWorkshopTagFilter } from "@/components/workshop-tag-filter";
 import { registrationUtmFields } from "@/lib/registration-utm";
 import { featureGroups, primaryTag, type TagPolicy } from "@/lib/tag-features";
 
@@ -484,15 +485,17 @@ export default function WorkshopMasterPage() {
     });
     return Array.from(set);
   }, [records, tagPolicies]);
+  const workshopTagFilter = useWorkshopTagFilter(records);
   const filteredRecords = useMemo(() => {
-    return records.filter((record) => {
+    return workshopTagFilter.filtered.filter((record) => {
       if (recordScope === "active" && record.archived) return false;
       if (recordScope === "historical" && !record.archived) return false;
       if (recordScope === "untagged" && (record.tag || (Array.isArray(record.tags) && record.tags.length > 0))) return false;
       return workshopMatchesSearch(record, search);
     });
-  }, [recordScope, records, search]);
-  const repeaterWorkshops = useMemo(() => filterRepeaterWorkshops(records, editingId, repeaterWorkshopQuery), [records, editingId, repeaterWorkshopQuery]);
+  }, [workshopTagFilter.tag, recordScope, records, search]);
+  const repeaterTagFilter = useWorkshopTagFilter(records);
+  const repeaterWorkshops = useMemo(() => filterRepeaterWorkshops(repeaterTagFilter.filtered, editingId, repeaterWorkshopQuery), [records, repeaterTagFilter.tag, editingId, repeaterWorkshopQuery]);
   const paidCount = records.filter((record) => record.isPaid).length;
   const freeCount = records.filter((record) => !record.isPaid && !record.paymentUnknown).length;
   const historicalCount = records.filter((record) => record.archived).length;
@@ -2370,6 +2373,7 @@ export default function WorkshopMasterPage() {
                 </span>
                 <input checked={formRepeaterWaitingMode} className="size-5 shrink-0 accent-violet-600" onChange={(event) => setFormRepeaterWaitingMode(event.target.checked)} type="checkbox" />
               </label>
+                <WorkshopTagFilter {...repeaterTagFilter} />
               <label className="relative mt-3 block">
                 <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
                 <input className={`${inputClass} pl-10`} onChange={(event) => setRepeaterWorkshopQuery(event.target.value)} placeholder="Search past workshops" value={repeaterWorkshopQuery} />
@@ -2585,6 +2589,7 @@ export default function WorkshopMasterPage() {
                         <span><span className="block text-sm font-black text-slate-800">Repeater Waiting Mode</span><span className="mt-0.5 block text-xs font-semibold text-slate-500">{formRepeaterWaitingMode ? "ON: repeaters go to Waiting · Repeater review." : "OFF: repeaters stay confirmed and keep the Repeater status."}</span></span>
                         <input checked={formRepeaterWaitingMode} className="size-5 shrink-0 accent-violet-600" onChange={(event) => setFormRepeaterWaitingMode(event.target.checked)} type="checkbox" />
                       </label>
+                <WorkshopTagFilter {...repeaterTagFilter} />
                       <label className="relative mt-3 block">
                         <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
                         <input className={`${inputClass} pl-10`} onChange={(event) => setRepeaterWorkshopQuery(event.target.value)} placeholder="Search past workshops" value={repeaterWorkshopQuery} />
@@ -2703,6 +2708,7 @@ export default function WorkshopMasterPage() {
                   </button>
                 ))}
               </div>
+              <WorkshopTagFilter {...workshopTagFilter} />
               <label className="relative block min-w-0 flex-1">
                 <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
                 <input

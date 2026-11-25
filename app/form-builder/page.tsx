@@ -1,4 +1,5 @@
 "use client";
+import { WorkshopTagFilter, useWorkshopTagFilter } from "@/components/workshop-tag-filter";
 import { BirthdateInput } from "@/components/birthdate-input";
 import { isBirthdateField } from "@/lib/birthdate";
 
@@ -247,15 +248,16 @@ export default function FormBuilderPage() {
 
   const workshop = workshops.find((item) => item.id === workshopId) ?? null;
   const selectedWorkshopName = workshop?.name ?? "";
+  const workshopTagFilter = useWorkshopTagFilter(workshops);
   const filteredWorkshops = useMemo(() => {
     const query = workshopSearch.trim().toLowerCase();
-    if (!query) return workshops;
-    return workshops.filter((item) => {
+    if (!query) return workshopTagFilter.filtered;
+    return workshopTagFilter.filtered.filter((item) => {
       const tagList = Array.isArray(item.tags) ? item.tags : [];
       const tagStr = [item.tag ?? "", ...tagList].join(" ");
       return item.name.toLowerCase().includes(query) || tagStr.toLowerCase().includes(query);
     });
-  }, [workshopSearch, workshops]);
+  }, [workshopTagFilter.tag, workshopSearch, workshops]);
 
   const form = useMemo<BuilderForm>(() => {
     const name = workshop?.name ?? "";
@@ -449,6 +451,7 @@ export default function FormBuilderPage() {
         <div className="min-w-0 space-y-4">
           <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-soft">
             <h3 className="text-lg font-black text-slate-950">1. Workshop &amp; Batch</h3>
+            <WorkshopTagFilter {...workshopTagFilter} />
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
               <label className="block">
                 <span className="mb-2 block text-sm font-bold text-slate-600">Workshop</span>

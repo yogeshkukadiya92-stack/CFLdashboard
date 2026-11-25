@@ -1,5 +1,6 @@
 "use client";
 
+import { WorkshopTagFilter, useWorkshopTagFilter } from "@/components/workshop-tag-filter";
 import { AdminPlatformShell } from "@/components/admin-platform-shell";
 import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
 import type { ResponseAccessGrantSummary, ResponseAccessPermissions } from "@/lib/types";
@@ -69,15 +70,16 @@ export default function ResponseAccessPage() {
     if (!value) return grants;
     return grants.filter((grant) => [grant.recipientName, grant.recipientContact ?? "", ...grant.workshopNames].some((item) => item.toLowerCase().includes(value)));
   }, [grants, search]);
+  const workshopTagFilter = useWorkshopTagFilter(workshops);
   const filteredWorkshops = useMemo(() => {
     const value = workshopSearch.trim().toLowerCase();
-    if (!value) return workshops;
-    return workshops.filter((workshop) => {
+    if (!value) return workshopTagFilter.filtered;
+    return workshopTagFilter.filtered.filter((workshop) => {
       const tagList = Array.isArray(workshop.tags) ? workshop.tags : [];
       const tagStr = [workshop.tag ?? "", ...tagList].join(" ");
       return workshop.name.toLowerCase().includes(value) || tagStr.toLowerCase().includes(value);
     });
-  }, [workshopSearch, workshops]);
+  }, [workshopTagFilter.tag, workshopSearch, workshops]);
   const activeCount = grants.filter((grant) => accessStatus(grant) === "Active").length;
   const totalViews = grants.reduce((total, grant) => total + grant.accessCount, 0);
 
@@ -211,6 +213,7 @@ export default function ResponseAccessPage() {
           <div className="mt-7 grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
             <div>
               <div className="flex flex-wrap items-end justify-between gap-3"><div><p className="text-sm font-black text-slate-700">Workshop access</p><p className="mt-1 text-xs font-bold text-slate-500">{draft.workshopIds.length} selected</p></div><button className="text-xs font-black text-emerald-700" onClick={() => updateDraft({ workshopIds: selectedVisibleCount === filteredWorkshops.length ? draft.workshopIds.filter((id) => !filteredWorkshops.some((workshop) => workshop.id === id)) : [...new Set([...draft.workshopIds, ...filteredWorkshops.map((workshop) => workshop.id)])] })} type="button">{filteredWorkshops.length > 0 && selectedVisibleCount === filteredWorkshops.length ? "Clear visible" : "Select visible"}</button></div>
+              <WorkshopTagFilter {...workshopTagFilter} />
               <label className="relative mt-3 block"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" /><input className={`${inputClass} pl-10`} onChange={(event) => setWorkshopSearch(event.target.value)} placeholder="Search workshops..." value={workshopSearch} /></label>
               <div className="mt-3 max-h-80 overflow-y-auto border border-slate-200 bg-slate-50 p-2">
                 {filteredWorkshops.length ? filteredWorkshops.map((workshop) => <label className="flex cursor-pointer items-center gap-3 border-b border-slate-200 bg-white px-3 py-3 last:border-b-0 hover:bg-emerald-50" key={workshop.id}><input checked={draft.workshopIds.includes(workshop.id)} className="size-4 accent-emerald-600" onChange={() => toggleWorkshop(workshop.id)} type="checkbox" /><span className="min-w-0 flex-1 text-sm font-bold text-slate-800">{workshop.name}</span>{draft.workshopIds.includes(workshop.id) ? <Check className="size-4 text-emerald-600" /> : null}</label>) : <p className="px-3 py-8 text-center text-sm font-bold text-slate-500">No workshops found.</p>}
