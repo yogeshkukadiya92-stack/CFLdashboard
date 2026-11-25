@@ -75,6 +75,7 @@ export function useMedicalRegistration() {
       setBusy(false);
     }
   }
+  const selectedSlot = status.slots?.find((item) => item.id === slot);
   const result = access && (
     <section
       className="mt-4 grid gap-2 rounded-xl bg-slate-50 p-4"
@@ -88,9 +89,11 @@ export function useMedicalRegistration() {
       ) : (
         <>
           <p className="text-sm font-bold text-emerald-700" role="status" aria-live="polite">
-            {status.slots
-              ? `Available time slots: ${status.slots.length}`
-              : "Loading available time slots…"}
+            {!status.slots
+              ? "Loading available time slots…"
+              : selectedSlot
+                ? `Spaces remaining at selected time: ${selectedSlot.remainingCount}`
+                : "Select a time to see remaining spaces."}
           </p>
           <label>
             Choose your medical appointment (IST)
@@ -103,7 +106,7 @@ export function useMedicalRegistration() {
               <option value="">Select a time</option>
               {status.slots?.map((s) => (
                 <option key={s.id} value={s.id}>
-                  {time(s.startsAt)}
+                  {time(s.startsAt)} · {s.remainingCount} spaces left
                 </option>
               ))}
             </select>

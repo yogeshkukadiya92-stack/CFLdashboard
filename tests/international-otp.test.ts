@@ -21,7 +21,7 @@ test("OTP send and verify use the same full number; provider gets the correct co
   const recipients: string[] = [];
   const modules = {
     "@/lib/phone-number": { internationalPhone },
-    "@/lib/db": { getAppState: async () => ({ forms: [{ id: "test-form" }] }) },
+    "@/lib/otp-form": { getOtpForm: async () => ({ id: "test-form" }) },
     "@/lib/otp-store": { saveOtp: async (mobile: string) => { saved.push(mobile); }, clearOtp: async () => {}, verifyStoredOtp: async (mobile: string) => { verified.push(mobile); return "ok"; } },
     "@/lib/whatsapp-accounts": { resolveWhatsAppAccount: async () => ({ apiUrl: "https://example.test/otp", authToken: "test", otpTemplate: "otp", number: "919999999999", language: "en" }) },
     "@/lib/auth": { verifyAuthToken: async () => false },

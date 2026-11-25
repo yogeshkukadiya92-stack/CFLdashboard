@@ -3,8 +3,7 @@ import { NextResponse } from "next/server";
 
 import { randomInt } from "node:crypto";
 import { saveOtp, clearOtp } from "@/lib/otp-store";
-import { getAppState } from "@/lib/db";
-import type { BuilderForm } from "@/lib/types";
+import { getOtpForm } from "@/lib/otp-form";
 import { resolveWhatsAppAccount } from "@/lib/whatsapp-accounts";
 const OTP_TTL_MS = 5 * 60 * 1000;
 
@@ -68,6 +67,7 @@ async function sendWhatsAppOtp(mobile: string, code: string, senderId?: string) 
         Authorization: `Bearer ${directAuthToken}`,
         authtoken: directAuthToken
       },
+      signal: AbortSignal.timeout(12000),
       method: "POST"
     });
     let sent = response.ok;
@@ -106,6 +106,7 @@ async function sendWhatsAppOtp(mobile: string, code: string, senderId?: string) 
         "Content-Type": "application/json",
         ...(webhookToken ? { Authorization: `Bearer ${webhookToken}` } : {})
       },
+      signal: AbortSignal.timeout(12000),
       method: "POST"
     });
     return { configured: true, sent: response.ok };
@@ -125,6 +126,7 @@ async function sendWhatsAppOtp(mobile: string, code: string, senderId?: string) 
       "Content-Type": "application/json",
       authkey: authKey
     },
+    signal: AbortSignal.timeout(12000),
     method: "POST"
   });
   return { configured: true, sent: response.ok };
@@ -141,11 +143,10 @@ export async function POST(request: Request) {
 
     const code = createOtp();
     if (!formId) return NextResponse.json({ error: "Registration form is required." }, { status: 400 });
-    const state = await getAppState();
-    const form = (Array.isArray(state?.forms) ? state.forms : []).find((item: unknown) => String((item as BuilderForm)?.id) === formId) as BuilderForm | undefined;
+    const form = await getOtpForm(formId);
     const fallbackAvailable = Boolean(form?.otpRequired && form?.otpFallbackEnabled && form?.otpFallbackCodeHash);
-    await saveOtp(mobile, code, OTP_TTL_MS, formId);
     if (!form) return NextResponse.json({ error: "Registration form not found." }, { status: 404 });
+    await saveOtp(mobile, code, OTP_TTL_MS, formId);
     const whatsapp = await sendWhatsAppOtp(mobile, code, form.whatsappSenderId);
     if (!whatsapp.configured && (process.env.NODE_ENV === "production" || form.whatsappSenderId)) {
       if (fallbackAvailable) return NextResponse.json({ deliveryFailed: true, fallbackAvailable: true, ok: true, expiresInSeconds: OTP_TTL_MS / 1000 });

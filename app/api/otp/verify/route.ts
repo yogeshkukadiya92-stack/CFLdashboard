@@ -5,8 +5,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { clearOtp, verifyStoredOtp } from "@/lib/otp-store";
 import { verifyWorkshopOtpFallbackHash } from "@/lib/workshop-otp-fallback";
-import { getAppState } from "@/lib/db";
-import type { BuilderForm } from "@/lib/types";
+import { getOtpForm } from "@/lib/otp-form";
 
 function cleanMobile(value: unknown) {
   return internationalPhone(value);
@@ -36,8 +35,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ manualOverride: true, ok: true });
     }
 
-    const state = await getAppState();
-    const form = (Array.isArray(state?.forms) ? state.forms : []).find((item: unknown) => String((item as BuilderForm)?.id) === formId) as BuilderForm | undefined;
+    const form = await getOtpForm(formId);
     const fallbackMatches = Boolean(form?.otpRequired && form?.otpFallbackEnabled) && verifyWorkshopOtpFallbackHash(formId, otp, form?.otpFallbackCodeHash);
     const result = await verifyStoredOtp(mobile, otp, formId, fallbackMatches);
     if (result === "expired") return NextResponse.json({ error: "OTP expired. Please request a new OTP." }, { status: 400 });

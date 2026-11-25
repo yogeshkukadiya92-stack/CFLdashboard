@@ -45,10 +45,11 @@ export type MedicalSlot = {
   startsAt: string;
   endsAt: string;
   available: boolean;
+  remainingCount: number;
 };
 export async function availableMedicalSlots(mapping: { token: string; event: string }) {
   const data = await graphql<{form: {eventId: string}; slots: MedicalSlot[]}>(
-    "query($token:String!){form:getMyHealthyForeverWorkshopForm(token:$token){eventId} slots:getMyHealthyForeverWorkshopAppointmentSlots(token:$token){id startsAt endsAt available}}",
+    "query($token:String!){form:getMyHealthyForeverWorkshopForm(token:$token){eventId} slots:getMyHealthyForeverWorkshopAppointmentSlots(token:$token){id startsAt endsAt available remainingCount}}",
     {token: mapping.token}
   );
   if (data.form?.eventId !== mapping.event) throw new Error("Medical workshop mismatch.");
@@ -66,7 +67,7 @@ export async function medicalForm(mapping: { token: string; event: string }) {
     };
     slots: MedicalSlot[];
   }>(
-    "query($token:String!){form:getMyHealthyForeverWorkshopForm(token:$token){eventId title publicAccess appointments fields{key label type required options dataTarget logic validation}} slots:getMyHealthyForeverWorkshopAppointmentSlots(token:$token){id startsAt endsAt available}}",
+    "query($token:String!){form:getMyHealthyForeverWorkshopForm(token:$token){eventId title publicAccess appointments fields{key label type required options dataTarget logic validation}} slots:getMyHealthyForeverWorkshopAppointmentSlots(token:$token){id startsAt endsAt available remainingCount}}",
     { token: mapping.token }
   );
   if (data.form.eventId !== mapping.event || !data.form.appointments?.enabled)

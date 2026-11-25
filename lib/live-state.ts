@@ -210,7 +210,7 @@ export async function hydratePublicRegistrationState(): Promise<LiveState | null
   }
 }
 
-export async function savePublicRegistration(registration: unknown, registrations: unknown[]) {
+export async function savePublicRegistration(registration: unknown, _registrations: unknown[]) {
   // Serialize once: every retry carries the same registration identity.
   const body = JSON.stringify({ registration });
   for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -231,7 +231,6 @@ export async function savePublicRegistration(registration: unknown, registration
       continue;
     }
     if (!response.ok) return { ...result, ok: false, status: response.status };
-    try { writeLiveStateToLocalStorage({ registrations }); } catch { /* Server save already succeeded. */ }
     return { ...result, ok: true, status: response.status };
   } catch {
     if (attempt === 2) return false;
