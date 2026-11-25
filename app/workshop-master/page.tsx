@@ -626,23 +626,6 @@ export default function WorkshopMasterPage() {
     }
   }, [hideDuplicateParticipants, hideRepeaterParticipants, hideWaitingParticipants, responseFilters, selectedWorkshopId, showParticipants]);
 
-  useEffect(() => {
-    if (!selectedWorkshop) return;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      setSelectedWorkshopId(null);
-      setSelectedParticipantBatchId("all");
-      setShowParticipants(false);
-    };
-    window.addEventListener("keydown", closeOnEscape);
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      window.removeEventListener("keydown", closeOnEscape);
-    };
-  }, [selectedWorkshopId]);
-
   async function saveRecords(next: WorkshopRecord[]) {
     setRecords(next);
     return saveLiveState({ workshops: next });
