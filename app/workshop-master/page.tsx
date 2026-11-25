@@ -1,4 +1,5 @@
 "use client";
+import { registrationUtmFields } from "@/lib/registration-utm";
 import { featureGroups, primaryTag, type TagPolicy } from "@/lib/tag-features";
 
 import { filterRepeaterWorkshops } from "@/lib/repeater-workshops";
@@ -3370,7 +3371,15 @@ export default function WorkshopMasterPage() {
       ) : null}
 
       {linkWorkshop ? <RegistrationLinkModal workshop={linkWorkshop} onClose={() => setLinkWorkshop(null)} /> : null}
-      {responseDetailTarget ? <RegistrationResponseModal entry={responseDetailTarget} onClose={() => setResponseDetailTarget(null)} /> : null}
+      {responseDetailTarget ? <RegistrationResponseModal entry={responseDetailTarget} onClose={() => setResponseDetailTarget(null)} onSaved={(registration) => {
+        setRegistrations((current) => {
+          const next = current.map((entry) => entry.id === registration.id ? registration : entry);
+          writeLocalCache(REGISTRATION_STORAGE_KEY, next);
+          return next;
+        });
+        setResponseDetailTarget(registration);
+        setMessage("Registration response updated.");
+      }} /> : null}
       {followUpTarget ? <FollowUpModal statusOptions={statusOptions} entry={followUpTarget} onClose={() => setFollowUpTarget(null)} onSave={updateRegistrationFollowUp} /> : null}
       {shareSelectedOpen && selectedWorkshop ? (
         <ShareSelectedResponsesModal
@@ -3578,12 +3587,56 @@ export default function WorkshopMasterPage() {
   );
 }
 
-function RegistrationResponseModal({ entry, onClose }: { entry: RegistrationEntry; onClose: () => void }) {
+function RegistrationResponseModal({ entry, onClose, onSaved }: {
+  entry: RegistrationEntry;
+  onClose: () => void;
+  onSaved: (registration: RegistrationEntry) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const answerFields = Object.entries(entry.answers ?? {}).filter(([label]) =>
+    label !== "Registration Type" && !registrationUtmFields.some(([, trackingLabel]) => label === trackingLabel)
+  );
+
+  async function save(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (saving) return;
+    const fields = new FormData(event.currentTarget);
+    const mobile = String(fields.get("mobile") ?? "").trim();
+    const answers = Object.fromEntries(answerFields.flatMap(([label, value], index) => {
+      const answer = String(fields.get(`answer-${index}`) ?? "");
+      return answer === (value ?? "") ? [] : [[label, answer]];
+    }));
+    setSaving(true);
+    setError("");
+    try {
+      const response = await fetch("/api/admin/registration-response", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          registrationId: entry.id,
+          fullName: fields.get("fullName"),
+          mobile: mobile === entry.mobile ? undefined : mobile,
+          answers
+        })
+      });
+      const result = await response.json() as { error?: string; message?: string; registration?: RegistrationEntry };
+      if (!response.ok || !result.registration) throw new Error(result.error || result.message || "Could not save the registration response.");
+      onSaved(result.registration);
+      setEditing(false);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Could not save the registration response.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   useEffect(() => {
-    function handleKeyDown(event: KeyboardEvent) { if (event.key === "Escape") onClose(); }
+    function handleKeyDown(event: KeyboardEvent) { if (event.key === "Escape" && !saving) onClose(); }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onClose]);
+  }, [onClose, saving]);
 
   const details: [string, string][] = [
     ["Full name", entry.fullName], ["Mobile", entry.mobile], ["Email", entry.email], ["City", entry.city],
@@ -3591,13 +3644,42 @@ function RegistrationResponseModal({ entry, onClose }: { entry: RegistrationEntr
   ];
 
   return (
-    <div aria-modal="true" aria-labelledby="registration-response-title" className="fixed inset-0 z-50 grid place-items-end bg-slate-950/55 sm:place-items-center sm:p-4" role="dialog" onClick={onClose}>
+    <div aria-modal="true" aria-labelledby="registration-response-title" className="fixed inset-0 z-50 grid place-items-end bg-slate-950/55 sm:place-items-center sm:p-4" role="dialog" onClick={saving ? undefined : onClose}>
       <section className="flex max-h-[90vh] w-full max-w-2xl flex-col rounded-t-2xl bg-white shadow-2xl sm:rounded-xl" onClick={(event) => event.stopPropagation()}>
         <header className="flex items-start justify-between gap-4 border-b border-slate-200 p-5">
           <div><p className="text-xs font-black uppercase tracking-wider text-emerald-700">Registration response</p><h2 className="mt-1 text-xl font-black text-slate-950" id="registration-response-title">{entry.fullName}</h2><p className="mt-1 text-sm text-slate-500">{entry.workshopTitle} · {formatSubmittedAt(entry.createdAt)}</p></div>
-          <button aria-label="Close registration response" className="grid size-9 shrink-0 place-items-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50" onClick={onClose} type="button"><X className="size-4" /></button>
+          <button aria-label="Close registration response" disabled={saving} className="grid size-9 shrink-0 place-items-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50" onClick={onClose} type="button"><X className="size-4" /></button>
         </header>
+        {editing ? (
+          <form className="flex min-h-0 flex-col" onSubmit={save}>
+            <fieldset className="space-y-4 overflow-y-auto p-5" disabled={saving}>
+              <label className="block text-sm font-bold">Full name
+                <input autoFocus className="mt-1 block w-full rounded-lg border border-slate-300 p-2 font-normal" defaultValue={entry.fullName} name="fullName" required />
+              </label>
+              <label className="block text-sm font-bold">Mobile number
+                <input className="mt-1 block w-full rounded-lg border border-slate-300 p-2 font-normal" defaultValue={entry.mobile} name="mobile" type="tel" />
+                <span className="mt-1 block text-xs font-normal text-slate-500">Include the country code for international numbers.</span>
+              </label>
+              {answerFields.map(([label, value], index) => (
+                <label className="block text-sm font-bold" key={label}>{label}
+                  <textarea className="mt-1 block w-full rounded-lg border border-slate-300 p-2 font-normal" defaultValue={value} name={`answer-${index}`} rows={2} />
+                </label>
+              ))}
+            </fieldset>
+            {error ? <p className="px-5 pb-3 text-sm text-rose-700" role="alert">{error}</p> : null}
+            <footer className="flex justify-end gap-2 border-t border-slate-200 p-4">
+              <button className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-bold" disabled={saving} onClick={() => { setEditing(false); setError(""); }} type="button">Cancel</button>
+              <button className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-50" disabled={saving} type="submit">{saving ? "Saving…" : "Save changes"}</button>
+            </footer>
+          </form>
+        ) : (
+          <>
         <div className="overflow-y-auto p-5"><dl className="divide-y divide-slate-100">{details.map(([label, value], index) => <div className="py-3 first:pt-0" key={`${label}-${index}`}><dt className="text-xs font-bold text-slate-500">{label}</dt><dd className="mt-1 whitespace-pre-wrap break-words text-sm font-semibold text-slate-900">{value == null || String(value).trim() === "" ? "Not provided" : String(value)}</dd></div>)}</dl>{!Object.keys(entry.answers ?? {}).length ? <p className="mt-4 rounded-lg bg-slate-50 p-3 text-sm text-slate-500">No additional answers were saved for this registration.</p> : null}</div>
+            <footer className="flex justify-end border-t border-slate-200 p-4">
+              <button className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-bold text-white" onClick={() => setEditing(true)} type="button">Edit response</button>
+            </footer>
+          </>
+        )}
       </section>
     </div>
   );
