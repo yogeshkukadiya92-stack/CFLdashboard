@@ -87,6 +87,11 @@ export function useMedicalRegistration() {
         </p>
       ) : (
         <>
+          <p className="text-sm font-bold text-emerald-700" role="status" aria-live="polite">
+            {status.slots
+              ? `Available time slots: ${status.slots.length}`
+              : "Loading available time slots…"}
+          </p>
           <label>
             Choose your medical appointment (IST)
             <select
