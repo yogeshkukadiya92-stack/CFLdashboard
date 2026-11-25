@@ -3636,14 +3636,15 @@ function RegistrationResponseModal({ entry, onClose, onSaved }: {
 
   return (
     <div aria-modal="true" aria-labelledby="registration-response-title" className="fixed inset-0 z-50 grid place-items-end bg-slate-950/55 sm:place-items-center sm:p-4" role="dialog" onClick={saving ? undefined : onClose}>
-      <section className="flex max-h-[90vh] w-full max-w-2xl flex-col rounded-t-2xl bg-white shadow-2xl sm:rounded-xl" onClick={(event) => event.stopPropagation()}>
-        <header className="flex items-start justify-between gap-4 border-b border-slate-200 p-5">
+      <section className="flex max-h-[90dvh] w-full max-w-2xl flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl sm:rounded-xl" onClick={(event) => event.stopPropagation()}>
+        <header className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-200 p-5">
           <div><p className="text-xs font-black uppercase tracking-wider text-emerald-700">Registration response</p><h2 className="mt-1 text-xl font-black text-slate-950" id="registration-response-title">{entry.fullName}</h2><p className="mt-1 text-sm text-slate-500">{entry.workshopTitle} · {formatSubmittedAt(entry.createdAt)}</p></div>
           <button aria-label="Close registration response" disabled={saving} className="grid size-9 shrink-0 place-items-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50" onClick={onClose} type="button"><X className="size-4" /></button>
         </header>
         {editing ? (
-          <form className="flex min-h-0 flex-col" onSubmit={save}>
-            <fieldset className="space-y-4 overflow-y-auto p-5" disabled={saving}>
+          <form className="flex min-h-0 flex-1 flex-col overflow-hidden" onSubmit={save}>
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-5">
+            <fieldset className="min-w-0 space-y-4" disabled={saving}>
               <label className="block text-sm font-bold">Full name
                 <input autoFocus className="mt-1 block w-full rounded-lg border border-slate-300 p-2 font-normal" defaultValue={entry.fullName} name="fullName" required />
               </label>
@@ -3657,16 +3658,17 @@ function RegistrationResponseModal({ entry, onClose, onSaved }: {
                 </label>
               ))}
             </fieldset>
+            </div>
             {error ? <p className="px-5 pb-3 text-sm text-rose-700" role="alert">{error}</p> : null}
-            <footer className="flex justify-end gap-2 border-t border-slate-200 p-4">
+            <footer className="flex shrink-0 justify-end gap-2 border-t border-slate-200 p-4">
               <button className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-bold" disabled={saving} onClick={() => { setEditing(false); setError(""); }} type="button">Cancel</button>
               <button className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-50" disabled={saving} type="submit">{saving ? "Saving…" : "Save changes"}</button>
             </footer>
           </form>
         ) : (
           <>
-        <div className="overflow-y-auto p-5"><dl className="divide-y divide-slate-100">{details.map(([label, value], index) => <div className="py-3 first:pt-0" key={`${label}-${index}`}><dt className="text-xs font-bold text-slate-500">{label}</dt><dd className="mt-1 whitespace-pre-wrap break-words text-sm font-semibold text-slate-900">{value == null || String(value).trim() === "" ? "Not provided" : String(value)}</dd></div>)}</dl>{!Object.keys(entry.answers ?? {}).length ? <p className="mt-4 rounded-lg bg-slate-50 p-3 text-sm text-slate-500">No additional answers were saved for this registration.</p> : null}</div>
-            <footer className="flex justify-end border-t border-slate-200 p-4">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-5"><dl className="divide-y divide-slate-100">{details.map(([label, value], index) => <div className="py-3 first:pt-0" key={`${label}-${index}`}><dt className="text-xs font-bold text-slate-500">{label}</dt><dd className="mt-1 whitespace-pre-wrap break-words text-sm font-semibold text-slate-900">{value == null || String(value).trim() === "" ? "Not provided" : String(value)}</dd></div>)}</dl>{!Object.keys(entry.answers ?? {}).length ? <p className="mt-4 rounded-lg bg-slate-50 p-3 text-sm text-slate-500">No additional answers were saved for this registration.</p> : null}</div>
+            <footer className="flex shrink-0 justify-end border-t border-slate-200 p-4">
               <button className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-bold text-white" onClick={() => setEditing(true)} type="button">Edit response</button>
             </footer>
           </>
