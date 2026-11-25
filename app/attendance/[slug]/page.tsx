@@ -115,7 +115,7 @@ export default function AttendanceFormPage() {
       } catch {
         // Manual entry remains available when lookup is offline.
       }
-    }, 350);
+    }, 75);
 
     return () => {
       window.clearTimeout(timer);
