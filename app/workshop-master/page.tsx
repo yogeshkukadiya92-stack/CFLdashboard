@@ -54,6 +54,7 @@ type WorkshopRecord = {
   name: string;
   maxOrderQty?: string;
   mfwEnrollmentEnabled?: boolean;
+  mfwMedicalFormToken?: string;
   mfwWorkshopEventId?: string;
   mfwWorkshopTitle?: string;
   minOrderQty?: string;
@@ -236,6 +237,7 @@ export default function WorkshopMasterPage() {
   const [ruleEndDate, setRuleEndDate] = useState("");
   const [ruleSalesPersonIds, setRuleSalesPersonIds] = useState<string[]>([]);
   const [mfwEnrollmentEnabled, setMfwEnrollmentEnabled] = useState(false);
+  const [medicalToken, setMedicalToken] = useState("");
   const [mfwWorkshopEventId, setMfwWorkshopEventId] = useState("");
   const [mfwWorkshopTitle, setMfwWorkshopTitle] = useState("");
   const [mfwWorkshops, setMfwWorkshops] = useState<Array<{ id: string; title: string }>>([]);
@@ -724,6 +726,7 @@ export default function WorkshopMasterPage() {
     setRuleEndDate("");
     setRuleSalesPersonIds([]);
     setMfwEnrollmentEnabled(false);
+    setMedicalToken("");
     setMfwWorkshopEventId("");
     setMfwWorkshopTitle("");
     setMfwError("");
@@ -800,6 +803,7 @@ export default function WorkshopMasterPage() {
     setAssignedSalesPersonIds(record.assignedSalesPersonIds ?? (record.assignedSalesPersonId ? [record.assignedSalesPersonId] : []));
     setLeadAssignmentRules(record.leadAssignmentRules ?? []);
     setMfwEnrollmentEnabled(Boolean(record.mfwEnrollmentEnabled));
+    setMedicalToken(record.mfwMedicalFormToken || "");
     setMfwWorkshopEventId(record.mfwWorkshopEventId ?? "");
     setMfwWorkshopTitle(record.mfwWorkshopTitle ?? "");
     setEditingId(record.id);
@@ -839,7 +843,8 @@ export default function WorkshopMasterPage() {
       setAssignedSalesPersonIds(record.assignedSalesPersonIds ?? (record.assignedSalesPersonId ? [record.assignedSalesPersonId] : []));
       setLeadAssignmentRules(record.leadAssignmentRules ?? []);
       setMfwEnrollmentEnabled(false);
-      setMfwWorkshopEventId("");
+      setMedicalToken("");
+    setMfwWorkshopEventId("");
       setMfwWorkshopTitle("");
     }
     loadBuilderForm(record);
@@ -1331,6 +1336,7 @@ export default function WorkshopMasterPage() {
       maxOrderQty,
       pawSyncEnabled: connectPaw,
       mfwEnrollmentEnabled,
+      mfwMedicalFormToken: mfwEnrollmentEnabled ? medicalToken.trim() || undefined : undefined,
       mfwWorkshopEventId: mfwEnrollmentEnabled ? mfwWorkshopEventId : undefined,
       mfwWorkshopTitle: mfwEnrollmentEnabled ? mfwWorkshopTitle : undefined,
       minOrderQty,
@@ -1943,6 +1949,7 @@ export default function WorkshopMasterPage() {
                 Refresh MFW
               </button>
               {mfwError ? <p className="text-sm font-bold text-rose-700 md:col-span-2" role="alert">{mfwError}</p> : null}
+              <label className="block md:col-span-2">MFW medical form link or share token (optional)<input className={inputClass} value={medicalToken} onChange={event => setMedicalToken(medicalFormTokenFromInput(event.target.value))} /></label>
               {!mfwError && mfwWorkshopEventId ? <p className="text-xs font-bold text-emerald-700 md:col-span-2">Mapped to: {mfwWorkshopTitle || mfwWorkshopEventId}</p> : null}
             </div>
           ) : null}
@@ -2164,7 +2171,8 @@ export default function WorkshopMasterPage() {
                           Refresh MFW
                         </button>
                         {mfwError ? <p className="text-sm font-bold text-rose-700 md:col-span-2" role="alert">{mfwError}</p> : null}
-                        {!mfwError && mfwWorkshopEventId ? <p className="text-xs font-bold text-emerald-700 md:col-span-2">Mapped to: {mfwWorkshopTitle || mfwWorkshopEventId}</p> : null}
+                        <label className="block md:col-span-2">MFW medical form link or share token (optional)<input className={inputClass} value={medicalToken} onChange={event => setMedicalToken(medicalFormTokenFromInput(event.target.value))} /></label>
+              {!mfwError && mfwWorkshopEventId ? <p className="text-xs font-bold text-emerald-700 md:col-span-2">Mapped to: {mfwWorkshopTitle || mfwWorkshopEventId}</p> : null}
                       </div>
                     ) : null}
                   </div>
@@ -3310,7 +3318,7 @@ export default function WorkshopMasterPage() {
                             <RegistrationConfirmationBadge status={entry.confirmationStatus} statusOptions={statusOptions} />
                             {entry.confirmationUpdatedBy ? <p className="mt-1 max-w-[150px] text-[10px] leading-4 text-slate-500">{entry.confirmationUpdatedBy}{entry.confirmationUpdatedAt ? ` · ${formatSubmittedAt(entry.confirmationUpdatedAt)}` : ""}</p> : null}
                           </td>
-                          <td className="px-2.5 py-2.5"><MfwSyncBadge entry={entry} /></td>
+                          <td className="px-2.5 py-2.5"><MfwSyncBadge entry={entry} />{entry.medicalBookingKey && <div>{entry.medicalBookingReceipt ? `Medical: ${new Date(entry.medicalBookingReceipt.startsAt).toLocaleString("en-IN",{ timeZone:"Asia/Kolkata" })} · ${entry.medicalBookingReceipt.id}` : entry.medicalBookingState === "choose_slot" ? "Another slot required" : entry.medicalBookingState === "review" ? "Verify booking in MFW" : "Medical booking pending"}</div>}</td>
                           {showMedicalReport ? (
                             <td className="min-w-[145px] px-2.5 py-2.5">
                               <div aria-label={`Medical report status for ${entry.fullName}`} className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5">
@@ -5110,6 +5118,11 @@ function WhatsAppVerificationBadge({ status }: { status?: RegistrationEntry["wha
     return <span className="rounded-full bg-rose-50 px-3 py-1 text-xs font-black text-rose-700">Not Verified</span>;
   }
   return <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-500">Not Required</span>;
+}
+
+function medicalFormTokenFromInput(value: string) {
+  try { return new URL(value.trim()).searchParams.get("token") || value.trim(); }
+  catch { return value.trim(); }
 }
 
 function MfwSyncBadge({ entry }: { entry: RegistrationEntry }) {

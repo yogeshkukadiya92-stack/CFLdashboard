@@ -1,4 +1,5 @@
 "use client";
+import { useMedicalRegistration } from "@/components/medical-registration";
 import { BirthdateInput } from "@/components/birthdate-input";
 import { isBirthdateField, validBirthdate } from "@/lib/birthdate";
 
@@ -283,6 +284,7 @@ export default function RegistrationPage() {
   const [otpVerifiedMobile, setOtpVerifiedMobile] = useState("");
   const [otpModalOpen, setOtpModalOpen] = useState(false);
   const [duplicateModalOpen, setDuplicateModalOpen] = useState(false);
+  const medical = useMedicalRegistration(model?.id);
   const [success, setSuccess] = useState(false);
   const [waitingPosition, setWaitingPosition] = useState<number | null>(null);
   const [registrationNumber, setRegistrationNumber] = useState("");
@@ -480,7 +482,7 @@ export default function RegistrationPage() {
   }, []);
 
   useEffect(() => {
-    if (!success || waitingPosition || !(model?.redirectUrl || model?.whatsappGroupUrl)) {
+    if (medical.active || !success || waitingPosition || !(model?.redirectUrl || model?.whatsappGroupUrl)) {
       return;
     }
 
@@ -496,7 +498,7 @@ export default function RegistrationPage() {
       window.clearInterval(countdownTimer);
       window.clearTimeout(redirectTimer);
     };
-  }, [model?.redirectUrl, model?.whatsappGroupUrl, success, waitingPosition]);
+  }, [medical.active, model?.redirectUrl, model?.whatsappGroupUrl, success, waitingPosition]);
 
   const roleField = (role: NonNullable<BuilderField["role"]>) => model?.fields.find((field) => field.role === role) ?? null;
   const mobileFieldId = roleField("mobile")?.id;
@@ -909,9 +911,13 @@ export default function RegistrationPage() {
       } : undefined
     };
 
+    setSubmitting(true);
+    try { payload.medicalBookingKey = await medical.prepare(name,mobile,email,registrationId); }
+    catch (error) { setSubmitting(false); setMessage(error instanceof Error ? error.message : "Medical booking unavailable."); return; }
     let payment: RazorpaySuccess | null = null;
     if (model.paid) {
       if (amountPaid < 1) {
+        setSubmitting(false);
         setMessage("Please enter a valid payment amount.");
         return;
       }
@@ -1009,6 +1015,7 @@ export default function RegistrationPage() {
   }
 
   function submitAnotherResponse() {
+    medical.reset();
     setSuccess(false);
     setMessage("");
     setWaitingPosition(null);
@@ -1270,6 +1277,7 @@ export default function RegistrationPage() {
                 </div>
               ) : null}
 
+              {isLastPage && medical.fields(answers[roleField("name")?.id || ""] || "",mobileInternational,answers[roleField("email")?.id || ""] || "")}
               {isLastPage && model.allowReferralConfirmation ? (
                 <label className="mt-5 block rounded-2xl border border-indigo-100 bg-indigo-50/50 p-4">
                   <span className="block text-sm font-black text-slate-700">Reference Number <span className="font-semibold text-slate-400">(optional)</span></span>
@@ -1384,8 +1392,9 @@ export default function RegistrationPage() {
                       : model.eligibilityWaitingMessage || `Your registration is saved in the waiting list as WL-${waitingPosition}. We will confirm it after eligibility verification.`
                 : (message || "Your registration has been saved successfully.")}
             </p>
+            {!waitingPosition && medical.result}
             {!waitingPosition && registrationNumber ? <p className="mt-3 text-lg font-black text-emerald-700">Registration No. {registrationNumber}</p> : null}
-            {(model.redirectUrl || model.whatsappGroupUrl) && !waitingPosition ? (
+            {!medical.active && (model.redirectUrl || model.whatsappGroupUrl) && !waitingPosition ? (
               <p className="mt-3 rounded-2xl bg-emerald-50 px-4 py-3 text-sm font-black text-emerald-700">
                 {model.redirectUrl ? "Your next page" : "WhatsApp group"} opens in {redirectCountdown} seconds.
               </p>

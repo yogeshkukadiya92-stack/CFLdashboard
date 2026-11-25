@@ -317,6 +317,9 @@ export interface RegistrationEntry {
   mfwUserId?: string;
   mfwParticipantId?: string;
   mfwWorkshopEventId?: string;
+  medicalBookingKey?: string;
+  medicalBookingState?: "choose_slot" | "review";
+  medicalBookingReceipt?: { id: string; startsAt: string; endsAt: string };
   medicalReportStatus?: "yes" | "no";
   medicalReportUpdatedAt?: string;
   medicalReportUpdatedBy?: string;

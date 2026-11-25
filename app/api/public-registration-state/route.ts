@@ -54,6 +54,7 @@ export async function POST(request: Request) {
       : undefined;
   if (hasInvalidBirthdateAnswer(answers)) return NextResponse.json({ error: "Please select a valid birthdate. Minimum age is 12 years." }, { status: 400 });
     const sanitizedRegistration = {
+      medicalBookingKey: /^[a-f0-9]{64}$/.test(String(input.medicalBookingKey)) ? String(input.medicalBookingKey) : undefined,
       amountDue,
       amountPaid,
       answers,
@@ -98,7 +99,8 @@ export async function POST(request: Request) {
             'repeaterWaitingMode','allowDuplicate','closedMessage','requiredAttendanceSessionId','attendanceOnlyConfirmation','referralCodes'])))
           FROM jsonb_array_elements(forms) f
           WHERE f->>'workshopId' = $1 OR f->>'workshopSlug' = $2), '[]'::jsonb) AS forms,
-        COALESCE((SELECT jsonb_agg(jsonb_build_object('id',w->'id','batches',w->'batches')) FROM jsonb_array_elements(workshops) w
+        COALESCE((SELECT jsonb_agg(jsonb_build_object('id',w->'id','batches',w->'batches',
+          'mfwEnrollmentEnabled',w->'mfwEnrollmentEnabled','mfwWorkshopEventId',w->'mfwWorkshopEventId','mfwMedicalFormToken',w->'mfwMedicalFormToken')) FROM jsonb_array_elements(workshops) w
           WHERE w->>'id' = $1 OR lower(w->>'name') = lower($3)), '[]'::jsonb) AS workshops,
         COALESCE((SELECT jsonb_agg(payload) FROM cfl_attendance_lookup
           WHERE mobile_normalized = $4), '[]'::jsonb) AS attendance_entries
@@ -134,6 +136,18 @@ export async function POST(request: Request) {
       if (previousRegistration && isDuplicateWorkshopRegistration(previousRegistration, sanitizedRegistration)) {
         await client.query("COMMIT");
         return NextResponse.json({ ok: true, dbEnabled: true, registration: previousRegistration });
+      }
+      if (workshop?.mfwEnrollmentEnabled && workshop.mfwMedicalFormToken && sanitizedRegistration.source !== "manual") {
+        const draft = sanitizedRegistration.medicalBookingKey && await client.query(
+          "SELECT 1 FROM cfl_medical_bookings WHERE key=$1 AND workshop=$2 AND registration_id=$3 AND event=$4 AND token=$5",
+          [sanitizedRegistration.medicalBookingKey, sanitizedRegistration.workshopId, sanitizedRegistration.id, workshop.mfwWorkshopEventId, workshop.mfwMedicalFormToken]
+        );
+        if (!draft || !draft.rowCount) {
+          await client.query("ROLLBACK");
+          return NextResponse.json({error:"Please complete the linked medical form and select a slot."},{status:400});
+        }
+      } else {
+        sanitizedRegistration.medicalBookingKey = undefined;
       }
       const duplicate = current.find((value: unknown) => {
         if (!value || typeof value !== "object") return false;

@@ -17,6 +17,7 @@ const publicPrefixes = [
   "/api/callflow",
   "/api/otp",
   "/api/public-registration-state",
+  "/api/medical-booking",
   "/api/public-profile-lookup",
   "/api/attendance-state",
   "/api/attendance-team",

@@ -1,3 +1,4 @@
+import { completeMedicalBooking } from "./mfw-medical";
 import { upsertLiveRegistration } from "@/lib/crm-db";
 import { assignRegistrationToCrm } from "./registration-crm-recovery";
 import { sendRegistrationStatusNotifications } from "@/lib/registration-confirmation";
@@ -41,6 +42,8 @@ export async function runRegistrationFollowup(registrationId: string) {
     await persistPatch(savedRegistration);
     await upsertLiveRegistration(savedRegistration as unknown as Record<string, unknown>);
   }
+
+  await completeMedicalBooking(savedRegistration);
 
   if (crmAssignment?.required && !crmAssignment.assigned) {
     throw new Error(crmAssignment.reason || "CRM assignment pending; retry scheduled");
