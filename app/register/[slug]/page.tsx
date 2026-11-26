@@ -286,6 +286,7 @@ export default function RegistrationPage() {
   const [duplicateModalOpen, setDuplicateModalOpen] = useState(false);
   const medical = useMedicalRegistration();
   const [success, setSuccess] = useState(false);
+  const [waitingParticipant, setWaitingParticipant] = useState<Pick<RegistrationEntry, "fullName" | "mobile"> | null>(null);
   const [waitingPosition, setWaitingPosition] = useState<number | null>(null);
   const [registrationNumber, setRegistrationNumber] = useState("");
   const [referralCode, setReferralCode] = useState("");
@@ -997,6 +998,7 @@ export default function RegistrationPage() {
       if (saved.registrationStatus === "confirmed" && saved.medicalSlotAccess === payload.medicalSlotAccess)
         medical.open(saved.id, slotSecret);
       setWaitingPosition(saved.registrationStatus === "waiting" ? saved.waitingPosition ?? 1 : null);
+      setWaitingParticipant(saved.registrationStatus === "waiting" ? { fullName: saved.fullName || name, mobile: saved.mobile || mobile } : null);
       setWaitingReason(saved.waitingReason);
       setRegistrationNumber(saved.registrationNumber ?? "");
     } catch (reason) {
@@ -1025,6 +1027,7 @@ export default function RegistrationPage() {
     setSuccess(false);
     setMessage("");
     setWaitingPosition(null);
+    setWaitingParticipant(null);
     setRegistrationNumber("");
     setWaitingReason(undefined);
     setReferralCode("");
@@ -1397,6 +1400,18 @@ export default function RegistrationPage() {
                       : model.eligibilityWaitingMessage || `Your registration is saved in the waiting list as WL-${waitingPosition}. We will confirm it after eligibility verification.`
                 : (message || "Your registration has been saved successfully.")}
             </p>
+            {waitingPosition && waitingParticipant ? (
+              <dl className="mt-4 space-y-2 rounded-2xl bg-slate-50 px-4 py-3 text-left text-sm">
+                <div>
+                  <dt className="text-xs font-semibold text-slate-500">Participant name</dt>
+                  <dd className="break-words font-bold text-slate-950">{waitingParticipant.fullName}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-semibold text-slate-500">Registered mobile number</dt>
+                  <dd className="font-bold text-slate-950">{waitingParticipant.mobile}</dd>
+                </div>
+              </dl>
+            ) : null}
             {!waitingPosition && medical.result}
             {!waitingPosition && registrationNumber ? <p className="mt-3 text-lg font-black text-emerald-700">Registration No. {registrationNumber}</p> : null}
             {!medical.active && (model.redirectUrl || model.whatsappGroupUrl) && !waitingPosition ? (
