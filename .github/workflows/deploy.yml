@@ -15,6 +15,7 @@ permissions:
 
 env:
   IMAGE: ghcr.io/yogeshkukadiya92-stack/cfldashboard
+  COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
 
 jobs:
   build-and-deploy:
@@ -50,8 +51,6 @@ jobs:
       # Tell Coolify to pull the new image and restart (no build on the server)
       - name: Trigger Coolify deploy
         if: ${{ env.COOLIFY_TOKEN != '' }}
-        env:
-          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
         run: |
           curl -fsS -X GET \
             -H "Authorization: Bearer $COOLIFY_TOKEN" \
