@@ -78,7 +78,9 @@ export async function POST(request: NextRequest) {
         };
         processed.add(event.eventUuid); acceptedEventIds.push(event.eventUuid); continue;
       }
-      leads[index] = applyCallFlowEvent(leads[index], event, user.name);
+      // Stamp with server receive time so other devices whose cursor is past the
+      // phone-side createdAt (offline/late uploads) still pull this change.
+      leads[index] = { ...applyCallFlowEvent(leads[index], event, user.name), updatedAt: new Date(now).toISOString() };
       if (event.entityType === "CALL" && payload.endedAt) {
         const durationSeconds = Math.max(0, Number(payload.durationSeconds) || 0);
         const startedAtMs = Number(payload.startedAt) || now;

@@ -112,7 +112,8 @@ export function applyCallFlowEvent(lead: Lead, event: CallFlowEvent, actor: stri
   } else if (event.entityType === "NOTE") {
     const note = String(payload.body || payload.note || "").trim();
     if (note && !notes.includes(note)) notes.push(note);
-    if (note) activities.push({ id: event.eventUuid, type: "note", message: note, createdAt: at, createdBy: actor });
+    // Reuse the phone's note id so the writing device does not get a duplicate.
+    if (note && !activities.some((item) => item.id === event.entityId)) activities.push({ id: event.entityId || event.eventUuid, type: "note", message: note, createdAt: at, createdBy: actor });
   } else if (event.entityType === "FOLLOW_UP") {
     if (event.operation === "COMPLETE") {
       const completedAt = iso(payload.completedAt, now);

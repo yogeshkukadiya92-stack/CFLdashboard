@@ -48,5 +48,10 @@ export async function GET(request: NextRequest) {
     callId: record.id, body: record.note, createdAt: Date.parse(record.startedAt),
     createdBy: identity.userId, deviceId: "external-import",
   }] : []);
-  return NextResponse.json({ leads, calls, callEvents: [], notes, followUps, leadStages: callFlowStages.map(([id, name], sortOrder) => ({ id, code: id.toUpperCase(), name, sortOrder, active: true })), dispositions: callFlowDispositions.map(([id, code, name, requiresNote, requiresFollowUp, targetStageId], sortOrder) => ({ id, code, name, icon: null, sortOrder, active: true, requiresNote, requiresFollowUp, targetStageId })), appConfiguration, deletedLeadIds: removedLeads.map(lead => lead.id), deletedFollowUpIds: removedLeads.flatMap(lead => (lead.followUps || []).map(item => item.id)), nextCursor: Buffer.from(String(now)).toString("base64url"), serverTimestamp: new Date(now).toISOString() });
+  // Lead notes written on any device, so every phone of this salesperson sees them.
+  const leadNotes = assignedLeads.filter((lead) => cursor === 0 || (Date.parse(lead.updatedAt || "") || 0) > cursor).flatMap((lead) => (lead.activities || [])
+    .filter((item) => item.type === "note" && item.message)
+    .map((item) => ({ id: item.id, leadId: lead.id, callId: null, body: item.message, createdAt: Date.parse(item.createdAt) || now, createdBy: item.createdBy || "CallFlow", deviceId: "cfl-dashboard" })));
+  const allNotes = [...notes, ...leadNotes];
+  return NextResponse.json({ leads, calls, callEvents: [], notes: allNotes, followUps, leadStages: callFlowStages.map(([id, name], sortOrder) => ({ id, code: id.toUpperCase(), name, sortOrder, active: true })), dispositions: callFlowDispositions.map(([id, code, name, requiresNote, requiresFollowUp, targetStageId], sortOrder) => ({ id, code, name, icon: null, sortOrder, active: true, requiresNote, requiresFollowUp, targetStageId })), appConfiguration, deletedLeadIds: removedLeads.map(lead => lead.id), deletedFollowUpIds: removedLeads.flatMap(lead => (lead.followUps || []).map(item => item.id)), nextCursor: Buffer.from(String(now)).toString("base64url"), serverTimestamp: new Date(now).toISOString() });
 }
