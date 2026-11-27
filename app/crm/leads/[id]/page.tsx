@@ -7,7 +7,8 @@ import { LeadCampaignDetails } from "@/components/lead-campaign-details";
 import { AdminPlatformShell } from "@/components/admin-platform-shell";
 import { createLeadActivity, nextPendingFollowUp, normalizeLead, normalizeLeadMobile } from "@/lib/lead-utils";
 import { detectLeadRisk } from "@/lib/crm-workflow";
-import { hydrateLiveState, LIVE_STATE_STORAGE_KEYS, readLocalArray, saveLiveState } from "@/lib/live-state";
+import { LIVE_STATE_STORAGE_KEYS, readLocalArray, saveLiveState } from "@/lib/live-state";
+import { clearCrmDashboard, loadCrmDashboard } from "@/lib/crm-dashboard-cache";
 import type { Lead, LeadFollowUp, LeadPriority, LeadStage } from "@/lib/types";
 import { ArrowLeft, Building2, CalendarClock, Check, CircleDollarSign, Clock3, Mail, MapPin, MessageCircle, Phone, Save, ShieldAlert, Target, UserRound, X } from "lucide-react";
 import { use, useEffect, useMemo, useState } from "react";
@@ -21,7 +22,27 @@ const inputClass="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 t
 
 export default function Lead360Page({params}:{params:Promise<{id:string}>}){
   const {id}=use(params);const [leads,setLeads]=useState<Lead[]>([]);const [loaded,setLoaded]=useState(false);const [sessions,setSessions]=useState<SessionRow[]>([]);const [serverActivities,setServerActivities]=useState<ServerActivity[]>([]);const [message,setMessage]=useState("");const [noteOpen,setNoteOpen]=useState(false);const [taskType,setTaskType]=useState<LeadFollowUp["type"]>("Call");const [taskAt,setTaskAt]=useState("");const [taskNote,setTaskNote]=useState("");
-  useEffect(()=>{const load=()=>{setLeads(readLocalArray<unknown>(LIVE_STATE_STORAGE_KEYS.leads).map(normalizeLead));setLoaded(true)};load();void hydrateLiveState().then(load);void fetch(`/api/crm/sales-sessions?leadId=${encodeURIComponent(id)}`,{cache:"no-store"}).then(async(r)=>({ok:r.ok,data:await r.json()})).then(({ok,data})=>{if(ok){setSessions(data.participants??[]);setServerActivities(data.activities??[])}}).catch(()=>undefined)},[id]);
+  const [loadError,setLoadError]=useState("");
+  const [reloadKey,setReloadKey]=useState(0);
+  useEffect(()=>{
+    let active=true;
+    setLoaded(false);
+    setLoadError("");
+    setLeads([]);
+    setSessions([]);
+    setServerActivities([]);
+    void loadCrmDashboard().then((state)=>{
+      if(!active)return;
+      const records=state.dbEnabled===false?readLocalArray<unknown>(LIVE_STATE_STORAGE_KEYS.leads):state.leads??[];
+      setLeads(records.map(normalizeLead));
+      setLoaded(true);
+    }).catch(()=>{
+      if(active){setLoadError("Could not load lead data. Please retry.");setLoaded(true)}
+    });
+    void fetch(`/api/crm/sales-sessions?leadId=${encodeURIComponent(id)}`,{cache:"no-store"}).then(async(r)=>({ok:r.ok,data:await r.json()})).then(({ok,data})=>{if(active&&ok){setSessions(data.participants??[]);setServerActivities(data.activities??[])}}).catch(()=>undefined);
+    return ()=>{active=false};
+  },[id,reloadKey]);
+  function retryLoad(){clearCrmDashboard();setReloadKey((key)=>key+1)}
   const lead=leads.find((item)=>item.id===id);const risk=lead?detectLeadRisk(lead):null;const duplicates=lead?leads.filter((item)=>item.id!==lead.id&&normalizeLeadMobile(item.mobile)===normalizeLeadMobile(lead.mobile)):[];
   const timeline=useMemo(()=>{if(!lead)return [];return [...(lead.activities??[]).map((a)=>({id:a.id,type:a.type,body:a.message,actor:a.createdBy||"Admin",createdAt:a.createdAt})),...serverActivities.map((a)=>({id:a.id,type:a.type,body:a.body,actor:a.actor_user,createdAt:a.created_at}))].sort((a,b)=>new Date(b.createdAt).getTime()-new Date(a.createdAt).getTime())},[lead,serverActivities]);
   async function update(patch:Partial<Lead>,activity?:{type:Parameters<typeof createLeadActivity>[0];message:string}){if(!lead)return;const now=new Date().toISOString();const next=leads.map((item)=>item.id===lead.id?normalizeLead({...item,...patch,lastActivityAt:activity?now:item.lastActivityAt,updatedAt:now,activities:activity?[createLeadActivity(activity.type,activity.message),...(item.activities??[])]:item.activities}):item);setLeads(next);await saveLiveState({leads:next})}
@@ -38,7 +59,8 @@ export default function Lead360Page({params}:{params:Promise<{id:string}>}){
   }
   async function mergeDuplicate(duplicate:Lead){if(!lead||!window.confirm(`Merge ${duplicate.name} into ${lead.name}? The duplicate record will be removed.`))return;const now=new Date().toISOString();const merged=normalizeLead({...duplicate,...lead,tags:Array.from(new Set([...(lead.tags??[]),...(duplicate.tags??[])])),notes:Array.from(new Set([...(lead.notes??[]),...(duplicate.notes??[])])),sourceDetails:Array.from(new Set([...(lead.sourceDetails??[]),...(duplicate.sourceDetails??[])])),activities:[createLeadActivity("note",`Merged duplicate lead ${duplicate.name} (${duplicate.id}).`),...(lead.activities??[]),...(duplicate.activities??[])],followUps:[...(lead.followUps??[]),...(duplicate.followUps??[])],updatedAt:now,lastActivityAt:now});const next=leads.filter((item)=>item.id!==duplicate.id).map((item)=>item.id===lead.id?merged:item);setLeads(next);await saveLiveState({leads:next});setMessage(`${duplicate.name} merged into this lead.`)}
   if(!loaded)return <AdminPlatformShell activeLabel="Lead 360" title="Lead Profile"><div className="h-80 animate-pulse rounded-2xl bg-white"/></AdminPlatformShell>;
-  if(!lead)return <AdminPlatformShell activeLabel="Lead 360" title="Lead Profile"><div className="grid min-h-96 place-items-center text-center"><div><p className="text-xl font-black">Lead not found</p><a className="mt-3 inline-flex text-sm font-black text-emerald-700" href="/lead-management">Back to leads</a></div></div></AdminPlatformShell>;
+  if(loadError)return <AdminPlatformShell activeLabel="Lead 360" title="Lead Profile"><div className="grid min-h-96 place-items-center text-center"><div><p className="text-lg font-bold">{loadError}</p><button className="mt-3 text-sm font-black text-emerald-700" onClick={retryLoad} type="button">Retry</button></div></div></AdminPlatformShell>;
+  if(!lead)return <AdminPlatformShell activeLabel="Lead 360" title="Lead Profile"><div className="grid min-h-96 place-items-center text-center"><div><p className="text-xl font-black">Lead not found</p><button className="mt-3 mr-4 text-sm font-black text-emerald-700" onClick={retryLoad} type="button">Refresh lead data</button><a className="mt-3 inline-flex text-sm font-black text-emerald-700" href="/lead-management">Back to leads</a></div></div></AdminPlatformShell>;
   const latest=sessions.find((row)=>row.total_score!==null&&row.total_score!==undefined);const activeTasks=(lead.followUps??[]).filter((item)=>!item.completed).sort((a,b)=>new Date(a.dueAt).getTime()-new Date(b.dueAt).getTime());
   return <AdminPlatformShell activeLabel="Lead 360" description="Complete lead context, score, next action and activity history." title={lead.name}>
     <a className="mb-4 inline-flex items-center gap-2 text-sm font-black text-slate-500 hover:text-slate-950" href="/lead-management"><ArrowLeft className="size-4"/>Back to leads</a>
