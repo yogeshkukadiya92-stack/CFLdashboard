@@ -6,7 +6,7 @@ import { type FormEvent, useEffect, useState } from "react";
 const BRAND_LOGO_SRC = "/brand/coach-for-life-logo-stacked.png";
 
 export default function LoginPage() {
-  const [email, setEmail] = useState("coachforlife107@gmail.com");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [nextPath, setNextPath] = useState("/");
   const [error, setError] = useState("");

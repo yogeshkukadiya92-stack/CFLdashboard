@@ -1,19 +1,38 @@
 "use client";
 
 import { AdminPlatformShell } from "@/components/admin-platform-shell";
-import { createLeadActivity, nextPendingFollowUp, normalizeLead } from "@/lib/lead-utils";
+import { createLeadActivity, nextPendingFollowUp, normalizeLead, normalizeLeadMobile } from "@/lib/lead-utils";
 import { rankNextBestActions } from "@/lib/crm-workflow";
-import { hydrateLiveState, LIVE_STATE_STORAGE_KEYS, readLocalArray, saveLiveState } from "@/lib/live-state";
+import { fetchLiveState, LIVE_STATE_STORAGE_KEYS, readLocalArray, saveLiveState } from "@/lib/live-state";
 import type { Lead, LeadFollowUp } from "@/lib/types";
-import { AlertTriangle, CalendarClock, Clock3, Download, Flame, Phone, Target, UserPlus, X } from "lucide-react";
+import { AlertTriangle, CalendarClock, Clock3, Download, Flame, Phone, Search, Target, UserPlus, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+
+const istDate = new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit", day: "2-digit" });
 
 export default function CrmTodayPage() {
   const [leads, setLeads] = useState<Lead[]>([]);
+  const [mobileSearch, setMobileSearch] = useState("");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+  const [loadStatus, setLoadStatus] = useState<"loading" | "ready" | "error">("loading");
   const [callLead, setCallLead] = useState<Lead | null>(null);
   const [message, setMessage] = useState("");
   const [exporting, setExporting] = useState(false);
-  useEffect(() => { const load=()=>setLeads(readLocalArray<unknown>(LIVE_STATE_STORAGE_KEYS.leads).map(normalizeLead)); load(); void hydrateLiveState().then(load); }, []);
+  useEffect(() => {
+    let active = true;
+    void fetchLiveState().then((state) => {
+      if (!active) return;
+      if (!state) {
+        setLoadStatus("error");
+        return;
+      }
+      const records = state.dbEnabled === false ? readLocalArray<unknown>(LIVE_STATE_STORAGE_KEYS.leads) : state.leads ?? [];
+      setLeads(records.map(normalizeLead));
+      setLoadStatus("ready");
+    });
+    return () => { active = false; };
+  }, []);
   const ranked = useMemo(() => rankNextBestActions(leads.filter((lead) => !lead.blocked)), [leads]);
   const active = leads.filter((lead) => !lead.blocked && !["Won","Lost"].includes(lead.stage));
   const counts = {
@@ -28,12 +47,30 @@ export default function CrmTodayPage() {
   async function completeNext(lead: Lead) { const target=nextPendingFollowUp(lead.followUps ?? []); if (!target) return; const followUps=(lead.followUps ?? []).map((item)=>item.id===target.id?{...item,completed:true,completedAt:new Date().toISOString()}:item); await save(leads.map((item)=>item.id===lead.id?normalizeLead({...item,followUps,nextFollowUp:nextPendingFollowUp(followUps)?.dueAt ?? "",activities:[createLeadActivity("follow_up","Next action completed."),...(item.activities ?? [])]}):item)); setMessage(`${lead.name}: action completed.`); }
   const rankedIds = new Set(ranked.map((item) => item.lead.id));
   const allLeads = [...ranked, ...leads.filter((lead) => !rankedIds.has(lead.id)).map((lead) => ({ lead, reason: lead.blocked ? "Blocked" : lead.stage, recommendedAction: "Open lead" }))];
+  const isSearching = mobileSearch.trim().length > 0;
+  const searchDigits = normalizeLeadMobile(mobileSearch).replace(/\D/g, "");
+  const hasDateFilter = Boolean(fromDate || toDate);
+  const hasFilters = isSearching || hasDateFilter;
+  const invalidRange = Boolean(fromDate && toDate && fromDate > toDate);
+  const visibleLeads = allLeads.filter(({ lead }) => {
+    if (invalidRange || (isSearching && (!searchDigits || !lead.mobile.replace(/\D/g, "").includes(searchDigits)))) return false;
+    if (!hasDateFilter) return true;
+    const createdDate = istDate.format(new Date(lead.createdAt));
+    return (!fromDate || createdDate >= fromDate) && (!toDate || createdDate <= toDate);
+  });
+
+  function clearFilters() {
+    setMobileSearch("");
+    setFromDate("");
+    setToDate("");
+  }
+
   async function downloadExcel() {
-    if (exporting || !allLeads.length) return;
+    if (exporting || !visibleLeads.length) return;
     setExporting(true);
     try {
       const XLSX = await import("xlsx");
-      const rows = allLeads.map(({ lead, reason }, index) => ({
+      const rows = visibleLeads.map(({ lead, reason }, index) => ({
         "Sr. No.": index + 1,
         "Lead ID": lead.id,
         "Name": lead.name,
@@ -68,7 +105,7 @@ export default function CrmTodayPage() {
       sheet["!autofilter"] = { ref: sheet["!ref"]! };
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, sheet, "Leads");
-      const date = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+      const date = istDate.format(new Date());
       XLSX.writeFile(workbook, `CRM-Leads-${date}.xlsx`);
       setMessage(`Excel download started for ${rows.length} leads.`);
     } catch {
@@ -84,15 +121,51 @@ export default function CrmTodayPage() {
       <Stat icon={Flame} label="Hot leads" value={counts.hot} tone="rose" /><Stat icon={Phone} label="Calls due" value={counts.due} tone="sky" /><Stat icon={AlertTriangle} label="Overdue" value={counts.overdue} tone="rose" /><Stat icon={CalendarClock} label="Meetings" value={counts.meetings} tone="violet" /><Stat icon={UserPlus} label="New leads" value={counts.newLeads} tone="emerald" /><Stat icon={Clock3} label="No next action" value={counts.noAction} tone="amber" />
     </section>
     <section className="mt-5 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <header className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 p-5"><div><h3 className="text-xl font-black">All leads ({allLeads.length})</h3><p className="mt-1 text-sm font-semibold text-slate-500">All your leads together, highest urgency first.</p></div><div className="flex flex-wrap items-center gap-4"><button className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-bold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50" disabled={exporting || !allLeads.length} onClick={() => void downloadExcel()} type="button"><Download className="size-4" />{exporting ? "Downloading…" : "Download Excel"}</button><a className="text-sm font-black text-emerald-700" href="/crm/follow-ups">All tasks</a></div></header>
-      <div className="divide-y divide-slate-100">{allLeads.map((item, index) => <div className="flex flex-wrap items-center gap-3 p-4 hover:bg-slate-50" key={item.lead.id}>
+      <header className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 p-5">
+        <div><h3 className="text-xl font-black">All leads ({allLeads.length})</h3><p className="mt-1 text-sm font-semibold text-slate-500">All your leads together, highest urgency first.</p></div>
+        <div className="flex flex-wrap items-center gap-4">
+          <button className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-bold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50" disabled={exporting || !visibleLeads.length} onClick={downloadExcel} type="button">
+            <Download aria-hidden="true" className="size-4" />{exporting ? "Downloading…" : hasFilters ? "Download filtered Excel" : "Download Excel"}
+          </button>
+          <a className="text-sm font-black text-emerald-700" href="/crm/follow-ups">All tasks</a>
+        </div>
+      </header>
+      <div className="border-b border-slate-200 px-5 py-4">
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="w-full sm:max-w-xs">
+            <label className="block text-sm font-bold text-slate-700" htmlFor="crm-mobile-search">Search by mobile number</label>
+            <div className="relative mt-2">
+              <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-3 size-4 text-slate-400" />
+              <input autoComplete="off" className="w-full rounded-lg border border-slate-300 py-2.5 pl-9 pr-3 text-sm" id="crm-mobile-search" inputMode="tel" onChange={(event) => setMobileSearch(event.target.value)} placeholder="Enter a full or partial number" type="search" value={mobileSearch} />
+            </div>
+          </div>
+          <fieldset>
+            <legend className="text-sm font-bold text-slate-700">Lead created date (IST)</legend>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <label className="flex items-center gap-2 text-sm text-slate-600">
+                From <input className="rounded-lg border border-slate-300 px-2 py-2.5" max={toDate || undefined} onChange={(event) => setFromDate(event.target.value)} type="date" value={fromDate} />
+              </label>
+              <label className="flex items-center gap-2 text-sm text-slate-600">
+                To <input className="rounded-lg border border-slate-300 px-2 py-2.5" min={fromDate || undefined} onChange={(event) => setToDate(event.target.value)} type="date" value={toDate} />
+              </label>
+            </div>
+          </fieldset>
+          {hasFilters ? <button className="rounded-lg px-3 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-100" onClick={clearFilters} type="button">Clear filters</button> : null}
+        </div>
+        {invalidRange ? <p className="mt-2 text-sm text-rose-700" role="alert">The To date must be on or after the From date.</p> : null}
+        {hasFilters && !invalidRange && loadStatus === "ready" ? <p className="mt-2 text-xs font-semibold text-slate-500" role="status">{visibleLeads.length ? `${visibleLeads.length} of ${allLeads.length} leads` : "No leads match the selected filters."}</p> : null}
+      </div>
+      <div className="divide-y divide-slate-100">{visibleLeads.map((item, index) => <div className="flex flex-wrap items-center gap-3 p-4 hover:bg-slate-50" key={item.lead.id}>
         <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-slate-100 text-xs font-black text-slate-600">{index + 1}</span>
-        <a className="min-w-0 flex-1" href={`/crm/leads/${encodeURIComponent(item.lead.id)}`}><span className="block text-sm font-black">{item.lead.name}</span><span className="mt-1 block text-xs font-semibold text-slate-500">{item.lead.interest || "General enquiry"} · {item.lead.city || item.lead.source}</span><span className="mt-1 block text-xs text-slate-500">{item.reason}</span></a>
+        <a className="min-w-0 flex-1" href={`/crm/leads/${encodeURIComponent(item.lead.id)}`}><span className="block text-sm font-black">{item.lead.name}</span>{item.lead.mobile ? <span className="mt-1 block text-xs font-semibold text-slate-600">{item.lead.mobile}</span> : null}<span className="mt-1 block text-xs font-semibold text-slate-500">{item.lead.interest || "General enquiry"} · {item.lead.city || item.lead.source}</span><span className="mt-1 block text-xs text-slate-500">{item.reason}</span></a>
         <span className="rounded-lg bg-slate-100 px-2 py-1 text-xs font-bold">{item.lead.stage}</span>
         <button className="inline-flex items-center gap-2 rounded-lg bg-sky-600 px-3 py-2 text-sm font-bold text-white disabled:opacity-50" disabled={item.lead.blocked} onClick={() => setCallLead(item.lead)} type="button"><Phone className="size-4" />Call</button>
         <a className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-bold" href={`/crm/leads/${encodeURIComponent(item.lead.id)}`}>Open lead</a>
         {nextPendingFollowUp(item.lead.followUps ?? []) ? <button className="rounded-lg bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-700" onClick={() => void completeNext(item.lead)} type="button">Complete</button> : null}
-      </div>)}</div>{!allLeads.length ? <Empty /> : null}
+      </div>)}</div>
+      {loadStatus === "loading" ? <p className="p-5 text-sm text-slate-500" role="status">Loading leads…</p> : null}
+      {loadStatus === "error" ? <p className="p-5 text-sm text-rose-700" role="alert">Could not load leads. Refresh the page to try again.</p> : null}
+      {loadStatus === "ready" && !hasFilters && !allLeads.length ? <Empty /> : null}
     </section>
     {callLead ? <CallOutcomeModal lead={callLead} onClose={()=>setCallLead(null)} onSave={async (outcome,note,nextType,nextAt)=>{ const now=new Date().toISOString(); const followUp:LeadFollowUp|undefined=nextAt?{id:`followup-${Date.now().toString(36)}`,dueAt:new Date(nextAt).toISOString(),type:nextType,note,completed:false,createdAt:now}:undefined; const next=leads.map((lead)=>lead.id===callLead.id?normalizeLead({...lead,stage:outcome==="Interested"&&lead.stage==="New Leads"?"Contacted":lead.stage,callHistory:[`${outcome}: ${note}`,...lead.callHistory],followUps:followUp?[followUp,...(lead.followUps??[])]:lead.followUps,nextFollowUp:followUp?.dueAt??lead.nextFollowUp,lastActivityAt:now,activities:[createLeadActivity("call",`Call outcome: ${outcome}${note?` · ${note}`:""}`),...(followUp?[createLeadActivity("follow_up",`${nextType} scheduled for ${formatDateTime(followUp.dueAt)}.`)]:[]),...(lead.activities??[])]}):lead); await save(next); setCallLead(null); setMessage(`${callLead.name}: call outcome saved.`);}} />:null}
   </AdminPlatformShell>;

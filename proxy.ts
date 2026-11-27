@@ -83,6 +83,10 @@ export async function proxy(request: NextRequest) {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
 
+    if (pathname === "/crm/today") {
+      return NextResponse.redirect(new URL("/sales-login", request.url));
+    }
+
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("next", `${pathname}${search}`);
     return NextResponse.redirect(loginUrl);
