@@ -88,6 +88,7 @@ export interface Lead {
   score: number;
   revenuePotential: number;
   notes: string[];
+  noteFields?: import("./crm-note-fields").NoteField[];
   callHistory: string[];
   whatsappHistory: string[];
   workshopsAttended: string[];

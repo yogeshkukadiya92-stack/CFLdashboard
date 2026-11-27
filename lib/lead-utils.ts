@@ -88,6 +88,7 @@ export function normalizeLead(value: unknown): Lead {
     name: String(input.name ?? "Unnamed Lead"),
     nextFollowUp: String(input.nextFollowUp ?? nextPendingFollowUp(followUps)?.dueAt ?? ""),
     notes: stringArray(legacy.notes),
+    noteFields: Array.isArray(input.noteFields) ? input.noteFields.filter((field) => field && typeof field.label === "string" && typeof field.value === "string").map((field) => ({ ...field, label: field.label, value: field.value })) : [],
     paymentHistory: stringArray(input.paymentHistory),
     preQualification: input.preQualification,
     priority: isLeadPriority(input.priority) ? input.priority : "Warm",

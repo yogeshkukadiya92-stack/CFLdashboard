@@ -71,7 +71,7 @@ export async function proxy(request: NextRequest) {
 
   if (salesSession) {
     const permission = permissionForPath(pathname);
-    const allowed = pathname === "/api/state" || Boolean(permission && salesSession.permissions.includes(permission));
+    const allowed = pathname === "/api/state" || (pathname === "/api/crm/note-templates" && salesSession.permissions.some(permission => permission === "crm_today" || permission === "lead_details")) || Boolean(permission && salesSession.permissions.includes(permission));
     if (allowed) return nextWithFreshHtml(pathname);
     if (pathname.startsWith("/api/")) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
     const fallback = salesHome || "/sales-login?access=none";
