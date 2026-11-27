@@ -1,6 +1,32 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { hydrateLiveState, readLocalArray, saveLiveState, writeLiveStateToLocalStorage } from "../lib/live-state.ts";
+import { hydrateLiveState, hydratePublicRegistrationState, readLocalArray, saveLiveState, writeLiveStateToLocalStorage } from "../lib/live-state.ts";
+
+test("scoped public form loads do not overwrite admin caches or send repair writes", async () => {
+  const oldWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
+  const oldFetch = globalThis.fetch;
+  const calls: string[] = [];
+  let storageWrites = 0;
+  Object.defineProperty(globalThis, "window", { configurable: true, value: {
+    setTimeout, clearTimeout,
+    localStorage: { getItem: () => '[{"id":"admin-data"}]', setItem: () => { storageWrites++; } }
+  } });
+  globalThis.fetch = async (url, options) => {
+    calls.push(String(url));
+    assert.notEqual(options?.method, "POST");
+    return Response.json({ dbEnabled: true, forms: [], workshops: [], registrationLinks: {} });
+  };
+  try {
+    const state = await hydratePublicRegistrationState("r-test", "w1");
+    assert.deepEqual(state?.forms, []);
+    assert.deepEqual(calls, ["/api/public-registration-state?slug=r-test&wid=w1"]);
+    assert.equal(storageWrites, 0);
+  } finally {
+    globalThis.fetch = oldFetch;
+    if (oldWindow) Object.defineProperty(globalThis, "window", oldWindow);
+    else Reflect.deleteProperty(globalThis, "window");
+  }
+});
 
 test("full browser cache preserves fresh data and does not block server saves", async () => {
   const oldWindow = Object.getOwnPropertyDescriptor(globalThis, "window");

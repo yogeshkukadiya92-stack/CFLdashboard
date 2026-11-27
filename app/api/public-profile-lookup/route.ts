@@ -1,4 +1,4 @@
-import { ensureRegistrationRecordsTable, getAppState, getDbPool, isDbEnabled } from "@/lib/db";
+import { ensureRegistrationRecordsTable, getDbPool, isDbEnabled } from "@/lib/db";
 import { NextResponse } from "next/server";
 
 function mobileDigits(value: unknown) {
@@ -9,9 +9,6 @@ function text(value: unknown) {
   return String(value ?? "").trim();
 }
 
-function slugify(value: unknown) {
-  return text(value).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
-}
 
 export async function GET(request: Request) {
   if (!(await isDbEnabled())) return NextResponse.json({ dbEnabled: false, profile: null });
@@ -62,55 +59,45 @@ export async function GET(request: Request) {
       } : null });
     }
 
-    const state = await getAppState();
-    if (!state) return NextResponse.json({ dbEnabled: true, profile: null });
-
-    {
-      const knownLink = Object.values(state.registrationLinks).some((value: unknown) => {
-        const link = value as { published?: unknown; slug?: unknown };
-        return text(link.slug) === slug && link.published !== false;
-      });
-      const knownForm = state.forms.some((value: unknown) => {
-        const form = value as { workshopSlug?: unknown };
-        return text(form.workshopSlug) === slug;
-      });
-      const knownWorkshop = state.workshops.some((value: unknown) => {
-        const workshop = value as { archived?: unknown; id?: unknown; name?: unknown };
-        return workshop.archived !== true && (text(workshop.id) === slug || slugify(workshop.name) === slug);
-      });
-      if (!knownLink && !knownForm && !knownWorkshop) {
-        return NextResponse.json({ profile: null }, { status: 404 });
-      }
+    const db = getDbPool();
+    if (!db) return NextResponse.json({ dbEnabled: false, profile: null });
+    // Validate the link in SQL without reading registrations, leads or analytics.
+    const context = await db.query(`SELECT
+      EXISTS(SELECT 1 FROM jsonb_each(registration_links) l
+        WHERE (l.key=$1 OR l.value->>'slug'=$1) AND COALESCE(l.value->>'published','true') <> 'false')
+      OR EXISTS(SELECT 1 FROM jsonb_array_elements(forms) f WHERE f->>'workshopSlug'=$1)
+      OR EXISTS(SELECT 1 FROM jsonb_array_elements(workshops) w
+        WHERE COALESCE(w->>'archived','false') <> 'true' AND (w->>'id'=$1 OR
+          trim(both '-' from regexp_replace(lower(w->>'name'),'[^a-z0-9]+','-','g'))=$1)) AS valid
+      FROM app_state WHERE id=1`, [slug]);
+    if (!context.rows[0]?.valid) return NextResponse.json({ profile: null }, { status: 404 });
+    await ensureRegistrationRecordsTable();
+    const [clients, registrations] = await Promise.all([
+      db.query(`SELECT jsonb_build_object('name', item->>'name', 'email', item->>'email', 'city', item->>'city') AS profile
+        FROM app_state, LATERAL jsonb_array_elements(clients) item
+        WHERE app_state.id=1 AND RIGHT(REGEXP_REPLACE(COALESCE(item->>'mobile',''), '[^0-9]', '', 'g'),10)=$1 LIMIT 1`, [mobile]),
+      db.query(`SELECT jsonb_build_object('fullName', payload->>'fullName', 'email', payload->>'email', 'city', payload->>'city') AS profile
+        FROM cfl_registration_records WHERE mobile_normalized=$1
+        ORDER BY created_at DESC, external_id DESC LIMIT 1`, [mobile])
+    ]);
+    const matches = [clients.rows[0]?.profile, registrations.rows[0]?.profile].filter(Boolean) as Array<Record<string, unknown>>;
+    // Most visitors match an indexed registration. Only scan legacy attendance
+    // when a profile field is still missing; never hydrate the full app state.
+    if (!matches.some(item => text(item.name) || text(item.fullName)) ||
+        !matches.some(item => text(item.email)) || !matches.some(item => text(item.city))) {
+      const attendance = await db.query(`SELECT jsonb_build_object('attendeeName', item->>'attendeeName',
+          'name', item->>'name', 'fullName', item->>'fullName', 'email', item->>'email', 'city', item->>'city') AS profile
+        FROM app_state, LATERAL jsonb_array_elements(attendance_entries) item
+        WHERE app_state.id=1 AND RIGHT(REGEXP_REPLACE(COALESCE(item->>'mobile',''), '[^0-9]', '', 'g'),10)=$1 LIMIT 1`, [mobile]);
+      if (attendance.rows[0]?.profile) matches.push(attendance.rows[0].profile);
     }
-
-    const clients = state.clients as Array<Record<string, unknown>>;
-    const registrations = state.registrations as Array<Record<string, unknown>>;
-    const attendanceEntries = state.attendanceEntries as Array<Record<string, unknown>>;
-    const client = clients.find((item) => mobileDigits(item.mobile) === mobile);
-    const registration = registrations.find((item) => mobileDigits(item.mobile) === mobile);
-    const attendance = attendanceEntries.find((item) => mobileDigits(item.mobile) === mobile);
-    const matches = [client, registration, attendance].filter(Boolean) as Array<Record<string, unknown>>;
-
-    if (!matches.length) return NextResponse.json({ dbEnabled: true, profile: null });
-
     const firstValue = (...keys: string[]) => {
-      for (const match of matches) {
-        for (const key of keys) {
-          const value = text(match[key]);
-          if (value) return value;
-        }
-      }
+      for (const match of matches) for (const key of keys) if (text(match[key])) return text(match[key]);
       return "";
     };
-
-    return NextResponse.json({
-      dbEnabled: true,
-      profile: {
-        city: firstValue("city"),
-        email: firstValue("email"),
-        name: firstValue("name", "fullName", "attendeeName")
-      }
-    });
+    return NextResponse.json({ dbEnabled: true, profile: matches.length ? {
+      city: firstValue("city"), email: firstValue("email"), name: firstValue("name", "fullName", "attendeeName")
+    } : null }, { headers: { "Cache-Control": "private, no-store" } });
   } catch {
     return NextResponse.json({ error: "Failed to look up profile" }, { status: 500 });
   }

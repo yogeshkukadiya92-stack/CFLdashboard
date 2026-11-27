@@ -31,6 +31,9 @@ const REGISTRATION_LINK_CONFIG_STORAGE_KEY = "cfl_registration_link_configs_v1";
 const CLIENTS_STORAGE_KEY = "cfl_clients_v1";
 const FORM_ANALYTICS_STORAGE_KEY = "cfl_form_analytics_v1";
 const BRAND_LOGO_SRC = "/brand/coach-for-life-logo-horizontal.png";
+const PHONE_COUNTRY_OPTIONS = PHONE_COUNTRIES.map(country => ({
+  code: country.isoCode, callingCode: phoneCallingCode(country.isoCode)
+})).filter(country => country.callingCode);
 
 type WorkshopMasterRecord = { archived?: boolean; batch?: string; id: string; name: string; facilitator?: string; isPaid?: boolean; minimumPartPayment?: string | number };
 type ClientRecord = { city?: string; email?: string; id: number | string; mobile?: string; name?: string };
@@ -300,6 +303,7 @@ export default function RegistrationPage() {
   const analyticsCompletedRef = useRef(false);
   const draftLoadedRef = useRef("");
   const lastFieldIdRef = useRef("");
+  const linkConfigRef = useRef<RegistrationLinkConfig | undefined>(undefined);
 
   // Resolve the form: a builder form (?f=) wins; then a self-contained simple
   // link (?title=); then saved master records; then the static seed.
@@ -307,8 +311,15 @@ export default function RegistrationPage() {
     let cancelled = false;
 
     async function resolveForm() {
-      await hydratePublicRegistrationState();
+      const state = await hydratePublicRegistrationState(slug, widParam || "");
+      const readFormArray = <T,>(key: string): T[] => {
+        const value = key === FORMS_STORAGE_KEY ? state?.forms : key === WORKSHOP_MASTER_STORAGE_KEY ? state?.workshops : undefined;
+        return Array.isArray(value) ? value as T[] : readLocalArray<T>(key);
+      };
+      const readFormObject = <T extends Record<string, unknown>,>(key: string): T =>
+        state?.registrationLinks ? state.registrationLinks as T : readLocalObject<T>(key);
       if (cancelled) return;
+      linkConfigRef.current = readFormObject<Record<string, RegistrationLinkConfig>>(REGISTRATION_LINK_CONFIG_STORAGE_KEY)[slug];
 
       let resolved: FormModel | null = null;
       let linkBlocked = false;
@@ -344,7 +355,7 @@ export default function RegistrationPage() {
 
       if (!resolved) {
         try {
-          const configs = readLocalObject<Record<string, RegistrationLinkConfig>>(REGISTRATION_LINK_CONFIG_STORAGE_KEY);
+          const configs = readFormObject<Record<string, RegistrationLinkConfig>>(REGISTRATION_LINK_CONFIG_STORAGE_KEY);
           const config = configs[slug];
           if (config?.title) {
             const expiresAt = config.publishUntil ? new Date(config.publishUntil).getTime() : 0;
@@ -352,8 +363,8 @@ export default function RegistrationPage() {
           }
           if (config?.title && !linkBlocked) {
             const fee = Number(config.fee || 0);
-            const forms = readLocalArray<BuilderForm>(FORMS_STORAGE_KEY);
-            const records = readLocalArray<WorkshopMasterRecord>(WORKSHOP_MASTER_STORAGE_KEY);
+            const forms = readFormArray<BuilderForm>(FORMS_STORAGE_KEY);
+            const records = readFormArray<WorkshopMasterRecord>(WORKSHOP_MASTER_STORAGE_KEY);
             const currentWorkshop = records.find((record) => !record.archived && record.id === config.id);
             const savedForm = forms.find((item) => item.workshopId === config.id || item.workshopSlug === slug || item.workshopSlug === config.slug);
             if (savedForm) {
@@ -396,10 +407,10 @@ export default function RegistrationPage() {
 
       if (!resolved && !linkBlocked) {
         try {
-          const records = readLocalArray<WorkshopMasterRecord>(WORKSHOP_MASTER_STORAGE_KEY);
+          const records = readFormArray<WorkshopMasterRecord>(WORKSHOP_MASTER_STORAGE_KEY);
           const match = records.find((record) => !record.archived && (slugify(record.name) === slug || record.id === slug || record.id === widParam));
           if (match) {
-            const forms = readLocalArray<BuilderForm>(FORMS_STORAGE_KEY);
+            const forms = readFormArray<BuilderForm>(FORMS_STORAGE_KEY);
             const savedForm = forms.find((item) => item.workshopId === match.id || item.workshopSlug === slugify(match.name));
             if (savedForm) {
               resolved = modelFromBuilderForm(savedForm, {
@@ -459,13 +470,13 @@ export default function RegistrationPage() {
       if (resolved) {
         resolved = {
           ...resolved,
-          redirectButtonText: readLocalObject<Record<string, RegistrationLinkConfig>>(REGISTRATION_LINK_CONFIG_STORAGE_KEY)[slug]?.redirectButtonText?.trim(),
+          redirectButtonText: readFormObject<Record<string, RegistrationLinkConfig>>(REGISTRATION_LINK_CONFIG_STORAGE_KEY)[slug]?.redirectButtonText?.trim(),
           redirectUrl: (() => {
-            const value = readLocalObject<Record<string, RegistrationLinkConfig>>(REGISTRATION_LINK_CONFIG_STORAGE_KEY)[slug]?.redirectUrl;
+            const value = readFormObject<Record<string, RegistrationLinkConfig>>(REGISTRATION_LINK_CONFIG_STORAGE_KEY)[slug]?.redirectUrl;
             try { const url = new URL(value || ""); return ["https:", "http:"].includes(url.protocol) ? url.href : undefined; } catch { return undefined; }
           })(),
-          minimumPartPayment: configuredPartPayment(readLocalArray<WorkshopMasterRecord>(WORKSHOP_MASTER_STORAGE_KEY), resolved.id, Number.MAX_SAFE_INTEGER),
-          whatsappGroupUrl: resolveRegistrationGroupUrl(readLocalArray<BuilderForm>(FORMS_STORAGE_KEY), resolved)
+          minimumPartPayment: configuredPartPayment(readFormArray<WorkshopMasterRecord>(WORKSHOP_MASTER_STORAGE_KEY), resolved.id, Number.MAX_SAFE_INTEGER),
+          whatsappGroupUrl: resolveRegistrationGroupUrl(readFormArray<BuilderForm>(FORMS_STORAGE_KEY), resolved)
         };
       }
       setModel(linkBlocked ? null : resolved);
@@ -608,6 +619,7 @@ export default function RegistrationPage() {
   const amountDue = Math.max(0, fullAmount - amountPaid);
 
   const visibleFields = useMemo(() => getVisibleBuilderFields(model?.fields ?? [], answers), [answers, model]);
+  const descriptionHtml = useMemo(() => sanitizeRichTextHtml(model?.description ?? ""), [model?.description]);
   const pages = useMemo(() => buildPublicPages(visibleFields, model?.mode ?? "classic"), [model?.mode, visibleFields]);
   const activePageIndex = Math.min(currentPage, Math.max(0, pages.length - 1));
   const activePage = pages[activePageIndex] ?? { fields: visibleFields, title: "" };
@@ -670,10 +682,20 @@ export default function RegistrationPage() {
 
   useEffect(() => {
     if (!model || success || !Object.keys(answers).length) return;
-    window.localStorage.setItem(
-      `cfl_registration_draft_${model.formId}`,
-      JSON.stringify({ answers, currentPage: activePageIndex, partAmount, paymentMode, referralCode, selectedTierId, phoneCountry: phoneCountryOverride })
-    );
+    const saveDraft = () => {
+      try {
+        window.localStorage.setItem(
+          `cfl_registration_draft_${model.formId}`,
+          JSON.stringify({ answers, currentPage: activePageIndex, partAmount, paymentMode, referralCode, selectedTierId, phoneCountry: phoneCountryOverride })
+        );
+      } catch { /* A full browser cache must not interrupt typing. */ }
+    };
+    const timer = window.setTimeout(saveDraft, 300);
+    window.addEventListener("pagehide", saveDraft);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener("pagehide", saveDraft);
+    };
   }, [activePageIndex, answers, model, partAmount, paymentMode, referralCode, selectedTierId, success, phoneCountryOverride]);
 
   useEffect(() => {
@@ -818,10 +840,12 @@ export default function RegistrationPage() {
 
   function persistDraftAtPage(pageIndex: number) {
     if (!model || success || !Object.keys(answers).length) return;
-    window.localStorage.setItem(
-      `cfl_registration_draft_${model.formId}`,
-      JSON.stringify({ answers, currentPage: pageIndex, partAmount, paymentMode, selectedTierId })
-    );
+    try {
+      window.localStorage.setItem(
+        `cfl_registration_draft_${model.formId}`,
+        JSON.stringify({ answers, currentPage: pageIndex, partAmount, paymentMode, referralCode, selectedTierId, phoneCountry: phoneCountryOverride })
+      );
+    } catch { /* Continue to the next step even when browser storage is full. */ }
   }
 
   function goToNextPage() {
@@ -875,7 +899,7 @@ export default function RegistrationPage() {
     const responseSuffix = model.allowDuplicate ? `-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}` : "";
     const registrationId = `reg-${model.id}-${registrationScope}-${mobile || Date.now().toString(36)}${responseSuffix}`;
     const source = searchParams.get("source") === "landing-page" ? "landing_page" : "registration_link";
-    const linkConfig = readLocalObject<Record<string, RegistrationLinkConfig>>(REGISTRATION_LINK_CONFIG_STORAGE_KEY)[slug];
+    const linkConfig = linkConfigRef.current;
     const configuredTracking: Record<string, string | undefined> = {
       utm_source: linkConfig?.utmSource,
       utm_medium: linkConfig?.utmMedium,
@@ -1131,7 +1155,7 @@ export default function RegistrationPage() {
           {model.description ? (
             <div
               className="registration-public-description rich-text-content mt-4 break-words leading-7 text-slate-500"
-              dangerouslySetInnerHTML={{ __html: sanitizeRichTextHtml(model.description) }}
+              dangerouslySetInnerHTML={{ __html: descriptionHtml }}
             />
           ) : null}
           {metaLine.length ? <p className="registration-public-meta mt-4 break-words text-sm font-semibold leading-6 text-slate-400">{metaLine.join("  •  ")}</p> : null}
@@ -1490,7 +1514,7 @@ function RenderField({
   } else if (field.role === "mobile") {
     control = <div className="flex gap-2">
       <select aria-label="Mobile country code" className={`${inputClass} !w-32 shrink-0 !px-2`} value={phoneCountry} onChange={event => onPhoneCountryChange?.(event.target.value)}>
-        {PHONE_COUNTRIES.filter(country => phoneCallingCode(country.isoCode)).map(country => <option key={country.isoCode} value={country.isoCode}>{country.isoCode} +{phoneCallingCode(country.isoCode)}</option>)}
+        {PHONE_COUNTRY_OPTIONS.map(country => <option key={country.code} value={country.code}>{country.code} +{country.callingCode}</option>)}
       </select>
       <input aria-label={field.label} autoComplete="tel-national" className={`${inputClass} min-w-0`} type="tel" inputMode="tel" placeholder="Mobile number" value={value} onChange={event => onChange(event.target.value)} />
     </div>;

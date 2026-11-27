@@ -46,6 +46,8 @@ export async function POST(request: Request) {
 
   attempts.delete(key);
   const response = NextResponse.json({ ok: true });
+  response.cookies.set({ name: "cfl_crm_cache_session", value: crypto.randomUUID(), path: "/", sameSite: "lax", secure: process.env.NODE_ENV === "production" });
+
   response.cookies.set({
     httpOnly: true,
     maxAge: 60 * 60 * 24 * 7,

@@ -420,6 +420,29 @@ export async function getLeadManagementState() {
   return state;
 }
 
+// Dashboard and identity reads avoid unrelated workshop and registration data.
+export async function getCrmDashboardState(includeLeads = true, assignedTo?: string) {
+  const client = getDbPool();
+  if (!client) return null;
+  const leadSelection = assignedTo === undefined ? "leads," : `COALESCE((
+    SELECT jsonb_agg(lead) FROM jsonb_array_elements(leads) lead
+    WHERE lead->>'assignedTo' = $1
+  ), '[]'::jsonb) AS leads,`;
+  const read = () => client.query(`SELECT ${includeLeads ? leadSelection : ""}
+    sales_people AS "salesPeople", sales_team_users AS "salesTeamUsers"
+    FROM app_state WHERE id = 1 LIMIT 1`, includeLeads && assignedTo !== undefined ? [assignedTo] : []);
+  let result;
+  try { result = await read(); }
+  catch (error) {
+    if (!isMissingPersistenceTableError(error)) throw error;
+    await ensurePersistenceTable();
+    result = await read();
+  }
+  const state = result.rows[0] ?? { leads: [], salesPeople: [], salesTeamUsers: [] };
+  state.salesPeople = reconcileSalesPeople(state.salesPeople, state.salesTeamUsers);
+  return state;
+}
+
 export async function getAppState() {
   const client = getDbPool();
   if (!client) return null;

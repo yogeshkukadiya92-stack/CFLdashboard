@@ -1,5 +1,7 @@
 "use client";
 
+import { cacheCrmDashboard, readCrmDashboard } from "./crm-dashboard-cache.ts";
+
 export const LIVE_STATE_STORAGE_KEYS = {
   attendanceEntries: "cfl_attendance_entries_v1",
   attendanceSessions: "cfl_attendance_sessions_v1",
@@ -140,7 +142,14 @@ export async function saveLiveStateResult(patch: LiveStatePatch): Promise<LiveSt
       method: "POST"
     });
     const result = await response.json().catch(() => null);
-    if (response.ok && result?.ok === true) return { ok: true };
+    if (response.ok && result?.ok === true) {
+      const cached = readCrmDashboard();
+      if (cached && patch.leads) {
+        const updates = new Map(patch.leads.map((lead) => [String((lead as { id: string }).id), lead]));
+        cacheCrmDashboard({ ...cached, leads: (cached.leads ?? []).filter((lead) => updates.has(String((lead as { id: string }).id))).map((lead) => updates.get(String((lead as { id: string }).id))!) });
+      }
+      return { ok: true };
+    }
     if (response.status === 401 || response.redirected) return { ok: false, error: "Your login session has expired. Sign in again, then retry saving." };
     if (response.status === 403) return { ok: false, error: "Your account does not have permission to save these changes." };
     if (response.status === 413) return { ok: false, error: "The form data is too large. Reduce uploaded image sizes and retry." };
@@ -155,17 +164,21 @@ export async function saveLiveState(patch: LiveStatePatch) {
   return (await saveLiveStateResult(patch)).ok;
 }
 
-export async function hydratePublicRegistrationState(): Promise<LiveState | null> {
+export async function hydratePublicRegistrationState(slug = "", workshopId = ""): Promise<LiveState | null> {
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), PUBLIC_STATE_TIMEOUT_MS);
   try {
-    const response = await fetch("/api/public-registration-state", {
+    const query = slug ? `?${new URLSearchParams({ slug, wid: workshopId })}` : "";
+    const response = await fetch(`/api/public-registration-state${query}`, {
       cache: "no-store",
       signal: controller.signal
     });
     if (!response.ok) return null;
     const state = (await response.json()) as LiveState;
     if (!state.dbEnabled) return state;
+    // A scoped result is read directly by the form. It must never truncate
+    // admin caches or trigger the legacy repair/write path.
+    if (slug) return state;
 
     const patch: LiveStatePatch = {};
     const repairPatch: LiveStatePatch = {};

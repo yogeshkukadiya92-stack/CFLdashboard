@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { AUTH_COOKIE_NAME, verifyAuthToken } from "@/lib/auth";
-import { deleteLeadRecords, getAppState, getLeadManagementState, isDbEnabled, saveAppState } from "@/lib/db";
+import { deleteLeadRecords, getAppState, getCrmDashboardState, getLeadManagementState, isDbEnabled, saveAppState } from "@/lib/db";
 import { readSalesSession, SALES_SESSION_COOKIE } from "@/lib/sales-session";
 import type { Lead, SalesTeamUser } from "@/lib/types";
 
@@ -41,7 +41,23 @@ export async function GET(request: NextRequest) {
   try {
     const access = await getRequestRole(request);
     if (access.role === "none") return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-    const state = request.nextUrl.searchParams.get("scope") === "lead-management"
+    const scope = request.nextUrl.searchParams.get("scope");
+    const dashboardResponse = (body: unknown) => {
+      const response = NextResponse.json(body, { headers: { "Cache-Control": "private, no-store" } });
+      if (!request.cookies.get("cfl_crm_cache_session")?.value) response.cookies.set({ name: "cfl_crm_cache_session", value: crypto.randomUUID(), path: "/", sameSite: "lax", secure: process.env.NODE_ENV === "production" });
+      return response;
+    };
+    if (scope === "crm-today" && access.role === "sales") {
+      const identity = await getCrmDashboardState(false);
+      const user = (identity?.salesTeamUsers as SalesTeamUser[] | undefined)?.find((item) => item.id === access.session.userId && item.active);
+      if (!user) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+      const name = salespersonName(identity, access.session.salesPersonId) || user.name;
+      // Filter in PostgreSQL before transferring or parsing other teams' leads.
+      const dashboard = await getCrmDashboardState(true, name);
+      if (!dashboard) return NextResponse.json({ error: "Database unavailable" }, { status: 503 });
+      return dashboardResponse({ dbEnabled: true, leads: dashboard.leads });
+    }
+    const state = scope === "crm-today" ? await getCrmDashboardState() : scope === "lead-management"
       ? await getLeadManagementState() : await getAppState();
     if (!state) return NextResponse.json({ dbEnabled: true });
     if (access.role === "sales") {
@@ -59,7 +75,7 @@ export async function GET(request: NextRequest) {
       salesTeamUsers: _privateSalesTeamUsers,
       ...publicState
     } = state;
-    return NextResponse.json({ dbEnabled: true, ...publicState });
+    return scope === "crm-today" ? dashboardResponse({ dbEnabled: true, ...publicState }) : NextResponse.json({ dbEnabled: true, ...publicState });
   } catch (error) {
     return NextResponse.json({ dbEnabled: true, error: "Failed to read DB state" }, { status: 500 });
   }

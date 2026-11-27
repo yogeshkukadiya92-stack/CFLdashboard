@@ -9,13 +9,14 @@ import { attendanceMatchesFinalRegistration, findRepeaterSource, isDuplicateWork
 import { NextResponse } from "next/server";
 import { after } from "next/server";
 
-export async function GET() {
+export async function GET(request: Request) {
   if (!(await isDbEnabled())) {
     return NextResponse.json({ dbEnabled: false });
   }
 
   try {
-    return new NextResponse(await publicRegistrationJson(), { headers: { "Content-Type":"application/json", "Cache-Control":"no-store" } });
+    const params = new URL(request.url).searchParams;
+    return new NextResponse(await publicRegistrationJson((params.get("slug") ?? "").slice(0, 300), (params.get("wid") ?? "").slice(0, 300)), { headers: { "Content-Type":"application/json", "Cache-Control":"no-store" } });
   } catch {
     return NextResponse.json({ error: "Failed to read registration state" }, { status: 500 });
   }
