@@ -50,3 +50,10 @@ test("typed questions validate answers and record who changed details", () => {
   assert.throws(()=>addCrmNote(lead, { ...base, fields: [{ ...fields[0], value: "abc" }] }, now), /number/);
   assert.throws(()=>addCrmNote(lead, { ...base, fields: [{ ...fields[1], value: "Weekly" }] }, now), /list/);
 });
+test("note without questions preserves existing required customer details", () => {
+  const existing = { ...lead, noteFields: [{ label: "Team", value: "", required: true, type: "number" as const }] };
+  const result = addCrmNote(existing, { ...base, fields: undefined }, now);
+  assert.deepEqual(result.noteFields, existing.noteFields);
+  assert.equal(result.notes[0], base.note);
+  assert.ok(!result.activities?.some(activity => activity.message.startsWith("Removed Team")));
+});

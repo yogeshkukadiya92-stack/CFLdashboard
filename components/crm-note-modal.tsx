@@ -9,6 +9,7 @@ import type { Lead } from "@/lib/types";
 
 export function CrmNoteModal({ lead, onClose, onSave }: { lead: Lead; onClose: () => void; onSave: (input: CrmNoteInput) => Promise<void> }) {
   const [input, setInput] = useState<CrmNoteInput>({ note: "", disposition: "", followUpAt: "", followUpType: "Call", fields: lead.noteFields ?? [] });
+  const [withQuestions, setWithQuestions] = useState(Boolean(lead.noteFields?.length));
   const saved = useRef(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -28,15 +29,15 @@ export function CrmNoteModal({ lead, onClose, onSave }: { lead: Lead; onClose: (
       setUser(data.user); setTemplates(data.templates || []); if (data.error) setNotice(data.error);
       const key = `cfl-note-draft:${data.user.id}:${lead.id}`;
       setDraftKey(key);
-      try { const saved = localStorage.getItem(key); if (saved) { const draft = JSON.parse(saved); if (draft && typeof draft.note === "string" && Array.isArray(draft.fields)) { setInput(draft); setNotice("Your unfinished note is back. You can continue below."); } } } catch { setNotice("Draft saving is not available on this device."); }
+      try { const saved = localStorage.getItem(key); if (saved) { const draft = JSON.parse(saved); if (draft && typeof draft.note === "string" && Array.isArray(draft.fields)) { setInput(draft); setWithQuestions(typeof draft.withQuestions === "boolean" ? draft.withQuestions : Boolean(draft.fields.length)); setNotice("Your unfinished note is back. You can continue below."); } } } catch { setNotice("Draft saving is not available on this device."); }
       setDraftReady(true);
     }).catch(()=>{ if (active) setNotice("Question sets and draft saving are unavailable. Please try again."); });
     return () => { active = false; };
   }, [lead.id]);
   useEffect(() => {
     if (!draftReady || !draftKey || busy || saved.current) return;
-    try { localStorage.setItem(draftKey, JSON.stringify(input)); } catch { setNotice("Draft could not be saved. Please use Save note before closing."); }
-  }, [input, draftKey, draftReady, busy]);
+    try { localStorage.setItem(draftKey, JSON.stringify({ ...input, withQuestions })); } catch { setNotice("Draft could not be saved. Please use Save note before closing."); }
+  }, [input, withQuestions, draftKey, draftReady, busy]);
   function addQuestions(fields: NoteField[]) {
     setInput(previous=>({ ...previous, fields: [...(previous.fields || []), ...fields.filter(f=>!previous.fields?.some(old=>old.label.toLowerCase()===f.label.toLowerCase())).map(f=>({...f,value:""}))].slice(0,50) }));
     setSection("All details");
@@ -55,14 +56,15 @@ export function CrmNoteModal({ lead, onClose, onSave }: { lead: Lead; onClose: (
   return <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-slate-950/50 p-4" role="dialog" aria-modal="true" aria-labelledby="crm-note-title">
     <form onInvalidCapture={() => setSection("All details")} className="max-h-[90dvh] w-full max-w-2xl space-y-4 overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl" onSubmit={async (event) => {
       event.preventDefault(); if (busy) return; setBusy(true); setError("");
-      try { await onSave({ ...input, actor: user?.name }); saved.current = true; if (draftKey) { try { localStorage.removeItem(draftKey); } catch {} } } catch (err) { setError(err instanceof Error ? err.message : "Could not save note."); } finally { setBusy(false); }
+      try { await onSave({ ...input, fields: withQuestions ? input.fields : undefined, actor: user?.name }); saved.current = true; if (draftKey) { try { localStorage.removeItem(draftKey); } catch {} } } catch (err) { setError(err instanceof Error ? err.message : "Could not save note."); } finally { setBusy(false); }
     }}>
       <header className="flex items-start justify-between gap-3"><div><h3 className="text-xl font-black" id="crm-note-title">Add note</h3><p className="text-sm text-slate-600">{lead.name} · {lead.mobile}</p></div><button aria-label="Close note" disabled={busy} onClick={onClose} type="button"><X className="size-5" /></button></header>
       {notice ? <p className="rounded-lg bg-blue-50 p-3 text-sm text-blue-800" role="status">{notice}</p> : null}
       <fieldset disabled={busy} className="min-w-0 space-y-4 disabled:opacity-70">
       <label className="block text-sm font-bold">1. What happened on the call?<select className={`${field} mt-2`} value={input.disposition} onChange={(event) => setInput({ ...input, disposition: event.target.value, followUpType: event.target.value === "GENERATE_MEETING" ? "Meeting" : input.followUpType })}><option value="">Note only</option>{callFlowDispositions.map(([, code, label]) => <option key={code} value={code}>{label}</option>)}</select></label>
-      <label className="block text-sm font-bold">2. What did the customer say?{!outcome || outcome[3] ? " *" : ""}<textarea autoFocus className={`${field} mt-2 min-h-28`} required={(!outcome || outcome[3]) && !input.fields?.some((field) => field.label.trim() && field.value.trim())} value={input.note} onChange={(event) => setInput({ ...input, note: event.target.value })} placeholder="Write a short note here. You can also fill in the boxes below." /></label>
-      <section className="space-y-3 rounded-xl border border-slate-200 p-3" aria-label="Custom note boxes">
+      <label className="block text-sm font-bold">2. What did the customer say?{!outcome || outcome[3] ? " *" : ""}<textarea autoFocus className={`${field} mt-2 min-h-28`} required={(!outcome || outcome[3]) && !(withQuestions && input.fields?.some((field) => field.label.trim() && field.value.trim()))} value={input.note} onChange={(event) => setInput({ ...input, note: event.target.value })} placeholder={withQuestions ? "Write a short note here. You can also fill in the boxes below." : "Write a short note here."} /></label>
+      <fieldset className="space-y-2"><legend className="text-sm font-bold">Customer detail questions</legend><div className="flex flex-wrap gap-3">{[[false, "Without questions — note only"], [true, "With questions"]].map(([enabled, label]) => <label key={String(enabled)} className="flex items-center gap-2 rounded-lg border p-3 text-sm font-semibold"><input type="radio" name="note-questions" checked={withQuestions === enabled} onChange={() => setWithQuestions(enabled as boolean)} />{label}</label>)}</div></fieldset>
+      {withQuestions ? <section className="space-y-3 rounded-xl border border-slate-200 p-3" aria-label="Custom note boxes">
         <h4 className="text-base font-bold">3. Customer details</h4>
         <p className="text-sm text-slate-600">Choose a question set, or add your own questions.</p>
         <label className="block text-sm font-bold">Use saved questions<select className={`${field} mt-1`} value="" onChange={event=>{ const selected=templates.find(t=>t.id===event.target.value); addQuestions(selected?.fields || businessNoteFields); }}><option value="">Choose a question set</option><option value="business">Business details (ready to use)</option>{templates.map(template=><option key={template.id} value={template.id}>{template.name}{template.shared ? " (Team)" : " (Mine)"}</option>)}</select></label>
@@ -81,7 +83,7 @@ export function CrmNoteModal({ lead, onClose, onSave }: { lead: Lead; onClose: (
         </div>)}
         <button className="rounded-lg border border-emerald-200 px-3 py-2 text-sm font-bold text-emerald-700 disabled:opacity-50" type="button" disabled={busy || (input.fields?.length ?? 0) >= 50} onClick={() => setInput({ ...input, fields: [...(input.fields ?? []), { label: "", value: "", type: "text", section: "Business details" }] })}>+ Add custom question</button>
         <details className="rounded-lg border p-3"><summary className="cursor-pointer text-sm font-bold">Save these questions for other customers</summary><p className="mt-2 text-xs text-slate-600">Only the questions are saved. Customer answers are not copied.</p><label className="mt-2 block text-sm">Question set name<input className={field} value={templateName} maxLength={100} onChange={event=>setTemplateName(event.target.value)} placeholder="e.g. My business questions" /></label>{user?.admin ? <label className="my-2 flex items-center gap-2 text-sm"><input type="checkbox" checked={share} onChange={event=>setShare(event.target.checked)} />Share with all salespeople</label> : null}<button className="mt-2 rounded-lg bg-emerald-700 px-3 py-2 text-sm font-bold text-white disabled:opacity-50" disabled={!user || !templateName.trim() || !input.fields?.length} type="button" onClick={()=>void saveTemplate()}>Save question set</button></details>
-      </section>
+      </section> : null}
       <fieldset className="space-y-2"><legend className="text-sm font-bold">4. What should you do next?{outcome?.[4] ? " *" : " (optional)"}</legend><select aria-label="Next action type" className={field} disabled={input.disposition === "GENERATE_MEETING"} value={input.followUpType} onChange={(event) => setInput({ ...input, followUpType: event.target.value as CrmNoteInput["followUpType"] })}>{["Call", "Meeting", "Send Information", "Partner Call", "Payment Follow-up"].map((type) => <option key={type}>{type}</option>)}</select><input aria-label="Next action date and time" className={field} required={Boolean(outcome?.[4])} type="datetime-local" value={input.followUpAt} onChange={(event) => setInput({ ...input, followUpAt: event.target.value })} /></fieldset>
       {input.disposition === "WRONG_NUMBER" ? <p className="text-sm text-rose-700">Wrong number marks this lead Lost and enables Do Not Call.</p> : null}
       </fieldset>
