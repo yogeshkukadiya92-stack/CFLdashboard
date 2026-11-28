@@ -42,6 +42,7 @@ type RazorpayCheckout = { open: () => void; on: (event: string, handler: (respon
 
 declare global {
   interface Window {
+    fbq?: (...args: unknown[]) => void;
     Razorpay?: new (options: Record<string, unknown>) => RazorpayCheckout;
   }
 }
@@ -301,6 +302,7 @@ export default function RegistrationPage() {
   const analyticsViewRef = useRef("");
   const analyticsStartedRef = useRef(false);
   const analyticsCompletedRef = useRef(false);
+  const pixelRegistrationsRef = useRef(new Set<string>());
   const draftLoadedRef = useRef("");
   const lastFieldIdRef = useRef("");
   const linkConfigRef = useRef<RegistrationLinkConfig | undefined>(undefined);
@@ -1016,6 +1018,20 @@ export default function RegistrationPage() {
         throw new Error(result && result.error ? result.error : "Could not complete registration.");
       }
       const saved = result && result.registration ? result.registration : payload;
+      // Queue the conversion only after the API succeeds, before any success redirect.
+      // Tracking must never interrupt a successfully saved registration.
+      if (result.ok === true && !result.duplicate && !pixelRegistrationsRef.current.has(saved.id)) {
+        try {
+          if (window.fbq) {
+            window.fbq("track", "CompleteRegistration", {
+              content_name: model.title,
+              value: 0,
+              currency: "INR"
+            });
+            pixelRegistrationsRef.current.add(saved.id);
+          }
+        } catch { /* Browser tracking is optional; registration is already saved. */ }
+      }
       const savedIndex = current.findIndex((item) => item.id === registrationId);
       if (savedIndex >= 0) current[savedIndex] = saved;
       try { writeLiveStateToLocalStorage({ registrations: current }); } catch { /* Registration is durable even if browser storage is full. */ }
