@@ -166,7 +166,7 @@ export default function CrmTodayPage() {
       <div className="border-b border-slate-200 px-5 py-4">
         <div className="flex flex-wrap items-end gap-3">
           <div className="w-full sm:max-w-xs">
-            <label className="block text-sm font-bold text-slate-700" htmlFor="crm-mobile-search">Search leads</label>
+            <label className="block text-sm font-bold text-slate-700" htmlFor="crm-mobile-search">Search by name or mobile</label>
             <div className="relative mt-2">
               <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-3 size-4 text-slate-400" />
               <input autoComplete="off" className="w-full rounded-lg border border-slate-300 py-2.5 pl-9 pr-3 text-sm" id="crm-mobile-search" onChange={(event) => setMobileSearch(event.target.value)} placeholder="Name, mobile, city, email or lead ID" type="search" value={mobileSearch} />

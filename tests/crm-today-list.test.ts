@@ -7,6 +7,15 @@ test("search supports formatted phones and multi-word case-insensitive details",
   for (const query of ["+91 94271-65817", "9427165817", " PRADIP   Surat ", "pradip@example.com", "test-12"]) assert.equal(matchesLeadSearch(lead, query), true, query);
   for (const query of ["unknown", "wrong9427165817", "Surat Ahmedabad", "00000000"]) assert.equal(matchesLeadSearch(lead, query), false, query);
 });
+test("name search accepts partial names, surname first, initials and spacing differences", () => {
+  for (const query of ["prad", "SHAH", "Shah Pradip", "PradipShah", "Pradip  Shah"]) {
+    assert.equal(matchesLeadSearch(lead, query), true, query);
+  }
+  const initials = normalizeLead({ ...lead, name: "P. K. Shah" });
+  assert.equal(matchesLeadSearch(initials, "P K Shah"), true);
+  assert.equal(matchesLeadSearch(initials, "P.K.Shah"), true);
+  assert.equal(matchesLeadSearch(initials, "Patel"), false);
+});
 test("last contact ignores unrelated updates and invalid dates", () => {
   const record = normalizeLead({ ...lead, activities: [
     { id: "1", type: "call", createdAt: "2026-11-20T10:00:00Z", message: "Called" },

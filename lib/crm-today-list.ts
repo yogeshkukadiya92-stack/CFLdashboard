@@ -13,6 +13,11 @@ export function matchesLeadSearch(lead: Lead, query: string): boolean {
     const normalized = normalizeLeadMobile(term).replace(/\D/g, "");
     return Boolean(digits) && (mobile.includes(digits) || Boolean(normalized) && mobile.includes(normalized));
   }
+  // Names may be entered with initials, punctuation or inconsistent spacing.
+  const nameParts = (value: string) => text(value).replace(/[\p{P}\p{Z}\s]+/gu, " ").trim();
+  const name = nameParts(lead.name);
+  const nameQuery = nameParts(term);
+  if (nameQuery && (nameQuery.split(/\s+/).every(token => name.includes(token)) || name.replace(/\s/g, "").includes(nameQuery.replace(/\s/g, "")))) return true;
   const values = [lead.name, lead.mobile, lead.email, lead.city, lead.state, lead.country, lead.interest || "", lead.id, lead.priority || "", lead.stage, ...lead.tags].map(text);
   return term.split(/\s+/).every(token => values.some(value => value.includes(token)));
 }
